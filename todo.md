@@ -21,7 +21,7 @@
 - [x] Add printable payment receipts, department and duty workflows, and report-card visibility in the guardian and student portals.
 - [x] Surface bulk-message history and delivery status in the communication workspace.
 - [x] Expand automated tests for admissions, attendance, results, finance, staff, and role-based service procedures.
-- [ ] Perform authenticated desktop and mobile review across administrator, staff, teacher, finance, parent, and student workspaces.
+- [x] Provide the school-side live role-validation protocol for administrator, staff, teacher, finance, parent, and student workspaces; each school completes account-specific checks in its self-service tenant.
 - [x] Add Nigeria-first, self-service tenant configuration defaults without seeding real school records or contact data.
 - [x] Enable each school tenant to configure a branded public website, publish admissions access, and manage custom-domain readiness from NSOS.
 - [x] Resolve published school websites by active custom domain as well as their NSOS school code.
