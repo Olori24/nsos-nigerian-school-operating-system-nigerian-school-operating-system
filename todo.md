@@ -33,3 +33,5 @@
 - [x] Export NSOS multi-tenant architecture and deployment documentation.
 - [x] Resolve duplicate architecture-documentation tracker entry; no separate implementation work required.
 - [x] Add owner/admin payment and notification provider configuration with tenant-scoped provider states and secure credential handling.
+- [x] Synchronize the shared NSOS preview with the latest project version.
+- [x] Add an owner/admin Test Connection action that verifies configured payment and notification provider credentials without exposing them.

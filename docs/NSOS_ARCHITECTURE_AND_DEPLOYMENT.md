@@ -208,6 +208,8 @@ Owners and administrators configure payment and notification providers directly 
 
 Credential values are encrypted server-side before persistence and are never returned in dashboard reads. The UI exposes only whether credentials are present, the provider’s draft/ready/disabled state, and non-secret configuration such as a public key, merchant reference, sender ID, or from address. Externally connected providers cannot be marked ready unless encrypted credentials are present. Adapter execution remains separately enabled by the payment or notification workflow that consumes the provider configuration.
 
+Owner and administrator users can invoke **Test Connection** only after saving a provider configuration. The test decrypts credentials solely within the server process, performs a safe read-only provider request, and returns a sanitized success or failure message. It records the successful verification timestamp and does not create a payment or send a notification. Manual payment confirmation and in-app-only notifications report readiness locally because they do not require an external provider connection.
+
 | Configuration category | Examples |
 |---|---|
 | Database | `DATABASE_URL` |

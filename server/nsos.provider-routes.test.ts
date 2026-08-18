@@ -4,6 +4,7 @@ vi.mock("./db", () => ({
   getSchoolMembership: vi.fn(),
   listProviderConfigurations: vi.fn(),
   saveProviderConfiguration: vi.fn(),
+  testProviderConnection: vi.fn(),
   providerRequiresCredentials: vi.fn((provider: string) => provider !== "manual" && provider !== "in_app"),
 }));
 
@@ -34,5 +35,11 @@ describe("NSOS provider configuration routes", () => {
     vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 2, schoolId: 1, userId: 8, role: "teacher", status: "active", createdAt: new Date(), updatedAt: new Date() });
     await expect(caller().nsos.providers.list({ schoolId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(db.listProviderConfigurations).not.toHaveBeenCalled();
+  });
+
+  it("allows an administrator to initiate a server-side provider connection test", async () => {
+    vi.mocked(db.testProviderConnection).mockResolvedValue({ ok: true, message: "Connection verified. No payment or notification was sent.", testedAt: new Date() });
+    await expect(caller().nsos.providers.testConnection({ schoolId: 1, category: "payment" })).resolves.toMatchObject({ ok: true });
+    expect(db.testProviderConnection).toHaveBeenCalledWith(1, "payment");
   });
 });

@@ -1,6 +1,6 @@
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { createCipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import {
   academicSessions,
@@ -100,6 +100,15 @@ export function sealProviderCredentials(credentials: ProviderCredentials) {
   return `v1:${iv.toString("base64url")}:${cipher.getAuthTag().toString("base64url")}:${ciphertext.toString("base64url")}`;
 }
 
+export function openProviderCredentials(payload: string | null) {
+  if (!payload) return {} as ProviderCredentials;
+  const [version, ivValue, tagValue, ciphertextValue] = payload.split(":");
+  if (version !== "v1" || !ivValue || !tagValue || !ciphertextValue) throw new Error("Stored provider credentials are invalid. Save the provider configuration again.");
+  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivValue, "base64url"));
+  decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
+  return JSON.parse(Buffer.concat([decipher.update(Buffer.from(ciphertextValue, "base64url")), decipher.final()]).toString("utf8")) as ProviderCredentials;
+}
+
 export function providerReadiness(category: ProviderCategory, provider: string, hasCredentials: boolean, status: "draft" | "ready" | "disabled") {
   if (status === "disabled") return "Disabled";
   if (!hasCredentials && provider !== "manual" && provider !== "in_app") return "Credentials required";
@@ -108,6 +117,21 @@ export function providerReadiness(category: ProviderCategory, provider: string, 
 
 export function providerRequiresCredentials(provider: string) {
   return provider !== "manual" && provider !== "in_app";
+}
+
+export function providerTestRequest(provider: string, credentials: ProviderCredentials) {
+  const token = credentials.secretKey || credentials.apiKey;
+  if (!token && providerRequiresCredentials(provider)) throw new Error("Store provider credentials before testing this connection.");
+  if (provider === "manual" || provider === "in_app") return null;
+  if (provider === "paystack") return { url: "https://api.paystack.co/bank?perPage=1", init: { headers: { Authorization: `Bearer ${token}` } } };
+  if (provider === "flutterwave") return { url: "https://api.flutterwave.com/v3/balances", init: { headers: { Authorization: `Bearer ${token}` } } };
+  if (provider === "stripe") return { url: "https://api.stripe.com/v1/balance", init: { headers: { Authorization: `Bearer ${token}` } } };
+  if (provider === "termii") return { url: `https://api.ng.termii.com/api/get-balance?api_key=${encodeURIComponent(token!)}`, init: {} };
+  if (provider === "twilio") return { url: "https://api.twilio.com/2010-04-01/Accounts.json?PageSize=1", init: { headers: { Authorization: `Basic ${Buffer.from(`${credentials.apiKey ?? ""}:${credentials.secretKey ?? ""}`).toString("base64")}` } } };
+  if (provider === "resend") return { url: "https://api.resend.com/domains?limit=1", init: { headers: { Authorization: `Bearer ${token}` } } };
+  if (provider === "sendgrid") return { url: "https://api.sendgrid.com/v3/user/profile", init: { headers: { Authorization: `Bearer ${token}` } } };
+  if (provider === "whatsapp_cloud") return { url: "https://graph.facebook.com/v20.0/me", init: { headers: { Authorization: `Bearer ${token}` } } };
+  throw new Error("This provider does not support a connection test yet.");
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -178,6 +202,30 @@ export async function saveProviderConfiguration(input: { schoolId: number; categ
   const values = { schoolId: input.schoolId, category: input.category, provider: input.provider, status: input.status, configuration: input.configuration, encryptedCredentials, configuredBy: input.configuredBy, lastValidatedAt: null };
   await db.insert(providerConfigurations).values(values).onDuplicateKeyUpdate({ set: values });
   return listProviderConfigurations(input.schoolId);
+}
+
+export async function testProviderConnection(schoolId: number, category: ProviderCategory) {
+  const db = await database();
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, schoolId), eq(providerConfigurations.category, category))).limit(1))[0];
+  if (!configuration) throw new Error("Configure this provider before testing its connection.");
+  if (configuration.status === "disabled") throw new Error("Enable or save this provider as a draft before testing it.");
+  const credentials = openProviderCredentials(configuration.encryptedCredentials);
+  const request = providerTestRequest(configuration.provider, credentials);
+  if (!request) return { ok: true, message: "This internal workflow is ready; it does not require an external connection.", testedAt: new Date() };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(request.url, { ...request.init, method: "GET", signal: controller.signal, headers: { Accept: "application/json", ...(request.init.headers ?? {}) } });
+    if (!response.ok) return { ok: false, message: `The provider rejected the verification request (HTTP ${response.status}). Check the saved credentials and account permissions.`, testedAt: new Date() };
+    const testedAt = new Date();
+    await db.update(providerConfigurations).set({ lastValidatedAt: testedAt }).where(eq(providerConfigurations.id, configuration.id));
+    return { ok: true, message: "Connection verified. No payment or notification was sent.", testedAt };
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    return { ok: false, message: timedOut ? "The provider did not respond within eight seconds." : "NSOS could not reach the provider. Check network access and provider availability.", testedAt: new Date() };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function getSchoolWebsite(schoolId: number) {
