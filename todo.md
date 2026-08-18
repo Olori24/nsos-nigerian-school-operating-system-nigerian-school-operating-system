@@ -42,7 +42,19 @@
 - [x] Review NSOS security controls, compliance priorities, backend readiness, and GitHub source-control setup before the next feature cycle.
 - [x] Verify and export NSOS to the confirmed GitHub repository `Olori24/nsos-nigerian-school-operating-system-nigerian-school-operating-system` using a secret-safe source-control process.
 - [x] Review and remediate production dependency-audit findings before the NSOS GitHub export.
-- [ ] Enable the GitHub Actions workflow upload after the GitHub connection is granted `workflow` permission.
+- [x] Enable the GitHub Actions workflow upload after the GitHub connection is granted `workflow` permission.
+- [ ] Re-authorize or replace the GitHub integration until workflow-file writes and Actions-read API access no longer return 403.
+- [x] Remove the mistakenly created `github/` workflow directory while retaining only `.github/workflows/ci.yml`.
+- [x] Confirm GitHub Actions registers the NSOS CI workflow and record at least one visible run status.
+- [ ] Diagnose and repair the failed GitHub Actions Node.js setup stage, then confirm a successful NSOS CI run.
+- [x] Capture the exact error text from the current failing GitHub Actions Set up Node.js step before applying any further CI changes.
+- [x] Record the exact GitHub Actions pnpm executable error and the automatic-cache cause in the NSOS CI maintenance notes.
+- [ ] Move the pnpm-dependent cache configuration after Corepack activation, then rerun the NSOS workflow.
+- [ ] Resume the paused CI automatic-cache repair after the scheduled 8:00 AM reminder.
+- [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
+- [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
+- [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
+- [x] Add Gmail-based GitHub Actions notification fallback and confidence states to the daily NSOS CI status monitor.
 - [x] Add the first NSOS security-hardening release: request protections, abuse resistance, sensitive-operation auditability, and operational safeguards.
 - [x] Extend security audit coverage to membership, website/domain, admissions, finance, and results actions that materially affect school data or access.
 - [x] Replace the per-instance rate limiter with a shared or gateway-backed control suitable for autoscaled production traffic, with Express-level enforcement tests.
