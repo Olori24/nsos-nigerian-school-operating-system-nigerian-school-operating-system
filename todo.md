@@ -29,3 +29,6 @@
 - [x] Add automated tests for custom-domain resolution, activation, and publication behavior.
 - [x] Restrict website publishing and domain lifecycle controls to owner and administrator roles at the service layer.
 - [x] Validate custom-domain format before persistence and add service-focused tests for DNS verification and active-domain publication gates.
+- [x] Package the NSOS production build-and-validation process as a reusable school-platform skill.
+- [x] Export NSOS multi-tenant architecture and deployment documentation.
+- [x] Resolve duplicate architecture-documentation tracker entry; no separate implementation work required.
