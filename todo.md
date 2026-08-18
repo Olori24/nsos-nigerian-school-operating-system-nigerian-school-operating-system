@@ -56,6 +56,8 @@
 - [x] Produce a concrete NSOS product-differentiation roadmap ranking revenue protection, parent trust, operational control, and retention features by impact and implementation readiness.
 - [x] Document the prioritized NSOS differentiators in a durable product strategy note for future product and go-to-market decisions.
 - [x] Add buyer-focused NSOS positioning and the Greener Future Academy admissions workflow context to the repository README.
+- [x] Package the proven NSOS school-platform discovery, delivery, security, buyer-positioning, and rollout process as a reusable Manus skill.
+- [x] Test the reusable NSOS school-platform launch skill by producing a data-safe onboarding playbook for a hypothetical second pilot school.
 - [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
 - [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
