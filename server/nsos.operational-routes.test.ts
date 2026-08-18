@@ -6,6 +6,7 @@ vi.mock("./db", () => ({
   getAssessment: vi.fn(),
   listGradeScales: vi.fn(),
   upsertScore: vi.fn(),
+  recordSecurityAuditEvent: vi.fn(),
 }));
 
 import * as db from "./db";

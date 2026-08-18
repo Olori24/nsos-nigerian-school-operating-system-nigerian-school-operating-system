@@ -27,7 +27,9 @@ import {
   payrollRecords,
   performanceNotes,
   providerConfigurations,
+  rateLimitBuckets,
   resultPublications,
+  securityAuditEvents,
   schoolMemberships,
   schoolWebsites,
   schools,
@@ -149,6 +151,39 @@ export function maskSmsRecipient(value: string) {
   return value.length <= 6 ? "••••" : `${value.slice(0, 4)}••••${value.slice(-3)}`;
 }
 
+const sensitiveAuditMetadataKey = /(?:api|auth|credential|key|password|phone|recipient|secret|token|email|body)/i;
+
+export function sanitizeSecurityAuditMetadata(metadata: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(metadata).map(([key, value]) => {
+    if (sensitiveAuditMetadataKey.test(key)) return [key, "[REDACTED]"];
+    if (typeof value === "string") return [key, value.slice(0, 160)];
+    if (typeof value === "number" || typeof value === "boolean" || value === null) return [key, value];
+    return [key, "[OMITTED]"];
+  }));
+}
+
+export async function recordSecurityAuditEvent(input: { schoolId: number; actorUserId?: number; eventType: string; targetType: string; targetId?: string | number; metadata?: Record<string, unknown> }) {
+  await (await database()).insert(securityAuditEvents).values({ schoolId: input.schoolId, actorUserId: input.actorUserId ?? null, eventType: input.eventType.slice(0, 96), targetType: input.targetType.slice(0, 96), targetId: input.targetId === undefined ? null : String(input.targetId).slice(0, 128), metadata: sanitizeSecurityAuditMetadata(input.metadata ?? {}) });
+}
+
+export async function listSecurityAuditEvents(schoolId: number, limit = 50) {
+  return (await database()).select({ id: securityAuditEvents.id, actorUserId: securityAuditEvents.actorUserId, eventType: securityAuditEvents.eventType, targetType: securityAuditEvents.targetType, targetId: securityAuditEvents.targetId, metadata: securityAuditEvents.metadata, occurredAt: securityAuditEvents.occurredAt }).from(securityAuditEvents).where(eq(securityAuditEvents.schoolId, schoolId)).orderBy(desc(securityAuditEvents.occurredAt)).limit(Math.min(Math.max(limit, 1), 100));
+}
+
+export async function consumeSharedRateLimit(input: { namespace: string; route: string; clientKey: string; limit: number; windowMs: number; now?: number }) {
+  const now = input.now ?? Date.now();
+  const windowStartedAt = Math.floor(now / input.windowMs) * input.windowMs;
+  const expiresAt = new Date(windowStartedAt + input.windowMs);
+  const bucketMaterial = `${input.namespace}:${input.route}:${input.clientKey}:${windowStartedAt}`;
+  const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
+  const db = await database();
+  await db.insert(rateLimitBuckets).values({ bucketKey, count: 1, expiresAt }).onDuplicateKeyUpdate({ set: { count: sql`${rateLimitBuckets.count} + 1`, expiresAt } });
+  const bucket = (await db.select({ count: rateLimitBuckets.count, expiresAt: rateLimitBuckets.expiresAt }).from(rateLimitBuckets).where(eq(rateLimitBuckets.bucketKey, bucketKey)).limit(1))[0];
+  if (Math.random() < 0.01) void db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.expiresAt} < ${new Date(now)}`);
+  const count = Number(bucket?.count ?? input.limit + 1);
+  return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+}
+
 function signaturesMatch(received: string | undefined, expected: string) {
   if (!received) return false;
   const candidate = Buffer.from(received.trim(), "utf8");
@@ -266,6 +301,7 @@ export async function saveProviderConfiguration(input: { schoolId: number; categ
   if (input.status === "ready" && providerRequiresCredentials(input.provider) && !encryptedCredentials) throw new Error("Store provider credentials before marking this configuration ready.");
   const values = { schoolId: input.schoolId, category: input.category, provider: input.provider, status: input.status, configuration: input.configuration, encryptedCredentials, configuredBy: input.configuredBy, lastValidatedAt: null };
   await db.insert(providerConfigurations).values(values).onDuplicateKeyUpdate({ set: values });
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.configuredBy, eventType: input.clearCredentials ? "provider_credentials_cleared" : "provider_configuration_saved", targetType: "provider_configuration", targetId: `${input.category}:${input.provider}`, metadata: { category: input.category, provider: input.provider, status: input.status, credentialsState: input.clearCredentials ? "cleared" : encryptedCredentials ? "stored" : "not_provided" } });
   return listProviderConfigurations(input.schoolId);
 }
 
@@ -323,6 +359,7 @@ export async function sendProviderSmsTest(input: { schoolId: number; to: string;
   const school = (await db.select({ name: schools.name }).from(schools).where(eq(schools.id, input.schoolId)).limit(1))[0];
   const message = `NSOS test message from ${school?.name ?? "your school"}. SMS delivery is configured.`;
   const log = await createMessageLog({ schoolId: input.schoolId, channel: "sms", audience: "staff", subject: `Provider SMS test to ${maskedRecipient}`, body: `Test SMS dispatch requested via ${configuration.provider}.`, recipientCount: 1, createdBy: input.createdBy });
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.createdBy, eventType: "provider_sms_test_requested", targetType: "notification_provider", targetId: configuration.provider, metadata: { provider: configuration.provider, deliveryTracking: "requested" } });
   const credentials = openProviderCredentials(configuration.encryptedCredentials);
   if (configuration.provider === "termii" && !credentials.webhookSecret) throw new Error("Store the Termii webhook signing secret before sending an automatically tracked SMS test.");
   const details = (configuration.configuration ?? {}) as Record<string, unknown>;
@@ -349,6 +386,7 @@ export async function sendProviderSmsTest(input: { schoolId: number; to: string;
       return { ok: false, message: "The provider accepted the request but did not return a message identifier for delivery tracking.", recipient: maskedRecipient };
     }
     await db.update(messageLogs).set({ providerMessageId }).where(eq(messageLogs.id, log.messageId));
+    await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.createdBy, eventType: "provider_sms_test_submitted", targetType: "message_log", targetId: log.messageId, metadata: { provider: configuration.provider, deliveryTracking: "pending" } });
     return { ok: true, message: `SMS submitted to ${maskedRecipient}. Delivery confirmation is pending.`, recipient: maskedRecipient, providerMessageId, logId: log.messageId, deliveryState: "pending" as const };
   } catch (error) {
     await db.update(messageLogs).set({ status: "failed" }).where(eq(messageLogs.id, log.messageId));

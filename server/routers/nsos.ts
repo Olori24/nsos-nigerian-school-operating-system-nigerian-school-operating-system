@@ -53,7 +53,9 @@ export const nsosRouter = router({
       .input(schoolInput.extend({ userId: z.number().int().positive(), role: roleInput }))
       .mutation(async ({ ctx, input }) => {
         if (!isManagementRole(ctx.schoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school administrators can assign roles." });
-        return db.upsertMembership(input.schoolId, input.userId, input.role);
+        const result = await db.upsertMembership(input.schoolId, input.userId, input.role);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_membership_assigned", targetType: "school_membership", targetId: input.userId, metadata: { assignedRole: input.role } });
+        return result;
       }),
   }),
 
@@ -61,8 +63,16 @@ export const nsosRouter = router({
     config: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolWebsite(input.schoolId)),
     save: websiteAdminProcedure
       .input(schoolInput.extend({ headline: z.string().max(255).optional(), introduction: z.string().max(5000).optional(), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), contactEmail: z.string().email().optional(), contactPhone: z.string().max(48).optional(), campusLocation: z.string().max(255).optional(), customDomain: customDomainInput, admissionsEnabled: z.boolean().optional(), published: z.boolean().optional() }))
-      .mutation(({ input }) => db.saveSchoolWebsite(input)),
-    verifyDomain: websiteAdminProcedure.input(schoolInput).mutation(({ input }) => db.verifySchoolWebsiteDomain(input.schoolId)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.saveSchoolWebsite(input);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_website_configuration_saved", targetType: "school_website", metadata: { admissionsEnabled: input.admissionsEnabled, published: input.published, customDomainConfigured: Boolean(input.customDomain) } });
+        return result;
+      }),
+    verifyDomain: websiteAdminProcedure.input(schoolInput).mutation(async ({ ctx, input }) => {
+      const result = await db.verifySchoolWebsiteDomain(input.schoolId);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_domain_verified", targetType: "school_website", metadata: { verification: "active" } });
+      return result;
+    }),
     publicSite: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getPublicSchoolWebsite(input.shortCode)),
     publicDomain: publicProcedure.input(z.object({ domain: z.string().min(3).max(255) })).query(({ input }) => db.getPublicSchoolWebsiteByDomain(input.domain)),
   }),
@@ -75,6 +85,10 @@ export const nsosRouter = router({
     webhookUrls: providerAdminProcedure.input(schoolInput).query(({ input }) => db.getSmsDeliveryWebhookUrls(input.schoolId)),
     sendTestSms: providerAdminProcedure.input(schoolInput.extend({ to: z.string().min(7).max(24), confirmed: z.literal(true) })).mutation(({ ctx, input }) => db.sendProviderSmsTest({ ...input, createdBy: ctx.user.id })),
     checkTestSmsDelivery: providerAdminProcedure.input(schoolInput.extend({ messageLogId: z.number().int().positive() })).mutation(({ input }) => db.checkProviderSmsTestDelivery(input)),
+  }),
+
+  security: router({
+    auditEvents: providerAdminProcedure.input(schoolInput.extend({ limit: z.number().int().min(1).max(100).optional() })).query(({ input }) => db.listSecurityAuditEvents(input.schoolId, input.limit)),
   }),
 
   dashboard: router({
@@ -98,7 +112,11 @@ export const nsosRouter = router({
       .mutation(({ input }) => db.createApplication(input)),
     review: managementProcedure("students.read")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), status: z.enum(["under_review", "accepted", "declined"]), decisionNote: z.string().max(5000).optional() }))
-      .mutation(async ({ ctx, input }) => db.reviewApplication(input.applicationId, input.status, input.decisionNote, ctx.user.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.reviewApplication(input.applicationId, input.status, input.decisionNote, ctx.user.id);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_reviewed", targetType: "admissions_application", targetId: input.applicationId, metadata: { decision: input.status } });
+        return result;
+      }),
     documents: managementProcedure("students.read").input(schoolInput.extend({ applicationId: z.number().int().positive() })).query(({ input }) => db.listAdmissionDocuments(input.applicationId)),
     uploadDocument: managementProcedure("students.read")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), label: z.string().min(2).max(160), fileName: z.string().min(1).max(180), mimeType: z.string().min(3).max(120), base64: z.string().min(1).max(7_000_000) }))
@@ -108,7 +126,11 @@ export const nsosRouter = router({
       .mutation(({ ctx, input }) => db.reviewAdmissionDocument(input.documentId, input.status, input.reviewNote, ctx.user.id)),
     enrol: managementProcedure("students.write")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), admissionNo: z.string().min(2).max(64), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
-      .mutation(({ input }) => db.enrolApplication(input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.enrolApplication(input);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_enrolled", targetType: "admissions_application", targetId: input.applicationId, metadata: { outcome: "student_created" } });
+        return result;
+      }),
   }),
 
   students: router({
@@ -178,10 +200,18 @@ export const nsosRouter = router({
       }),
     publish: managementProcedure("results.write")
       .input(schoolInput.extend({ termId: z.number().int().positive(), classId: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => db.publishResults(input.schoolId, input.termId, input.classId, ctx.user.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.publishResults(input.schoolId, input.termId, input.classId, ctx.user.id);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "results_published", targetType: "result_publication", targetId: `${input.termId}:${input.classId}`, metadata: { action: "published" } });
+        return result;
+      }),
     approve: managementProcedure("results.write")
       .input(schoolInput.extend({ termId: z.number().int().positive(), classId: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => db.approveResults(input.schoolId, input.termId, input.classId, ctx.user.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.approveResults(input.schoolId, input.termId, input.classId, ctx.user.id);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "results_approved", targetType: "result_publication", targetId: `${input.termId}:${input.classId}`, metadata: { action: "approved" } });
+        return result;
+      }),
     reportCard: managementProcedure("results.read")
       .input(schoolInput.extend({ studentId: z.number().int().positive(), termId: z.number().int().positive() }))
       .query(({ input }) => db.getStudentReportCard(input.schoolId, input.studentId, input.termId)),
@@ -194,10 +224,18 @@ export const nsosRouter = router({
       .mutation(({ input }) => db.createFeeStructure(input)),
     createInvoice: managementProcedure("finance.write")
       .input(schoolInput.extend({ studentId: z.number().int().positive(), termId: z.number().int().positive().optional(), issueDate: z.string().min(10).max(10), dueDate: z.string().optional(), lineItems: z.array(z.object({ description: z.string().min(2).max(255), quantity: z.number().int().positive(), unitAmount: z.number().positive(), feeStructureId: z.number().int().positive().optional() })).min(1), discount: z.number().min(0).optional(), note: z.string().max(1000).optional() }))
-      .mutation(({ ctx, input }) => db.createInvoice({ ...input, createdBy: ctx.user.id })),
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.createInvoice({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "invoice_created", targetType: "invoice", targetId: result.invoiceId, metadata: { lineItemCount: input.lineItems.length, invoiceCreated: true } });
+        return result;
+      }),
     recordPayment: managementProcedure("finance.write")
       .input(schoolInput.extend({ invoiceId: z.number().int().positive(), amount: z.number().positive(), paidOn: z.string().min(10).max(10), method: z.enum(["cash", "bank_transfer", "card", "pos", "cheque", "other"]), reference: z.string().max(160).optional(), note: z.string().max(1000).optional() }))
-      .mutation(({ ctx, input }) => db.recordPayment({ ...input, recordedBy: ctx.user.id })),
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.recordPayment({ ...input, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "payment_recorded", targetType: "invoice", targetId: input.invoiceId, metadata: { method: input.method, paymentRecorded: true } });
+        return result;
+      }),
   }),
 
   staff: router({

@@ -6,6 +6,7 @@ vi.mock("./db", () => ({
   verifySchoolWebsiteDomain: vi.fn(),
   getPublicSchoolWebsite: vi.fn(),
   getPublicSchoolWebsiteByDomain: vi.fn(),
+  recordSecurityAuditEvent: vi.fn(),
 }));
 
 import * as db from "./db";
@@ -21,6 +22,7 @@ describe("NSOS tenant website routes", () => {
     vi.mocked(db.saveSchoolWebsite).mockResolvedValue({ school: { id: 1, name: "Greener Future Academy" }, website: { published: true } } as any);
     await expect(adminCaller().nsos.website.save({ schoolId: 1, headline: "Future-ready learning.", primaryColor: "#0f5c4f", admissionsEnabled: true, published: true })).resolves.toMatchObject({ website: { published: true } });
     expect(db.saveSchoolWebsite).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, headline: "Future-ready learning.", published: true }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, actorUserId: 5, eventType: "school_website_configuration_saved" }));
   });
 
   it("resolves only the public school-site configuration for an external visitor", async () => {

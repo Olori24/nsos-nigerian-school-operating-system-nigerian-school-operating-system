@@ -657,5 +657,31 @@ export const providerConfigurations = mysqlTable(
   table => ({ schoolCategory: uniqueIndex("providerConfiguration_school_category_unique").on(table.schoolId, table.category), schoolIndex: index("providerConfiguration_school_idx").on(table.schoolId) }),
 );
 
+export const securityAuditEvents = mysqlTable(
+  "securityAuditEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    actorUserId: int("actorUserId"),
+    eventType: varchar("eventType", { length: 96 }).notNull(),
+    targetType: varchar("targetType", { length: 96 }).notNull(),
+    targetId: varchar("targetId", { length: 128 }),
+    metadata: json("metadata").notNull(),
+    occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+  },
+  table => ({ schoolOccurred: index("securityAudit_school_occurred_idx").on(table.schoolId, table.occurredAt), actorOccurred: index("securityAudit_actor_occurred_idx").on(table.actorUserId, table.occurredAt) }),
+);
+
+export const rateLimitBuckets = mysqlTable(
+  "rateLimitBuckets",
+  {
+    bucketKey: varchar("bucketKey", { length: 128 }).primaryKey(),
+    count: int("count").notNull().default(0),
+    expiresAt: timestamp("expiresAt").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ expiresIndex: index("rateLimit_expires_idx").on(table.expiresAt) }),
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

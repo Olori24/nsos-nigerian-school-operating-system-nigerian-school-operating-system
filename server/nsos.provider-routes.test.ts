@@ -6,6 +6,8 @@ vi.mock("./db", () => ({
   saveProviderConfiguration: vi.fn(),
   testProviderConnection: vi.fn(),
   getSmsDeliveryWebhookUrls: vi.fn(),
+  listSecurityAuditEvents: vi.fn(),
+  recordSecurityAuditEvent: vi.fn(),
   sendProviderSmsTest: vi.fn(),
   checkProviderSmsTestDelivery: vi.fn(),
   providerRequiresCredentials: vi.fn((provider: string) => provider !== "manual" && provider !== "in_app"),
@@ -50,6 +52,12 @@ describe("NSOS provider configuration routes", () => {
     vi.mocked(db.getSmsDeliveryWebhookUrls).mockReturnValue({ termii: "https://nsos-system-uhkdscaf.manus.space/api/webhooks/sms/termii?schoolId=1", twilio: "https://nsos-system-uhkdscaf.manus.space/api/webhooks/sms/twilio?schoolId=1" });
     await expect(caller().nsos.providers.webhookUrls({ schoolId: 1 })).resolves.toMatchObject({ termii: expect.stringContaining("schoolId=1") });
     expect(db.getSmsDeliveryWebhookUrls).toHaveBeenCalledWith(1);
+  });
+
+  it("allows school administrators to read their tenant-scoped security audit trail", async () => {
+    vi.mocked(db.listSecurityAuditEvents).mockResolvedValue([{ id: 5, eventType: "provider_configuration_saved", targetType: "provider_configuration", metadata: { provider: "termii" }, occurredAt: new Date() }] as any);
+    await expect(caller().nsos.security.auditEvents({ schoolId: 1, limit: 20 })).resolves.toHaveLength(1);
+    expect(db.listSecurityAuditEvents).toHaveBeenCalledWith(1, 20);
   });
 
   it("requires explicit confirmation before an administrator can dispatch a real SMS test", async () => {

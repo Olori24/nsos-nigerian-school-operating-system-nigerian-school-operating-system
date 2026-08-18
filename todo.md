@@ -39,3 +39,7 @@
 - [x] Track SMS test-message submission separately from confirmed provider delivery and show administrators the distinction clearly.
 - [x] Add signed real-time SMS delivery webhooks that transition pending tenant message logs to delivered or failed automatically.
 - [x] Refine the Provider Configuration UI so administrators can clearly copy the Termii callback URL and save its signing secret.
+- [ ] Review NSOS security controls, compliance priorities, backend readiness, and GitHub source-control setup before the next feature cycle.
+- [x] Add the first NSOS security-hardening release: request protections, abuse resistance, sensitive-operation auditability, and operational safeguards.
+- [x] Extend security audit coverage to membership, website/domain, admissions, finance, and results actions that materially affect school data or access.
+- [x] Replace the per-instance rate limiter with a shared or gateway-backed control suitable for autoscaled production traffic, with Express-level enforcement tests.

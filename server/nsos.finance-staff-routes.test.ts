@@ -5,6 +5,7 @@ vi.mock("./db", () => ({
   createInvoice: vi.fn(),
   createDepartment: vi.fn(),
   createStaffDuty: vi.fn(),
+  recordSecurityAuditEvent: vi.fn(),
 }));
 
 import * as db from "./db";
@@ -22,6 +23,7 @@ describe("NSOS finance and staff routes", () => {
 
     await expect(callerFor(9).nsos.finance.createInvoice({ schoolId: 1, studentId: 22, issueDate: "2026-08-18", lineItems: [{ description: "Tuition", quantity: 1, unitAmount: 150000 }] })).resolves.toEqual({ invoiceId: 71 });
     expect(db.createInvoice).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, studentId: 22, createdBy: 9 }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, actorUserId: 9, eventType: "invoice_created", targetId: 71, metadata: { lineItemCount: 1, invoiceCreated: true } }));
   });
 
   it("allows an administrator to create a department and assign an active duty", async () => {
