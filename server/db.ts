@@ -26,9 +26,11 @@ import {
   payments,
   payrollRecords,
   performanceNotes,
+  platformBillingRecords,
   providerConfigurations,
   rateLimitBuckets,
   resultPublications,
+  schoolSubscriptions,
   securityAuditEvents,
   schoolMemberships,
   schoolWebsites,
@@ -38,6 +40,7 @@ import {
   staffProfiles,
   studentGuardians,
   studentProfiles,
+  subscriptionPlans,
   subjects,
   timetableEntries,
   type InsertUser,
@@ -278,7 +281,93 @@ export async function createSchool(input: { name: string; shortCode: string; sta
   const created = await db.insert(schools).values({ ...input, shortCode: input.shortCode.trim().toUpperCase(), currency: "NGN", timezone: "Africa/Lagos" });
   const schoolId = Number(created[0].insertId);
   await db.insert(schoolMemberships).values({ schoolId, userId: input.createdBy, role: "owner", status: "active" });
+  await db.insert(schoolSubscriptions).values({ schoolId, status: "trial", billingCycle: "manual", assignedBy: input.createdBy, note: "Commercial plan not yet assigned." });
   return { schoolId };
+}
+
+type PlatformSubscriptionStatus = "trial" | "active" | "payment_due" | "suspended" | "cancelled";
+type PlatformBillingCycle = "monthly" | "annual" | "manual";
+
+export async function getPlatformRevenueOverview() {
+  const db = await database();
+  const [plans, schoolRows, subscriptions, billingRecords] = await Promise.all([
+    db.select().from(subscriptionPlans).orderBy(desc(subscriptionPlans.createdAt)),
+    db.select({ id: schools.id, name: schools.name, shortCode: schools.shortCode, state: schools.state, createdAt: schools.createdAt }).from(schools).orderBy(desc(schools.createdAt)),
+    db.select().from(schoolSubscriptions),
+    db.select().from(platformBillingRecords).orderBy(desc(platformBillingRecords.createdAt)),
+  ]);
+  const schoolsWithRevenue = schoolRows.map(school => {
+    const subscription = subscriptions.find(item => item.schoolId === school.id) ?? null;
+    const plan = subscription?.planId ? plans.find(item => item.id === subscription.planId) ?? null : null;
+    const records = billingRecords.filter(item => item.schoolId === school.id);
+    return { ...school, subscription, plan, billingRecords: records };
+  });
+  const issued = billingRecords.filter(record => record.status === "issued" || record.status === "paid");
+  const collected = billingRecords.filter(record => record.status === "paid");
+  return {
+    plans,
+    schools: schoolsWithRevenue,
+    metrics: {
+      schoolCount: schoolRows.length,
+      activeSubscriptions: subscriptions.filter(item => item.status === "active").length,
+      paymentDueSubscriptions: subscriptions.filter(item => item.status === "payment_due").length,
+      invoiced: issued.reduce((total, record) => total + Number(record.amount), 0),
+      collected: collected.reduce((total, record) => total + Number(record.amount), 0),
+    },
+  };
+}
+
+export async function createSubscriptionPlan(input: { code: string; name: string; description?: string; monthlyAmount: number; annualAmount: number; studentLimit?: number; createdBy: number }) {
+  const db = await database();
+  const code = input.code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "_");
+  if (!code) throw new Error("A subscription plan code is required.");
+  const created = await db.insert(subscriptionPlans).values({ code, name: input.name.trim(), description: input.description?.trim() || null, monthlyAmount: String(input.monthlyAmount), annualAmount: String(input.annualAmount), studentLimit: input.studentLimit ?? null, createdBy: input.createdBy });
+  return { planId: Number(created[0].insertId) };
+}
+
+export async function assignSchoolSubscription(input: { schoolId: number; planId?: number; status: PlatformSubscriptionStatus; billingCycle: PlatformBillingCycle; startsAt?: string; endsAt?: string; note?: string; assignedBy: number }) {
+  const db = await database();
+  const school = (await db.select({ id: schools.id }).from(schools).where(eq(schools.id, input.schoolId)).limit(1))[0];
+  if (!school) throw new Error("School not found.");
+  if (input.planId) {
+    const plan = (await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, input.planId)).limit(1))[0];
+    if (!plan || plan.status !== "active") throw new Error("Select an active subscription plan.");
+  }
+  const startsAt = input.startsAt ? asDate(input.startsAt) : new Date();
+  const endsAt = input.endsAt ? asDate(input.endsAt) : null;
+  if (endsAt && startsAt && endsAt <= startsAt) throw new Error("Subscription end date must be after its start date.");
+  const values = { schoolId: input.schoolId, planId: input.planId ?? null, status: input.status, billingCycle: input.billingCycle, startsAt, endsAt, note: input.note?.trim() || null, assignedBy: input.assignedBy };
+  await db.insert(schoolSubscriptions).values(values).onDuplicateKeyUpdate({ set: values });
+  return getSchoolSubscription(input.schoolId);
+}
+
+export async function getSchoolSubscription(schoolId: number) {
+  const db = await database();
+  const subscription = (await db.select().from(schoolSubscriptions).where(eq(schoolSubscriptions.schoolId, schoolId)).limit(1))[0] ?? null;
+  const plan = subscription?.planId ? (await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, subscription.planId)).limit(1))[0] ?? null : null;
+  const billingRecords = await db.select({ id: platformBillingRecords.id, invoiceNo: platformBillingRecords.invoiceNo, amount: platformBillingRecords.amount, currency: platformBillingRecords.currency, status: platformBillingRecords.status, issueDate: platformBillingRecords.issueDate, dueDate: platformBillingRecords.dueDate, paidAt: platformBillingRecords.paidAt, paymentMethod: platformBillingRecords.paymentMethod }).from(platformBillingRecords).where(eq(platformBillingRecords.schoolId, schoolId)).orderBy(desc(platformBillingRecords.createdAt));
+  return { subscription, plan, billingRecords };
+}
+
+export async function issuePlatformBillingRecord(input: { schoolId: number; issueDate: string; dueDate?: string; note?: string; createdBy: number }) {
+  const db = await database();
+  const subscription = (await db.select().from(schoolSubscriptions).where(eq(schoolSubscriptions.schoolId, input.schoolId)).limit(1))[0];
+  if (!subscription?.planId) throw new Error("Assign an active subscription plan before issuing a platform billing record.");
+  const plan = (await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, subscription.planId)).limit(1))[0];
+  if (!plan || plan.status !== "active") throw new Error("The assigned subscription plan is unavailable for billing.");
+  const amount = subscription.billingCycle === "annual" ? Number(plan.annualAmount) : Number(plan.monthlyAmount);
+  if (subscription.billingCycle === "manual" || amount <= 0) throw new Error("Set a paid monthly or annual plan before issuing a platform billing record.");
+  const created = await db.insert(platformBillingRecords).values({ schoolId: input.schoolId, subscriptionId: subscription.id, planId: plan.id, invoiceNo: makeNumber("NSOS"), amount: String(amount), currency: plan.currency, status: "issued", issueDate: asDate(input.issueDate)!, dueDate: asDate(input.dueDate), note: input.note?.trim() || null, createdBy: input.createdBy });
+  return { billingRecordId: Number(created[0].insertId), schoolId: input.schoolId };
+}
+
+export async function recordPlatformBillingPayment(input: { billingRecordId: number; paidAt: string; paymentMethod: "bank_transfer" | "card" | "manual"; providerReference?: string; settledBy: number }) {
+  const db = await database();
+  const record = (await db.select().from(platformBillingRecords).where(eq(platformBillingRecords.id, input.billingRecordId)).limit(1))[0];
+  if (!record) throw new Error("Platform billing record not found.");
+  if (record.status !== "issued") throw new Error("Only an issued platform billing record can be marked as paid.");
+  await db.update(platformBillingRecords).set({ status: "paid", paidAt: asDate(input.paidAt) ?? new Date(), paymentMethod: input.paymentMethod, providerReference: input.providerReference?.trim() || null, settledBy: input.settledBy }).where(and(eq(platformBillingRecords.id, input.billingRecordId), eq(platformBillingRecords.status, "issued")));
+  return { schoolId: record.schoolId, billingRecordId: record.id };
 }
 
 export async function listProviderConfigurations(schoolId: number) {

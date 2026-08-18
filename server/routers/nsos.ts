@@ -3,7 +3,7 @@ import { z } from "zod";
 import * as db from "../db";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
-import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
@@ -57,6 +57,35 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_membership_assigned", targetType: "school_membership", targetId: input.userId, metadata: { assignedRole: input.role } });
         return result;
       }),
+  }),
+
+  platformRevenue: router({
+    overview: platformOwnerProcedure.query(() => db.getPlatformRevenueOverview()),
+    createPlan: platformOwnerProcedure
+      .input(z.object({ code: z.string().min(2).max(48), name: z.string().min(2).max(120), description: z.string().max(2000).optional(), monthlyAmount: z.number().min(0).max(100_000_000), annualAmount: z.number().min(0).max(1_000_000_000), studentLimit: z.number().int().positive().max(1_000_000).optional() }))
+      .mutation(({ ctx, input }) => db.createSubscriptionPlan({ ...input, createdBy: ctx.user.id })),
+    assignSubscription: platformOwnerProcedure
+      .input(z.object({ schoolId: z.number().int().positive(), planId: z.number().int().positive().optional(), status: z.enum(["trial", "active", "payment_due", "suspended", "cancelled"]), billingCycle: z.enum(["monthly", "annual", "manual"]), startsAt: z.string().min(10).max(10).optional(), endsAt: z.string().min(10).max(10).optional(), note: z.string().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.assignSchoolSubscription({ ...input, assignedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "platform_subscription_assigned", targetType: "school_subscription", metadata: { status: input.status, billingCycle: input.billingCycle, planAssigned: Boolean(input.planId) } });
+        return result;
+      }),
+    issueBillingRecord: platformOwnerProcedure
+      .input(z.object({ schoolId: z.number().int().positive(), issueDate: z.string().min(10).max(10), dueDate: z.string().min(10).max(10).optional(), note: z.string().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.issuePlatformBillingRecord({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "platform_billing_record_issued", targetType: "platform_billing_record", targetId: result.billingRecordId, metadata: { action: "issued" } });
+        return result;
+      }),
+    recordBillingPayment: platformOwnerProcedure
+      .input(z.object({ billingRecordId: z.number().int().positive(), paidAt: z.string().min(10).max(10), paymentMethod: z.enum(["bank_transfer", "card", "manual"]), providerReference: z.string().max(160).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.recordPlatformBillingPayment({ ...input, settledBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: result.schoolId, actorUserId: ctx.user.id, eventType: "platform_billing_record_paid", targetType: "platform_billing_record", targetId: result.billingRecordId, metadata: { paymentMethod: input.paymentMethod, paymentRecorded: true } });
+        return result;
+      }),
+    schoolSubscription: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolSubscription(input.schoolId)),
   }),
 
   website: router({

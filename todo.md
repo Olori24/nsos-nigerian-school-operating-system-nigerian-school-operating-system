@@ -55,6 +55,10 @@
 - [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
 - [x] Add Gmail-based GitHub Actions notification fallback and confidence states to the daily NSOS CI status monitor.
+- [x] Build the NSOS revenue foundation with school subscription plans, owner-controlled account lifecycle, onboarding billing records, and renewal-ready administration.
+- [x] Restrict platform revenue overview, plan creation, subscription assignment, and billing mutations to the configured NSOS platform owner rather than every global admin.
+- [x] Surface a clear school-facing error state when subscription or platform billing status cannot be loaded.
+- [x] Add regression tests proving non-owner global admins cannot manage the NSOS commercial lifecycle.
 - [x] Add the first NSOS security-hardening release: request protections, abuse resistance, sensitive-operation auditability, and operational safeguards.
 - [x] Extend security audit coverage to membership, website/domain, admissions, finance, and results actions that materially affect school data or access.
 - [x] Replace the per-instance rate limiter with a shared or gateway-backed control suitable for autoscaled production traffic, with Express-level enforcement tests.

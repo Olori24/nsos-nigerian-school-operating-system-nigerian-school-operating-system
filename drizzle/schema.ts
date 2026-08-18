@@ -41,6 +41,68 @@ export const schools = mysqlTable("schools", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const subscriptionPlans = mysqlTable(
+  "subscriptionPlans",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    code: varchar("code", { length: 48 }).notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    monthlyAmount: decimal("monthlyAmount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    annualAmount: decimal("annualAmount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+    studentLimit: int("studentLimit"),
+    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ codeUnique: uniqueIndex("subscriptionPlan_code_unique").on(table.code) }),
+);
+
+export const schoolSubscriptions = mysqlTable(
+  "schoolSubscriptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    planId: int("planId"),
+    status: mysqlEnum("status", ["trial", "active", "payment_due", "suspended", "cancelled"]).notNull().default("trial"),
+    billingCycle: mysqlEnum("billingCycle", ["monthly", "annual", "manual"]).notNull().default("manual"),
+    startsAt: timestamp("startsAt").defaultNow().notNull(),
+    endsAt: timestamp("endsAt"),
+    assignedBy: int("assignedBy"),
+    note: text("note"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolUnique: uniqueIndex("schoolSubscription_school_unique").on(table.schoolId), statusIndex: index("schoolSubscription_status_idx").on(table.status) }),
+);
+
+export const platformBillingRecords = mysqlTable(
+  "platformBillingRecords",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    subscriptionId: int("subscriptionId").notNull(),
+    planId: int("planId"),
+    invoiceNo: varchar("invoiceNo", { length: 64 }).notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+    status: mysqlEnum("status", ["draft", "issued", "paid", "void"]).notNull().default("draft"),
+    issueDate: date("issueDate").notNull(),
+    dueDate: date("dueDate"),
+    paidAt: timestamp("paidAt"),
+    paymentMethod: mysqlEnum("paymentMethod", ["bank_transfer", "card", "manual"]).notNull().default("manual"),
+    providerReference: varchar("providerReference", { length: 160 }),
+    note: text("note"),
+    createdBy: int("createdBy").notNull(),
+    settledBy: int("settledBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ invoiceNoUnique: uniqueIndex("platformBilling_invoice_no_unique").on(table.invoiceNo), schoolIndex: index("platformBilling_school_idx").on(table.schoolId), statusIndex: index("platformBilling_status_idx").on(table.status) }),
+);
+
 export const schoolWebsites = mysqlTable(
   "schoolWebsites",
   {
