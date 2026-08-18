@@ -51,6 +51,10 @@
 - [x] Record the exact GitHub Actions pnpm executable error and the automatic-cache cause in the NSOS CI maintenance notes.
 - [ ] Move the pnpm-dependent cache configuration after Corepack activation, then rerun the NSOS workflow.
 - [ ] Resume the paused CI automatic-cache repair after the scheduled 8:00 AM reminder.
+- [ ] Keep GitHub permission troubleshooting paused until the scheduled 8:00 AM Africa/Lagos review, with no further authorization prompts before then.
+- [x] Prioritize NSOS product differentiators that make school owners reluctant to operate without the platform, beginning with revenue protection, parent trust, operational control, and retention value.
+- [x] Produce a concrete NSOS product-differentiation roadmap ranking revenue protection, parent trust, operational control, and retention features by impact and implementation readiness.
+- [x] Document the prioritized NSOS differentiators in a durable product strategy note for future product and go-to-market decisions.
 - [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
 - [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
