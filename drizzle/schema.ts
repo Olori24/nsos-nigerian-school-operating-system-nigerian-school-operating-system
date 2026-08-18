@@ -638,5 +638,23 @@ export const messageLogs = mysqlTable(
   table => ({ schoolIndex: index("message_school_idx").on(table.schoolId) }),
 );
 
+export const providerConfigurations = mysqlTable(
+  "providerConfigurations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    category: mysqlEnum("category", ["payment", "notification"]).notNull(),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    status: mysqlEnum("status", ["draft", "ready", "disabled"]).notNull().default("draft"),
+    configuration: json("configuration").notNull(),
+    encryptedCredentials: text("encryptedCredentials"),
+    configuredBy: int("configuredBy").notNull(),
+    lastValidatedAt: timestamp("lastValidatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolCategory: uniqueIndex("providerConfiguration_school_category_unique").on(table.schoolId, table.category), schoolIndex: index("providerConfiguration_school_idx").on(table.schoolId) }),
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

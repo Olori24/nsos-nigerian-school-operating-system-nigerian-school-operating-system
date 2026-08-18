@@ -93,7 +93,7 @@ The implemented schema contains 35 tables. The table groups below provide the pr
 
 | Domain | Tables | Operational outcome |
 |---|---|---|
-| Tenant and identity | `users`, `schools`, `schoolMemberships`, `schoolWebsites` | Isolated school workspaces, access roles, public school configuration, verified domains |
+| Tenant and identity | `users`, `schools`, `schoolMemberships`, `schoolWebsites`, `providerConfigurations` | Isolated school workspaces, access roles, public school configuration, verified domains, and provider settings |
 | Admissions | `admissionsApplications`, `admissionDocuments` | Public applications, document records, review states, enrollment handoff |
 | Student lifecycle | `studentProfiles`, `guardians`, `studentGuardians`, `enrollments` | Profiles, guardian links, academic history, promotion, graduation |
 | Academics | `academicSessions`, `academicTerms`, `classes`, `subjects`, `classSubjects`, `timetableEntries`, `lessonPlans`, `curriculumMilestones` | Academic structure, timetable, teaching plans, coverage tracking |
@@ -202,6 +202,12 @@ The current project is deployed on the managed **Autoscale** profile. The runtim
 
 The managed environment provides the database, OAuth, storage, JWT, and platform integration variables. Do not commit `.env` files or hardcode credentials. Add or change secrets through the managed secret workflow and validate any updated integration with tests.
 
+### Tenant provider configuration
+
+Owners and administrators configure payment and notification providers directly from the command dashboard. The current interface supports Paystack, Flutterwave, Stripe, manual payment confirmation, Termii, Twilio, Resend, SendGrid, WhatsApp Cloud, and in-app-only notification delivery. Each tenant may retain one payment configuration and one notification configuration.
+
+Credential values are encrypted server-side before persistence and are never returned in dashboard reads. The UI exposes only whether credentials are present, the provider’s draft/ready/disabled state, and non-secret configuration such as a public key, merchant reference, sender ID, or from address. Externally connected providers cannot be marked ready unless encrypted credentials are present. Adapter execution remains separately enabled by the payment or notification workflow that consumes the provider configuration.
+
 | Configuration category | Examples |
 |---|---|
 | Database | `DATABASE_URL` |
@@ -229,6 +235,7 @@ Follow this sequence for any change that affects persistence:
 |---|---|---|
 | Cross-school access | Tenant-scoped schema plus active membership and permission checks | Add automated regression tests whenever a new tenant-owned domain is introduced. |
 | Role escalation | Owner/admin-only procedures for membership and public website/domain actions | Review memberships during school onboarding and staff offboarding. |
+| Provider credential exposure | Owner/admin-only provider APIs, server-side encrypted credential storage, sanitized dashboard reads | Do not paste provider secrets into browser-visible documentation or client configuration. |
 | Public data exposure | Public routes return only admissions and published website configuration | Keep operational reporting, documents, and portal records behind authentication. |
 | Result privacy | Parent/student portal retrieval is restricted to the relevant learner and published results | Verify guardian links before enabling a family account. |
 | Document storage | Object storage references rather than database file bytes | Define retention and deletion policy with each school. |

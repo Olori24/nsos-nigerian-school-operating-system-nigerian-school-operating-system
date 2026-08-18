@@ -32,3 +32,4 @@
 - [x] Package the NSOS production build-and-validation process as a reusable school-platform skill.
 - [x] Export NSOS multi-tenant architecture and deployment documentation.
 - [x] Resolve duplicate architecture-documentation tracker entry; no separate implementation work required.
+- [x] Add owner/admin payment and notification provider configuration with tenant-scoped provider states and secure credential handling.

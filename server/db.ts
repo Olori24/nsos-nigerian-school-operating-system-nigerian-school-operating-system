@@ -1,5 +1,6 @@
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import {
   academicSessions,
@@ -25,6 +26,7 @@ import {
   payments,
   payrollRecords,
   performanceNotes,
+  providerConfigurations,
   resultPublications,
   schoolMemberships,
   schoolWebsites,
@@ -81,6 +83,33 @@ export function isActivePublishedDomain(website: { domainStatus: string; publish
   return website.domainStatus === "active" && website.published;
 }
 
+type ProviderCategory = "payment" | "notification";
+type ProviderCredentials = { apiKey?: string; secretKey?: string; webhookSecret?: string };
+
+function encryptionKey() {
+  if (!ENV.cookieSecret) throw new Error("Provider credentials cannot be stored until the application secret is configured.");
+  return createHash("sha256").update(`nsos-provider-configuration:${ENV.cookieSecret}`).digest();
+}
+
+export function sealProviderCredentials(credentials: ProviderCredentials) {
+  const compact = Object.fromEntries(Object.entries(credentials).filter(([, value]) => typeof value === "string" && value.trim().length > 0));
+  if (!Object.keys(compact).length) return null;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(compact), "utf8"), cipher.final()]);
+  return `v1:${iv.toString("base64url")}:${cipher.getAuthTag().toString("base64url")}:${ciphertext.toString("base64url")}`;
+}
+
+export function providerReadiness(category: ProviderCategory, provider: string, hasCredentials: boolean, status: "draft" | "ready" | "disabled") {
+  if (status === "disabled") return "Disabled";
+  if (!hasCredentials && provider !== "manual" && provider !== "in_app") return "Credentials required";
+  return category === "payment" ? "Ready for payment adapter" : "Ready for notification adapter";
+}
+
+export function providerRequiresCredentials(provider: string) {
+  return provider !== "manual" && provider !== "in_app";
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await database();
@@ -127,6 +156,28 @@ export async function createSchool(input: { name: string; shortCode: string; sta
   const schoolId = Number(created[0].insertId);
   await db.insert(schoolMemberships).values({ schoolId, userId: input.createdBy, role: "owner", status: "active" });
   return { schoolId };
+}
+
+export async function listProviderConfigurations(schoolId: number) {
+  const db = await database();
+  const rows = await db.select().from(providerConfigurations).where(eq(providerConfigurations.schoolId, schoolId));
+  return (["payment", "notification"] as const).map(category => {
+    const row = rows.find(item => item.category === category);
+    const hasCredentials = Boolean(row?.encryptedCredentials);
+    return row
+      ? { id: row.id, category, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, hasCredentials, readiness: providerReadiness(category, row.provider, hasCredentials, row.status), lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
+      : { id: null, category, provider: category === "payment" ? "paystack" : "termii", status: "draft" as const, configuration: {}, hasCredentials: false, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
+  });
+}
+
+export async function saveProviderConfiguration(input: { schoolId: number; category: ProviderCategory; provider: string; status: "draft" | "ready" | "disabled"; configuration: Record<string, unknown>; credentials?: ProviderCredentials; clearCredentials?: boolean; configuredBy: number }) {
+  const db = await database();
+  const existing = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.category, input.category))).limit(1))[0];
+  const encryptedCredentials = input.clearCredentials ? null : sealProviderCredentials(input.credentials ?? {}) ?? existing?.encryptedCredentials ?? null;
+  if (input.status === "ready" && providerRequiresCredentials(input.provider) && !encryptedCredentials) throw new Error("Store provider credentials before marking this configuration ready.");
+  const values = { schoolId: input.schoolId, category: input.category, provider: input.provider, status: input.status, configuration: input.configuration, encryptedCredentials, configuredBy: input.configuredBy, lastValidatedAt: null };
+  await db.insert(providerConfigurations).values(values).onDuplicateKeyUpdate({ set: values });
+  return listProviderConfigurations(input.schoolId);
 }
 
 export async function getSchoolWebsite(schoolId: number) {

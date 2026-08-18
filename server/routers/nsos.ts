@@ -31,6 +31,12 @@ const websiteAdminProcedure = protectedProcedure.input(schoolInput).use(async ({
   return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
 });
 
+const providerAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can configure payment or notification providers." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
 
 export const nsosRouter = router({
@@ -59,6 +65,12 @@ export const nsosRouter = router({
     verifyDomain: websiteAdminProcedure.input(schoolInput).mutation(({ input }) => db.verifySchoolWebsiteDomain(input.schoolId)),
     publicSite: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getPublicSchoolWebsite(input.shortCode)),
     publicDomain: publicProcedure.input(z.object({ domain: z.string().min(3).max(255) })).query(({ input }) => db.getPublicSchoolWebsiteByDomain(input.domain)),
+  }),
+
+  providers: router({
+    list: providerAdminProcedure.input(schoolInput).query(({ input }) => db.listProviderConfigurations(input.schoolId)),
+    save: providerAdminProcedure.input(schoolInput.extend({ category: z.enum(["payment", "notification"]), provider: z.enum(["paystack", "flutterwave", "stripe", "manual", "termii", "twilio", "resend", "sendgrid", "whatsapp_cloud", "in_app"]), status: z.enum(["draft", "ready", "disabled"]), configuration: z.record(z.string(), z.unknown()).default({}), credentials: z.object({ apiKey: z.string().max(500).optional(), secretKey: z.string().max(500).optional(), webhookSecret: z.string().max(500).optional() }).optional(), clearCredentials: z.boolean().optional() }))
+      .mutation(({ ctx, input }) => db.saveProviderConfiguration({ ...input, configuredBy: ctx.user.id })),
   }),
 
   dashboard: router({
