@@ -210,6 +210,10 @@ Credential values are encrypted server-side before persistence and are never ret
 
 Owner and administrator users can invoke **Test Connection** only after saving a provider configuration. The test decrypts credentials solely within the server process, performs a safe read-only provider request, and returns a sanitized success or failure message. It records the successful verification timestamp and does not create a payment or send a notification. Manual payment confirmation and in-app-only notifications report readiness locally because they do not require an external provider connection.
 
+For SMS-capable **Termii** and **Twilio** notification configurations, the dashboard also exposes **Send test message**. It opens a confirmation modal that requires a specific phone number and an explicit authorization acknowledgement before a live SMS request can be sent. Nigerian `080…` numbers are normalized to international format, audit logs retain only a masked destination, and the server uses the encrypted provider credentials without returning them to the client. A test may consume the provider’s SMS credit but contains no learner or guardian data.
+
+NSOS records a successful send request as **submitted with delivery pending**, not delivered. It stores the provider message identifier and presents a **Check delivery status** action. This queries the Termii message-history report or Twilio message resource, reporting confirmed delivery only when the provider returns `delivered`; failures update the audit state accordingly. Until then, the dashboard states that delivery has not been confirmed.
+
 | Configuration category | Examples |
 |---|---|
 | Database | `DATABASE_URL` |

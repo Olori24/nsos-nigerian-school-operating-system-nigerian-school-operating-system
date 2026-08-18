@@ -630,6 +630,7 @@ export const messageLogs = mysqlTable(
     subject: varchar("subject", { length: 255 }),
     body: text("body").notNull(),
     recipientCount: int("recipientCount").notNull().default(0),
+    providerMessageId: varchar("providerMessageId", { length: 255 }),
     status: mysqlEnum("status", ["queued", "sent", "failed"]).notNull().default("queued"),
     createdBy: int("createdBy").notNull(),
     sentAt: timestamp("sentAt"),

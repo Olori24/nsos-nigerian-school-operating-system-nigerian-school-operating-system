@@ -5,6 +5,8 @@ vi.mock("./db", () => ({
   listProviderConfigurations: vi.fn(),
   saveProviderConfiguration: vi.fn(),
   testProviderConnection: vi.fn(),
+  sendProviderSmsTest: vi.fn(),
+  checkProviderSmsTestDelivery: vi.fn(),
   providerRequiresCredentials: vi.fn((provider: string) => provider !== "manual" && provider !== "in_app"),
 }));
 
@@ -41,5 +43,17 @@ describe("NSOS provider configuration routes", () => {
     vi.mocked(db.testProviderConnection).mockResolvedValue({ ok: true, message: "Connection verified. No payment or notification was sent.", testedAt: new Date() });
     await expect(caller().nsos.providers.testConnection({ schoolId: 1, category: "payment" })).resolves.toMatchObject({ ok: true });
     expect(db.testProviderConnection).toHaveBeenCalledWith(1, "payment");
+  });
+
+  it("requires explicit confirmation before an administrator can dispatch a real SMS test", async () => {
+    vi.mocked(db.sendProviderSmsTest).mockResolvedValue({ ok: true, message: "Test SMS accepted for delivery to 2348••••123.", recipient: "2348••••123" });
+    await expect(caller().nsos.providers.sendTestSms({ schoolId: 1, to: "08031234567", confirmed: true })).resolves.toMatchObject({ ok: true });
+    expect(db.sendProviderSmsTest).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, to: "08031234567", confirmed: true, createdBy: 8 }));
+  });
+
+  it("allows an administrator to check a submitted SMS test for provider-confirmed delivery", async () => {
+    vi.mocked(db.checkProviderSmsTestDelivery).mockResolvedValue({ ok: true, deliveryState: "delivered", message: "Provider confirmed that the test SMS was delivered." });
+    await expect(caller().nsos.providers.checkTestSmsDelivery({ schoolId: 1, messageLogId: 42 })).resolves.toMatchObject({ deliveryState: "delivered" });
+    expect(db.checkProviderSmsTestDelivery).toHaveBeenCalledWith({ schoolId: 1, messageLogId: 42 });
   });
 });

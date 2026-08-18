@@ -134,6 +134,18 @@ export function providerTestRequest(provider: string, credentials: ProviderCrede
   throw new Error("This provider does not support a connection test yet.");
 }
 
+export function normaliseSmsRecipient(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (/^0\d{10}$/.test(digits)) return `234${digits.slice(1)}`;
+  if (/^234\d{10}$/.test(digits)) return digits;
+  if (/^[1-9]\d{7,14}$/.test(digits)) return digits;
+  throw new Error("Enter a valid mobile number in Nigerian (080…) or international format.");
+}
+
+export function maskSmsRecipient(value: string) {
+  return value.length <= 6 ? "••••" : `${value.slice(0, 4)}••••${value.slice(-3)}`;
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await database();
@@ -226,6 +238,88 @@ export async function testProviderConnection(schoolId: number, category: Provide
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function sendProviderSmsTest(input: { schoolId: number; to: string; confirmed: boolean; createdBy: number }) {
+  if (!input.confirmed) throw new Error("Confirm that you are authorized to send this test message.");
+  const db = await database();
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.category, "notification"))).limit(1))[0];
+  if (!configuration) throw new Error("Configure a notification provider before sending a test message.");
+  if (configuration.status !== "ready") throw new Error("Save this notification provider as ready and test its connection before sending an SMS.");
+  if (configuration.provider !== "termii" && configuration.provider !== "twilio") throw new Error("SMS test delivery is currently available for Termii and Twilio configurations.");
+  const recipient = normaliseSmsRecipient(input.to);
+  const maskedRecipient = maskSmsRecipient(recipient);
+  const school = (await db.select({ name: schools.name }).from(schools).where(eq(schools.id, input.schoolId)).limit(1))[0];
+  const message = `NSOS test message from ${school?.name ?? "your school"}. SMS delivery is configured.`;
+  const log = await createMessageLog({ schoolId: input.schoolId, channel: "sms", audience: "staff", subject: `Provider SMS test to ${maskedRecipient}`, body: `Test SMS dispatch requested via ${configuration.provider}.`, recipientCount: 1, createdBy: input.createdBy });
+  const credentials = openProviderCredentials(configuration.encryptedCredentials);
+  const details = (configuration.configuration ?? {}) as Record<string, unknown>;
+  const sender = typeof details.senderId === "string" && details.senderId.trim() ? details.senderId.trim() : "NSOS";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    let response: Response;
+    if (configuration.provider === "termii") {
+      if (!credentials.apiKey && !credentials.secretKey) throw new Error("Store a Termii API key before sending a test message.");
+      response = await fetch("https://api.ng.termii.com/api/sms/send", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ api_key: credentials.apiKey ?? credentials.secretKey, to: recipient, from: sender, sms: message, type: "plain", channel: "generic" }) });
+    } else {
+      if (!credentials.apiKey || !credentials.secretKey) throw new Error("Store the Twilio account SID and auth token before sending a test message.");
+      response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(credentials.apiKey)}/Messages.json`, { method: "POST", signal: controller.signal, headers: { Authorization: `Basic ${Buffer.from(`${credentials.apiKey}:${credentials.secretKey}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ To: `+${recipient}`, From: sender, Body: message }).toString() });
+    }
+    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (!response.ok || (configuration.provider === "termii" && payload.code !== "ok")) {
+      await db.update(messageLogs).set({ status: "failed" }).where(eq(messageLogs.id, log.messageId));
+      return { ok: false, message: `The provider did not accept the SMS test (HTTP ${response.status}). Check the configured sender ID, SMS route, credentials, and account balance.`, recipient: maskedRecipient };
+    }
+    const providerMessageId = String(payload.message_id ?? payload.message_id_str ?? payload.sid ?? "") || undefined;
+    if (!providerMessageId) {
+      await db.update(messageLogs).set({ status: "failed" }).where(eq(messageLogs.id, log.messageId));
+      return { ok: false, message: "The provider accepted the request but did not return a message identifier for delivery tracking.", recipient: maskedRecipient };
+    }
+    await db.update(messageLogs).set({ providerMessageId }).where(eq(messageLogs.id, log.messageId));
+    return { ok: true, message: `SMS submitted to ${maskedRecipient}. Delivery confirmation is pending.`, recipient: maskedRecipient, providerMessageId, logId: log.messageId, deliveryState: "pending" as const };
+  } catch (error) {
+    await db.update(messageLogs).set({ status: "failed" }).where(eq(messageLogs.id, log.messageId));
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    if (error instanceof Error && !timedOut) return { ok: false, message: error.message, recipient: maskedRecipient };
+    return { ok: false, message: "The SMS provider did not respond within twelve seconds.", recipient: maskedRecipient };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function checkProviderSmsTestDelivery(input: { schoolId: number; messageLogId: number }) {
+  const db = await database();
+  const log = (await db.select().from(messageLogs).where(and(eq(messageLogs.id, input.messageLogId), eq(messageLogs.schoolId, input.schoolId))).limit(1))[0];
+  if (!log || log.channel !== "sms") throw new Error("SMS test message was not found in this school workspace.");
+  if (!log.providerMessageId) throw new Error("This SMS test has no provider message identifier to verify.");
+  if (log.status === "sent") return { ok: true, deliveryState: "delivered" as const, message: "Delivery was already confirmed by the provider." };
+  if (log.status === "failed") return { ok: false, deliveryState: "failed" as const, message: "The provider previously reported this test message as failed." };
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.category, "notification"))).limit(1))[0];
+  if (!configuration || (configuration.provider !== "termii" && configuration.provider !== "twilio")) throw new Error("The configured notification provider cannot confirm SMS delivery for this test.");
+  const credentials = openProviderCredentials(configuration.encryptedCredentials);
+  let response: Response;
+  if (configuration.provider === "termii") {
+    const apiKey = credentials.apiKey ?? credentials.secretKey;
+    if (!apiKey) throw new Error("Store a Termii API key before checking delivery status.");
+    response = await fetch(`https://api.ng.termii.com/api/sms/inbox?api_key=${encodeURIComponent(apiKey)}&message_id=${encodeURIComponent(log.providerMessageId)}`, { headers: { Accept: "application/json" } });
+  } else {
+    if (!credentials.apiKey || !credentials.secretKey) throw new Error("Store the Twilio account SID and auth token before checking delivery status.");
+    response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(credentials.apiKey)}/Messages/${encodeURIComponent(log.providerMessageId)}.json`, { headers: { Authorization: `Basic ${Buffer.from(`${credentials.apiKey}:${credentials.secretKey}`).toString("base64")}`, Accept: "application/json" } });
+  }
+  if (!response.ok) return { ok: false, deliveryState: "pending" as const, message: `The provider status report is not available yet (HTTP ${response.status}). Try again shortly.` };
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown> | Record<string, unknown>[];
+  const report = Array.isArray(payload) ? payload[0] ?? {} : payload;
+  const providerStatus = String(report.status ?? "").toLowerCase();
+  if (providerStatus === "delivered") {
+    await db.update(messageLogs).set({ status: "sent", sentAt: new Date() }).where(eq(messageLogs.id, log.id));
+    return { ok: true, deliveryState: "delivered" as const, message: "Provider confirmed that the test SMS was delivered." };
+  }
+  if (["failed", "undelivered", "canceled"].includes(providerStatus)) {
+    await db.update(messageLogs).set({ status: "failed" }).where(eq(messageLogs.id, log.id));
+    return { ok: false, deliveryState: "failed" as const, message: "Provider confirmed that the test SMS was not delivered." };
+  }
+  return { ok: false, deliveryState: "pending" as const, message: "SMS was submitted but delivery has not been confirmed yet. Try again shortly." };
 }
 
 export async function getSchoolWebsite(schoolId: number) {
@@ -580,7 +674,7 @@ export async function listStaffOperations(schoolId: number) {
 export async function listAnnouncements(schoolId: number) { return (await database()).select().from(announcements).where(eq(announcements.schoolId, schoolId)).orderBy(desc(announcements.createdAt)); }
 export async function createAnnouncement(input: { schoolId: number; title: string; body: string; audience: "everyone" | "staff" | "students" | "guardians" | "class"; classId?: number; publish?: boolean; createdBy: number }) { const now = new Date(); const result = await (await database()).insert(announcements).values({ ...input, classId: input.classId, status: input.publish ? "published" : "draft", publishedAt: input.publish ? now : null }); return { announcementId: Number(result[0].insertId) }; }
 export async function publishAnnouncement(announcementId: number) { await (await database()).update(announcements).set({ status: "published", publishedAt: new Date() }).where(eq(announcements.id, announcementId)); return { success: true }; }
-export async function createMessageLog(input: { schoolId: number; channel: "in_app" | "email" | "sms" | "whatsapp"; audience: "everyone" | "staff" | "students" | "guardians" | "class"; subject?: string; body: string; recipientCount: number; createdBy: number }) {
+export async function createMessageLog(input: { schoolId: number; channel: "in_app" | "email" | "sms" | "whatsapp"; audience: "everyone" | "staff" | "students" | "guardians" | "class"; subject?: string; body: string; recipientCount: number; providerMessageId?: string; createdBy: number }) {
   const db = await database();
   const isInApp = input.channel === "in_app";
   const result = await db.insert(messageLogs).values({ ...input, status: isInApp ? "sent" : "queued", sentAt: isInApp ? new Date() : null });

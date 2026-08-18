@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { providerReadiness, providerRequiresCredentials, providerTestRequest } from "./db";
+import { maskSmsRecipient, normaliseSmsRecipient, providerReadiness, providerRequiresCredentials, providerTestRequest } from "./db";
 
 describe("NSOS provider configuration rules", () => {
   it("requires secrets for external providers but not internal/manual workflows", () => {
@@ -24,5 +24,12 @@ describe("NSOS provider configuration rules", () => {
 
   it("refuses an external connection test when no credentials have been retained", () => {
     expect(() => providerTestRequest("termii", {})).toThrow("Store provider credentials");
+  });
+
+  it("normalizes Nigerian phone numbers and never returns raw numbers in display-facing audit values", () => {
+    expect(normaliseSmsRecipient("0803 123 4567")).toBe("2348031234567");
+    expect(normaliseSmsRecipient("+234 803 123 4567")).toBe("2348031234567");
+    expect(maskSmsRecipient("2348031234567")).toBe("2348••••567");
+    expect(() => normaliseSmsRecipient("not-a-number")).toThrow("Enter a valid mobile number");
   });
 });
