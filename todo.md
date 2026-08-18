@@ -60,6 +60,7 @@
 - [x] Test the reusable NSOS school-platform launch skill by producing a data-safe onboarding playbook for a hypothetical second pilot school.
 - [x] Define a safe AI employee framework for NSOS, including supervised AI course and subject-teaching roles.
 - [x] Produce a detailed, build-ready Cash Assurance module specification covering data, workflows, controls, interfaces, automation, and validation.
+- [x] Implement Cash Assurance Phase 1: tenant-scoped collection cases, payment-evidence review, promises, disputes, finance workbench, owner metrics, audit events, and regression tests without automated ledger changes.
 - [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
 - [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.

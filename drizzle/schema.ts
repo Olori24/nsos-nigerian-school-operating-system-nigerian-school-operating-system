@@ -617,6 +617,94 @@ export const payments = mysqlTable(
   table => ({ schoolReceipt: uniqueIndex("payment_school_receipt_unique").on(table.schoolId, table.receiptNo) }),
 );
 
+export const cashAssuranceCases = mysqlTable(
+  "cashAssuranceCases",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    studentId: int("studentId").notNull(),
+    guardianId: int("guardianId"),
+    status: mysqlEnum("status", ["open", "contact_due", "awaiting_promise", "payment_under_review", "disputed", "escalated", "settled", "closed"]).notNull().default("open"),
+    priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).notNull().default("normal"),
+    assignedTo: int("assignedTo"),
+    nextActionAt: timestamp("nextActionAt"),
+    pausedReason: text("pausedReason"),
+    openedBy: int("openedBy").notNull(),
+    closedBy: int("closedBy"),
+    closedAt: timestamp("closedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolStatus: index("cashAssuranceCase_school_status_idx").on(table.schoolId, table.status), studentIndex: index("cashAssuranceCase_student_idx").on(table.studentId), assigneeIndex: index("cashAssuranceCase_assignee_idx").on(table.assignedTo) }),
+);
+
+export const cashAssuranceCaseInvoices = mysqlTable(
+  "cashAssuranceCaseInvoices",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    caseId: int("caseId").notNull(),
+    invoiceId: int("invoiceId").notNull(),
+    snapshotOutstandingAmount: decimal("snapshotOutstandingAmount", { precision: 12, scale: 2 }).notNull(),
+    includedAt: timestamp("includedAt").defaultNow().notNull(),
+  },
+  table => ({ caseInvoice: uniqueIndex("cashAssuranceCaseInvoice_unique").on(table.caseId, table.invoiceId), invoiceIndex: index("cashAssuranceCaseInvoice_invoice_idx").on(table.invoiceId) }),
+);
+
+export const cashAssuranceEvents = mysqlTable(
+  "cashAssuranceEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    caseId: int("caseId").notNull(),
+    eventType: varchar("eventType", { length: 96 }).notNull(),
+    actorType: mysqlEnum("actorType", ["user", "guardian", "system"]).notNull().default("user"),
+    actorUserId: int("actorUserId"),
+    note: text("note"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ caseCreated: index("cashAssuranceEvent_case_created_idx").on(table.caseId, table.createdAt), schoolCreated: index("cashAssuranceEvent_school_created_idx").on(table.schoolId, table.createdAt) }),
+);
+
+export const paymentEvidence = mysqlTable(
+  "paymentEvidence",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    caseId: int("caseId").notNull(),
+    invoiceId: int("invoiceId").notNull(),
+    amountClaimed: decimal("amountClaimed", { precision: 12, scale: 2 }).notNull(),
+    source: mysqlEnum("source", ["manual_receipt", "bank_reference", "provider_event", "other"]).notNull().default("manual_receipt"),
+    providerReference: varchar("providerReference", { length: 160 }),
+    note: text("note"),
+    status: mysqlEnum("status", ["submitted", "under_review", "accepted", "rejected"]).notNull().default("submitted"),
+    reviewedBy: int("reviewedBy"),
+    reviewedAt: timestamp("reviewedAt"),
+    linkedPaymentId: int("linkedPaymentId"),
+    reviewNote: text("reviewNote"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolStatus: index("paymentEvidence_school_status_idx").on(table.schoolId, table.status), caseIndex: index("paymentEvidence_case_idx").on(table.caseId), invoiceIndex: index("paymentEvidence_invoice_idx").on(table.invoiceId) }),
+);
+
+export const paymentPromises = mysqlTable(
+  "paymentPromises",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    caseId: int("caseId").notNull(),
+    promisedAmount: decimal("promisedAmount", { precision: 12, scale: 2 }).notNull(),
+    promisedOn: date("promisedOn").notNull(),
+    note: text("note"),
+    status: mysqlEnum("status", ["open", "fulfilled", "overdue", "cancelled"]).notNull().default("open"),
+    recordedBy: int("recordedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ caseIndex: index("paymentPromise_case_idx").on(table.caseId), schoolStatus: index("paymentPromise_school_status_idx").on(table.schoolId, table.status) }),
+);
+
 export const leaveRequests = mysqlTable(
   "leaveRequests",
   {

@@ -10,6 +10,9 @@ import {
   announcements,
   assessments,
   attendanceRecords,
+  cashAssuranceCaseInvoices,
+  cashAssuranceCases,
+  cashAssuranceEvents,
   classes,
   classSubjects,
   curriculumMilestones,
@@ -26,6 +29,8 @@ import {
   payments,
   payrollRecords,
   performanceNotes,
+  paymentEvidence,
+  paymentPromises,
   platformBillingRecords,
   providerConfigurations,
   rateLimitBuckets,
@@ -855,6 +860,158 @@ export async function recordPayment(input: { schoolId: number; invoiceId: number
   await db.insert(payments).values({ schoolId: input.schoolId, invoiceId: input.invoiceId, receiptNo: makeNumber("RCT"), amount: String(input.amount), paidOn: asDate(input.paidOn)!, method: input.method, reference: input.reference, note: input.note, recordedBy: input.recordedBy });
   await db.update(invoices).set({ amountPaid: String(newPaid), status: newPaid >= total ? "paid" : "partial" }).where(eq(invoices.id, input.invoiceId));
   return { success: true, outstanding: Math.max(0, total - newPaid) };
+}
+
+type CashAssuranceCaseStatus = "open" | "contact_due" | "awaiting_promise" | "payment_under_review" | "disputed" | "escalated" | "settled" | "closed";
+type CashAssurancePriority = "low" | "normal" | "high" | "urgent";
+
+function isActiveCashAssuranceCase(status: CashAssuranceCaseStatus) {
+  return status !== "settled" && status !== "closed";
+}
+
+function invoiceOutstanding(invoice: { total: string | number; amountPaid: string | number }) {
+  return Math.max(0, Number(invoice.total) - Number(invoice.amountPaid));
+}
+
+async function getCashAssuranceCaseOrThrow(schoolId: number, caseId: number) {
+  const item = (await (await database()).select().from(cashAssuranceCases).where(and(eq(cashAssuranceCases.id, caseId), eq(cashAssuranceCases.schoolId, schoolId))).limit(1))[0];
+  if (!item) throw new Error("Cash Assurance case not found.");
+  return item;
+}
+
+async function addCashAssuranceEvent(input: { schoolId: number; caseId: number; eventType: string; actorUserId?: number; actorType?: "user" | "guardian" | "system"; note?: string }) {
+  await (await database()).insert(cashAssuranceEvents).values({ schoolId: input.schoolId, caseId: input.caseId, eventType: input.eventType.slice(0, 96), actorType: input.actorType ?? "user", actorUserId: input.actorUserId ?? null, note: input.note?.slice(0, 2000) ?? null });
+}
+
+export async function listCashAssuranceData(schoolId: number) {
+  const db = await database();
+  const [invoiceRows, caseRows, links, evidenceRows, promiseRows, eventRows, students] = await Promise.all([
+    db.select().from(invoices).where(eq(invoices.schoolId, schoolId)).orderBy(desc(invoices.updatedAt)),
+    db.select().from(cashAssuranceCases).where(eq(cashAssuranceCases.schoolId, schoolId)).orderBy(desc(cashAssuranceCases.updatedAt)),
+    db.select().from(cashAssuranceCaseInvoices),
+    db.select().from(paymentEvidence).where(eq(paymentEvidence.schoolId, schoolId)).orderBy(desc(paymentEvidence.createdAt)),
+    db.select().from(paymentPromises).where(eq(paymentPromises.schoolId, schoolId)).orderBy(desc(paymentPromises.createdAt)),
+    db.select().from(cashAssuranceEvents).where(eq(cashAssuranceEvents.schoolId, schoolId)).orderBy(desc(cashAssuranceEvents.createdAt)).limit(100),
+    db.select().from(studentProfiles).where(eq(studentProfiles.schoolId, schoolId)),
+  ]);
+  const invoiceById = new Map(invoiceRows.map(item => [item.id, item]));
+  const studentById = new Map(students.map(item => [item.id, item]));
+  const linksByCase = new Map<number, typeof links>();
+  for (const link of links) {
+    if (!caseRows.some(item => item.id === link.caseId)) continue;
+    linksByCase.set(link.caseId, [...(linksByCase.get(link.caseId) ?? []), link]);
+  }
+  const cases = caseRows.map(item => {
+    const caseInvoices = (linksByCase.get(item.id) ?? []).map(link => {
+      const invoice = invoiceById.get(link.invoiceId);
+      return invoice ? { ...invoice, outstanding: invoiceOutstanding(invoice), snapshotOutstanding: Number(link.snapshotOutstandingAmount) } : null;
+    }).filter(Boolean);
+    const outstanding = caseInvoices.reduce((sum, invoice) => sum + Number(invoice?.outstanding ?? 0), 0);
+    const latestPromise = promiseRows.find(promise => promise.caseId === item.id) ?? null;
+    const evidence = evidenceRows.filter(row => row.caseId === item.id);
+    return { ...item, student: studentById.get(item.studentId) ?? null, invoices: caseInvoices, outstanding, latestPromise, evidence };
+  });
+  const outstandingInvoices = invoiceRows.filter(item => item.status !== "void").map(item => invoiceOutstanding(item));
+  const today = new Date();
+  const overdue = invoiceRows.filter(item => item.status !== "void" && item.dueDate && new Date(item.dueDate) < today).reduce((sum, item) => sum + invoiceOutstanding(item), 0);
+  return {
+    dashboard: {
+      outstanding: outstandingInvoices.reduce((sum, amount) => sum + amount, 0),
+      overdue,
+      activeCases: cases.filter(item => isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus)).length,
+      highPriorityCases: cases.filter(item => isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus) && ["high", "urgent"].includes(item.priority)).length,
+      evidenceUnderReview: evidenceRows.filter(item => item.status === "submitted" || item.status === "under_review").length,
+    },
+    cases,
+    events: eventRows,
+    paymentEvidence: evidenceRows,
+    promises: promiseRows,
+  };
+}
+
+export async function openCashAssuranceCase(input: { schoolId: number; studentId: number; invoiceId: number; priority: CashAssurancePriority; assignedTo?: number; nextActionOn?: string; note?: string; openedBy: number }) {
+  const db = await database();
+  const [student, invoice] = await Promise.all([
+    db.select().from(studentProfiles).where(and(eq(studentProfiles.id, input.studentId), eq(studentProfiles.schoolId, input.schoolId))).limit(1),
+    db.select().from(invoices).where(and(eq(invoices.id, input.invoiceId), eq(invoices.schoolId, input.schoolId), eq(invoices.studentId, input.studentId))).limit(1),
+  ]);
+  if (!student[0]) throw new Error("Student not found in this school workspace.");
+  if (!invoice[0]) throw new Error("Invoice does not belong to the selected student in this school.");
+  if (invoice[0].status === "void" || invoiceOutstanding(invoice[0]) <= 0.009) throw new Error("Only an outstanding invoice can be added to a Cash Assurance case.");
+  const existingLinks = await db.select().from(cashAssuranceCaseInvoices).where(eq(cashAssuranceCaseInvoices.invoiceId, input.invoiceId));
+  const linkedCases = await Promise.all(existingLinks.map(link => getCashAssuranceCaseOrThrow(input.schoolId, link.caseId).catch(() => null)));
+  if (linkedCases.some(item => item && isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus))) throw new Error("This invoice already has an active Cash Assurance case.");
+  const relationships = await db.select().from(studentGuardians).where(eq(studentGuardians.studentId, input.studentId));
+  const primaryGuardian = relationships.find(item => item.isPrimary) ?? relationships[0];
+  const created = await db.insert(cashAssuranceCases).values({ schoolId: input.schoolId, studentId: input.studentId, guardianId: primaryGuardian?.guardianId ?? null, priority: input.priority, assignedTo: input.assignedTo ?? null, nextActionAt: asDate(input.nextActionOn), openedBy: input.openedBy });
+  const caseId = Number(created[0].insertId);
+  await db.insert(cashAssuranceCaseInvoices).values({ caseId, invoiceId: input.invoiceId, snapshotOutstandingAmount: String(invoiceOutstanding(invoice[0])) });
+  await addCashAssuranceEvent({ schoolId: input.schoolId, caseId, eventType: "case_opened", actorUserId: input.openedBy, note: input.note });
+  return { caseId };
+}
+
+export async function recordCashAssurancePromise(input: { schoolId: number; caseId: number; promisedAmount: number; promisedOn: string; note?: string; recordedBy: number }) {
+  const db = await database();
+  const item = await getCashAssuranceCaseOrThrow(input.schoolId, input.caseId);
+  if (!isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus) || item.status === "disputed") throw new Error("A payment promise cannot be added to this case in its current status.");
+  const inserted = await db.insert(paymentPromises).values({ schoolId: input.schoolId, caseId: input.caseId, promisedAmount: String(input.promisedAmount), promisedOn: asDate(input.promisedOn)!, note: input.note ?? null, recordedBy: input.recordedBy });
+  await db.update(cashAssuranceCases).set({ status: "awaiting_promise", nextActionAt: asDate(input.promisedOn) }).where(eq(cashAssuranceCases.id, input.caseId));
+  await addCashAssuranceEvent({ schoolId: input.schoolId, caseId: input.caseId, eventType: "payment_promise_recorded", actorUserId: input.recordedBy, note: input.note });
+  return { promiseId: Number(inserted[0].insertId) };
+}
+
+export async function submitPaymentEvidence(input: { schoolId: number; caseId: number; invoiceId: number; amountClaimed: number; source: "manual_receipt" | "bank_reference" | "provider_event" | "other"; providerReference?: string; note?: string; createdBy: number }) {
+  const db = await database();
+  const [item, invoice, link] = await Promise.all([
+    getCashAssuranceCaseOrThrow(input.schoolId, input.caseId),
+    db.select().from(invoices).where(and(eq(invoices.id, input.invoiceId), eq(invoices.schoolId, input.schoolId))).limit(1),
+    db.select().from(cashAssuranceCaseInvoices).where(and(eq(cashAssuranceCaseInvoices.caseId, input.caseId), eq(cashAssuranceCaseInvoices.invoiceId, input.invoiceId))).limit(1),
+  ]);
+  if (!invoice[0] || !link[0] || invoice[0].studentId !== item.studentId) throw new Error("Payment evidence must reference an invoice linked to this case.");
+  if (item.status === "disputed" || !isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus)) throw new Error("Payment evidence cannot be added to this case in its current status.");
+  if (input.amountClaimed > invoiceOutstanding(invoice[0]) + 0.009) throw new Error("Claimed amount exceeds the invoice’s current outstanding balance.");
+  const inserted = await db.insert(paymentEvidence).values({ schoolId: input.schoolId, caseId: input.caseId, invoiceId: input.invoiceId, amountClaimed: String(input.amountClaimed), source: input.source, providerReference: input.providerReference ?? null, note: input.note ?? null, createdBy: input.createdBy });
+  await db.update(cashAssuranceCases).set({ status: "payment_under_review" }).where(eq(cashAssuranceCases.id, input.caseId));
+  await addCashAssuranceEvent({ schoolId: input.schoolId, caseId: input.caseId, eventType: "payment_evidence_submitted", actorUserId: input.createdBy, note: input.note });
+  return { evidenceId: Number(inserted[0].insertId) };
+}
+
+export async function reviewPaymentEvidence(input: { schoolId: number; evidenceId: number; status: "accepted" | "rejected"; linkedPaymentId?: number; reviewNote?: string; reviewedBy: number }) {
+  const db = await database();
+  const evidence = (await db.select().from(paymentEvidence).where(and(eq(paymentEvidence.id, input.evidenceId), eq(paymentEvidence.schoolId, input.schoolId))).limit(1))[0];
+  if (!evidence) throw new Error("Payment evidence not found.");
+  if (evidence.status === "accepted" || evidence.status === "rejected") throw new Error("This payment evidence has already been reviewed.");
+  let linkedPaymentId: number | null = null;
+  if (input.status === "accepted") {
+    if (!input.linkedPaymentId) throw new Error("Link a validated payment before accepting this evidence.");
+    const payment = (await db.select().from(payments).where(and(eq(payments.id, input.linkedPaymentId), eq(payments.schoolId, input.schoolId), eq(payments.invoiceId, evidence.invoiceId))).limit(1))[0];
+    if (!payment || Number(payment.amount) + 0.009 < Number(evidence.amountClaimed)) throw new Error("The linked payment must be a validated payment for this invoice and cover the claimed amount.");
+    linkedPaymentId = payment.id;
+  }
+  await db.update(paymentEvidence).set({ status: input.status, linkedPaymentId, reviewedBy: input.reviewedBy, reviewedAt: new Date(), reviewNote: input.reviewNote ?? null }).where(eq(paymentEvidence.id, evidence.id));
+  const invoice = (await db.select().from(invoices).where(and(eq(invoices.id, evidence.invoiceId), eq(invoices.schoolId, input.schoolId))).limit(1))[0];
+  const nextStatus: CashAssuranceCaseStatus = input.status === "accepted" && invoice && invoiceOutstanding(invoice) <= 0.009 ? "settled" : "open";
+  await db.update(cashAssuranceCases).set({ status: nextStatus, pausedReason: null, closedBy: nextStatus === "settled" ? input.reviewedBy : null, closedAt: nextStatus === "settled" ? new Date() : null }).where(eq(cashAssuranceCases.id, evidence.caseId));
+  await addCashAssuranceEvent({ schoolId: input.schoolId, caseId: evidence.caseId, eventType: input.status === "accepted" ? "payment_evidence_accepted" : "payment_evidence_rejected", actorUserId: input.reviewedBy, note: input.reviewNote });
+  return { success: true, caseStatus: nextStatus };
+}
+
+export async function recordCashAssuranceDispute(input: { schoolId: number; caseId: number; note: string; recordedBy: number }) {
+  const db = await database();
+  const item = await getCashAssuranceCaseOrThrow(input.schoolId, input.caseId);
+  if (!isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus)) throw new Error("A dispute cannot be added to a closed case.");
+  await db.update(cashAssuranceCases).set({ status: "disputed", pausedReason: input.note }).where(eq(cashAssuranceCases.id, input.caseId));
+  await addCashAssuranceEvent({ schoolId: input.schoolId, caseId: input.caseId, eventType: "dispute_recorded", actorUserId: input.recordedBy, note: input.note });
+  return { success: true };
+}
+
+export async function resolveCashAssuranceDispute(input: { schoolId: number; caseId: number; note?: string; resolvedBy: number }) {
+  const db = await database();
+  const item = await getCashAssuranceCaseOrThrow(input.schoolId, input.caseId);
+  if (item.status !== "disputed") throw new Error("Only a disputed case can be resolved.");
+  await db.update(cashAssuranceCases).set({ status: "open", pausedReason: null }).where(eq(cashAssuranceCases.id, input.caseId));
+  await addCashAssuranceEvent({ schoolId: input.schoolId, caseId: input.caseId, eventType: "dispute_resolved", actorUserId: input.resolvedBy, note: input.note });
+  return { success: true };
 }
 
 export async function listStaff(schoolId: number) { return (await database()).select().from(staffProfiles).where(eq(staffProfiles.schoolId, schoolId)).orderBy(staffProfiles.lastName); }

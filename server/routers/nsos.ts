@@ -267,6 +267,52 @@ export const nsosRouter = router({
       }),
   }),
 
+  cashAssurance: router({
+    list: managementProcedure("finance.read").input(schoolInput).query(({ input }) => db.listCashAssuranceData(input.schoolId)),
+    openCase: managementProcedure("finance.write")
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), invoiceId: z.number().int().positive(), priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"), assignedTo: z.number().int().positive().optional(), nextActionOn: z.string().min(10).max(10).optional(), note: z.string().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.openCashAssuranceCase({ ...input, openedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_case_opened", targetType: "cash_assurance_case", targetId: result.caseId, metadata: { priority: input.priority, invoiceLinked: true } });
+        return result;
+      }),
+    recordPromise: managementProcedure("finance.write")
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), promisedAmount: z.number().positive(), promisedOn: z.string().min(10).max(10), note: z.string().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.recordCashAssurancePromise({ ...input, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_promise_recorded", targetType: "cash_assurance_case", targetId: input.caseId, metadata: { promiseRecorded: true } });
+        return result;
+      }),
+    submitEvidence: managementProcedure("finance.write")
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), invoiceId: z.number().int().positive(), amountClaimed: z.number().positive(), source: z.enum(["manual_receipt", "bank_reference", "provider_event", "other"]), providerReference: z.string().max(160).optional(), note: z.string().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.submitPaymentEvidence({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_payment_evidence_submitted", targetType: "payment_evidence", targetId: result.evidenceId, metadata: { source: input.source, evidenceSubmitted: true } });
+        return result;
+      }),
+    reviewEvidence: managementProcedure("finance.write")
+      .input(schoolInput.extend({ evidenceId: z.number().int().positive(), status: z.enum(["accepted", "rejected"]), linkedPaymentId: z.number().int().positive().optional(), reviewNote: z.string().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.reviewPaymentEvidence({ ...input, reviewedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_payment_evidence_reviewed", targetType: "payment_evidence", targetId: input.evidenceId, metadata: { decision: input.status, ledgerChanged: false } });
+        return result;
+      }),
+    recordDispute: managementProcedure("finance.write")
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), note: z.string().min(2).max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.recordCashAssuranceDispute({ ...input, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_dispute_recorded", targetType: "cash_assurance_case", targetId: input.caseId, metadata: { remindersPaused: true } });
+        return result;
+      }),
+    resolveDispute: managementProcedure("finance.write")
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), note: z.string().max(2000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.resolveCashAssuranceDispute({ ...input, resolvedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_dispute_resolved", targetType: "cash_assurance_case", targetId: input.caseId, metadata: { remindersPaused: false } });
+        return result;
+      }),
+  }),
+
   staff: router({
     list: managementProcedure("students.read").input(schoolInput).query(({ input }) => db.listStaff(input.schoolId)),
     create: managementProcedure("students.write")
