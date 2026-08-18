@@ -38,3 +38,4 @@
 - [x] Add an owner/admin Send Test Message modal for configured notification providers with clear consent, phone validation, and provider delivery feedback.
 - [x] Track SMS test-message submission separately from confirmed provider delivery and show administrators the distinction clearly.
 - [x] Add signed real-time SMS delivery webhooks that transition pending tenant message logs to delivered or failed automatically.
+- [x] Refine the Provider Configuration UI so administrators can clearly copy the Termii callback URL and save its signing secret.
