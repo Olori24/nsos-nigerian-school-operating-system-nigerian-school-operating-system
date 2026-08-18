@@ -1,6 +1,6 @@
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import {
   academicSessions,
@@ -85,6 +85,9 @@ export function isActivePublishedDomain(website: { domainStatus: string; publish
 
 type ProviderCategory = "payment" | "notification";
 type ProviderCredentials = { apiKey?: string; secretKey?: string; webhookSecret?: string };
+export type SmsDeliveryState = "pending" | "delivered" | "failed";
+
+const NSOS_WEBHOOK_ORIGIN = "https://nsos-system-uhkdscaf.manus.space";
 
 function encryptionKey() {
   if (!ENV.cookieSecret) throw new Error("Provider credentials cannot be stored until the application secret is configured.");
@@ -146,6 +149,55 @@ export function maskSmsRecipient(value: string) {
   return value.length <= 6 ? "••••" : `${value.slice(0, 4)}••••${value.slice(-3)}`;
 }
 
+function signaturesMatch(received: string | undefined, expected: string) {
+  if (!received) return false;
+  const candidate = Buffer.from(received.trim(), "utf8");
+  const trusted = Buffer.from(expected, "utf8");
+  return candidate.length === trusted.length && timingSafeEqual(candidate, trusted);
+}
+
+export function verifyTermiiWebhookSignature(rawPayload: string, signature: string | undefined, webhookSecret: string) {
+  const mac = createHmac("sha512", webhookSecret).update(rawPayload, "utf8");
+  return signaturesMatch(signature, mac.digest("hex")) || signaturesMatch(signature, createHmac("sha512", webhookSecret).update(rawPayload, "utf8").digest("base64"));
+}
+
+export function verifyTwilioWebhookSignature(input: { callbackUrl: string; formFields: Record<string, string | string[]>; signature?: string; authToken: string }) {
+  const signedPayload = Object.keys(input.formFields)
+    .sort()
+    .reduce((value, key) => {
+      const fieldValues = Array.isArray(input.formFields[key]) ? [...input.formFields[key]].sort() : [input.formFields[key] as string];
+      return `${value}${key}${fieldValues.join("")}`;
+    }, input.callbackUrl);
+  const expected = createHmac("sha1", input.authToken).update(signedPayload, "utf8").digest("base64");
+  return signaturesMatch(input.signature, expected);
+}
+
+export function mapTermiiSmsDeliveryStatus(status: string | undefined): SmsDeliveryState {
+  const normalized = status?.trim().toLowerCase();
+  if (normalized === "delivered") return "delivered";
+  if (["dnd active on phone number", "message failed", "rejected", "expired"].includes(normalized ?? "")) return "failed";
+  return "pending";
+}
+
+export function mapTwilioSmsDeliveryStatus(status: string | undefined): SmsDeliveryState {
+  const normalized = status?.trim().toLowerCase();
+  if (normalized === "delivered") return "delivered";
+  if (["failed", "undelivered"].includes(normalized ?? "")) return "failed";
+  return "pending";
+}
+
+export function canApplySmsDeliveryTransition(currentStatus: "queued" | "sent" | "failed", incoming: SmsDeliveryState) {
+  return currentStatus === "queued" && incoming !== "pending";
+}
+
+export function getSmsDeliveryWebhookUrls(schoolId: number) {
+  const query = `?schoolId=${schoolId}`;
+  return {
+    termii: `${NSOS_WEBHOOK_ORIGIN}/api/webhooks/sms/termii${query}`,
+    twilio: `${NSOS_WEBHOOK_ORIGIN}/api/webhooks/sms/twilio${query}`,
+  };
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await database();
@@ -200,9 +252,10 @@ export async function listProviderConfigurations(schoolId: number) {
   return (["payment", "notification"] as const).map(category => {
     const row = rows.find(item => item.category === category);
     const hasCredentials = Boolean(row?.encryptedCredentials);
+    const hasWebhookSecret = Boolean(row?.encryptedCredentials && openProviderCredentials(row.encryptedCredentials).webhookSecret);
     return row
-      ? { id: row.id, category, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, hasCredentials, readiness: providerReadiness(category, row.provider, hasCredentials, row.status), lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
-      : { id: null, category, provider: category === "payment" ? "paystack" : "termii", status: "draft" as const, configuration: {}, hasCredentials: false, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
+      ? { id: row.id, category, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, hasCredentials, hasWebhookSecret, readiness: providerReadiness(category, row.provider, hasCredentials, row.status), lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
+      : { id: null, category, provider: category === "payment" ? "paystack" : "termii", status: "draft" as const, configuration: {}, hasCredentials: false, hasWebhookSecret: false, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
   });
 }
 
@@ -214,6 +267,24 @@ export async function saveProviderConfiguration(input: { schoolId: number; categ
   const values = { schoolId: input.schoolId, category: input.category, provider: input.provider, status: input.status, configuration: input.configuration, encryptedCredentials, configuredBy: input.configuredBy, lastValidatedAt: null };
   await db.insert(providerConfigurations).values(values).onDuplicateKeyUpdate({ set: values });
   return listProviderConfigurations(input.schoolId);
+}
+
+export async function getSmsWebhookVerificationSecret(schoolId: number, provider: "termii" | "twilio") {
+  const db = await database();
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, schoolId), eq(providerConfigurations.category, "notification"), eq(providerConfigurations.provider, provider), eq(providerConfigurations.status, "ready"))).limit(1))[0];
+  if (!configuration) return undefined;
+  const credentials = openProviderCredentials(configuration.encryptedCredentials);
+  return provider === "termii" ? credentials.webhookSecret : credentials.secretKey;
+}
+
+export async function updateProviderSmsDeliveryStatus(input: { schoolId: number; providerMessageId: string; deliveryState: SmsDeliveryState }) {
+  const db = await database();
+  const log = (await db.select().from(messageLogs).where(and(eq(messageLogs.schoolId, input.schoolId), eq(messageLogs.providerMessageId, input.providerMessageId), eq(messageLogs.channel, "sms"))).limit(1))[0];
+  if (!log) return { updated: false, reason: "message_not_found" as const };
+  if (!canApplySmsDeliveryTransition(log.status, input.deliveryState)) return { updated: false, reason: input.deliveryState === "pending" ? "non_terminal_event" as const : "already_terminal" as const, status: log.status };
+  const status = input.deliveryState === "delivered" ? "sent" : "failed";
+  await db.update(messageLogs).set({ status, sentAt: status === "sent" ? new Date() : null }).where(and(eq(messageLogs.id, log.id), eq(messageLogs.schoolId, input.schoolId), eq(messageLogs.status, "queued")));
+  return { updated: true, status };
 }
 
 export async function testProviderConnection(schoolId: number, category: ProviderCategory) {
@@ -253,6 +324,7 @@ export async function sendProviderSmsTest(input: { schoolId: number; to: string;
   const message = `NSOS test message from ${school?.name ?? "your school"}. SMS delivery is configured.`;
   const log = await createMessageLog({ schoolId: input.schoolId, channel: "sms", audience: "staff", subject: `Provider SMS test to ${maskedRecipient}`, body: `Test SMS dispatch requested via ${configuration.provider}.`, recipientCount: 1, createdBy: input.createdBy });
   const credentials = openProviderCredentials(configuration.encryptedCredentials);
+  if (configuration.provider === "termii" && !credentials.webhookSecret) throw new Error("Store the Termii webhook signing secret before sending an automatically tracked SMS test.");
   const details = (configuration.configuration ?? {}) as Record<string, unknown>;
   const sender = typeof details.senderId === "string" && details.senderId.trim() ? details.senderId.trim() : "NSOS";
   const controller = new AbortController();
@@ -264,7 +336,7 @@ export async function sendProviderSmsTest(input: { schoolId: number; to: string;
       response = await fetch("https://api.ng.termii.com/api/sms/send", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ api_key: credentials.apiKey ?? credentials.secretKey, to: recipient, from: sender, sms: message, type: "plain", channel: "generic" }) });
     } else {
       if (!credentials.apiKey || !credentials.secretKey) throw new Error("Store the Twilio account SID and auth token before sending a test message.");
-      response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(credentials.apiKey)}/Messages.json`, { method: "POST", signal: controller.signal, headers: { Authorization: `Basic ${Buffer.from(`${credentials.apiKey}:${credentials.secretKey}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ To: `+${recipient}`, From: sender, Body: message }).toString() });
+      response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(credentials.apiKey)}/Messages.json`, { method: "POST", signal: controller.signal, headers: { Authorization: `Basic ${Buffer.from(`${credentials.apiKey}:${credentials.secretKey}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ To: `+${recipient}`, From: sender, Body: message, StatusCallback: getSmsDeliveryWebhookUrls(input.schoolId).twilio }).toString() });
     }
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok || (configuration.provider === "termii" && payload.code !== "ok")) {
@@ -310,13 +382,21 @@ export async function checkProviderSmsTestDelivery(input: { schoolId: number; me
   if (!response.ok) return { ok: false, deliveryState: "pending" as const, message: `The provider status report is not available yet (HTTP ${response.status}). Try again shortly.` };
   const payload = await response.json().catch(() => ({})) as Record<string, unknown> | Record<string, unknown>[];
   const report = Array.isArray(payload) ? payload[0] ?? {} : payload;
-  const providerStatus = String(report.status ?? "").toLowerCase();
-  if (providerStatus === "delivered") {
-    await db.update(messageLogs).set({ status: "sent", sentAt: new Date() }).where(eq(messageLogs.id, log.id));
+  const deliveryState = configuration.provider === "termii" ? mapTermiiSmsDeliveryStatus(String(report.status ?? "")) : mapTwilioSmsDeliveryStatus(String(report.status ?? ""));
+  if (deliveryState !== "pending") {
+    const transition = await updateProviderSmsDeliveryStatus({ schoolId: input.schoolId, providerMessageId: log.providerMessageId, deliveryState });
+    const effectiveStatus = transition.updated ? transition.status : transition.status;
+    if (effectiveStatus === "sent") {
+      return { ok: true, deliveryState: "delivered" as const, message: "Provider confirmed that the test SMS was delivered." };
+    }
+    if (effectiveStatus === "failed") {
+      return { ok: false, deliveryState: "failed" as const, message: "Provider confirmed that the test SMS was not delivered." };
+    }
+  }
+  if (deliveryState === "delivered") {
     return { ok: true, deliveryState: "delivered" as const, message: "Provider confirmed that the test SMS was delivered." };
   }
-  if (["failed", "undelivered", "canceled"].includes(providerStatus)) {
-    await db.update(messageLogs).set({ status: "failed" }).where(eq(messageLogs.id, log.id));
+  if (deliveryState === "failed") {
     return { ok: false, deliveryState: "failed" as const, message: "Provider confirmed that the test SMS was not delivered." };
   }
   return { ok: false, deliveryState: "pending" as const, message: "SMS was submitted but delivery has not been confirmed yet. Try again shortly." };

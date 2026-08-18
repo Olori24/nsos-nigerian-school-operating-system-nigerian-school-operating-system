@@ -5,6 +5,7 @@ vi.mock("./db", () => ({
   listProviderConfigurations: vi.fn(),
   saveProviderConfiguration: vi.fn(),
   testProviderConnection: vi.fn(),
+  getSmsDeliveryWebhookUrls: vi.fn(),
   sendProviderSmsTest: vi.fn(),
   checkProviderSmsTestDelivery: vi.fn(),
   providerRequiresCredentials: vi.fn((provider: string) => provider !== "manual" && provider !== "in_app"),
@@ -43,6 +44,12 @@ describe("NSOS provider configuration routes", () => {
     vi.mocked(db.testProviderConnection).mockResolvedValue({ ok: true, message: "Connection verified. No payment or notification was sent.", testedAt: new Date() });
     await expect(caller().nsos.providers.testConnection({ schoolId: 1, category: "payment" })).resolves.toMatchObject({ ok: true });
     expect(db.testProviderConnection).toHaveBeenCalledWith(1, "payment");
+  });
+
+  it("returns tenant-scoped callback URLs only to school administrators", async () => {
+    vi.mocked(db.getSmsDeliveryWebhookUrls).mockReturnValue({ termii: "https://nsos-system-uhkdscaf.manus.space/api/webhooks/sms/termii?schoolId=1", twilio: "https://nsos-system-uhkdscaf.manus.space/api/webhooks/sms/twilio?schoolId=1" });
+    await expect(caller().nsos.providers.webhookUrls({ schoolId: 1 })).resolves.toMatchObject({ termii: expect.stringContaining("schoolId=1") });
+    expect(db.getSmsDeliveryWebhookUrls).toHaveBeenCalledWith(1);
   });
 
   it("requires explicit confirmation before an administrator can dispatch a real SMS test", async () => {

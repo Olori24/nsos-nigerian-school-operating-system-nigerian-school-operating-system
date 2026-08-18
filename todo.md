@@ -37,3 +37,4 @@
 - [x] Add an owner/admin Test Connection action that verifies configured payment and notification provider credentials without exposing them.
 - [x] Add an owner/admin Send Test Message modal for configured notification providers with clear consent, phone validation, and provider delivery feedback.
 - [x] Track SMS test-message submission separately from confirmed provider delivery and show administrators the distinction clearly.
+- [x] Add signed real-time SMS delivery webhooks that transition pending tenant message logs to delivered or failed automatically.

@@ -214,6 +214,17 @@ For SMS-capable **Termii** and **Twilio** notification configurations, the dashb
 
 NSOS records a successful send request as **submitted with delivery pending**, not delivered. It stores the provider message identifier and presents a **Check delivery status** action. This queries the Termii message-history report or Twilio message resource, reporting confirmed delivery only when the provider returns `delivered`; failures update the audit state accordingly. Until then, the dashboard states that delivery has not been confirmed.
 
+### Real-time SMS delivery callbacks
+
+Automatic delivery reports are handled by two public, stateless `POST` routes that execute before authenticated APIs. A route receives no user session and updates no data until it verifies both the tenant selector and the provider signature. The handler then finds the matching SMS audit log by **school ID and provider message ID**, and performs a conditional transition from `queued` to `sent` or `failed`. Replayed, delayed, non-terminal, or out-of-order callbacks cannot downgrade a terminal record.
+
+| Provider | School setup | NSOS callback behavior |
+|---|---|---|
+| Termii | Copy the dashboard callback URL to the Termii developer console and store Termii’s webhook signing secret in the protected provider configuration. | NSOS verifies `X-Termii-Signature` against the raw JSON payload using HMAC-SHA512. `Delivered` marks the log as sent; DND, failed, rejected, and expired statuses mark it failed. |
+| Twilio | NSOS supplies the tenant callback URL as `StatusCallback` whenever it sends a Twilio SMS test. | NSOS verifies `X-Twilio-Signature` using the tenant Auth Token and the full callback URL plus form fields. `delivered` marks the log as sent; `failed` and `undelivered` mark it failed. |
+
+The primary delivery-confirmation path therefore requires no persistent worker or periodic polling and remains compatible with the managed stateless deployment. The manual delivery check remains available as an operational fallback.
+
 | Configuration category | Examples |
 |---|---|
 | Database | `DATABASE_URL` |
@@ -242,6 +253,7 @@ Follow this sequence for any change that affects persistence:
 | Cross-school access | Tenant-scoped schema plus active membership and permission checks | Add automated regression tests whenever a new tenant-owned domain is introduced. |
 | Role escalation | Owner/admin-only procedures for membership and public website/domain actions | Review memberships during school onboarding and staff offboarding. |
 | Provider credential exposure | Owner/admin-only provider APIs, server-side encrypted credential storage, sanitized dashboard reads | Do not paste provider secrets into browser-visible documentation or client configuration. |
+| SMS callback spoofing | Provider-specific signed callback validation, tenant-scoped message lookup, constant-time signature comparison, and terminal-state protection | Register only the copied tenant callback URL and rotate provider secrets if compromise is suspected. |
 | Public data exposure | Public routes return only admissions and published website configuration | Keep operational reporting, documents, and portal records behind authentication. |
 | Result privacy | Parent/student portal retrieval is restricted to the relevant learner and published results | Verify guardian links before enabling a family account. |
 | Document storage | Object storage references rather than database file bytes | Define retention and deletion policy with each school. |
@@ -256,7 +268,9 @@ Follow this sequence for any change that affects persistence:
 4. Configure public admissions and the school website only after the school approves published content.
 5. If a custom domain is required, save it in Website Studio, add the TXT record, bind the domain through platform settings, and verify it in NSOS.
 6. Import or create real records only through authorized school channels and confirm portal access links are correct.
-7. Monitor attendance, admissions, invoice, payment, and results workflows during the first term.
+7. For Termii, copy the provider callback URL into the Termii developer console and save its webhook signing secret in the protected notification configuration. For Twilio, retain the configured Auth Token so NSOS can validate its automatic delivery callback.
+8. Send an authorized test SMS and confirm that its audit status changes from pending to delivered or failed after the provider report. Use manual delivery check only if the callback cannot be configured.
+9. Monitor attendance, admissions, invoice, payment, and results workflows during the first term.
 
 ## 10. Validation evidence
 
@@ -265,7 +279,7 @@ The current release was validated using the following application checks:
 | Validation | Result |
 |---|---|
 | TypeScript validation | Passed via `pnpm check` |
-| Automated tests | 23 Vitest tests passed, covering policy, grading, public admissions, operations, finance/staff, and domain controls |
+| Automated tests | 37 Vitest tests passed, covering policy, grading, public admissions, operations, finance/staff, domains, provider security, SMS delivery signatures, and terminal-state rules |
 | Production build | Passed via `pnpm build` |
 | Visual review | Desktop and mobile onboarding plus public unpublished-site privacy state reviewed |
 | Change control | Release checkpoint saved after completion |
@@ -276,6 +290,7 @@ The current release was validated using the following application checks:
 |---|---|
 | Runtime/build scripts | `package.json` |
 | Server request pipeline | `server/_core/index.ts` |
+| Signed SMS delivery callbacks | `server/webhooks.ts`, `server/db.ts`, `server/routers/nsos.ts` |
 | Tenant schema | `drizzle/schema.ts` |
 | Role and tenant procedure guards | `server/routers/nsos.ts`, `server/roles.ts` |
 | Data access and DNS verification | `server/db.ts` |
