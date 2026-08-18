@@ -24,6 +24,33 @@ NSOS is designed around a different model:
 
 The goal is not simply to digitize paperwork. NSOS provides the operational layer that connects the people, workflows, data, permissions, and public-facing services required to run a school.
 
+## Why school owners buy and keep NSOS
+
+Schools do not need another disconnected dashboard. They need control over the daily realities that affect income, parent confidence, staff performance, and the school’s ability to grow responsibly.
+
+> **NSOS helps a school collect what it is owed, keep families informed, and show the owner the issues requiring attention before they become a larger problem.**
+
+| School-owner pressure | NSOS operational outcome | Why it becomes difficult to operate without NSOS |
+| --- | --- | --- |
+| **Fee leakage and late payment** | Fee structures, invoices, payment records, balances, receipts, finance reporting, and provider-ready payment controls. | The school gains a clearer view of what is due, paid, outstanding, or needing follow-up. |
+| **Parents chasing updates** | Parent/guardian access to linked learner attendance, published results, fees, announcements, and reliable message-delivery states. | Families receive consistent information from the school instead of relying on fragmented chats and manual follow-up. |
+| **Owner visibility** | Leadership KPIs, enrolment and finance reporting, attendance summaries, admissions queues, and audit-friendly operational states. | Proprietors can focus on exceptions and decisions rather than reconstructing school activity from paper and spreadsheets. |
+| **Lost admissions opportunities** | Public applications, document handling, review queues, decisions, and enrollment confirmation. | Each prospective family has a traceable journey from public enquiry to admission decision. |
+| **Staff accountability and academic quality** | Staff duties, leave, attendance, lesson planning, curriculum coverage, score entry, approval, and result publishing controls. | Leaders can connect academic and operational responsibilities to named workflows and statuses. |
+| **Trust, control, and responsible growth** | Tenant isolation, role-based permissions, security audit events, protected provider credentials, branded school websites, and controlled custom domains. | The school gains a more credible operating foundation as enrolment, staff, and parent expectations grow. |
+
+### The commercial wedge: cash and parent trust
+
+The strongest initial promise is **NSOS Cash and Parent Trust**. This is more useful than selling “school management software” because it combines two outcomes that proprietors feel immediately: protecting school revenue and giving parents dependable information.
+
+The product sequence is deliberately focused: strengthen payment visibility and follow-up first; unify parent-facing attendance, fee, result, and announcement information next; then surface a short owner exception brief covering overdue fees, unusual absences, stalled admissions, and delivery failures. The result should be a system that becomes part of the owner’s daily operating routine—not software used only at the end of term.
+
+### Real admissions-workflow context
+
+The public [Greener Future Academy digital admission form](https://greener-future-academy-admission-2utcuraeo.vercel.app) is a useful real-world reference for the start of this journey. It lets a family select an applying class and submit pupil information, guardian details, medical history, application-fee payment evidence, and a declaration.
+
+NSOS is designed to extend that public-intake moment through a secured school workflow: **application → document review → decision → enrollment → student record → invoices and receipts → attendance, results, and parent communication**. The public form is an admissions-entry reference; NSOS provides the controlled operating system around the entire lifecycle.
+
 ### Built for Nigeria first
 
 NSOS is configured for the Nigerian operating environment out of the box:
@@ -401,6 +428,7 @@ If you discover a security issue, do not disclose exploitable details in a publi
 ## Documentation
 
 - [`docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md`](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md) — architecture, deployment, tenant isolation, domains, providers, and operational controls
+- [`docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md`](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md) — buyer value, product differentiation, and the cash-and-parent-trust growth sequence
 - [`LIVE_QA_GUIDE.md`](LIVE_QA_GUIDE.md) — live QA and verification workflow
 - [`SECURITY.md`](SECURITY.md) — security policy and reporting guidance
 
