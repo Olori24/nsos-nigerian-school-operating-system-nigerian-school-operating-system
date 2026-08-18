@@ -1,0 +1,11 @@
+import { trpc } from "@/lib/trpc";
+import { History } from "lucide-react";
+import { useState } from "react";
+
+const inputClass = "h-10 w-full rounded-lg border border-[#dfe5df] bg-[#fbfcfa] px-3 text-sm text-[#15201c] outline-none transition focus:border-[#0f5c4f] focus:ring-2 focus:ring-[#0f5c4f]/10";
+
+export function AcademicHistoryStation({ schoolId, students }: { schoolId: number; students: any[] }) {
+  const [studentId, setStudentId] = useState("");
+  const history = trpc.nsos.students.history.useQuery({ schoolId, studentId: Number(studentId || 0) }, { enabled: !!studentId });
+  return <section className="rounded-[1.2rem] border border-[#e0e5df] bg-white p-5 shadow-[0_10px_32px_rgba(16,45,35,0.035)] sm:p-6"><div className="flex items-start gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#edf3ed] text-[#0f5c4f]"><History className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-[#2d4439]">Academic history</p><p className="mt-1 text-xs text-[#758079]">Review a learner’s class enrollment timeline, promotions, withdrawals, and graduation state.</p></div></div><select className={`${inputClass} mt-5 max-w-md`} value={studentId} onChange={event => setStudentId(event.target.value)}><option value="">Select student</option>{students.map(item => <option key={item.id} value={item.id}>{item.firstName} {item.lastName} · {item.admissionNo}</option>)}</select>{history.isLoading ? <p className="mt-4 text-xs text-[#758079]">Loading academic history…</p> : history.data?.length ? <div className="mt-5 divide-y divide-[#edf0eb] border-t border-[#edf0eb]">{history.data.map(item => <div key={item.enrollment.id} className="flex items-center justify-between gap-3 py-3"><div><p className="text-xs font-semibold text-[#32473d]">{item.className}</p><p className="mt-1 text-[10px] text-[#7a847e]">{item.sessionName} · Enrolled {new Date(item.enrollment.enrolledOn).toLocaleDateString()}</p></div><span className="rounded-full bg-[#f1f4f0] px-2.5 py-1 text-[10px] font-semibold text-[#52635b]">{item.enrollment.status}</span></div>)}</div> : studentId ? <p className="mt-4 text-xs text-[#758079]">No academic enrollment history has been recorded for this learner.</p> : null}</section>;
+}

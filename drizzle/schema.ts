@@ -1,17 +1,20 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  date,
+  decimal,
+  index,
+  int,
+  json,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -22,7 +25,618 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+export const schools = mysqlTable("schools", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  shortCode: varchar("shortCode", { length: 32 }).notNull().unique(),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 48 }),
+  address: text("address"),
+  state: varchar("state", { length: 100 }),
+  logoUrl: text("logoUrl"),
+  currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+  timezone: varchar("timezone", { length: 64 }).notNull().default("Africa/Lagos"),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const schoolWebsites = mysqlTable(
+  "schoolWebsites",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    headline: varchar("headline", { length: 255 }),
+    introduction: text("introduction"),
+    primaryColor: varchar("primaryColor", { length: 16 }).notNull().default("#0f5c4f"),
+    contactEmail: varchar("contactEmail", { length: 320 }),
+    contactPhone: varchar("contactPhone", { length: 48 }),
+    campusLocation: varchar("campusLocation", { length: 255 }),
+    customDomain: varchar("customDomain", { length: 255 }),
+    domainVerificationToken: varchar("domainVerificationToken", { length: 96 }),
+    domainStatus: mysqlEnum("domainStatus", ["not_configured", "pending", "active"]).notNull().default("not_configured"),
+    admissionsEnabled: boolean("admissionsEnabled").notNull().default(true),
+    published: boolean("published").notNull().default(false),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolUnique: uniqueIndex("schoolWebsite_school_unique").on(table.schoolId), domainUnique: uniqueIndex("schoolWebsite_domain_unique").on(table.customDomain) }),
+);
+
+export const schoolMemberships = mysqlTable(
+  "schoolMemberships",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    userId: int("userId").notNull(),
+    role: mysqlEnum("role", ["owner", "admin", "staff", "teacher", "finance", "parent", "student"])
+      .notNull()
+      .default("staff"),
+    status: mysqlEnum("status", ["active", "invited", "suspended"]).notNull().default("active"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolUser: uniqueIndex("schoolMembership_school_user_unique").on(table.schoolId, table.userId),
+    schoolIndex: index("schoolMembership_school_idx").on(table.schoolId),
+  }),
+);
+
+export const academicSessions = mysqlTable(
+  "academicSessions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    name: varchar("name", { length: 64 }).notNull(),
+    startsOn: date("startsOn").notNull(),
+    endsOn: date("endsOn").notNull(),
+    isCurrent: boolean("isCurrent").notNull().default(false),
+    status: mysqlEnum("status", ["planning", "active", "closed"]).notNull().default("planning"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("academicSession_school_idx").on(table.schoolId) }),
+);
+
+export const academicTerms = mysqlTable(
+  "academicTerms",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    sessionId: int("sessionId").notNull(),
+    name: varchar("name", { length: 64 }).notNull(),
+    startsOn: date("startsOn").notNull(),
+    endsOn: date("endsOn").notNull(),
+    isCurrent: boolean("isCurrent").notNull().default(false),
+    status: mysqlEnum("status", ["planning", "active", "closed"]).notNull().default("planning"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("academicTerm_school_idx").on(table.schoolId) }),
+);
+
+export const departments = mysqlTable(
+  "departments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    code: varchar("code", { length: 24 }),
+    headStaffId: int("headStaffId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolName: uniqueIndex("department_school_name_unique").on(table.schoolId, table.name) }),
+);
+
+export const staffProfiles = mysqlTable(
+  "staffProfiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    userId: int("userId"),
+    employeeNo: varchar("employeeNo", { length: 48 }).notNull(),
+    firstName: varchar("firstName", { length: 120 }).notNull(),
+    lastName: varchar("lastName", { length: 120 }).notNull(),
+    email: varchar("email", { length: 320 }),
+    phone: varchar("phone", { length: 48 }),
+    departmentId: int("departmentId"),
+    jobTitle: varchar("jobTitle", { length: 120 }).notNull(),
+    employmentType: mysqlEnum("employmentType", ["full_time", "part_time", "contract", "temporary"]).notNull().default("full_time"),
+    employmentStatus: mysqlEnum("employmentStatus", ["active", "on_leave", "suspended", "exited"]).notNull().default("active"),
+    joinedOn: date("joinedOn"),
+    address: text("address"),
+    emergencyContact: varchar("emergencyContact", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolEmployee: uniqueIndex("staff_school_employee_unique").on(table.schoolId, table.employeeNo),
+    schoolIndex: index("staff_school_idx").on(table.schoolId),
+  }),
+);
+
+export const staffDuties = mysqlTable(
+  "staffDuties",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    staffId: int("staffId").notNull(),
+    title: varchar("title", { length: 160 }).notNull(),
+    description: text("description"),
+    startsOn: date("startsOn"),
+    endsOn: date("endsOn"),
+    status: mysqlEnum("status", ["active", "ended"]).notNull().default("active"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("staffDuty_school_idx").on(table.schoolId), staffIndex: index("staffDuty_staff_idx").on(table.staffId) }),
+);
+
+export const guardians = mysqlTable(
+  "guardians",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    userId: int("userId"),
+    firstName: varchar("firstName", { length: 120 }).notNull(),
+    lastName: varchar("lastName", { length: 120 }).notNull(),
+    relationship: varchar("relationship", { length: 80 }).notNull(),
+    email: varchar("email", { length: 320 }),
+    phone: varchar("phone", { length: 48 }),
+    address: text("address"),
+    occupation: varchar("occupation", { length: 160 }),
+    isPrimaryContact: boolean("isPrimaryContact").notNull().default(false),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("guardian_school_idx").on(table.schoolId) }),
+);
+
+export const studentProfiles = mysqlTable(
+  "studentProfiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    userId: int("userId"),
+    admissionNo: varchar("admissionNo", { length: 64 }).notNull(),
+    firstName: varchar("firstName", { length: 120 }).notNull(),
+    lastName: varchar("lastName", { length: 120 }).notNull(),
+    middleName: varchar("middleName", { length: 120 }),
+    dateOfBirth: date("dateOfBirth"),
+    gender: mysqlEnum("gender", ["female", "male", "other", "prefer_not_to_say"]),
+    email: varchar("email", { length: 320 }),
+    phone: varchar("phone", { length: 48 }),
+    address: text("address"),
+    stateOfOrigin: varchar("stateOfOrigin", { length: 120 }),
+    localGovernment: varchar("localGovernment", { length: 120 }),
+    medicalNotes: text("medicalNotes"),
+    status: mysqlEnum("status", ["active", "graduated", "withdrawn", "suspended", "alumni"]).notNull().default("active"),
+    admittedOn: date("admittedOn"),
+    graduationYear: int("graduationYear"),
+    avatarUrl: text("avatarUrl"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolAdmission: uniqueIndex("student_school_admission_unique").on(table.schoolId, table.admissionNo),
+    schoolIndex: index("student_school_idx").on(table.schoolId),
+  }),
+);
+
+export const studentGuardians = mysqlTable(
+  "studentGuardians",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    studentId: int("studentId").notNull(),
+    guardianId: int("guardianId").notNull(),
+    isPrimary: boolean("isPrimary").notNull().default(false),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ relationship: uniqueIndex("student_guardian_unique").on(table.studentId, table.guardianId) }),
+);
+
+export const admissionsApplications = mysqlTable(
+  "admissionsApplications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    applicationNo: varchar("applicationNo", { length: 64 }).notNull(),
+    firstName: varchar("firstName", { length: 120 }).notNull(),
+    lastName: varchar("lastName", { length: 120 }).notNull(),
+    dateOfBirth: date("dateOfBirth"),
+    gender: mysqlEnum("gender", ["female", "male", "other", "prefer_not_to_say"]),
+    applyingForClassId: int("applyingForClassId"),
+    guardianName: varchar("guardianName", { length: 255 }).notNull(),
+    guardianEmail: varchar("guardianEmail", { length: 320 }),
+    guardianPhone: varchar("guardianPhone", { length: 48 }).notNull(),
+    priorSchool: varchar("priorSchool", { length: 255 }),
+    notes: text("notes"),
+    status: mysqlEnum("status", ["submitted", "under_review", "accepted", "declined", "enrolled"])
+      .notNull()
+      .default("submitted"),
+    reviewerId: int("reviewerId"),
+    decisionNote: text("decisionNote"),
+    submittedAt: timestamp("submittedAt").defaultNow().notNull(),
+    decidedAt: timestamp("decidedAt"),
+  },
+  table => ({
+    schoolApplication: uniqueIndex("application_school_no_unique").on(table.schoolId, table.applicationNo),
+    schoolIndex: index("application_school_idx").on(table.schoolId),
+  }),
+);
+
+export const admissionDocuments = mysqlTable(
+  "admissionDocuments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    applicationId: int("applicationId").notNull(),
+    label: varchar("label", { length: 160 }).notNull(),
+    storageKey: text("storageKey").notNull(),
+    url: text("url").notNull(),
+    mimeType: varchar("mimeType", { length: 120 }),
+    status: mysqlEnum("status", ["pending", "verified", "rejected"]).notNull().default("pending"),
+    reviewedBy: int("reviewedBy"),
+    reviewedAt: timestamp("reviewedAt"),
+    reviewNote: text("reviewNote"),
+    uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
+  },
+  table => ({ applicationIndex: index("admissionDocument_application_idx").on(table.applicationId) }),
+);
+
+export const classes = mysqlTable(
+  "classes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    sessionId: int("sessionId"),
+    name: varchar("name", { length: 120 }).notNull(),
+    level: varchar("level", { length: 64 }),
+    arm: varchar("arm", { length: 32 }),
+    capacity: int("capacity"),
+    classTeacherId: int("classTeacherId"),
+    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolName: uniqueIndex("class_school_name_unique").on(table.schoolId, table.name) }),
+);
+
+export const subjects = mysqlTable(
+  "subjects",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    code: varchar("code", { length: 32 }).notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    departmentId: int("departmentId"),
+    description: text("description"),
+    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolCode: uniqueIndex("subject_school_code_unique").on(table.schoolId, table.code) }),
+);
+
+export const classSubjects = mysqlTable(
+  "classSubjects",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    classId: int("classId").notNull(),
+    subjectId: int("subjectId").notNull(),
+    teacherId: int("teacherId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ classSubject: uniqueIndex("class_subject_unique").on(table.classId, table.subjectId) }),
+);
+
+export const enrollments = mysqlTable(
+  "enrollments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    studentId: int("studentId").notNull(),
+    classId: int("classId").notNull(),
+    sessionId: int("sessionId").notNull(),
+    status: mysqlEnum("status", ["active", "promoted", "graduated", "withdrawn"]).notNull().default("active"),
+    enrolledOn: date("enrolledOn").notNull(),
+    promotionNote: text("promotionNote"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    studentSession: uniqueIndex("enrollment_student_session_unique").on(table.studentId, table.sessionId),
+    schoolIndex: index("enrollment_school_idx").on(table.schoolId),
+  }),
+);
+
+export const timetableEntries = mysqlTable(
+  "timetableEntries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    classId: int("classId").notNull(),
+    subjectId: int("subjectId").notNull(),
+    teacherId: int("teacherId"),
+    dayOfWeek: mysqlEnum("dayOfWeek", ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]).notNull(),
+    startsAt: varchar("startsAt", { length: 8 }).notNull(),
+    endsAt: varchar("endsAt", { length: 8 }).notNull(),
+    room: varchar("room", { length: 80 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ classDay: index("timetable_class_day_idx").on(table.classId, table.dayOfWeek) }),
+);
+
+export const lessonPlans = mysqlTable(
+  "lessonPlans",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    classId: int("classId").notNull(),
+    subjectId: int("subjectId").notNull(),
+    teacherId: int("teacherId").notNull(),
+    termId: int("termId"),
+    weekNo: int("weekNo").notNull(),
+    topic: varchar("topic", { length: 255 }).notNull(),
+    objectives: text("objectives"),
+    resources: text("resources"),
+    status: mysqlEnum("status", ["draft", "submitted", "approved", "delivered"]).notNull().default("draft"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("lessonPlan_school_idx").on(table.schoolId) }),
+);
+
+export const curriculumMilestones = mysqlTable(
+  "curriculumMilestones",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    classSubjectId: int("classSubjectId").notNull(),
+    termId: int("termId"),
+    title: varchar("title", { length: 255 }).notNull(),
+    targetWeek: int("targetWeek"),
+    completionPercentage: int("completionPercentage").notNull().default(0),
+    status: mysqlEnum("status", ["not_started", "in_progress", "complete"]).notNull().default("not_started"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("curriculum_school_idx").on(table.schoolId) }),
+);
+
+export const attendanceRecords = mysqlTable(
+  "attendanceRecords",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    attendeeType: mysqlEnum("attendeeType", ["student", "staff"]).notNull(),
+    studentId: int("studentId"),
+    staffId: int("staffId"),
+    classId: int("classId"),
+    attendanceDate: date("attendanceDate").notNull(),
+    status: mysqlEnum("status", ["present", "late", "absent", "excused"]).notNull(),
+    note: text("note"),
+    recordedBy: int("recordedBy").notNull(),
+    recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+  },
+  table => ({
+    studentDate: uniqueIndex("attendance_student_date_unique").on(table.studentId, table.attendanceDate),
+    staffDate: uniqueIndex("attendance_staff_date_unique").on(table.staffId, table.attendanceDate),
+    schoolDate: index("attendance_school_date_idx").on(table.schoolId, table.attendanceDate),
+  }),
+);
+
+export const assessments = mysqlTable(
+  "assessments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    termId: int("termId").notNull(),
+    classId: int("classId").notNull(),
+    subjectId: int("subjectId").notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    assessmentType: mysqlEnum("assessmentType", ["assignment", "test", "project", "exam", "practical"]).notNull(),
+    maximumScore: int("maximumScore").notNull(),
+    weight: decimal("weight", { precision: 5, scale: 2 }).notNull().default("100.00"),
+    heldOn: date("heldOn"),
+    status: mysqlEnum("status", ["draft", "open", "locked", "published"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("assessment_school_idx").on(table.schoolId) }),
+);
+
+export const gradeScales = mysqlTable(
+  "gradeScales",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    label: varchar("label", { length: 12 }).notNull(),
+    minPercentage: decimal("minPercentage", { precision: 5, scale: 2 }).notNull(),
+    maxPercentage: decimal("maxPercentage", { precision: 5, scale: 2 }).notNull(),
+    remark: varchar("remark", { length: 255 }),
+    sortOrder: int("sortOrder").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolLabel: uniqueIndex("grade_school_label_unique").on(table.schoolId, table.label) }),
+);
+
+export const scores = mysqlTable(
+  "scores",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    assessmentId: int("assessmentId").notNull(),
+    studentId: int("studentId").notNull(),
+    score: decimal("score", { precision: 7, scale: 2 }).notNull(),
+    comment: text("comment"),
+    enteredBy: int("enteredBy").notNull(),
+    enteredAt: timestamp("enteredAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ assessmentStudent: uniqueIndex("score_assessment_student_unique").on(table.assessmentId, table.studentId) }),
+);
+
+export const resultPublications = mysqlTable(
+  "resultPublications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    termId: int("termId").notNull(),
+    classId: int("classId").notNull(),
+    status: mysqlEnum("status", ["draft", "approved", "published", "withdrawn"]).notNull().default("draft"),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    publishedBy: int("publishedBy"),
+    publishedAt: timestamp("publishedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ termClass: uniqueIndex("result_term_class_unique").on(table.termId, table.classId) }),
+);
+
+export const feeStructures = mysqlTable(
+  "feeStructures",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    termId: int("termId"),
+    classId: int("classId"),
+    name: varchar("name", { length: 255 }).notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    mandatory: boolean("mandatory").notNull().default(true),
+    dueOn: date("dueOn"),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("feeStructure_school_idx").on(table.schoolId) }),
+);
+
+export const invoices = mysqlTable(
+  "invoices",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    studentId: int("studentId").notNull(),
+    termId: int("termId"),
+    invoiceNo: varchar("invoiceNo", { length: 64 }).notNull(),
+    issueDate: date("issueDate").notNull(),
+    dueDate: date("dueDate"),
+    subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+    discount: decimal("discount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+    amountPaid: decimal("amountPaid", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    status: mysqlEnum("status", ["draft", "issued", "partial", "paid", "overdue", "void"]).notNull().default("draft"),
+    note: text("note"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolNo: uniqueIndex("invoice_school_no_unique").on(table.schoolId, table.invoiceNo),
+    studentIndex: index("invoice_student_idx").on(table.studentId),
+  }),
+);
+
+export const invoiceLineItems = mysqlTable("invoiceLineItems", {
+  id: int("id").autoincrement().primaryKey(),
+  invoiceId: int("invoiceId").notNull(),
+  feeStructureId: int("feeStructureId"),
+  description: varchar("description", { length: 255 }).notNull(),
+  quantity: int("quantity").notNull().default(1),
+  unitAmount: decimal("unitAmount", { precision: 12, scale: 2 }).notNull(),
+  lineTotal: decimal("lineTotal", { precision: 12, scale: 2 }).notNull(),
+});
+
+export const payments = mysqlTable(
+  "payments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    invoiceId: int("invoiceId").notNull(),
+    receiptNo: varchar("receiptNo", { length: 64 }).notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    paidOn: date("paidOn").notNull(),
+    method: mysqlEnum("method", ["cash", "bank_transfer", "card", "pos", "cheque", "other"]).notNull(),
+    reference: varchar("reference", { length: 160 }),
+    recordedBy: int("recordedBy").notNull(),
+    note: text("note"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolReceipt: uniqueIndex("payment_school_receipt_unique").on(table.schoolId, table.receiptNo) }),
+);
+
+export const leaveRequests = mysqlTable(
+  "leaveRequests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    staffId: int("staffId").notNull(),
+    leaveType: mysqlEnum("leaveType", ["annual", "sick", "maternity", "paternity", "compassionate", "other"]).notNull(),
+    startsOn: date("startsOn").notNull(),
+    endsOn: date("endsOn").notNull(),
+    reason: text("reason").notNull(),
+    status: mysqlEnum("status", ["pending", "approved", "declined", "cancelled"]).notNull().default("pending"),
+    reviewedBy: int("reviewedBy"),
+    reviewNote: text("reviewNote"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolIndex: index("leave_school_idx").on(table.schoolId) }),
+);
+
+export const payrollRecords = mysqlTable(
+  "payrollRecords",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    staffId: int("staffId").notNull(),
+    periodLabel: varchar("periodLabel", { length: 64 }).notNull(),
+    grossPay: decimal("grossPay", { precision: 12, scale: 2 }).notNull(),
+    deductions: decimal("deductions", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    netPay: decimal("netPay", { precision: 12, scale: 2 }).notNull(),
+    status: mysqlEnum("status", ["draft", "approved", "paid", "void"]).notNull().default("draft"),
+    paidOn: date("paidOn"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ staffPeriod: uniqueIndex("payroll_staff_period_unique").on(table.staffId, table.periodLabel) }),
+);
+
+export const performanceNotes = mysqlTable("performanceNotes", {
+  id: int("id").autoincrement().primaryKey(),
+  schoolId: int("schoolId").notNull(),
+  staffId: int("staffId").notNull(),
+  authorId: int("authorId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  note: text("note").notNull(),
+  visibility: mysqlEnum("visibility", ["private", "shared"]).notNull().default("private"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const announcements = mysqlTable(
+  "announcements",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body").notNull(),
+    audience: mysqlEnum("audience", ["everyone", "staff", "students", "guardians", "class"]).notNull().default("everyone"),
+    classId: int("classId"),
+    status: mysqlEnum("status", ["draft", "published", "archived"]).notNull().default("draft"),
+    publishedAt: timestamp("publishedAt"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolIndex: index("announcement_school_idx").on(table.schoolId) }),
+);
+
+export const messageLogs = mysqlTable(
+  "messageLogs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    channel: mysqlEnum("channel", ["in_app", "email", "sms", "whatsapp"]).notNull(),
+    audience: mysqlEnum("audience", ["everyone", "staff", "students", "guardians", "class"]).notNull(),
+    subject: varchar("subject", { length: 255 }),
+    body: text("body").notNull(),
+    recipientCount: int("recipientCount").notNull().default(0),
+    status: mysqlEnum("status", ["queued", "sent", "failed"]).notNull().default("queued"),
+    createdBy: int("createdBy").notNull(),
+    sentAt: timestamp("sentAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolIndex: index("message_school_idx").on(table.schoolId) }),
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
-
-// TODO: Add your tables here

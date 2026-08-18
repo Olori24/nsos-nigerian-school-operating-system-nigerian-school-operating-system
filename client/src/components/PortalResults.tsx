@@ -1,0 +1,6 @@
+import { Award } from "lucide-react";
+
+export function PortalResults({ data }: { data: any }) {
+  const cards = data?.reportCards ?? [];
+  return <section className="rounded-[1.2rem] border border-[#e0e5df] bg-white p-5 shadow-[0_10px_32px_rgba(16,45,35,0.035)] sm:p-6"><div className="flex items-start gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e2f0f3] text-[#216574]"><Award className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-[#2d4439]">Published results</p><p className="mt-1 text-xs text-[#758079]">Only results formally published by the school are available in this portal.</p></div></div>{cards.length ? <div className="mt-5 divide-y divide-[#edf0eb] border-t border-[#edf0eb]">{cards.map((card: any, index: number) => <div key={`${card.studentId}-${card.termId}-${index}`} className="flex items-center justify-between gap-3 py-3"><div><p className="text-xs font-semibold text-[#32473d]">Term #{card.termId} result</p><p className="mt-1 text-[10px] text-[#7a847e]">{card.entries.length} recorded assessments</p></div><span className="rounded-full bg-[#e2f1e8] px-2.5 py-1 text-[10px] font-semibold text-[#176145]">Average {card.average ?? "—"}%</span></div>)}</div> : <p className="mt-5 text-xs text-[#758079]">No published report cards are available yet.</p>}</section>;
+}

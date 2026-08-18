@@ -1,5 +1,48 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1787055762417,
+      "tag": "0000_empty_venom",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1787056048197,
+      "tag": "0001_cute_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1787057781323,
+      "tag": "0002_little_shatterstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1787058282291,
+      "tag": "0003_outstanding_adam_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1787058925467,
+      "tag": "0004_moaning_tigra",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1787059311366,
+      "tag": "0005_nebulous_warstar",
+      "breakpoints": true
+    }
+  ]
 }

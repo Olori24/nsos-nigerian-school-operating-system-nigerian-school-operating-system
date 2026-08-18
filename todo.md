@@ -1,0 +1,31 @@
+# NSOS Delivery Tracker
+
+- [x] Establish premium NSOS visual language, typography, responsive layout, accessibility, and role-aware navigation.
+- [x] Implement multi-role access controls for administrators, staff, students, and parents or guardians.
+- [x] Implement online student admission applications, document records, reviewer queues, decisions, and enrollment confirmation.
+- [x] Implement student records, academic history, class assignment, promotion, graduation, and guardian relationship workflows.
+- [x] Implement academic structures for sessions, terms, classes, subjects, timetables, lesson plans, and curriculum coverage.
+- [x] Implement student and staff attendance capture, absence alerts, attendance summaries, and exports.
+- [x] Implement assessments, score entry, grade computation, approval, result publishing, and printable report cards.
+- [x] Implement fee structures, invoices, payments, receipts, balances, and finance reporting.
+- [x] Implement staff profiles, departments, duties, leave requests, payroll records, and performance notes.
+- [x] Implement parent or guardian portal views for ward attendance, results, fees, and announcements.
+- [x] Implement school announcements, notice board publishing, recipient targeting, in-app bulk delivery, and communication history.
+- [x] Implement leadership dashboard KPIs, enrollment analytics, financial summaries, term reporting, and data exports.
+- [x] Add validation, empty states, loading states, audit-friendly status tracking, and error handling across all operations.
+- [x] Write and run unit tests for critical policies, computations, and service procedures.
+- [x] Verify the rendered interface on desktop and mobile, fix regressions, and confirm role-based access behavior.
+- [x] Add public admissions submission, document review status, and an enrollment-confirmation experience.
+- [x] Complete guardian linking, academic-history views, and graduation state transitions for student records.
+- [x] Add curriculum-coverage tracking, attendance CSV export, result approval workflow, and printable report-card output.
+- [x] Add printable payment receipts, department and duty workflows, and report-card visibility in the guardian and student portals.
+- [x] Surface bulk-message history and delivery status in the communication workspace.
+- [x] Expand automated tests for admissions, attendance, results, finance, staff, and role-based service procedures.
+- [ ] Perform authenticated desktop and mobile review across administrator, staff, teacher, finance, parent, and student workspaces.
+- [x] Add Nigeria-first, self-service tenant configuration defaults without seeding real school records or contact data.
+- [x] Enable each school tenant to configure a branded public website, publish admissions access, and manage custom-domain readiness from NSOS.
+- [x] Resolve published school websites by active custom domain as well as their NSOS school code.
+- [x] Add domain validation, DNS setup guidance, verification state transitions, and administrator activation controls.
+- [x] Add automated tests for custom-domain resolution, activation, and publication behavior.
+- [x] Restrict website publishing and domain lifecycle controls to owner and administrator roles at the service layer.
+- [x] Validate custom-domain format before persistence and add service-focused tests for DNS verification and active-domain publication gates.
