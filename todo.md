@@ -40,8 +40,9 @@
 - [x] Add signed real-time SMS delivery webhooks that transition pending tenant message logs to delivered or failed automatically.
 - [x] Refine the Provider Configuration UI so administrators can clearly copy the Termii callback URL and save its signing secret.
 - [x] Review NSOS security controls, compliance priorities, backend readiness, and GitHub source-control setup before the next feature cycle.
-- [ ] Verify and export NSOS to the confirmed GitHub repository `Olori24/nsos-nigerian-school-operating-system-nigerian-school-operating-system` using a secret-safe source-control process.
+- [x] Verify and export NSOS to the confirmed GitHub repository `Olori24/nsos-nigerian-school-operating-system-nigerian-school-operating-system` using a secret-safe source-control process.
 - [x] Review and remediate production dependency-audit findings before the NSOS GitHub export.
+- [ ] Enable the GitHub Actions workflow upload after the GitHub connection is granted `workflow` permission.
 - [x] Add the first NSOS security-hardening release: request protections, abuse resistance, sensitive-operation auditability, and operational safeguards.
 - [x] Extend security audit coverage to membership, website/domain, admissions, finance, and results actions that materially affect school data or access.
 - [x] Replace the per-instance rate limiter with a shared or gateway-backed control suitable for autoscaled production traffic, with Express-level enforcement tests.
