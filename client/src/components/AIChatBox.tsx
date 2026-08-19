@@ -3,7 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Loader2, Send, User, Sparkles } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { Streamdown } from "streamdown";
 
 /**
@@ -57,6 +57,9 @@ export type AIChatBoxProps = {
    * Click to send directly
    */
   suggestedPrompts?: string[];
+
+  /** Optional control rendered beside the input, for contextual actions such as voice transcription. */
+  inputAccessory?: (input: { value: string; onValueChange: (value: string) => void; disabled: boolean }) => ReactNode;
 };
 
 /**
@@ -119,6 +122,7 @@ export function AIChatBox({
   height = "600px",
   emptyStateMessage = "Start a conversation with AI",
   suggestedPrompts,
+  inputAccessory,
 }: AIChatBoxProps) {
   const [input, setInput] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -317,6 +321,7 @@ export function AIChatBox({
           className="flex-1 max-h-32 resize-none min-h-9"
           rows={1}
         />
+        {inputAccessory?.({ value: input, onValueChange: setInput, disabled: isLoading })}
         <Button
           type="submit"
           size="icon"

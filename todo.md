@@ -110,3 +110,4 @@
 - [x] Add a system-wide, role-aware NSOS Copilot that helps signed-in users discover and navigate only the workspaces they are permitted to access.
 - [x] Add private, user-and-school-scoped Copilot recent searches that can be repeated from the navigation assistant.
 - [x] Add accessible Copilot keyboard shortcuts for opening the assistant and navigating recent searches without interfering with form input.
+- [x] Add an accessible Copilot voice-input control that transcribes a spoken navigation request for user review before submission.
