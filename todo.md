@@ -97,3 +97,5 @@
 - [x] Repair GitHub Actions CI by removing duplicate pnpm configuration, updating the deprecated Node.js runtime, and confirming the triggered workflow outcome.
 - [x] Manually trigger and verify the NSOS scheduled CI-status monitoring workflow end to end.
 - [x] Capture the scheduled monitor’s own report with a verified GitHub or Gmail source label plus workflow, commit, status, conclusion, and job or failed-step details.
+- [x] Repair the Google OAuth `redirect_uri_mismatch` against the deployed NSOS domain and verify the sign-in start flow.
+- [ ] Add a user-facing security activity log for revoked sessions and automated security-check events, with safe scoped details and timestamps.
