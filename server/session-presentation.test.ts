@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sessionPresentation } from "../client/src/lib/sessionPresentation";
+import { sessionPresentation, sessionRevokeConfirmation } from "../client/src/lib/sessionPresentation";
 
 describe("Account & security session-list presentation", () => {
   it("uses the stored coarse location label and desktop icon choice", () => {
@@ -13,5 +13,16 @@ describe("Account & security session-list presentation", () => {
   it("keeps tablet and unknown devices visually distinct", () => {
     expect(sessionPresentation({ deviceKind: "tablet", locationLabel: "Africa/Accra" }).deviceIcon).toBe("tablet");
     expect(sessionPresentation({ deviceKind: "television", locationLabel: "Africa/Accra" }).deviceIcon).toBe("unknown");
+  });
+
+  it("requires a deliberate, cancellation-safe confirmation before a device is signed out", () => {
+    expect(sessionRevokeConfirmation({ deviceLabel: "Safari on iPhone or iPad", deviceKind: "mobile", locationLabel: "Nigeria · Africa/Lagos" })).toEqual({
+      title: "Sign out this device?",
+      description: "This will immediately end the selected NSOS session. The device will need to sign in again to regain access.",
+      deviceLabel: "Safari on iPhone or iPad",
+      locationText: "Approximate location: Nigeria · Africa/Lagos",
+      cancelLabel: "Keep session",
+      actionLabel: "Sign out device",
+    });
   });
 });

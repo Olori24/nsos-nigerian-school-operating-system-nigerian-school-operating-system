@@ -92,3 +92,5 @@
 - [x] Capture and refresh coarse client time zones during normal authenticated app startup so all active devices can report approximate session locations.
 - [x] Add regression coverage for stored session locations, legacy fallback text, and multi-device session-list presentation.
 - [x] Add frontend session-list presentation coverage for stored location labels, legacy fallback text, and device icon choices.
+- [x] Add a confirmation modal before revoking an individual active NSOS session to prevent accidental logout of another device.
+- [x] Add regression coverage for individual-session confirmation copy, selected-device details, and cancellation-safe action labels.
