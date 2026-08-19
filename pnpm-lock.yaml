@@ -170,6 +170,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      nigeria-inec-geo:
+        specifier: ^1.0.0
+        version: 1.0.0
       react:
         specifier: ^19.2.1
         version: 19.2.1
@@ -3379,6 +3382,10 @@ packages:
     peerDependencies:
       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+
+  nigeria-inec-geo@1.0.0:
+    resolution: {integrity: sha512-jG+FnHKHnLytjzCfOKrhgoAvkkqK47MJ01q7KGmZH6njUKgeJu/5CG8SeZK2MSl9pLFZZ3fHvGvySN8JJV5KKg==}
+    engines: {node: '>=14'}
 
   node-releases@2.0.23:
     resolution: {integrity: sha512-cCmFDMSm26S6tQSDpBCg/NR8NENrVPhAJSf+XbxBG4rPFaaonlEoE9wHQmun+cls499TQGSb7ZyPBRlzgKfpeg==}
@@ -7321,6 +7328,8 @@ snapshots:
     dependencies:
       react: 19.2.1
       react-dom: 19.2.1(react@19.2.1)
+
+  nigeria-inec-geo@1.0.0: {}
 
   node-releases@2.0.23: {}
 

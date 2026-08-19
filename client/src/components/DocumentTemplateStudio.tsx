@@ -18,7 +18,7 @@ type TemplateDraft = {
 };
 
 const fieldOptions = [
-  ["middleName", "Applicant middle name"], ["dateOfBirth", "Date of birth"], ["placeOfBirth", "Place of birth"], ["nationality", "Nationality"], ["homeTown", "Home town"], ["gender", "Gender"], ["residentialAddress", "Residential address"], ["postalAddress", "Postal address"], ["priorSchool", "Previous school"], ["currentClass", "Current class"], ["religion", "Religion"], ["medicalHistory", "Relevant medical history"], ["familyDoctor", "Family doctor or clinic"], ["guardianOccupation", "Guardian occupation"], ["guardianOfficeAddress", "Guardian office address"],
+  ["middleName", "Applicant middle name"], ["dateOfBirth", "Date of birth"], ["placeOfBirth", "Place of birth"], ["nationality", "Nationality"], ["homeTown", "Home town"], ["stateOfOrigin", "State of origin"], ["localGovernmentOfOrigin", "Local Government Area of origin"], ["gender", "Gender"], ["residentialAddress", "Residential address"], ["postalAddress", "Postal address"], ["priorSchool", "Previous school"], ["currentClass", "Current class"], ["religion", "Religion"], ["medicalHistory", "Relevant medical history"], ["familyDoctor", "Family doctor or clinic"], ["guardianOccupation", "Guardian occupation"], ["guardianOfficeAddress", "Guardian office address"],
 ] as const;
 
 const sampleTemplate: TemplateDraft = {
@@ -27,7 +27,7 @@ const sampleTemplate: TemplateDraft = {
   headerLogoUrl: "",
   headerAddressLine: "",
   headerContactLine: "",
-  admissionFields: ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "priorSchool", "currentClass", "medicalHistory", "guardianOccupation"],
+  admissionFields: ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "stateOfOrigin", "localGovernmentOfOrigin", "gender", "residentialAddress", "priorSchool", "currentClass", "medicalHistory", "guardianOccupation"],
   declarationText: "I confirm that the information provided is accurate to the best of my knowledge and I understand that the school will use it only for admissions and student-support purposes.",
   requireDeclaration: true,
   termlyFeeTitle: "Termly fee guide",

@@ -44,4 +44,19 @@ describe("NSOS public admissions", () => {
     await expect(caller().nsos.admissions.publicSubmit({ shortCode: "CGC", firstName: "Ada", lastName: "Okafor", guardianName: "Ifeoma Okafor", guardianPhone: "08000000000", supplementalData: { dateOfBirth: "2017-01-15", medicalHistory: "Not enabled by this school" }, declarationAccepted: true })).resolves.toEqual({ applicationId: 45 });
     expect(db.createApplication).toHaveBeenLastCalledWith(expect.objectContaining({ schoolId: 18, dateOfBirth: "2017-01-15", declarationAccepted: true, supplementalData: { dateOfBirth: "2017-01-15" } }));
   });
+
+  it("returns nationwide selector options and accepts only a configured State-to-LGA pair", async () => {
+    const origins = await caller().nsos.admissions.originOptions({ state: "Lagos" });
+    const stateOfOrigin = "Lagos";
+    const localGovernmentOfOrigin = origins.lgas[0];
+    expect(origins.states).toContain(stateOfOrigin);
+    expect(localGovernmentOfOrigin).toBeTruthy();
+    vi.mocked(db.getSchoolByCode).mockResolvedValue({ id: 18, name: "Cedar Grove College", shortCode: "CGC", state: "Lagos", admissionTemplate: { admissionTitle: "Admission form", headerTagline: "School admissions", admissionFields: ["stateOfOrigin", "localGovernmentOfOrigin"], declarationText: "", requireDeclaration: false } });
+    vi.mocked(db.createApplication).mockResolvedValue({ applicationId: 46 });
+
+    await expect(caller().nsos.admissions.publicSubmit({ shortCode: "CGC", firstName: "Ada", lastName: "Okafor", guardianName: "Ifeoma Okafor", guardianPhone: "08000000000", supplementalData: { stateOfOrigin: "lagos", localGovernmentOfOrigin: localGovernmentOfOrigin.toUpperCase() } })).resolves.toEqual({ applicationId: 46 });
+    expect(db.createApplication).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 18, supplementalData: { stateOfOrigin, localGovernmentOfOrigin } }));
+
+    await expect(caller().nsos.admissions.publicSubmit({ shortCode: "CGC", firstName: "Ada", lastName: "Okafor", guardianName: "Ifeoma Okafor", guardianPhone: "08000000000", supplementalData: { stateOfOrigin, localGovernmentOfOrigin: "Not a Lagos LGA" } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
 });

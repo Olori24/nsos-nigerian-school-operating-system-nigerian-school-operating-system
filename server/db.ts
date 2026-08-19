@@ -749,7 +749,7 @@ export async function getSchoolWebsite(schoolId: number) {
   return { school, website: website ?? { schoolId, headline: `${school.name}: learning for a brighter future.`, introduction: "", primaryColor: "#0f5c4f", contactEmail: school.email, contactPhone: school.phone, campusLocation: school.address ?? school.state, customDomain: null, domainStatus: "not_configured", admissionsEnabled: true, published: false } };
 }
 
-const admissionTemplateFieldIds = ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"] as const;
+const admissionTemplateFieldIds = ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "stateOfOrigin", "localGovernmentOfOrigin", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"] as const;
 type AdmissionTemplateFieldId = (typeof admissionTemplateFieldIds)[number];
 type FeeScheduleEntry = { category: string; tuitionFee: number };
 
@@ -759,7 +759,7 @@ const defaultDocumentTemplate = {
   headerLogoUrl: null,
   headerAddressLine: null,
   headerContactLine: null,
-  admissionFields: ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "priorSchool", "currentClass", "medicalHistory", "guardianOccupation"] as AdmissionTemplateFieldId[],
+  admissionFields: ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "stateOfOrigin", "localGovernmentOfOrigin", "gender", "residentialAddress", "priorSchool", "currentClass", "medicalHistory", "guardianOccupation"] as AdmissionTemplateFieldId[],
   declarationText: "I confirm that the information provided is accurate to the best of my knowledge and I understand that the school will use it only for admissions and student-support purposes.",
   requireDeclaration: true,
   termlyFeeTitle: "Termly fee guide",
@@ -778,7 +778,8 @@ const defaultDocumentTemplate = {
 function templateFields(value: unknown): AdmissionTemplateFieldId[] {
   if (!Array.isArray(value)) return defaultDocumentTemplate.admissionFields;
   const selected = value.filter((item): item is AdmissionTemplateFieldId => typeof item === "string" && admissionTemplateFieldIds.includes(item as AdmissionTemplateFieldId));
-  return selected.length ? Array.from(new Set(selected)) : defaultDocumentTemplate.admissionFields;
+  const fields = selected.length ? Array.from(new Set(selected)) : defaultDocumentTemplate.admissionFields;
+  return fields.includes("localGovernmentOfOrigin") && !fields.includes("stateOfOrigin") ? [...fields, "stateOfOrigin"] : fields;
 }
 
 function templateFees(value: unknown): FeeScheduleEntry[] {
@@ -1002,7 +1003,10 @@ export async function enrolApplication(input: { schoolId: number; applicationId:
   const db = await database();
   const application = (await db.select().from(admissionsApplications).where(and(eq(admissionsApplications.id, input.applicationId), eq(admissionsApplications.schoolId, input.schoolId))).limit(1))[0];
   if (!application || application.status !== "accepted") throw new Error("Only accepted applications can be enrolled.");
-  const created = await db.insert(studentProfiles).values({ schoolId: input.schoolId, admissionNo: input.admissionNo, firstName: application.firstName, lastName: application.lastName, dateOfBirth: application.dateOfBirth, gender: application.gender, admittedOn: asDate(input.admittedOn) });
+  const supplement = (application.supplementalData ?? {}) as Record<string, string>;
+  const stateOfOrigin = supplement.stateOfOrigin?.trim() || undefined;
+  const localGovernment = supplement.localGovernmentOfOrigin?.trim() || undefined;
+  const created = await db.insert(studentProfiles).values({ schoolId: input.schoolId, admissionNo: input.admissionNo, firstName: application.firstName, lastName: application.lastName, dateOfBirth: application.dateOfBirth, gender: application.gender, stateOfOrigin, localGovernment, admittedOn: asDate(input.admittedOn) });
   const studentId = Number(created[0].insertId);
   await db.insert(enrollments).values({ schoolId: input.schoolId, studentId, classId: input.classId, sessionId: input.sessionId, enrolledOn: asDate(input.admittedOn)! });
   await db.update(admissionsApplications).set({ status: "enrolled" }).where(eq(admissionsApplications.id, input.applicationId));

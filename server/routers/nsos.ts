@@ -3,11 +3,20 @@ import { z } from "zod";
 import * as db from "../db";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
+import { listNigerianLgas, listNigerianOriginStates, normaliseNigerianOrigin } from "../nigerianOrigin";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
 import { platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
+
+function validatedNigerianOrigin(input: { stateOfOrigin?: string; localGovernmentOfOrigin?: string }) {
+  try {
+    return normaliseNigerianOrigin(input);
+  } catch (error) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Select a valid State and Local Government Area of Origin." });
+  }
+}
 
 async function accessSchool(userId: number, schoolId: number, permission: string) {
   const membership = await db.getSchoolMembership(userId, schoolId);
@@ -185,6 +194,7 @@ export const nsosRouter = router({
   }),
 
   admissions: router({
+    originOptions: publicProcedure.input(z.object({ state: z.string().max(120).optional() })).query(({ input }) => ({ states: listNigerianOriginStates(), lgas: input.state ? listNigerianLgas(input.state) : [] })),
     publicSchool: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getSchoolByCode(input.shortCode)),
     publicSubmit: publicProcedure
       .input(z.object({ shortCode: z.string().min(2).max(32), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional(), supplementalData: z.record(z.string().min(1).max(40), z.string().trim().max(1000)).optional(), declarationAccepted: z.boolean().optional() }))
@@ -195,6 +205,11 @@ export const nsosRouter = router({
         if (template.requireDeclaration && input.declarationAccepted !== true) throw new TRPCError({ code: "BAD_REQUEST", message: "Please confirm the admissions declaration before submitting." });
         const enabledFields = new Set(template.admissionFields);
         const supplementalData = Object.fromEntries(Object.entries(input.supplementalData ?? {}).filter(([key, value]) => enabledFields.has(key as (typeof template.admissionFields)[number]) && typeof value === "string" && value.trim().length > 0));
+        const origin = validatedNigerianOrigin({ stateOfOrigin: enabledFields.has("stateOfOrigin") ? supplementalData.stateOfOrigin : undefined, localGovernmentOfOrigin: enabledFields.has("localGovernmentOfOrigin") ? supplementalData.localGovernmentOfOrigin : undefined });
+        delete supplementalData.stateOfOrigin;
+        delete supplementalData.localGovernmentOfOrigin;
+        if (origin.stateOfOrigin) supplementalData.stateOfOrigin = origin.stateOfOrigin;
+        if (origin.localGovernmentOfOrigin) supplementalData.localGovernmentOfOrigin = origin.localGovernmentOfOrigin;
         const { shortCode: _shortCode, supplementalData: _supplementalData, declarationAccepted, dateOfBirth: submittedDateOfBirth, gender: submittedGender, priorSchool: submittedPriorSchool, ...application } = input;
         const dateOfBirth = enabledFields.has("dateOfBirth") ? supplementalData.dateOfBirth ?? submittedDateOfBirth : undefined;
         const gender = enabledFields.has("gender") ? supplementalData.gender ?? submittedGender : undefined;
@@ -205,8 +220,8 @@ export const nsosRouter = router({
       .input(schoolInput.extend({ status: z.enum(["submitted", "under_review", "accepted", "declined", "enrolled"]).optional() }))
       .query(({ input }) => db.listApplications(input.schoolId, input.status)),
     submit: managementProcedure("students.read")
-      .input(schoolInput.extend({ firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), applyingForClassId: z.number().int().positive().optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional() }))
-      .mutation(({ input }) => db.createApplication(input)),
+      .input(schoolInput.extend({ firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), applyingForClassId: z.number().int().positive().optional(), priorSchool: z.string().max(255).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), notes: z.string().max(5000).optional() }))
+      .mutation(({ input }) => { const origin = validatedNigerianOrigin(input); const { stateOfOrigin: _stateOfOrigin, localGovernmentOfOrigin: _localGovernmentOfOrigin, ...application } = input; return db.createApplication({ ...application, supplementalData: Object.fromEntries(Object.entries(origin).filter(([, value]) => Boolean(value))) }); }),
     review: managementProcedure("students.read")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), status: z.enum(["under_review", "accepted", "declined"]), decisionNote: z.string().max(5000).optional() }))
       .mutation(async ({ ctx, input }) => {
@@ -234,8 +249,8 @@ export const nsosRouter = router({
     list: managementProcedure("students.read").input(schoolInput.extend({ search: z.string().max(120).optional() })).query(({ input }) => db.listStudents(input.schoolId, input.search)),
     history: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive() })).query(({ input }) => db.getStudentAcademicHistory(input.schoolId, input.studentId)),
     create: managementProcedure("students.write")
-      .input(schoolInput.extend({ admissionNo: z.string().min(2).max(64), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional(), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
-      .mutation(({ input }) => db.createStudent(input)),
+      .input(schoolInput.extend({ admissionNo: z.string().min(2).max(64), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
+      .mutation(({ input }) => { const origin = validatedNigerianOrigin(input); const { localGovernmentOfOrigin: _localGovernmentOfOrigin, ...student } = input; return db.createStudent({ ...student, stateOfOrigin: origin.stateOfOrigin, localGovernment: origin.localGovernmentOfOrigin }); }),
     promote: managementProcedure("students.write")
       .input(schoolInput.extend({ studentId: z.number().int().positive(), toClassId: z.number().int().positive(), sessionId: z.number().int().positive(), note: z.string().max(1000).optional() }))
       .mutation(({ input }) => db.promoteStudent(input)),

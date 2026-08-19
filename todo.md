@@ -112,3 +112,4 @@
 - [x] Add accessible Copilot keyboard shortcuts for opening the assistant and navigating recent searches without interfering with form input.
 - [x] Add an accessible Copilot voice-input control that transcribes a spoken navigation request for user review before submission.
 - [x] Add a safe Copilot speech-end auto-submit flow with a brief cancellation option and unchanged typed submission behavior.
+- [x] Add configurable Nigerian State of Origin and Local Government Area of Origin fields to admissions and student biodata with validation and safe enrollment continuity.
