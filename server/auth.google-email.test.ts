@@ -150,6 +150,7 @@ describe("external authentication policy", () => {
   it("creates a session only once for a successfully consumed passwordless-email link", async () => {
     const consumeLink = vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "parent@example.ng", redirectOrigin: "https://nsos-system-uhkdscaf.manus.space" } as any);
     vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ openId: "external:email:123", name: "Parent", email: "parent@example.ng" } as any);
+    vi.spyOn(database, "createUserSession").mockResolvedValue("test-session-id");
     await withAuthRouteServer(async origin => {
       const first = await requestRoute(`${origin}/api/auth/email/verify?token=${"a".repeat(43)}`);
       expect(first.status).toBe(302);

@@ -61,6 +61,26 @@ export const authMagicLinks = mysqlTable(
   }),
 );
 
+export const userSessions = mysqlTable(
+  "userSessions",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(),
+    userId: int("userId").notNull(),
+    source: varchar("source", { length: 32 }).notNull().default("session"),
+    deviceLabel: varchar("deviceLabel", { length: 160 }).notNull(),
+    userAgent: varchar("userAgent", { length: 512 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    revokedAt: timestamp("revokedAt"),
+    revokedReason: varchar("revokedReason", { length: 96 }),
+  },
+  table => ({
+    userActive: index("userSession_user_active_idx").on(table.userId, table.revokedAt, table.lastSeenAt),
+    expiry: index("userSession_expiry_idx").on(table.expiresAt),
+  }),
+);
+
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),

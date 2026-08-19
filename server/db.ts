@@ -52,6 +52,7 @@ import {
   subjects,
   timetableEntries,
   type InsertUser,
+  userSessions,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -336,6 +337,56 @@ export async function consumeAuthMagicLink(token: string) {
   const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
   if (affectedRows !== 1) throw new Error("This sign-in link has already been used or has expired.");
   return link;
+}
+
+export function sessionDeviceLabel(userAgent: string | undefined) {
+  const value = userAgent ?? "";
+  const platform = /iPhone|iPad|iPod/i.test(value) ? "iPhone or iPad" : /Android/i.test(value) ? "Android device" : /Windows/i.test(value) ? "Windows device" : /Macintosh|Mac OS X/i.test(value) ? "Mac" : /Linux/i.test(value) ? "Linux device" : "Unknown device";
+  const browser = /Edg\//i.test(value) ? "Microsoft Edge" : /OPR\//i.test(value) ? "Opera" : /Firefox\//i.test(value) ? "Firefox" : /Chrome\//i.test(value) && !/Chromium/i.test(value) ? "Chrome" : /Safari\//i.test(value) && !/Chrome\//i.test(value) ? "Safari" : "Browser";
+  return `${browser} on ${platform}`;
+}
+
+export function legacySessionId(sessionToken: string) {
+  return `legacy:${createHmac("sha256", encryptionKey()).update(sessionToken).digest("hex").slice(0, 48)}`;
+}
+
+export async function createUserSession(input: { userId: number; source: string; userAgent?: string; expiresAt: Date }) {
+  const id = crypto.randomUUID();
+  const userAgent = input.userAgent?.slice(0, 512) || null;
+  await (await database()).insert(userSessions).values({ id, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, expiresAt: input.expiresAt });
+  return id;
+}
+
+export async function ensureActiveUserSession(input: { userId: number; sessionId: string; source: string; userAgent?: string; expiresAt: Date }) {
+  const db = await database();
+  const now = new Date();
+  const existing = (await db.select().from(userSessions).where(eq(userSessions.id, input.sessionId)).limit(1))[0];
+  if (existing) {
+    if (existing.userId !== input.userId || existing.revokedAt || existing.expiresAt <= now) return false;
+    await db.update(userSessions).set({ lastSeenAt: now }).where(eq(userSessions.id, input.sessionId));
+    return true;
+  }
+  const userAgent = input.userAgent?.slice(0, 512) || null;
+  await db.insert(userSessions).values({ id: input.sessionId, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, expiresAt: input.expiresAt, lastSeenAt: now });
+  return true;
+}
+
+export async function listActiveUserSessions(userId: number) {
+  const now = new Date();
+  return (await (await database()).select({ id: userSessions.id, source: userSessions.source, deviceLabel: userSessions.deviceLabel, createdAt: userSessions.createdAt, lastSeenAt: userSessions.lastSeenAt, expiresAt: userSessions.expiresAt }).from(userSessions).where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt), gt(userSessions.expiresAt, now))).orderBy(desc(userSessions.lastSeenAt))).map(session => ({ ...session, userAgent: undefined }));
+}
+
+export async function revokeUserSession(input: { userId: number; sessionId: string; reason: string }) {
+  const updated = await (await database()).update(userSessions).set({ revokedAt: new Date(), revokedReason: input.reason.slice(0, 96) }).where(and(eq(userSessions.id, input.sessionId), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt)));
+  return Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0) === 1;
+}
+
+export async function revokeOtherUserSessions(input: { userId: number; currentSessionId: string; reason: string }) {
+  const db = await database();
+  const active = await listActiveUserSessions(input.userId);
+  const targets = active.filter(session => session.id !== input.currentSessionId);
+  await Promise.all(targets.map(session => db.update(userSessions).set({ revokedAt: new Date(), revokedReason: input.reason.slice(0, 96) }).where(and(eq(userSessions.id, session.id), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt)))));
+  return targets.length;
 }
 
 export async function listUserSchools(userId: number) {

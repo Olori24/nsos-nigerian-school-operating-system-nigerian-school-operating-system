@@ -48,8 +48,13 @@ export function registerOAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
       });
 
+      const user = await db.getUserByOpenId(userInfo.openId);
+      if (!user) throw new Error("OAuth user could not be loaded after sign-in.");
+      const sessionId = await db.createUserSession({ userId: user.id, source: user.loginMethod ?? "manus", userAgent: req.get("user-agent") ?? undefined, expiresAt: new Date(Date.now() + ONE_YEAR_MS) });
+
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
         name: userInfo.name || "",
+        sessionId,
         expiresInMs: ONE_YEAR_MS,
       });
 

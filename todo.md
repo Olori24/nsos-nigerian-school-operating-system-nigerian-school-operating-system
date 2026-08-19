@@ -87,3 +87,4 @@
 - [x] Complete and verify secure Google OAuth and passwordless email sign-in, including browser-bound OAuth state, sender verification, regression tests, and the multi-option NSOS login screen.
 - [x] Add route-level authentication tests for Google callback state and provider failures, passwordless email delivery failures, and single-use email verification outcomes.
 - [x] Add explicit Resend sender-address validation for the configured NSOS passwordless-email sender.
+- [x] Add user-facing active-session visibility and secure per-session or all-other-device revocation in the NSOS dashboard.

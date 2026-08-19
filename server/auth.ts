@@ -62,8 +62,10 @@ function clearGoogleStateCookie(req: Request, res: Response) {
   res.clearCookie(GOOGLE_STATE_COOKIE, { path: "/", secure: true, sameSite: "lax", httpOnly: true });
 }
 
-async function createSession(req: Request, res: Response, user: { openId: string; name: string | null; email: string | null }, fallbackName: string) {
-  const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name?.trim() || fallbackName, expiresInMs: ONE_YEAR_MS });
+async function createSession(req: Request, res: Response, user: { id: number; openId: string; name: string | null; email: string | null; loginMethod: string | null }, fallbackName: string) {
+  const expiresAt = new Date(Date.now() + ONE_YEAR_MS);
+  const sessionId = await db.createUserSession({ userId: user.id, source: user.loginMethod ?? "external", userAgent: req.get("user-agent") ?? undefined, expiresAt });
+  const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name?.trim() || fallbackName, sessionId, expiresInMs: ONE_YEAR_MS });
   res.cookie(COOKIE_NAME, sessionToken, { ...getSessionCookieOptions(req), maxAge: ONE_YEAR_MS });
 }
 
