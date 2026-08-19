@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { legacySessionId, sessionDeviceKind, sessionDeviceLabel, sessionLocationLabel } from "./db";
+import { legacySessionId, normaliseGoogleProfileImageUrl, sessionDeviceKind, sessionDeviceLabel, sessionLocationLabel } from "./db";
 
 describe("session tracking policies", () => {
   it("returns a safe human-readable device label without storing a raw user agent in the UI model", () => {
@@ -20,5 +20,11 @@ describe("session tracking policies", () => {
     expect(sessionLocationLabel("Africa/Lagos")).toBe("Nigeria · Africa/Lagos");
     expect(sessionLocationLabel("Europe/London")).toBe("Europe/London");
     expect(sessionLocationLabel("not a time zone")).toBeNull();
+  });
+
+  it("permits only HTTPS Google-hosted profile images for the personalized sign-in toast", () => {
+    expect(normaliseGoogleProfileImageUrl("https://lh3.googleusercontent.com/a/verified-profile")).toBe("https://lh3.googleusercontent.com/a/verified-profile");
+    expect(normaliseGoogleProfileImageUrl("http://lh3.googleusercontent.com/a/profile")).toBeNull();
+    expect(normaliseGoogleProfileImageUrl("https://untrusted.example/profile.png")).toBeNull();
   });
 });

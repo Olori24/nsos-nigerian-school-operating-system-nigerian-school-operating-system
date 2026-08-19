@@ -280,20 +280,36 @@ export function normaliseAuthEmail(value: string) {
   return email;
 }
 
+export function normaliseGoogleProfileImageUrl(value: unknown) {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    const googleImageHost = url.hostname === "lh3.googleusercontent.com" || url.hostname.endsWith(".googleusercontent.com");
+    return url.protocol === "https:" && googleImageHost ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function externalOpenId(provider: ExternalAuthProvider) {
   return `external:${provider}:${crypto.randomUUID()}`;
 }
 
-export async function resolveExternalAuthIdentity(input: { provider: ExternalAuthProvider; providerSubject: string; email: string; name?: string | null }) {
+export async function resolveExternalAuthIdentity(input: { provider: ExternalAuthProvider; providerSubject: string; email: string; name?: string | null; avatarUrl?: string | null }) {
   const db = await database();
   const providerSubject = input.providerSubject.trim();
   const email = normaliseAuthEmail(input.email);
+  const avatarUrl = input.provider === "google" ? normaliseGoogleProfileImageUrl(input.avatarUrl) : null;
   if (!providerSubject || providerSubject.length > 320) throw new Error("External identity is invalid.");
   const existingIdentity = (await db.select().from(authIdentities).where(and(eq(authIdentities.provider, input.provider), eq(authIdentities.providerSubject, providerSubject))).limit(1))[0];
   if (existingIdentity) {
     const existingUser = (await db.select().from(users).where(eq(users.id, existingIdentity.userId)).limit(1))[0];
     if (!existingUser) throw new Error("External identity is not linked to an NSOS account.");
     await db.update(authIdentities).set({ lastUsedAt: new Date(), email }).where(eq(authIdentities.id, existingIdentity.id));
+    if (avatarUrl && existingUser.avatarUrl !== avatarUrl) {
+      await db.update(users).set({ avatarUrl }).where(eq(users.id, existingUser.id));
+      existingUser.avatarUrl = avatarUrl;
+    }
     await upsertUser({ openId: existingUser.openId, lastSignedIn: new Date() });
     return existingUser;
   }
@@ -304,10 +320,14 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   // Manus account requires a separate explicit reauthentication flow.
   let user = (await db.select().from(users).where(and(eq(users.email, email), like(users.openId, "external:%"))).limit(1))[0];
   if (!user) {
-    const created = await db.insert(users).values({ openId: externalOpenId(input.provider), name: input.name?.trim().slice(0, 255) || null, email, loginMethod: input.provider, lastSignedIn: new Date() });
+    const created = await db.insert(users).values({ openId: externalOpenId(input.provider), name: input.name?.trim().slice(0, 255) || null, email, avatarUrl, loginMethod: input.provider, lastSignedIn: new Date() });
     user = (await db.select().from(users).where(eq(users.id, Number(created[0].insertId))).limit(1))[0];
   }
   if (!user) throw new Error("Unable to create an NSOS account.");
+  if (avatarUrl && user.avatarUrl !== avatarUrl) {
+    await db.update(users).set({ avatarUrl }).where(eq(users.id, user.id));
+    user.avatarUrl = avatarUrl;
+  }
   await db.insert(authIdentities).values({ userId: user.id, provider: input.provider, providerSubject, email, lastUsedAt: new Date() }).onDuplicateKeyUpdate({ set: { lastUsedAt: new Date(), email } });
   const identity = (await db.select().from(authIdentities).where(and(eq(authIdentities.provider, input.provider), eq(authIdentities.providerSubject, providerSubject))).limit(1))[0];
   if (!identity) throw new Error("Unable to link the external identity.");

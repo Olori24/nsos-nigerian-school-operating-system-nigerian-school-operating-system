@@ -288,7 +288,12 @@ export default function Home() {
   const [platformRevenueOpen, setPlatformRevenueOpen] = useState(false);
 
   useEffect(() => {
-    if (user && consumeGoogleSignInNotice()) toast.success("Signed in with Google.", { description: "Your secure NSOS session is ready." });
+    if (!user || !consumeGoogleSignInNotice()) return;
+    const firstName = user.name?.trim().split(/\s+/)[0] || "there";
+    toast.success(`Welcome, ${firstName}!`, {
+      description: "Signed in with Google. Your secure NSOS session is ready.",
+      icon: user.avatarUrl ? <img src={user.avatarUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full border border-[#c9ddd0] object-cover" /> : <span className="grid h-8 w-8 place-items-center rounded-full bg-[#dceee3] text-[10px] font-bold text-[#0f5c4f]">{initials(firstName)}</span>,
+    });
   }, [user?.id]);
 
   useEffect(() => {
