@@ -19,3 +19,11 @@ export function sessionRevokeConfirmation(input: { deviceLabel?: string | null; 
     actionLabel: "Sign out device",
   };
 }
+
+export function sessionRevokeSuccessNotice(session: { deviceLabel?: string | null }) {
+  const deviceLabel = session.deviceLabel?.trim().slice(0, 160) || "Device";
+  return {
+    title: `${deviceLabel} signed out.`,
+    description: "This device no longer has access to your NSOS account.",
+  };
+}
