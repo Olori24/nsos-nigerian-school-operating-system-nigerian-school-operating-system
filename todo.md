@@ -118,3 +118,9 @@
 - [x] Add pre-submission biodata preview and client-side PDF export for admissions and student record forms without transmitting draft data.
 - [x] Add a confirmation-protected Clear Form action that resets biodata fields and removes the matching browser-session draft.
 - [x] Add accessible real-time inline biodata validation with green valid-state cues and concise correction guidance across admissions and student forms.
+- [x] Add customizable school branding and a completion timestamp to locally generated biodata PDF exports.
+- [x] Tie the PDF completion timestamp to a submit-ready biodata form instead of preview opening.
+- [x] Prefill internal admissions and student PDF exports with the active school’s branding defaults.
+- [x] Add regression coverage for completion readiness and branded defaults across public and internal PDF previews.
+- [x] Verify public admissions passes approved school branding and a submit-ready completion timestamp into its PDF preview.
+- [x] Verify internal admissions and student forms pass active-school branding and submit-ready completion timestamps into their PDF previews.
