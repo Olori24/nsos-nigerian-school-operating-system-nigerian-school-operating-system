@@ -46,12 +46,12 @@
 - [ ] Re-authorize or replace the GitHub integration until workflow-file writes and Actions-read API access no longer return 403.
 - [x] Remove the mistakenly created `github/` workflow directory while retaining only `.github/workflows/ci.yml`.
 - [x] Confirm GitHub Actions registers the NSOS CI workflow and record at least one visible run status.
-- [ ] Diagnose and repair the failed GitHub Actions Node.js setup stage, then confirm a successful NSOS CI run.
+- [x] Diagnose and repair the failed GitHub Actions Node.js setup stage, then confirm a successful NSOS CI run.
 - [x] Capture the exact error text from the current failing GitHub Actions Set up Node.js step before applying any further CI changes.
 - [x] Record the exact GitHub Actions pnpm executable error and the automatic-cache cause in the NSOS CI maintenance notes.
-- [ ] Move the pnpm-dependent cache configuration after Corepack activation, then rerun the NSOS workflow.
-- [ ] Resume the paused CI automatic-cache repair after the scheduled 8:00 AM reminder.
-- [ ] Keep GitHub permission troubleshooting paused until the scheduled 8:00 AM Africa/Lagos review, with no further authorization prompts before then.
+- [x] Replace setup-node’s pnpm cache path with a single Corepack-managed package-manager pin, then confirm the repaired CI run.
+- [x] Resume the paused CI automatic-cache repair after the scheduled 8:00 AM reminder.
+- [x] Keep GitHub permission troubleshooting paused until the scheduled 8:00 AM Africa/Lagos review, with no further authorization prompts before then.
 - [x] Prioritize NSOS product differentiators that make school owners reluctant to operate without the platform, beginning with revenue protection, parent trust, operational control, and retention value.
 - [x] Produce a concrete NSOS product-differentiation roadmap ranking revenue protection, parent trust, operational control, and retention features by impact and implementation readiness.
 - [x] Document the prioritized NSOS differentiators in a durable product strategy note for future product and go-to-market decisions.
@@ -94,4 +94,4 @@
 - [x] Add frontend session-list presentation coverage for stored location labels, legacy fallback text, and device icon choices.
 - [x] Add a confirmation modal before revoking an individual active NSOS session to prevent accidental logout of another device.
 - [x] Add regression coverage for individual-session confirmation copy, selected-device details, and cancellation-safe action labels.
-- [ ] Repair GitHub Actions CI by removing duplicate pnpm configuration, updating the deprecated Node.js runtime, and confirming the triggered workflow outcome.
+- [x] Repair GitHub Actions CI by removing duplicate pnpm configuration, updating the deprecated Node.js runtime, and confirming the triggered workflow outcome.
