@@ -1,4 +1,6 @@
 export const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
+export const GOOGLE_SIGNIN_TOAST_DURATION_MS = 5_000;
+export const GOOGLE_SIGNIN_TOAST_CLASS = "nsos-google-welcome-toast";
 
 export function hasGoogleSignInNotice(cookie: string | undefined) {
   if (!cookie) return false;

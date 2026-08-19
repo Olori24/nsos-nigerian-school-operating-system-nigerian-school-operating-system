@@ -17,7 +17,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { nigerianStates } from "@/lib/nigerianStates";
 import { sessionPresentation, sessionRevokeConfirmation } from "@/lib/sessionPresentation";
-import { clearGoogleSignInNotice, hasGoogleSignInNotice } from "@/lib/authNotice";
+import { clearGoogleSignInNotice, GOOGLE_SIGNIN_TOAST_CLASS, GOOGLE_SIGNIN_TOAST_DURATION_MS, hasGoogleSignInNotice } from "@/lib/authNotice";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
@@ -293,6 +293,8 @@ export default function Home() {
     toast.success(`Welcome, ${firstName}!`, {
       description: "Signed in with Google. Your secure NSOS session is ready.",
       icon: user.avatarUrl ? <img src={user.avatarUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full border border-[#c9ddd0] object-cover" /> : <span className="grid h-8 w-8 place-items-center rounded-full bg-[#dceee3] text-[10px] font-bold text-[#0f5c4f]">{initials(firstName)}</span>,
+      duration: GOOGLE_SIGNIN_TOAST_DURATION_MS,
+      className: GOOGLE_SIGNIN_TOAST_CLASS,
     });
   }, [user?.id]);
 
