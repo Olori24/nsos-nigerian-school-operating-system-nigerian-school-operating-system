@@ -25,6 +25,12 @@ const managementProcedure = (permission: string) =>
     return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
   });
 
+const familyPortalProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "portal.read");
+  if (membership.role !== "parent" && membership.role !== "student") throw new TRPCError({ code: "FORBIDDEN", message: "This portal action is available only to linked parents and students." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as "parent" | "student" } });
+});
+
 const websiteAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
   const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
   if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can manage the public website or custom domain." });
@@ -359,5 +365,13 @@ export const nsosRouter = router({
   portal: router({
     guardian: managementProcedure("portal.read").input(schoolInput).query(({ ctx, input }) => db.getGuardianPortal(input.schoolId, ctx.user.id)),
     student: managementProcedure("portal.read").input(schoolInput).query(({ ctx, input }) => db.getStudentPortal(input.schoolId, ctx.user.id)),
+    cashAssurance: familyPortalProcedure.input(schoolInput).query(({ ctx, input }) => db.getFamilyCashAssuranceData({ schoolId: input.schoolId, userId: ctx.user.id, role: ctx.schoolRole })),
+    submitPaymentEvidence: familyPortalProcedure
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), invoiceId: z.number().int().positive(), amountClaimed: z.number().positive(), source: z.enum(["manual_receipt", "bank_reference", "provider_event", "other"]).default("bank_reference"), providerReference: z.string().max(160).optional(), note: z.string().max(2000).optional(), upload: z.object({ base64: z.string().min(4).max(7_100_000), fileName: z.string().min(1).max(255), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]) }).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.submitFamilyPaymentEvidence({ ...input, userId: ctx.user.id, role: ctx.schoolRole });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "family_payment_evidence_submitted", targetType: "payment_evidence", targetId: result.evidenceId, metadata: { source: input.source, attachmentIncluded: !!input.upload, ledgerChanged: false } });
+        return result;
+      }),
   }),
 });
