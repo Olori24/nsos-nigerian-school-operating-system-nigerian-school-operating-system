@@ -44,6 +44,8 @@ const providerAdminProcedure = protectedProcedure.input(schoolInput).use(async (
 });
 
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
+const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
+const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
 
 export const nsosRouter = router({
   schools: router({
@@ -112,6 +114,24 @@ export const nsosRouter = router({
     publicDomain: publicProcedure.input(z.object({ domain: z.string().min(3).max(255) })).query(({ input }) => db.getPublicSchoolWebsiteByDomain(input.domain)),
   }),
 
+  documentTemplates: router({
+    get: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolDocumentTemplate(input.schoolId)),
+    save: websiteAdminProcedure
+      .input(schoolInput.extend({ admissionTitle: z.string().trim().min(3).max(160), headerTagline: z.string().trim().max(255).optional(), headerLogoUrl: z.string().trim().url().max(2048).refine(value => new URL(value).protocol === "https:", "Use an HTTPS logo URL.").optional(), headerAddressLine: z.string().trim().max(500).optional(), headerContactLine: z.string().trim().max(500).optional(), admissionFields: z.array(admissionTemplateFieldInput).max(15), declarationText: z.string().trim().max(3000).optional(), requireDeclaration: z.boolean(), termlyFeeTitle: z.string().trim().min(3).max(160), feeSchedule: z.array(feeScheduleInput).min(1).max(24) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.saveSchoolDocumentTemplate({ ...input, updatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_document_template_saved", targetType: "school_document_template", metadata: { admissionFieldCount: input.admissionFields.length, feeBandCount: input.feeSchedule.length, requiresDeclaration: input.requireDeclaration, brandedHeaderConfigured: Boolean(input.headerLogoUrl || input.headerAddressLine || input.headerContactLine) } });
+        return result;
+      }),
+    adoptFeeSchedule: websiteAdminProcedure
+      .input(schoolInput.extend({ termId: z.number().int().positive(), classId: z.number().int().positive().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.createDraftFeesFromTemplate(input);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "termly_fee_template_adopted", targetType: "fee_structure", metadata: { termId: input.termId, classScoped: Boolean(input.classId), createdCount: result.createdCount, status: "draft" } });
+        return result;
+      }),
+  }),
+
   providers: router({
     list: providerAdminProcedure.input(schoolInput).query(({ input }) => db.listProviderConfigurations(input.schoolId)),
     save: providerAdminProcedure.input(schoolInput.extend({ category: z.enum(["payment", "notification"]), provider: z.enum(["paystack", "flutterwave", "stripe", "manual", "termii", "twilio", "resend", "sendgrid", "whatsapp_cloud", "in_app"]), status: z.enum(["draft", "ready", "disabled"]), configuration: z.record(z.string(), z.unknown()).default({}), credentials: z.object({ apiKey: z.string().max(500).optional(), secretKey: z.string().max(500).optional(), webhookSecret: z.string().max(500).optional() }).optional(), clearCredentials: z.boolean().optional() }))
@@ -133,11 +153,19 @@ export const nsosRouter = router({
   admissions: router({
     publicSchool: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getSchoolByCode(input.shortCode)),
     publicSubmit: publicProcedure
-      .input(z.object({ shortCode: z.string().min(2).max(32), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional() }))
+      .input(z.object({ shortCode: z.string().min(2).max(32), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional(), supplementalData: z.record(z.string().min(1).max(40), z.string().trim().max(1000)).optional(), declarationAccepted: z.boolean().optional() }))
       .mutation(async ({ input }) => {
         const school = await db.getSchoolByCode(input.shortCode);
         if (!school) throw new TRPCError({ code: "NOT_FOUND", message: "School admissions link was not found." });
-        return db.createApplication({ ...input, schoolId: school.id });
+        const template = school.admissionTemplate ?? { admissionFields: [], requireDeclaration: false };
+        if (template.requireDeclaration && input.declarationAccepted !== true) throw new TRPCError({ code: "BAD_REQUEST", message: "Please confirm the admissions declaration before submitting." });
+        const enabledFields = new Set(template.admissionFields);
+        const supplementalData = Object.fromEntries(Object.entries(input.supplementalData ?? {}).filter(([key, value]) => enabledFields.has(key as (typeof template.admissionFields)[number]) && typeof value === "string" && value.trim().length > 0));
+        const { shortCode: _shortCode, supplementalData: _supplementalData, declarationAccepted, dateOfBirth: submittedDateOfBirth, gender: submittedGender, priorSchool: submittedPriorSchool, ...application } = input;
+        const dateOfBirth = enabledFields.has("dateOfBirth") ? supplementalData.dateOfBirth ?? submittedDateOfBirth : undefined;
+        const gender = enabledFields.has("gender") ? supplementalData.gender ?? submittedGender : undefined;
+        const priorSchool = enabledFields.has("priorSchool") ? supplementalData.priorSchool ?? submittedPriorSchool : undefined;
+        return db.createApplication({ ...application, schoolId: school.id, dateOfBirth, gender, priorSchool, supplementalData, declarationAccepted: declarationAccepted === true });
       }),
     list: managementProcedure("students.read")
       .input(schoolInput.extend({ status: z.enum(["submitted", "under_review", "accepted", "declined", "enrolled"]).optional() }))

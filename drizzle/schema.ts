@@ -198,6 +198,27 @@ export const schoolWebsites = mysqlTable(
   table => ({ schoolUnique: uniqueIndex("schoolWebsite_school_unique").on(table.schoolId), domainUnique: uniqueIndex("schoolWebsite_domain_unique").on(table.customDomain) }),
 );
 
+export const schoolDocumentTemplates = mysqlTable(
+  "schoolDocumentTemplates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    admissionTitle: varchar("admissionTitle", { length: 160 }).notNull().default("School admission form"),
+    headerTagline: varchar("headerTagline", { length: 255 }),
+    headerLogoUrl: varchar("headerLogoUrl", { length: 2048 }),
+    headerAddressLine: varchar("headerAddressLine", { length: 500 }),
+    headerContactLine: varchar("headerContactLine", { length: 500 }),
+    admissionFields: json("admissionFields").$type<string[]>().notNull(),
+    declarationText: text("declarationText"),
+    requireDeclaration: boolean("requireDeclaration").notNull().default(true),
+    termlyFeeTitle: varchar("termlyFeeTitle", { length: 160 }).notNull().default("Termly fee guide"),
+    feeSchedule: json("feeSchedule").$type<Array<{ category: string; tuitionFee: number }>>().notNull(),
+    updatedBy: int("updatedBy"),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolUnique: uniqueIndex("schoolDocumentTemplate_school_unique").on(table.schoolId) }),
+);
+
 export const schoolMemberships = mysqlTable(
   "schoolMemberships",
   {
@@ -382,6 +403,8 @@ export const admissionsApplications = mysqlTable(
     guardianPhone: varchar("guardianPhone", { length: 48 }).notNull(),
     priorSchool: varchar("priorSchool", { length: 255 }),
     notes: text("notes"),
+    supplementalData: json("supplementalData").$type<Record<string, string>>(),
+    declarationAccepted: boolean("declarationAccepted").notNull().default(false),
     status: mysqlEnum("status", ["submitted", "under_review", "accepted", "declined", "enrolled"])
       .notNull()
       .default("submitted"),

@@ -104,3 +104,6 @@
 - [x] Add smooth accessible slide-in motion and a five-second automatic dismissal to the personalized Google welcome toast.
 - [x] Show a safe success toast after an active NSOS device session is successfully revoked.
 - [x] Add a user-facing security activity log for revoked sessions and automated security-check events, with safe scoped details and timestamps.
+- [x] Add tenant-scoped, owner-editable admission-form and document-header templates derived from supplied sample school documents without creating live school or learner data.
+- [x] Add tenant-scoped, owner-editable termly fee-schedule templates with preview and controlled adoption into fee structures.
+- [x] Add tenant-scoped branded document-header fields with owner-admin editing, preview, safe public admissions rendering, and regression coverage.

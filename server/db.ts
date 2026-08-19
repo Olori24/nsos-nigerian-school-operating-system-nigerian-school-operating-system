@@ -41,6 +41,7 @@ import {
   schoolSubscriptions,
   securityAuditEvents,
   schoolMemberships,
+  schoolDocumentTemplates,
   schoolWebsites,
   schools,
   scores,
@@ -464,7 +465,10 @@ export async function listUserSchools(userId: number) {
 
 export async function getSchoolByCode(shortCode: string) {
   const db = await database();
-  return (await db.select({ id: schools.id, name: schools.name, shortCode: schools.shortCode, state: schools.state }).from(schools).where(eq(schools.shortCode, shortCode.trim().toUpperCase())).limit(1))[0];
+  const school = (await db.select({ id: schools.id, name: schools.name, shortCode: schools.shortCode, state: schools.state }).from(schools).where(eq(schools.shortCode, shortCode.trim().toUpperCase())).limit(1))[0];
+  if (!school) return undefined;
+  const template = await getSchoolDocumentTemplate(school.id);
+  return { ...school, admissionTemplate: publicAdmissionTemplate(template) };
 }
 
 export async function createSchool(input: { name: string; shortCode: string; state?: string; email?: string; phone?: string; createdBy: number }) {
@@ -726,6 +730,126 @@ export async function getSchoolWebsite(schoolId: number) {
   if (!school) throw new Error("School not found.");
   const website = (await db.select().from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1))[0];
   return { school, website: website ?? { schoolId, headline: `${school.name}: learning for a brighter future.`, introduction: "", primaryColor: "#0f5c4f", contactEmail: school.email, contactPhone: school.phone, campusLocation: school.address ?? school.state, customDomain: null, domainStatus: "not_configured", admissionsEnabled: true, published: false } };
+}
+
+const admissionTemplateFieldIds = ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"] as const;
+type AdmissionTemplateFieldId = (typeof admissionTemplateFieldIds)[number];
+type FeeScheduleEntry = { category: string; tuitionFee: number };
+
+const defaultDocumentTemplate = {
+  admissionTitle: "School admission form",
+  headerTagline: "Nursery · Primary · College",
+  headerLogoUrl: null,
+  headerAddressLine: null,
+  headerContactLine: null,
+  admissionFields: ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "priorSchool", "currentClass", "medicalHistory", "guardianOccupation"] as AdmissionTemplateFieldId[],
+  declarationText: "I confirm that the information provided is accurate to the best of my knowledge and I understand that the school will use it only for admissions and student-support purposes.",
+  requireDeclaration: true,
+  termlyFeeTitle: "Termly fee guide",
+  feeSchedule: [
+    { category: "Kindergarten", tuitionFee: 15000 },
+    { category: "Nursery", tuitionFee: 16000 },
+    { category: "Primary 1–3", tuitionFee: 18000 },
+    { category: "Primary 4–6", tuitionFee: 20000 },
+    { category: "JSS 1–2", tuitionFee: 22000 },
+    { category: "JSS 3", tuitionFee: 25000 },
+    { category: "SSS 1–2", tuitionFee: 17000 },
+    { category: "SSS 3", tuitionFee: 20000 },
+  ] satisfies FeeScheduleEntry[],
+};
+
+function templateFields(value: unknown): AdmissionTemplateFieldId[] {
+  if (!Array.isArray(value)) return defaultDocumentTemplate.admissionFields;
+  const selected = value.filter((item): item is AdmissionTemplateFieldId => typeof item === "string" && admissionTemplateFieldIds.includes(item as AdmissionTemplateFieldId));
+  return selected.length ? Array.from(new Set(selected)) : defaultDocumentTemplate.admissionFields;
+}
+
+function templateFees(value: unknown): FeeScheduleEntry[] {
+  if (!Array.isArray(value)) return defaultDocumentTemplate.feeSchedule;
+  const selected = value.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const entry = item as Record<string, unknown>;
+    const category = typeof entry.category === "string" ? entry.category.trim().slice(0, 120) : "";
+    const tuitionFee = typeof entry.tuitionFee === "number" ? entry.tuitionFee : Number(entry.tuitionFee);
+    return category && Number.isFinite(tuitionFee) && tuitionFee > 0 && tuitionFee <= 10_000_000 ? [{ category, tuitionFee: Math.round(tuitionFee * 100) / 100 }] : [];
+  });
+  const seenCategories = new Set<string>();
+  const distinct = selected.filter(entry => {
+    const key = entry.category.toLocaleLowerCase("en-NG");
+    if (seenCategories.has(key)) return false;
+    seenCategories.add(key);
+    return true;
+  });
+  return distinct.length ? distinct.slice(0, 24) : defaultDocumentTemplate.feeSchedule;
+}
+
+export function normalisePublicHeaderLogoUrl(value: string | undefined) {
+  const candidate = value?.trim();
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function publicAdmissionTemplate(template: { admissionTitle: string; headerTagline: string | null; headerLogoUrl: string | null; headerAddressLine: string | null; headerContactLine: string | null; admissionFields: unknown; declarationText: string | null; requireDeclaration: boolean } | undefined) {
+  return {
+    admissionTitle: template?.admissionTitle ?? defaultDocumentTemplate.admissionTitle,
+    headerTagline: template?.headerTagline ?? defaultDocumentTemplate.headerTagline,
+    headerLogoUrl: normalisePublicHeaderLogoUrl(template?.headerLogoUrl ?? undefined),
+    headerAddressLine: template?.headerAddressLine?.trim() || null,
+    headerContactLine: template?.headerContactLine?.trim() || null,
+    admissionFields: templateFields(template?.admissionFields),
+    declarationText: template?.declarationText ?? defaultDocumentTemplate.declarationText,
+    requireDeclaration: template?.requireDeclaration ?? defaultDocumentTemplate.requireDeclaration,
+  };
+}
+
+export async function getSchoolDocumentTemplate(schoolId: number) {
+  const row = (await (await database()).select().from(schoolDocumentTemplates).where(eq(schoolDocumentTemplates.schoolId, schoolId)).limit(1))[0];
+  return {
+    ...(row ?? { schoolId, ...defaultDocumentTemplate, updatedBy: null, updatedAt: null }),
+    admissionFields: templateFields(row?.admissionFields),
+    feeSchedule: templateFees(row?.feeSchedule),
+  };
+}
+
+export async function saveSchoolDocumentTemplate(input: { schoolId: number; admissionTitle: string; headerTagline?: string; headerLogoUrl?: string; headerAddressLine?: string; headerContactLine?: string; admissionFields: string[]; declarationText?: string; requireDeclaration: boolean; termlyFeeTitle: string; feeSchedule: FeeScheduleEntry[]; updatedBy: number }) {
+  const values = {
+    schoolId: input.schoolId,
+    admissionTitle: input.admissionTitle.trim(),
+    headerTagline: input.headerTagline?.trim() || null,
+    headerLogoUrl: normalisePublicHeaderLogoUrl(input.headerLogoUrl),
+    headerAddressLine: input.headerAddressLine?.trim() || null,
+    headerContactLine: input.headerContactLine?.trim() || null,
+    admissionFields: templateFields(input.admissionFields),
+    declarationText: input.declarationText?.trim() || null,
+    requireDeclaration: input.requireDeclaration,
+    termlyFeeTitle: input.termlyFeeTitle.trim(),
+    feeSchedule: templateFees(input.feeSchedule),
+    updatedBy: input.updatedBy,
+  };
+  await (await database()).insert(schoolDocumentTemplates).values(values).onDuplicateKeyUpdate({ set: values });
+  return getSchoolDocumentTemplate(input.schoolId);
+}
+
+export async function createDraftFeesFromTemplate(input: { schoolId: number; termId: number; classId?: number }) {
+  const db = await database();
+  const term = (await db.select({ id: academicTerms.id }).from(academicTerms).where(and(eq(academicTerms.id, input.termId), eq(academicTerms.schoolId, input.schoolId))).limit(1))[0];
+  if (!term) throw new Error("Select an academic term in this school before adopting a termly fee guide.");
+  if (input.classId) {
+    const classRow = (await db.select({ id: classes.id }).from(classes).where(and(eq(classes.id, input.classId), eq(classes.schoolId, input.schoolId))).limit(1))[0];
+    if (!classRow) throw new Error("Select a class in this school, or leave the class scope open.");
+  }
+  const template = await getSchoolDocumentTemplate(input.schoolId);
+  const existing = await db.select({ name: feeStructures.name }).from(feeStructures).where(and(eq(feeStructures.schoolId, input.schoolId), eq(feeStructures.termId, input.termId), input.classId ? eq(feeStructures.classId, input.classId) : isNull(feeStructures.classId)));
+  const existingNames = new Set(existing.map(row => row.name));
+  const newRows = template.feeSchedule.map(entry => ({ name: `${template.termlyFeeTitle} · ${entry.category}`, amount: String(entry.tuitionFee), schoolId: input.schoolId, termId: input.termId, classId: input.classId ?? null, mandatory: true, status: "draft" as const })).filter(row => !existingNames.has(row.name));
+  if (!newRows.length) throw new Error("This fee guide has already been adopted for the selected term and class scope.");
+  await db.insert(feeStructures).values(newRows);
+  return { createdCount: newRows.length, status: "draft" as const };
 }
 
 export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; published?: boolean }) {

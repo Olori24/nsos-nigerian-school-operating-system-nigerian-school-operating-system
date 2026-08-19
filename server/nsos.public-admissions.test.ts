@@ -35,4 +35,13 @@ describe("NSOS public admissions", () => {
     await expect(caller().nsos.admissions.publicSubmit({ shortCode: "CGC", firstName: "Ada", lastName: "Okafor", guardianName: "Ifeoma Okafor", guardianPhone: "08000000000", guardianEmail: "guardian@example.com" })).resolves.toEqual({ applicationId: 44 });
     expect(db.createApplication).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 18, firstName: "Ada", guardianEmail: "guardian@example.com" }));
   });
+
+  it("requires the configured declaration and retains only template-enabled supplemental fields", async () => {
+    vi.mocked(db.getSchoolByCode).mockResolvedValue({ id: 18, name: "Cedar Grove College", shortCode: "CGC", state: "Lagos", admissionTemplate: { admissionTitle: "Admission form", headerTagline: "School admissions", admissionFields: ["dateOfBirth"], declarationText: "I confirm this information is correct.", requireDeclaration: true } });
+    vi.mocked(db.createApplication).mockResolvedValue({ applicationId: 45 });
+
+    await expect(caller().nsos.admissions.publicSubmit({ shortCode: "CGC", firstName: "Ada", lastName: "Okafor", guardianName: "Ifeoma Okafor", guardianPhone: "08000000000", supplementalData: { dateOfBirth: "2017-01-15" } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller().nsos.admissions.publicSubmit({ shortCode: "CGC", firstName: "Ada", lastName: "Okafor", guardianName: "Ifeoma Okafor", guardianPhone: "08000000000", supplementalData: { dateOfBirth: "2017-01-15", medicalHistory: "Not enabled by this school" }, declarationAccepted: true })).resolves.toEqual({ applicationId: 45 });
+    expect(db.createApplication).toHaveBeenLastCalledWith(expect.objectContaining({ schoolId: 18, dateOfBirth: "2017-01-15", declarationAccepted: true, supplementalData: { dateOfBirth: "2017-01-15" } }));
+  });
 });
