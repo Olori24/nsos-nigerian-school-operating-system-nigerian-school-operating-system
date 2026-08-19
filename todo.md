@@ -69,9 +69,13 @@
 - [x] Add a family-safe PDF statement download showing the portal’s current outstanding balance and payment-evidence history without exposing other families or internal finance data.
 - [x] Add family dashboard notifications for approved or rejected payment evidence, with tenant-scoped recipient ownership and acknowledgement tracking.
 - [x] Add family portal payment-history filters and sorting for date, evidence status, and transaction ordering without exposing records outside the signed-in family scope.
+- [x] Replace the Manus-only NSOS sign-in experience with a secure Google and email-based authentication approach, preserving existing account and tenant safeguards.
+- [x] Implement direct Google sign-in and passwordless email sign-up routes, identity records, verified-link controls, and a school-facing login screen without removing access for existing users.
 - [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
 - [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
+- [x] Perform the scheduled 08:00 Africa/Lagos NSOS CI review using GitHub API first and the repository-specific Gmail fallback only when needed.
+- [ ] Capture evidence from one scheduler-originated 08:00 Africa/Lagos NSOS CI monitor run, including the delivered verified source and outcome.
 - [x] Add Gmail-based GitHub Actions notification fallback and confidence states to the daily NSOS CI status monitor.
 - [x] Build the NSOS revenue foundation with school subscription plans, owner-controlled account lifecycle, onboarding billing records, and renewal-ready administration.
 - [x] Restrict platform revenue overview, plan creation, subscription assignment, and billing mutations to the configured NSOS platform owner rather than every global admin.
@@ -80,3 +84,6 @@
 - [x] Add the first NSOS security-hardening release: request protections, abuse resistance, sensitive-operation auditability, and operational safeguards.
 - [x] Extend security audit coverage to membership, website/domain, admissions, finance, and results actions that materially affect school data or access.
 - [x] Replace the per-instance rate limiter with a shared or gateway-backed control suitable for autoscaled production traffic, with Express-level enforcement tests.
+- [x] Complete and verify secure Google OAuth and passwordless email sign-in, including browser-bound OAuth state, sender verification, regression tests, and the multi-option NSOS login screen.
+- [x] Add route-level authentication tests for Google callback state and provider failures, passwordless email delivery failures, and single-use email verification outcomes.
+- [x] Add explicit Resend sender-address validation for the configured NSOS passwordless-email sender.

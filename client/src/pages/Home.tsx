@@ -36,6 +36,7 @@ import {
   Globe2,
   LayoutDashboard,
   Loader2,
+  Mail,
   Megaphone,
   Menu,
   MoreHorizontal,
@@ -189,12 +190,41 @@ function EmptyNotice({ title, text, action, onAction }: { title: string; text: s
 function LoadingPanel() { return <div className="flex min-h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-[#0f5c4f]" /></div>; }
 
 function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [emailState, setEmailState] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [sendingLink, setSendingLink] = useState(false);
+
+  const requestEmailLink = async (event: FormEvent) => {
+    event.preventDefault();
+    setEmailState(null);
+    setSendingLink(true);
+    try {
+      const response = await fetch("/api/auth/email/request", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, origin: window.location.origin }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "We could not send a sign-in link right now.");
+      setEmailState({ tone: "success", message: payload.message || "Check your inbox for your secure NSOS sign-in link." });
+    } catch (error) {
+      setEmailState({ tone: "error", message: error instanceof Error ? error.message : "We could not send a sign-in link right now." });
+    } finally {
+      setSendingLink(false);
+    }
+  };
+
+  const startGoogleLogin = () => {
+    window.location.assign(`/api/auth/google/start?origin=${encodeURIComponent(window.location.origin)}`);
+  };
+
   return (
     <main className="noise min-h-screen overflow-hidden bg-[#0b1715] px-5 py-6 text-white sm:px-8 lg:px-12">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-7xl flex-col rounded-[1.7rem] border border-white/10 bg-[radial-gradient(circle_at_72%_18%,rgba(47,113,92,0.38),transparent_28%),linear-gradient(115deg,#10251f_0%,#0b1715_62%,#123328_100%)] p-6 sm:p-9 lg:p-12">
         <header className="relative z-10 flex items-center justify-between"><Brand inverse /><span className="mono rounded-full border border-white/12 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-white/60">School command system</span></header>
         <div className="relative z-10 grid flex-1 items-center gap-12 py-14 lg:grid-cols-[1.1fr_.9fr] lg:py-8">
-          <div className="max-w-2xl soft-enter"><p className="mono text-[11px] font-medium uppercase tracking-[0.2em] text-[#a6d7b5]">Nigerian School Operating System</p><h1 className="display-face mt-5 text-[52px] font-semibold leading-[0.94] tracking-[-0.055em] sm:text-[72px]">The calm center of a well-run school.</h1><p className="mt-6 max-w-xl text-base leading-7 text-white/68">Admissions, academics, attendance, results, fees, staff and family communication—designed as one coherent operating environment.</p><button onClick={() => startLogin()} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#dcefe1] px-5 py-3.5 text-sm font-bold text-[#133a2d] transition duration-150 hover:bg-white active:scale-[0.97]">Enter NSOS <ArrowUpRight className="h-4 w-4" /></button></div>
+          <div className="max-w-2xl soft-enter"><p className="mono text-[11px] font-medium uppercase tracking-[0.2em] text-[#a6d7b5]">Nigerian School Operating System</p><h1 className="display-face mt-5 text-[52px] font-semibold leading-[0.94] tracking-[-0.055em] sm:text-[72px]">The calm center of a well-run school.</h1><p className="mt-6 max-w-xl text-base leading-7 text-white/68">Admissions, academics, attendance, results, fees, staff and family communication—designed as one coherent operating environment.</p><div className="mt-8 max-w-md rounded-[1.15rem] border border-white/12 bg-black/10 p-4 shadow-[0_16px_34px_rgba(0,0,0,0.16)] backdrop-blur-sm"><p className="text-sm font-semibold text-white">Sign in to your school workspace</p><p className="mt-1 text-xs leading-5 text-white/56">Use Google or receive a secure, single-use email link.</p><button type="button" onClick={startGoogleLogin} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-[#183329] transition duration-150 hover:bg-[#eaf4ed] active:scale-[0.97]"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#0f5c4f] text-[11px] font-extrabold text-white">G</span>Continue with Google</button><div className="my-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div><form onSubmit={requestEmailLink} className="grid gap-2"><label className="sr-only" htmlFor="login-email">Email address</label><input id="login-email" value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="you@school.edu.ng" required className="h-11 w-full rounded-xl border border-white/12 bg-white/[0.08] px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#b8e3c1] focus:ring-2 focus:ring-[#b8e3c1]/20" /><button type="submit" disabled={sendingLink} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#b7dfc0]/30 bg-[#dcefe1]/12 px-4 text-sm font-bold text-[#dcefe1] transition duration-150 hover:bg-[#dcefe1]/18 disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.97]">{sendingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}{sendingLink ? "Sending secure link…" : "Email me a sign-in link"}</button></form>{emailState && <p role="status" className={cn("mt-3 rounded-lg px-3 py-2 text-xs leading-5", emailState.tone === "success" ? "bg-[#c9ebd2]/15 text-[#c7efd1]" : "bg-[#f6c7c3]/12 text-[#ffd0cb]")}>{emailState.message}</p>}<button type="button" onClick={() => startLogin()} className="mt-4 w-full text-center text-xs font-semibold text-white/48 transition hover:text-white/80">Existing Manus account? Continue with Manus</button></div></div>
           <div className="soft-enter relative mx-auto w-full max-w-md [animation-delay:120ms]">
             <div className="rounded-[1.4rem] border border-white/12 bg-white/[0.07] p-5 shadow-2xl backdrop-blur-sm">
               <div className="flex items-center justify-between"><div><p className="mono text-[10px] uppercase tracking-[0.15em] text-white/45">Operating view</p><p className="mt-1 text-sm font-semibold">Today at your school</p></div><span className="rounded-xl bg-[#dcefe1] p-2 text-[#123b31]"><Activity className="h-4 w-4" /></span></div>

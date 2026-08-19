@@ -1,4 +1,4 @@
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
@@ -8,6 +8,8 @@ import {
   admissionDocuments,
   admissionsApplications,
   announcements,
+  authIdentities,
+  authMagicLinks,
   assessments,
   attendanceRecords,
   cashAssuranceCaseInvoices,
@@ -267,6 +269,73 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 export async function getUserByOpenId(openId: string) {
   const db = await database();
   return (await db.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
+}
+
+export type ExternalAuthProvider = "google" | "email";
+
+export function normaliseAuthEmail(value: string) {
+  const email = value.trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 320) throw new Error("Enter a valid email address.");
+  return email;
+}
+
+function externalOpenId(provider: ExternalAuthProvider) {
+  return `external:${provider}:${crypto.randomUUID()}`;
+}
+
+export async function resolveExternalAuthIdentity(input: { provider: ExternalAuthProvider; providerSubject: string; email: string; name?: string | null }) {
+  const db = await database();
+  const providerSubject = input.providerSubject.trim();
+  const email = normaliseAuthEmail(input.email);
+  if (!providerSubject || providerSubject.length > 320) throw new Error("External identity is invalid.");
+  const existingIdentity = (await db.select().from(authIdentities).where(and(eq(authIdentities.provider, input.provider), eq(authIdentities.providerSubject, providerSubject))).limit(1))[0];
+  if (existingIdentity) {
+    const existingUser = (await db.select().from(users).where(eq(users.id, existingIdentity.userId)).limit(1))[0];
+    if (!existingUser) throw new Error("External identity is not linked to an NSOS account.");
+    await db.update(authIdentities).set({ lastUsedAt: new Date(), email }).where(eq(authIdentities.id, existingIdentity.id));
+    await upsertUser({ openId: existingUser.openId, lastSignedIn: new Date() });
+    return existingUser;
+  }
+
+  // A matching email alone must not attach a newly verified external provider
+  // to a pre-existing Manus user, because that user may already own tenant data.
+  // External providers may share their own local account; linking a legacy
+  // Manus account requires a separate explicit reauthentication flow.
+  let user = (await db.select().from(users).where(and(eq(users.email, email), like(users.openId, "external:%"))).limit(1))[0];
+  if (!user) {
+    const created = await db.insert(users).values({ openId: externalOpenId(input.provider), name: input.name?.trim().slice(0, 255) || null, email, loginMethod: input.provider, lastSignedIn: new Date() });
+    user = (await db.select().from(users).where(eq(users.id, Number(created[0].insertId))).limit(1))[0];
+  }
+  if (!user) throw new Error("Unable to create an NSOS account.");
+  await db.insert(authIdentities).values({ userId: user.id, provider: input.provider, providerSubject, email, lastUsedAt: new Date() }).onDuplicateKeyUpdate({ set: { lastUsedAt: new Date(), email } });
+  const identity = (await db.select().from(authIdentities).where(and(eq(authIdentities.provider, input.provider), eq(authIdentities.providerSubject, providerSubject))).limit(1))[0];
+  if (!identity) throw new Error("Unable to link the external identity.");
+  const linkedUser = (await db.select().from(users).where(eq(users.id, identity.userId)).limit(1))[0];
+  if (!linkedUser) throw new Error("External identity is not linked to an NSOS account.");
+  await upsertUser({ openId: linkedUser.openId, lastSignedIn: new Date() });
+  return linkedUser;
+}
+
+export async function createAuthMagicLink(input: { email: string; redirectOrigin: string }) {
+  const db = await database();
+  const email = normaliseAuthEmail(input.email);
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const now = new Date();
+  await db.insert(authMagicLinks).values({ email, tokenHash, redirectOrigin: input.redirectOrigin, expiresAt: new Date(now.getTime() + 15 * 60_000) });
+  if (Math.random() < 0.05) void db.delete(authMagicLinks).where(sql`${authMagicLinks.expiresAt} < ${now}`);
+  return token;
+}
+
+export async function consumeAuthMagicLink(token: string) {
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const db = await database();
+  const link = (await db.select().from(authMagicLinks).where(eq(authMagicLinks.tokenHash, tokenHash)).limit(1))[0];
+  if (!link) throw new Error("This sign-in link is invalid or has expired.");
+  const updated = await db.update(authMagicLinks).set({ usedAt: new Date() }).where(and(eq(authMagicLinks.id, link.id), isNull(authMagicLinks.usedAt), gt(authMagicLinks.expiresAt, new Date())));
+  const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This sign-in link has already been used or has expired.");
+  return link;
 }
 
 export async function listUserSchools(userId: number) {

@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -42,11 +43,15 @@ async function startServer() {
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "public-admissions", limit: 30, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.publicSubmit") }));
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "live-provider-action", limit: 6, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.providers.sendTestSms") }));
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "family-receipt-scan", limit: 12, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.portal.scanPaymentEvidence") }));
+  app.use("/api/auth/email/request", requireSameOriginForMutations());
+  app.use("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }));
   registerSmsWebhookRoutes(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
   registerStorageProxy(app);
+  registerGoogleAuthRoutes(app);
+  registerEmailAuthRoutes(app);
   registerOAuthRoutes(app);
   // tRPC API
   app.use(

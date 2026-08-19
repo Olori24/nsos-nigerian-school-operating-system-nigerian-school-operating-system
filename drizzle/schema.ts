@@ -25,6 +25,42 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+export const authIdentities = mysqlTable(
+  "authIdentities",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    provider: mysqlEnum("provider", ["google", "email"]).notNull(),
+    providerSubject: varchar("providerSubject", { length: 320 }).notNull(),
+    email: varchar("email", { length: 320 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    lastUsedAt: timestamp("lastUsedAt").defaultNow().notNull(),
+  },
+  table => ({
+    providerSubjectUnique: uniqueIndex("authIdentity_provider_subject_unique").on(table.provider, table.providerSubject),
+    userIndex: index("authIdentity_user_idx").on(table.userId),
+    emailIndex: index("authIdentity_email_idx").on(table.email),
+  }),
+);
+
+export const authMagicLinks = mysqlTable(
+  "authMagicLinks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    email: varchar("email", { length: 320 }).notNull(),
+    tokenHash: varchar("tokenHash", { length: 128 }).notNull(),
+    redirectOrigin: varchar("redirectOrigin", { length: 512 }).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    usedAt: timestamp("usedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    tokenUnique: uniqueIndex("authMagicLink_token_unique").on(table.tokenHash),
+    emailCreated: index("authMagicLink_email_created_idx").on(table.email, table.createdAt),
+    expiryIndex: index("authMagicLink_expiry_idx").on(table.expiresAt),
+  }),
+);
+
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
