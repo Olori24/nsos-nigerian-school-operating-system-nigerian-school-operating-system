@@ -64,6 +64,7 @@
 - [x] Add family-scoped Cash Assurance portal access so linked parents and students can view their own payment promises and submit payment evidence for finance review without ledger access.
 - [x] Add supervised AI receipt scanning that extracts likely amount and payment date from a family-uploaded evidence document, requires user confirmation, and never posts or alters the ledger.
 - [x] Add a receipt-scan loading skeleton and clear recoverable error state when AI extraction cannot read a family-uploaded payment document.
+- [x] Add a family portal payment-evidence tracker showing only the linked family’s pending, approved, or rejected submissions and safe outcome details.
 - [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
 - [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
