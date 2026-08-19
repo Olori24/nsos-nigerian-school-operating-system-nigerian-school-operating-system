@@ -43,7 +43,8 @@
 - [x] Verify and export NSOS to the confirmed GitHub repository `Olori24/nsos-nigerian-school-operating-system-nigerian-school-operating-system` using a secret-safe source-control process.
 - [x] Review and remediate production dependency-audit findings before the NSOS GitHub export.
 - [x] Enable the GitHub Actions workflow upload after the GitHub connection is granted `workflow` permission.
-- [ ] Re-authorize or replace the GitHub integration until workflow-file writes and Actions-read API access no longer return 403.
+- [x] Verify the enabled GitHub access path can modify the CI workflow and retrieve Actions run details without a 403.
+- [x] Verify the supported GitHub access path can update `.github/workflows/ci.yml` without a 403 and record direct evidence of a successful workflow-file write.
 - [x] Remove the mistakenly created `github/` workflow directory while retaining only `.github/workflows/ci.yml`.
 - [x] Confirm GitHub Actions registers the NSOS CI workflow and record at least one visible run status.
 - [x] Diagnose and repair the failed GitHub Actions Node.js setup stage, then confirm a successful NSOS CI run.
@@ -71,9 +72,9 @@
 - [x] Add family portal payment-history filters and sorting for date, evidence status, and transaction ordering without exposing records outside the signed-in family scope.
 - [x] Replace the Manus-only NSOS sign-in experience with a secure Google and email-based authentication approach, preserving existing account and tenant safeguards.
 - [x] Implement direct Google sign-in and passwordless email sign-up routes, identity records, verified-link controls, and a school-facing login screen without removing access for existing users.
-- [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
-- [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
-- [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
+- [x] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
+- [x] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
+- [x] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
 - [x] Perform the scheduled 08:00 Africa/Lagos NSOS CI review using GitHub API first and the repository-specific Gmail fallback only when needed.
 - [ ] Capture evidence from one scheduler-originated 08:00 Africa/Lagos NSOS CI monitor run, including the delivered verified source and outcome.
 - [x] Add Gmail-based GitHub Actions notification fallback and confidence states to the daily NSOS CI status monitor.
