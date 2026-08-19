@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sessionPresentation, sessionRevokeConfirmation, sessionRevokeSuccessNotice } from "../client/src/lib/sessionPresentation";
+import { sessionPresentation, sessionRevokeConfirmation, sessionRevokeSuccessNotice, sessionSecurityActivityPresentation } from "../client/src/lib/sessionPresentation";
 
 describe("Account & security session-list presentation", () => {
   it("uses the stored coarse location label and desktop icon choice", () => {
@@ -31,5 +31,16 @@ describe("Account & security session-list presentation", () => {
       title: "Chrome on Windows device signed out.",
       description: "This device no longer has access to your NSOS account.",
     });
+  });
+
+  it("presents security history without session tokens or raw network details", () => {
+    expect(sessionSecurityActivityPresentation({ eventType: "session_revoked", deviceLabel: "Safari on iPhone or iPad", locationLabel: "Nigeria · Africa/Lagos" })).toEqual({
+      label: "Session revoked",
+      title: "Safari on iPhone or iPad was signed out",
+      description: "This device can no longer access your NSOS account.",
+      locationText: "Approximate location: Nigeria · Africa/Lagos",
+      tone: "rose",
+    });
+    expect(sessionSecurityActivityPresentation({ eventType: "session_verified", deviceLabel: "Chrome on Windows device", locationLabel: null }).locationText).toBe("Location not reported by this device");
   });
 });

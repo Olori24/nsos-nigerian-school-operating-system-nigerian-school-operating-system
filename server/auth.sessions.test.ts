@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sessionDb = vi.hoisted(() => ({
   listActiveUserSessions: vi.fn(),
+  listUserSecurityActivity: vi.fn(),
   updateUserSessionLocation: vi.fn(),
   revokeUserSession: vi.fn(),
   revokeOtherUserSessions: vi.fn(),
@@ -44,6 +45,15 @@ describe("auth.sessions", () => {
     expect(sessions.map(session => session.locationLabel)).toEqual(["Nigeria · Africa/Lagos", null]);
     expect(sessions.map(session => session.deviceKind)).toEqual(["desktop", "mobile"]);
     expect(sessionDb.listActiveUserSessions).toHaveBeenCalledWith(41);
+  });
+
+  it("returns only the caller's safe security activity history", async () => {
+    sessionDb.listUserSecurityActivity.mockResolvedValue([{ id: 9, eventType: "session_revoked", deviceLabel: "Chrome on Windows device", locationLabel: "Nigeria · Africa/Lagos", source: "google", occurredAt: new Date("2026-08-19T08:00:00.000Z") }]);
+    const history = await appRouter.createCaller(context()).auth.sessions.history({ limit: 20 });
+    expect(history).toHaveLength(1);
+    expect(history[0]).not.toHaveProperty("sessionId");
+    expect(history[0]).not.toHaveProperty("userAgent");
+    expect(sessionDb.listUserSecurityActivity).toHaveBeenCalledWith(41, 20);
   });
 
   it("refuses to revoke the current session from the device list", async () => {

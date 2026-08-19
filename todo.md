@@ -102,4 +102,4 @@
 - [x] Personalize the one-time Google sign-in toast with the signed-in user’s first name and a safe profile-image or initials accent.
 - [x] Add smooth accessible slide-in motion and a five-second automatic dismissal to the personalized Google welcome toast.
 - [x] Show a safe success toast after an active NSOS device session is successfully revoked.
-- [ ] Add a user-facing security activity log for revoked sessions and automated security-check events, with safe scoped details and timestamps.
+- [x] Add a user-facing security activity log for revoked sessions and automated security-check events, with safe scoped details and timestamps.

@@ -52,6 +52,7 @@ import {
   subjects,
   timetableEntries,
   type InsertUser,
+  userSecurityActivity,
   userSessions,
   users,
 } from "../drizzle/schema";
@@ -390,7 +391,12 @@ export function legacySessionId(sessionToken: string) {
 export async function createUserSession(input: { userId: number; source: string; userAgent?: string; timeZone?: string; expiresAt: Date }) {
   const id = crypto.randomUUID();
   const userAgent = input.userAgent?.slice(0, 512) || null;
-  await (await database()).insert(userSessions).values({ id, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, locationLabel: sessionLocationLabel(input.timeZone), expiresAt: input.expiresAt });
+  const source = input.source.slice(0, 32);
+  const deviceLabel = sessionDeviceLabel(userAgent ?? undefined);
+  const locationLabel = sessionLocationLabel(input.timeZone);
+  const db = await database();
+  await db.insert(userSessions).values({ id, userId: input.userId, source, deviceLabel, userAgent, locationLabel, expiresAt: input.expiresAt });
+  await db.insert(userSecurityActivity).values({ userId: input.userId, eventType: "session_verified", deviceLabel, locationLabel, source });
   return id;
 }
 
@@ -405,6 +411,7 @@ export async function ensureActiveUserSession(input: { userId: number; sessionId
   }
   const userAgent = input.userAgent?.slice(0, 512) || null;
   await db.insert(userSessions).values({ id: input.sessionId, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, locationLabel: sessionLocationLabel(input.timeZone), expiresAt: input.expiresAt, lastSeenAt: now });
+  await db.insert(userSecurityActivity).values({ userId: input.userId, eventType: "session_verified", deviceLabel: sessionDeviceLabel(userAgent ?? undefined), locationLabel: sessionLocationLabel(input.timeZone), source: input.source.slice(0, 32), occurredAt: now });
   return true;
 }
 
@@ -421,16 +428,29 @@ export async function updateUserSessionLocation(input: { userId: number; session
 }
 
 export async function revokeUserSession(input: { userId: number; sessionId: string; reason: string }) {
-  const updated = await (await database()).update(userSessions).set({ revokedAt: new Date(), revokedReason: input.reason.slice(0, 96) }).where(and(eq(userSessions.id, input.sessionId), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt)));
-  return Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0) === 1;
+  const db = await database();
+  const session = (await db.select({ deviceLabel: userSessions.deviceLabel, locationLabel: userSessions.locationLabel, source: userSessions.source }).from(userSessions).where(and(eq(userSessions.id, input.sessionId), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt))).limit(1))[0];
+  if (!session) return false;
+  const occurredAt = new Date();
+  const updated = await db.update(userSessions).set({ revokedAt: occurredAt, revokedReason: input.reason.slice(0, 96) }).where(and(eq(userSessions.id, input.sessionId), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt)));
+  const revoked = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0) === 1;
+  if (revoked) await db.insert(userSecurityActivity).values({ userId: input.userId, eventType: "session_revoked", deviceLabel: session.deviceLabel, locationLabel: session.locationLabel, source: session.source, occurredAt });
+  return revoked;
 }
 
 export async function revokeOtherUserSessions(input: { userId: number; currentSessionId: string; reason: string }) {
   const db = await database();
   const active = await listActiveUserSessions(input.userId);
   const targets = active.filter(session => session.id !== input.currentSessionId);
-  await Promise.all(targets.map(session => db.update(userSessions).set({ revokedAt: new Date(), revokedReason: input.reason.slice(0, 96) }).where(and(eq(userSessions.id, session.id), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt)))));
+  const occurredAt = new Date();
+  await Promise.all(targets.map(session => db.update(userSessions).set({ revokedAt: occurredAt, revokedReason: input.reason.slice(0, 96) }).where(and(eq(userSessions.id, session.id), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt)))));
+  if (targets.length) await db.insert(userSecurityActivity).values(targets.map(session => ({ userId: input.userId, eventType: "session_revoked", deviceLabel: session.deviceLabel, locationLabel: session.locationLabel, source: session.source, occurredAt })));
   return targets.length;
+}
+
+export async function listUserSecurityActivity(userId: number, limit = 20) {
+  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
+  return (await (await database()).select({ id: userSecurityActivity.id, eventType: userSecurityActivity.eventType, deviceLabel: userSecurityActivity.deviceLabel, locationLabel: userSecurityActivity.locationLabel, source: userSecurityActivity.source, occurredAt: userSecurityActivity.occurredAt }).from(userSecurityActivity).where(eq(userSecurityActivity.userId, userId)).orderBy(desc(userSecurityActivity.occurredAt)).limit(safeLimit));
 }
 
 export async function listUserSchools(userId: number) {

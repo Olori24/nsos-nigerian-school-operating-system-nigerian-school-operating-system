@@ -25,6 +25,9 @@ export const appRouter = router({
         const sessions = await db.listActiveUserSessions(ctx.user.id);
         return sessions.map(session => ({ ...session, current: session.id === ctx.user.sessionId }));
       }),
+      history: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(50).optional() }).optional()).query(async ({ ctx, input }) => {
+        return db.listUserSecurityActivity(ctx.user.id, input?.limit ?? 20);
+      }),
       recordLocation: protectedProcedure.input(z.object({ timeZone: z.string().min(1).max(80) })).mutation(async ({ ctx, input }) => {
         if (!ctx.user.sessionId) throw new Error("This session cannot be updated from the dashboard.");
         const updated = await db.updateUserSessionLocation({ userId: ctx.user.id, sessionId: ctx.user.sessionId, timeZone: input.timeZone });

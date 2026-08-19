@@ -27,3 +27,12 @@ export function sessionRevokeSuccessNotice(session: { deviceLabel?: string | nul
     description: "This device no longer has access to your NSOS account.",
   };
 }
+
+export function sessionSecurityActivityPresentation(activity: { eventType?: string | null; deviceLabel?: string | null; locationLabel?: string | null }) {
+  const deviceLabel = activity.deviceLabel?.trim().slice(0, 160) || "Unrecognized device";
+  const locationText = activity.locationLabel ? `Approximate location: ${activity.locationLabel}` : "Location not reported by this device";
+  if (activity.eventType === "session_revoked") {
+    return { label: "Session revoked", title: `${deviceLabel} was signed out`, description: "This device can no longer access your NSOS account.", locationText, tone: "rose" as const };
+  }
+  return { label: "Security check", title: `NSOS verified ${deviceLabel}`, description: "The signed-in device passed an automated account-security check.", locationText, tone: "sage" as const };
+}

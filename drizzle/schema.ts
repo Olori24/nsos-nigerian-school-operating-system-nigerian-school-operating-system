@@ -83,6 +83,22 @@ export const userSessions = mysqlTable(
   }),
 );
 
+export const userSecurityActivity = mysqlTable(
+  "userSecurityActivity",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    eventType: varchar("eventType", { length: 64 }).notNull(),
+    deviceLabel: varchar("deviceLabel", { length: 160 }).notNull(),
+    locationLabel: varchar("locationLabel", { length: 160 }),
+    source: varchar("source", { length: 32 }).notNull(),
+    occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+  },
+  table => ({
+    userOccurred: index("userSecurityActivity_user_occurred_idx").on(table.userId, table.occurredAt),
+  }),
+);
+
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
