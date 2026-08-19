@@ -17,6 +17,7 @@ import { NsosCopilot } from "@/components/NsosCopilot";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { originLgaLoadPresentation } from "@/lib/originPresentation";
 import { nigerianStates } from "@/lib/nigerianStates";
 import { sessionPresentation, sessionRevokeConfirmation, sessionRevokeSuccessNotice, sessionSecurityActivityPresentation } from "@/lib/sessionPresentation";
 import { clearGoogleSignInNotice, SUCCESS_TOAST_CLASS, SUCCESS_TOAST_DURATION_MS, hasGoogleSignInNotice } from "@/lib/authNotice";
@@ -200,9 +201,10 @@ const selectClass = inputClass;
 
 function NigerianOriginFields({ stateOfOrigin, localGovernmentOfOrigin, onChange }: { stateOfOrigin: string; localGovernmentOfOrigin: string; onChange: (stateOfOrigin: string, localGovernmentOfOrigin: string) => void }) {
   const origins = trpc.nsos.admissions.originOptions.useQuery({ state: stateOfOrigin || undefined });
+  const lgaStatus = originLgaLoadPresentation({ stateOfOrigin, isLoading: origins.isLoading, isError: origins.isError });
   return <>
     <Field label="State of origin"><select className={selectClass} value={stateOfOrigin} onChange={event => onChange(event.target.value, "")}><option value="">Select state of origin</option>{origins.data?.states.map(state => <option value={state} key={state}>{state}</option>)}</select></Field>
-    <Field label="Local Government Area of origin"><select disabled={!stateOfOrigin || origins.isLoading} className={selectClass} value={localGovernmentOfOrigin} onChange={event => onChange(stateOfOrigin, event.target.value)}><option value="">{stateOfOrigin ? "Select Local Government Area" : "Select State of Origin first"}</option>{origins.data?.lgas.map(lga => <option value={lga} key={lga}>{lga}</option>)}</select></Field>
+    <div className="grid gap-1.5"><Field label="Local Government Area of origin"><select aria-describedby="internal-origin-lga-status" aria-invalid={lgaStatus.state === "error" || undefined} disabled={!stateOfOrigin || lgaStatus.state === "loading" || lgaStatus.state === "error"} className={selectClass} value={localGovernmentOfOrigin} onChange={event => onChange(stateOfOrigin, event.target.value)}><option value="">{lgaStatus.selectPlaceholder}</option>{origins.data?.lgas.map(lga => <option value={lga} key={lga}>{lga}</option>)}</select></Field>{lgaStatus.state === "loading" && <p id="internal-origin-lga-status" role="status" aria-live="polite" className="flex items-center gap-1.5 text-[11px] font-medium text-[#55736a]"><Loader2 className="h-3.5 w-3.5 animate-spin" />{lgaStatus.message}</p>}{lgaStatus.state === "error" && <div id="internal-origin-lga-status" role="alert" className="rounded-lg border border-[#f0c9c4] bg-[#fff7f5] px-3 py-2 text-[11px] leading-5 text-[#8f3b35]"><p>{lgaStatus.message}</p><button type="button" onClick={() => origins.refetch()} className="mt-1 font-bold text-[#9f352e] underline underline-offset-2">Retry loading LGAs</button></div>}</div>
   </>;
 }
 

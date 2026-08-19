@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { ArrowUpRight, CheckCircle2, Loader2, School } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { originLgaLoadPresentation } from "@/lib/originPresentation";
 
 const inputClass = "h-11 w-full rounded-xl border border-[#dfe5df] bg-[#fbfcfa] px-3 text-sm text-[#15201c] outline-none transition focus:border-[#0f5c4f] focus:ring-2 focus:ring-[#0f5c4f]/10";
 
@@ -25,6 +26,7 @@ export default function PublicAdmissions() {
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [applicationNo, setApplicationNo] = useState<number | null>(null);
   const origins = trpc.nsos.admissions.originOptions.useQuery({ state: supplementalData.stateOfOrigin || undefined });
+  const lgaStatus = originLgaLoadPresentation({ stateOfOrigin: supplementalData.stateOfOrigin, isLoading: origins.isLoading, isError: origins.isError });
 
   if (school.isLoading) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1]"><Loader2 className="h-6 w-6 animate-spin text-[#0f5c4f]" /></main>;
   if (!school.data) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1] p-5"><section className="max-w-md rounded-3xl border border-[#e0e5df] bg-white p-8 text-center shadow-sm"><School className="mx-auto h-7 w-7 text-[#0f5c4f]" /><h1 className="mt-4 text-xl font-semibold text-[#20342c]">Admissions link unavailable</h1><p className="mt-2 text-sm leading-6 text-[#758079]">Please return to your school’s official NSOS admissions link or contact the school office.</p></section></main>;
@@ -36,7 +38,7 @@ export default function PublicAdmissions() {
   const renderConfiguredField = (field: string) => {
     const meta = templateFieldMeta[field];
     if (meta.type === "originState") return <Field key={field} label={meta.label}><select className={inputClass} value={supplementalData[field] ?? ""} onChange={event => setSupplementalData(current => ({ ...current, stateOfOrigin: event.target.value, localGovernmentOfOrigin: "" }))}><option value="">Select state of origin</option>{origins.data?.states.map(state => <option key={state} value={state}>{state}</option>)}</select></Field>;
-    if (meta.type === "originLga") return <Field key={field} label={meta.label}><select disabled={!supplementalData.stateOfOrigin || origins.isLoading} className={inputClass} value={supplementalData[field] ?? ""} onChange={event => updateSupplement(field, event.target.value)}><option value="">{supplementalData.stateOfOrigin ? "Select Local Government Area" : "Select State of Origin first"}</option>{origins.data?.lgas.map(lga => <option key={lga} value={lga}>{lga}</option>)}</select></Field>;
+    if (meta.type === "originLga") return <div key={field} className="grid gap-1.5"><Field label={meta.label}><select aria-describedby="public-origin-lga-status" aria-invalid={lgaStatus.state === "error" || undefined} disabled={!supplementalData.stateOfOrigin || lgaStatus.state === "loading" || lgaStatus.state === "error"} className={inputClass} value={supplementalData[field] ?? ""} onChange={event => updateSupplement(field, event.target.value)}><option value="">{lgaStatus.selectPlaceholder}</option>{origins.data?.lgas.map(lga => <option key={lga} value={lga}>{lga}</option>)}</select></Field>{lgaStatus.state === "loading" && <p id="public-origin-lga-status" role="status" aria-live="polite" className="flex items-center gap-1.5 text-[11px] font-medium text-[#55736a]"><Loader2 className="h-3.5 w-3.5 animate-spin" />{lgaStatus.message}</p>}{lgaStatus.state === "error" && <div id="public-origin-lga-status" role="alert" className="rounded-lg border border-[#f0c9c4] bg-[#fff7f5] px-3 py-2 text-[11px] leading-5 text-[#8f3b35]"><p>{lgaStatus.message}</p><button type="button" onClick={() => origins.refetch()} className="mt-1 font-bold text-[#9f352e] underline underline-offset-2">Retry loading LGAs</button></div>}</div>;
     if (meta.type === "select") return <Field key={field} label={meta.label}><select className={inputClass} value={supplementalData[field] ?? ""} onChange={event => updateSupplement(field, event.target.value)}><option value="">Prefer not to say</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></Field>;
     if (meta.type === "textarea") return <Field key={field} label={meta.label}><textarea className={`${inputClass} min-h-24 h-auto py-3`} value={supplementalData[field] ?? ""} onChange={event => updateSupplement(field, event.target.value)} /></Field>;
     return <Field key={field} label={meta.label}><input type={meta.type ?? "text"} className={inputClass} value={supplementalData[field] ?? ""} onChange={event => updateSupplement(field, event.target.value)} /></Field>;
