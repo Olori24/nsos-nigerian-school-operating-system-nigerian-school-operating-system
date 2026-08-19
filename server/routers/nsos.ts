@@ -366,6 +366,14 @@ export const nsosRouter = router({
     guardian: managementProcedure("portal.read").input(schoolInput).query(({ ctx, input }) => db.getGuardianPortal(input.schoolId, ctx.user.id)),
     student: managementProcedure("portal.read").input(schoolInput).query(({ ctx, input }) => db.getStudentPortal(input.schoolId, ctx.user.id)),
     cashAssurance: familyPortalProcedure.input(schoolInput).query(({ ctx, input }) => db.getFamilyCashAssuranceData({ schoolId: input.schoolId, userId: ctx.user.id, role: ctx.schoolRole })),
+    paymentEvidenceNotifications: familyPortalProcedure.input(schoolInput).query(({ ctx, input }) => db.listFamilyPaymentEvidenceNotifications({ schoolId: input.schoolId, userId: ctx.user.id, role: ctx.schoolRole })),
+    markPaymentEvidenceNotificationRead: familyPortalProcedure
+      .input(schoolInput.extend({ notificationId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.markFamilyPaymentEvidenceNotificationRead({ schoolId: input.schoolId, userId: ctx.user.id, role: ctx.schoolRole, notificationId: input.notificationId });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "family_payment_evidence_notification_read", targetType: "payment_evidence", targetId: result.evidenceId, metadata: { notificationAcknowledged: true } });
+        return result;
+      }),
     submitPaymentEvidence: familyPortalProcedure
       .input(schoolInput.extend({ caseId: z.number().int().positive(), invoiceId: z.number().int().positive(), amountClaimed: z.number().positive(), claimedPaidOn: z.string().min(10).max(10).optional(), source: z.enum(["manual_receipt", "bank_reference", "provider_event", "other"]).default("bank_reference"), providerReference: z.string().max(160).optional(), note: z.string().max(2000).optional(), upload: z.object({ base64: z.string().min(4).max(7_100_000), fileName: z.string().min(1).max(255), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]) }).optional() }))
       .mutation(async ({ ctx, input }) => {

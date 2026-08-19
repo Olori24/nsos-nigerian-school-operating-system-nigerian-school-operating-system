@@ -19,6 +19,7 @@ import {
   departments,
   enrollments,
   feeStructures,
+  familyPaymentEvidenceNotifications,
   gradeScales,
   guardians,
   invoiceLineItems,
@@ -990,6 +991,10 @@ export async function reviewPaymentEvidence(input: { schoolId: number; evidenceI
     linkedPaymentId = payment.id;
   }
   await db.update(paymentEvidence).set({ status: input.status, linkedPaymentId, reviewedBy: input.reviewedBy, reviewedAt: new Date(), reviewNote: input.reviewNote ?? null }).where(eq(paymentEvidence.id, evidence.id));
+  const submitterMembership = (await db.select().from(schoolMemberships).where(and(eq(schoolMemberships.schoolId, input.schoolId), eq(schoolMemberships.userId, evidence.createdBy), eq(schoolMemberships.status, "active"))).limit(1))[0];
+  if (submitterMembership && (submitterMembership.role === "parent" || submitterMembership.role === "student")) {
+    await db.insert(familyPaymentEvidenceNotifications).values({ schoolId: input.schoolId, evidenceId: evidence.id, recipientUserId: evidence.createdBy, decision: input.status }).onDuplicateKeyUpdate({ set: { decision: input.status, readAt: null, createdAt: new Date() } });
+  }
   const invoice = (await db.select().from(invoices).where(and(eq(invoices.id, evidence.invoiceId), eq(invoices.schoolId, input.schoolId))).limit(1))[0];
   const nextStatus: CashAssuranceCaseStatus = input.status === "accepted" && invoice && invoiceOutstanding(invoice) <= 0.009 ? "settled" : "open";
   await db.update(cashAssuranceCases).set({ status: nextStatus, pausedReason: null, closedBy: nextStatus === "settled" ? input.reviewedBy : null, closedAt: nextStatus === "settled" ? new Date() : null }).where(eq(cashAssuranceCases.id, evidence.caseId));
@@ -1081,6 +1086,36 @@ export async function getFamilyCashAssuranceData(input: { schoolId: number; user
     promises: safePromises,
     paymentHistory,
   };
+}
+
+export async function listFamilyPaymentEvidenceNotifications(input: { schoolId: number; userId: number; role: FamilyPortalRole }) {
+  const db = await database();
+  const studentIds = await getFamilyStudentIds(input.schoolId, input.userId, input.role);
+  if (!studentIds.length) return [];
+  const [notifications, evidenceRows, caseRows, students] = await Promise.all([
+    db.select().from(familyPaymentEvidenceNotifications).where(and(eq(familyPaymentEvidenceNotifications.schoolId, input.schoolId), eq(familyPaymentEvidenceNotifications.recipientUserId, input.userId))).orderBy(desc(familyPaymentEvidenceNotifications.createdAt)),
+    db.select().from(paymentEvidence).where(eq(paymentEvidence.schoolId, input.schoolId)),
+    db.select().from(cashAssuranceCases).where(eq(cashAssuranceCases.schoolId, input.schoolId)),
+    db.select().from(studentProfiles).where(eq(studentProfiles.schoolId, input.schoolId)),
+  ]);
+  const evidenceById = new Map(evidenceRows.map(item => [item.id, item]));
+  const caseById = new Map(caseRows.map(item => [item.id, item]));
+  const studentById = new Map(students.map(item => [item.id, item]));
+  return notifications.flatMap(notification => {
+    const evidence = evidenceById.get(notification.evidenceId);
+    const item = evidence ? caseById.get(evidence.caseId) : undefined;
+    if (!evidence || !item || !studentIds.includes(item.studentId) || evidence.createdBy !== input.userId || evidence.status !== notification.decision) return [];
+    const student = studentById.get(item.studentId);
+    return [{ id: notification.id, evidenceId: evidence.id, decision: notification.decision, readAt: notification.readAt, createdAt: notification.createdAt, amountClaimed: Number(evidence.amountClaimed), claimedPaidOn: evidence.claimedPaidOn, student: student ? { id: student.id, firstName: student.firstName, lastName: student.lastName } : null }];
+  });
+}
+
+export async function markFamilyPaymentEvidenceNotificationRead(input: { schoolId: number; userId: number; role: FamilyPortalRole; notificationId: number }) {
+  const notifications = await listFamilyPaymentEvidenceNotifications({ schoolId: input.schoolId, userId: input.userId, role: input.role });
+  const notification = notifications.find(item => item.id === input.notificationId);
+  if (!notification) throw new Error("Payment-evidence notification not found.");
+  await (await database()).update(familyPaymentEvidenceNotifications).set({ readAt: new Date() }).where(and(eq(familyPaymentEvidenceNotifications.id, input.notificationId), eq(familyPaymentEvidenceNotifications.schoolId, input.schoolId), eq(familyPaymentEvidenceNotifications.recipientUserId, input.userId)));
+  return { success: true, evidenceId: notification.evidenceId };
 }
 
 export async function submitFamilyPaymentEvidence(input: { schoolId: number; userId: number; role: FamilyPortalRole; caseId: number; invoiceId: number; amountClaimed: number; claimedPaidOn?: string; source: "manual_receipt" | "bank_reference" | "provider_event" | "other"; providerReference?: string; note?: string; upload?: EvidenceUpload }) {

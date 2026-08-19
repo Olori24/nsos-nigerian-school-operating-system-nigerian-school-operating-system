@@ -694,6 +694,23 @@ export const paymentEvidence = mysqlTable(
   table => ({ schoolStatus: index("paymentEvidence_school_status_idx").on(table.schoolId, table.status), caseIndex: index("paymentEvidence_case_idx").on(table.caseId), invoiceIndex: index("paymentEvidence_invoice_idx").on(table.invoiceId) }),
 );
 
+export const familyPaymentEvidenceNotifications = mysqlTable(
+  "familyPaymentEvidenceNotifications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    evidenceId: int("evidenceId").notNull(),
+    recipientUserId: int("recipientUserId").notNull(),
+    decision: mysqlEnum("decision", ["accepted", "rejected"]).notNull(),
+    readAt: timestamp("readAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    evidenceRecipient: uniqueIndex("familyEvidenceNotification_evidence_recipient_unique").on(table.evidenceId, table.recipientUserId),
+    recipientUnread: index("familyEvidenceNotification_recipient_unread_idx").on(table.schoolId, table.recipientUserId, table.readAt),
+  }),
+);
+
 export const paymentPromises = mysqlTable(
   "paymentPromises",
   {

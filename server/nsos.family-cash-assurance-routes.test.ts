@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./db", () => ({
   getSchoolMembership: vi.fn(),
   getFamilyCashAssuranceData: vi.fn(),
+  listFamilyPaymentEvidenceNotifications: vi.fn(),
+  markFamilyPaymentEvidenceNotificationRead: vi.fn(),
   submitFamilyPaymentEvidence: vi.fn(),
   scanFamilyPaymentEvidence: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
@@ -52,10 +54,25 @@ describe("Family Cash Assurance portal routes", () => {
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "family_payment_receipt_scanned", targetId: 19, metadata: { fileType: "image/png", requiresConfirmation: true, ledgerChanged: false } }));
   });
 
+  it("shows and acknowledges only the signed-in family member's decision notifications", async () => {
+    vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 5, schoolId: 8, userId: 41, role: "parent", status: "active", createdAt: new Date(), updatedAt: new Date() });
+    vi.mocked(db.listFamilyPaymentEvidenceNotifications).mockResolvedValue([{ id: 90, evidenceId: 71, decision: "accepted", amountClaimed: 12000, readAt: null }] as any);
+    vi.mocked(db.markFamilyPaymentEvidenceNotificationRead).mockResolvedValue({ success: true, evidenceId: 71 });
+
+    await expect(callerFor(41).nsos.portal.paymentEvidenceNotifications({ schoolId: 8 })).resolves.toMatchObject([{ id: 90, decision: "accepted" }]);
+    expect(db.listFamilyPaymentEvidenceNotifications).toHaveBeenCalledWith({ schoolId: 8, userId: 41, role: "parent" });
+
+    await expect(callerFor(41).nsos.portal.markPaymentEvidenceNotificationRead({ schoolId: 8, notificationId: 90 })).resolves.toEqual({ success: true, evidenceId: 71 });
+    expect(db.markFamilyPaymentEvidenceNotificationRead).toHaveBeenCalledWith({ schoolId: 8, userId: 41, role: "parent", notificationId: 90 });
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "family_payment_evidence_notification_read", targetId: 71, metadata: { notificationAcknowledged: true } }));
+  });
+
   it("rejects finance and staff roles from family portal evidence controls", async () => {
     vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 3, schoolId: 8, userId: 43, role: "finance", status: "active", createdAt: new Date(), updatedAt: new Date() });
 
     await expect(callerFor(43).nsos.portal.cashAssurance({ schoolId: 8 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(callerFor(43).nsos.portal.paymentEvidenceNotifications({ schoolId: 8 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(db.getFamilyCashAssuranceData).not.toHaveBeenCalled();
+    expect(db.listFamilyPaymentEvidenceNotifications).not.toHaveBeenCalled();
   });
 });
