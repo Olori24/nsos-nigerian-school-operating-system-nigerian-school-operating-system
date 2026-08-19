@@ -95,3 +95,5 @@
 - [x] Add a confirmation modal before revoking an individual active NSOS session to prevent accidental logout of another device.
 - [x] Add regression coverage for individual-session confirmation copy, selected-device details, and cancellation-safe action labels.
 - [x] Repair GitHub Actions CI by removing duplicate pnpm configuration, updating the deprecated Node.js runtime, and confirming the triggered workflow outcome.
+- [x] Manually trigger and verify the NSOS scheduled CI-status monitoring workflow end to end.
+- [x] Capture the scheduled monitor’s own report with a verified GitHub or Gmail source label plus workflow, commit, status, conclusion, and job or failed-step details.
