@@ -68,6 +68,7 @@
 - [x] Add a family portal finance summary showing the total outstanding balance and the total amount of payment evidence awaiting finance review.
 - [x] Add a family-safe PDF statement download showing the portal’s current outstanding balance and payment-evidence history without exposing other families or internal finance data.
 - [x] Add family dashboard notifications for approved or rejected payment evidence, with tenant-scoped recipient ownership and acknowledgement tracking.
+- [x] Add family portal payment-history filters and sorting for date, evidence status, and transaction ordering without exposing records outside the signed-in family scope.
 - [ ] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
 - [ ] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [ ] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
