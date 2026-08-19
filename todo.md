@@ -94,3 +94,4 @@
 - [x] Add frontend session-list presentation coverage for stored location labels, legacy fallback text, and device icon choices.
 - [x] Add a confirmation modal before revoking an individual active NSOS session to prevent accidental logout of another device.
 - [x] Add regression coverage for individual-session confirmation copy, selected-device details, and cancellation-safe action labels.
+- [ ] Repair GitHub Actions CI by removing duplicate pnpm configuration, updating the deprecated Node.js runtime, and confirming the triggered workflow outcome.
