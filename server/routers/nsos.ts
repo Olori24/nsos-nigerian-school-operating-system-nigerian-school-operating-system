@@ -142,8 +142,27 @@ export const nsosRouter = router({
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Copilot is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const role = membership.role as SchoolRole;
         const guidance = await getCopilotGuidance({ role, message: input.message });
+        try {
+          await db.saveCopilotRecentSearch({ userId: ctx.user.id, schoolId: input.schoolId, query: input.message, destinationId: guidance.destination });
+        } catch (error) {
+          console.warn("[Copilot] Recent-search persistence failed", error);
+        }
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "copilot_navigation_requested", targetType: "copilot_navigation", targetId: guidance.destination ?? undefined, metadata: { source: guidance.source, role, destinationProvided: Boolean(guidance.destination) } });
         return { ...guidance, destinations: destinationsForRole(role).map(destination => ({ id: destination.id, label: destination.label, description: destination.description })) };
+      }),
+    recent: protectedProcedure
+      .input(schoolInput.extend({ limit: z.number().int().min(1).max(12).optional() }))
+      .query(async ({ ctx, input }) => {
+        await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+        return db.listCopilotRecentSearches({ userId: ctx.user.id, schoolId: input.schoolId, limit: input.limit });
+      }),
+    clearRecent: protectedProcedure
+      .input(schoolInput)
+      .mutation(async ({ ctx, input }) => {
+        await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+        const result = await db.clearCopilotRecentSearches({ userId: ctx.user.id, schoolId: input.schoolId });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "copilot_recent_searches_cleared", targetType: "copilot_recent_searches", metadata: { deletedCount: result.deletedCount } });
+        return result;
       }),
   }),
 

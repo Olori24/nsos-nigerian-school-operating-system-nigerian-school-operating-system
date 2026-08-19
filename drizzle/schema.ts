@@ -99,6 +99,22 @@ export const userSecurityActivity = mysqlTable(
   }),
 );
 
+export const copilotRecentSearches = mysqlTable(
+  "copilotRecentSearches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    schoolId: int("schoolId").notNull(),
+    query: varchar("query", { length: 600 }).notNull(),
+    destinationId: varchar("destinationId", { length: 32 }),
+    searchedAt: timestamp("searchedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userSchoolQuery: uniqueIndex("copilotRecentSearch_user_school_query_unique").on(table.userId, table.schoolId, table.query),
+    userSchoolRecent: index("copilotRecentSearch_user_school_recent_idx").on(table.userId, table.schoolId, table.searchedAt),
+  }),
+);
+
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),

@@ -108,3 +108,4 @@
 - [x] Add tenant-scoped, owner-editable termly fee-schedule templates with preview and controlled adoption into fee structures.
 - [x] Add tenant-scoped branded document-header fields with owner-admin editing, preview, safe public admissions rendering, and regression coverage.
 - [x] Add a system-wide, role-aware NSOS Copilot that helps signed-in users discover and navigate only the workspaces they are permitted to access.
+- [x] Add private, user-and-school-scoped Copilot recent searches that can be repeated from the navigation assistant.

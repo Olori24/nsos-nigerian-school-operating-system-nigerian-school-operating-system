@@ -17,6 +17,7 @@ import {
   cashAssuranceEvents,
   classes,
   classSubjects,
+  copilotRecentSearches,
   curriculumMilestones,
   departments,
   enrollments,
@@ -197,6 +198,22 @@ export async function consumeSharedRateLimit(input: { namespace: string; route: 
   if (Math.random() < 0.01) void db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.expiresAt} < ${new Date(now)}`);
   const count = Number(bucket?.count ?? input.limit + 1);
   return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+}
+
+export async function saveCopilotRecentSearch(input: { userId: number; schoolId: number; query: string; destinationId?: string | null }) {
+  const query = input.query.trim().slice(0, 600);
+  if (!query) return;
+  await (await database()).insert(copilotRecentSearches).values({ userId: input.userId, schoolId: input.schoolId, query, destinationId: input.destinationId?.slice(0, 32) || null, searchedAt: new Date() }).onDuplicateKeyUpdate({ set: { destinationId: input.destinationId?.slice(0, 32) || null, searchedAt: new Date() } });
+}
+
+export async function listCopilotRecentSearches(input: { userId: number; schoolId: number; limit?: number }) {
+  const limit = Math.min(Math.max(input.limit ?? 8, 1), 12);
+  return (await (await database()).select({ id: copilotRecentSearches.id, query: copilotRecentSearches.query, destinationId: copilotRecentSearches.destinationId, searchedAt: copilotRecentSearches.searchedAt }).from(copilotRecentSearches).where(and(eq(copilotRecentSearches.userId, input.userId), eq(copilotRecentSearches.schoolId, input.schoolId))).orderBy(desc(copilotRecentSearches.searchedAt)).limit(limit));
+}
+
+export async function clearCopilotRecentSearches(input: { userId: number; schoolId: number }) {
+  const result = await (await database()).delete(copilotRecentSearches).where(and(eq(copilotRecentSearches.userId, input.userId), eq(copilotRecentSearches.schoolId, input.schoolId)));
+  return { deletedCount: Number(result[0]?.affectedRows ?? 0) };
 }
 
 function signaturesMatch(received: string | undefined, expected: string) {
