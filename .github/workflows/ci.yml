@@ -27,12 +27,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          package-manager-cache: false
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
-          run_install: false
+      - name: Enable Corepack
+        run: |
+          npm install --global corepack@0.31.0
+          corepack enable
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
