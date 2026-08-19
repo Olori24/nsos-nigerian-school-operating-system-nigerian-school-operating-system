@@ -15,3 +15,9 @@ export function voiceInputErrorMessage(code: string) {
 export function supportsBrowserSpeechRecognition(candidate: unknown) {
   return typeof candidate === "function";
 }
+
+export const VOICE_AUTO_SUBMIT_DELAY_MS = 1500;
+
+export function canAutoSubmitVoiceTranscript(transcript: string) {
+  return transcript.trim().length >= 2;
+}
