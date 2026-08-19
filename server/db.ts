@@ -1352,6 +1352,71 @@ export async function resolveCashAssuranceDispute(input: { schoolId: number; cas
 type FamilyPortalRole = "parent" | "student";
 type EvidenceUpload = { base64: string; fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf" };
 
+export type BiodataDocumentUpload = EvidenceUpload;
+type BiodataProposal = {
+  firstName: string; lastName: string; dateOfBirth: string; gender: "female" | "male" | "other" | "prefer_not_to_say" | "";
+  residentialAddress: string; priorSchool: string; guardianName: string; guardianPhone: string; guardianEmail: string;
+  stateOfOrigin: string; localGovernmentOfOrigin: string; confidence: "low" | "medium" | "high";
+};
+
+function safeBiodataText(value: unknown, max: number) {
+  return typeof value === "string" ? value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+function safeBiodataDate(value: unknown) {
+  const date = safeBiodataText(value, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T00:00:00.000Z`)) ? date : "";
+}
+
+export async function extractBiodataFromDocument(upload: BiodataDocumentUpload) {
+  const supportedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+  if (!supportedMimeTypes.has(upload.mimeType)) throw new Error("Upload a JPG, PNG, WEBP, or PDF document.");
+  const byteLength = Buffer.byteLength(upload.base64, "base64");
+  if (!byteLength || byteLength > 4 * 1024 * 1024) throw new Error("The document must be between 1 byte and 4 MB.");
+  const documentUrl = `data:${upload.mimeType};base64,${upload.base64}`;
+  let response;
+  try {
+    response = await invokeLLM({
+      model: "gemini-3-flash-preview",
+      maxTokens: 600,
+      messages: [
+        { role: "system", content: "Extract only biodata explicitly visible in the supplied resume or identity document. Never infer a field from a filename, document number, photo, address, school name, birthplace, nationality, or context. Do not return passport, national ID, license, voter, bank, tax, or document numbers. A State or Local Government Area of origin must be explicitly labeled as origin; never infer it from residence or birthplace. If any field is unclear, return an empty string. This is a suggestion only; never make an admissions, identity, or eligibility decision. Return only the requested JSON." },
+        { role: "user", content: [{ type: "text", text: "Propose biodata fields from this document. Split a clearly stated full name into first and last names only when unambiguous. Return dates as YYYY-MM-DD when explicit. Return a guardian contact only when explicitly labeled guardian, parent, or next of kin. Set confidence for the overall extraction." }, upload.mimeType === "application/pdf" ? { type: "file_url", file_url: { url: documentUrl, mime_type: "application/pdf" } } : { type: "image_url", image_url: { url: documentUrl, detail: "high" } }] },
+      ],
+      outputSchema: {
+        name: "biodata_document_proposal",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            firstName: { type: "string" }, lastName: { type: "string" }, dateOfBirth: { type: "string" }, gender: { type: "string", enum: ["female", "male", "other", "prefer_not_to_say", ""] },
+            residentialAddress: { type: "string" }, priorSchool: { type: "string" }, guardianName: { type: "string" }, guardianPhone: { type: "string" }, guardianEmail: { type: "string" },
+            stateOfOrigin: { type: "string" }, localGovernmentOfOrigin: { type: "string" }, confidence: { type: "string", enum: ["low", "medium", "high"] },
+          },
+          required: ["firstName", "lastName", "dateOfBirth", "gender", "residentialAddress", "priorSchool", "guardianName", "guardianPhone", "guardianEmail", "stateOfOrigin", "localGovernmentOfOrigin", "confidence"],
+          additionalProperties: false,
+        },
+      },
+    });
+  } catch {
+    throw new Error("Document extraction is temporarily unavailable. Enter the biodata manually or try again shortly.");
+  }
+  const content = response.choices[0]?.message.content;
+  const raw = typeof content === "string" ? content : (content ?? []).filter(part => part.type === "text").map(part => part.text).join("");
+  let parsed: BiodataProposal;
+  try { parsed = JSON.parse(raw) as BiodataProposal; } catch { throw new Error("The document could not be read clearly. Enter the biodata manually or try a clearer document."); }
+  const gender = ["female", "male", "other", "prefer_not_to_say"].includes(parsed.gender) ? parsed.gender : "";
+  return {
+    proposal: {
+      firstName: safeBiodataText(parsed.firstName, 120), lastName: safeBiodataText(parsed.lastName, 120), dateOfBirth: safeBiodataDate(parsed.dateOfBirth), gender,
+      residentialAddress: safeBiodataText(parsed.residentialAddress, 500), priorSchool: safeBiodataText(parsed.priorSchool, 255), guardianName: safeBiodataText(parsed.guardianName, 255), guardianPhone: safeBiodataText(parsed.guardianPhone, 48), guardianEmail: safeBiodataText(parsed.guardianEmail, 254),
+      stateOfOrigin: safeBiodataText(parsed.stateOfOrigin, 120), localGovernmentOfOrigin: safeBiodataText(parsed.localGovernmentOfOrigin, 120), confidence: parsed.confidence,
+    },
+    requiresConfirmation: true,
+    documentStored: false,
+  };
+}
+
 async function getFamilyStudentIds(schoolId: number, userId: number, role: FamilyPortalRole) {
   const db = await database();
   if (role === "student") {

@@ -5,6 +5,8 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
+import { BiodataDocumentAutofill, type BiodataAutofillProposal } from "./components/BiodataDocumentAutofill";
+import { useEffect, useState } from "react";
 import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
@@ -21,6 +23,20 @@ function Router() {
   );
 }
 
+type InternalAutofillTarget = "admission" | "student";
+
+function InternalBiodataAutofillLauncher() {
+  const [target, setTarget] = useState<InternalAutofillTarget | null>(null);
+  useEffect(() => {
+    const onTarget = (event: Event) => setTarget((event as CustomEvent<{ target: InternalAutofillTarget | null }>).detail?.target ?? null);
+    window.addEventListener("nsos:biodata-autofill-target", onTarget);
+    return () => window.removeEventListener("nsos:biodata-autofill-target", onTarget);
+  }, []);
+  if (!target) return null;
+  const allowedKeys = (target === "admission" ? ["firstName", "lastName", "guardianName", "guardianPhone", "guardianEmail", "stateOfOrigin", "localGovernmentOfOrigin"] : ["firstName", "lastName", "stateOfOrigin", "localGovernmentOfOrigin"]) as Array<keyof BiodataAutofillProposal>;
+  return <div className="fixed bottom-5 left-5 z-[70] w-[min(28rem,calc(100vw-2.5rem))] shadow-[0_16px_40px_rgba(14,39,29,0.18)]"><BiodataDocumentAutofill allowedKeys={allowedKeys} onApply={values => window.dispatchEvent(new CustomEvent("nsos:biodata-autofill-apply", { detail: { target, values } }))} /></div>;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -28,6 +44,7 @@ export default function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <InternalBiodataAutofillLauncher />
           <div className="fixed bottom-5 right-5 z-[70]"><BiodataThemeToggle /></div>
         </TooltipProvider>
       </ThemeProvider>

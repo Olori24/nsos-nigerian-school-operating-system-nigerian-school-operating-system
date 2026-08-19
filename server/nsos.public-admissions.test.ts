@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./db", () => ({
   getSchoolByCode: vi.fn(),
   createApplication: vi.fn(),
+  extractBiodataFromDocument: vi.fn(),
 }));
 
 import * as db from "./db";
@@ -19,6 +20,12 @@ describe("NSOS public admissions", () => {
 
     await expect(caller().nsos.admissions.publicSchool({ shortCode: "CGC" })).resolves.toMatchObject({ id: 18, name: "Cedar Grove College" });
     expect(db.getSchoolByCode).toHaveBeenCalledWith("CGC");
+  });
+
+  it("returns reviewed document suggestions without creating an application", async () => {
+    vi.mocked(db.extractBiodataFromDocument).mockResolvedValue({ proposal: { firstName: "Ada", lastName: "Okafor" }, requiresConfirmation: true, documentStored: false } as any);
+    await expect(caller().nsos.admissions.extractBiodata({ upload: { base64: "aGVsbG8=", fileName: "id.png", mimeType: "image/png" } })).resolves.toMatchObject({ proposal: { firstName: "Ada" }, requiresConfirmation: true, documentStored: false });
+    expect(db.createApplication).not.toHaveBeenCalled();
   });
 
   it("rejects submissions addressed to an unknown school code", async () => {

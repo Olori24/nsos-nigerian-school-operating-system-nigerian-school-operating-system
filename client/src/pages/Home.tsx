@@ -22,6 +22,7 @@ import { useSessionDraft } from "@/hooks/useSessionDraft";
 import { LocalDraftNotice } from "@/components/LocalDraftNotice";
 import { BiodataPreviewDialog } from "@/components/BiodataPreviewDialog";
 import { ClearFormConfirmation } from "@/components/ClearFormConfirmation";
+import type { BiodataAutofillProposal } from "@/components/BiodataDocumentAutofill";
 import { InlineFieldFeedback } from "@/components/InlineFieldFeedback";
 import { validateAdmissionNumber, validateCompletedValue, validateDate, validateEmail, validateName, validatePhone, validationControlClass, type InlineValidation } from "@/lib/inlineValidation";
 import { isAdmissionBiodataReady, isStudentBiodataReady } from "@/lib/biodataCompletion";
@@ -230,6 +231,17 @@ const ApplicationFormWithOrigin = function ApplicationFormWithOrigin({ schoolId,
   const applicationDraft = useSessionDraft({ storageKey: `nsos:internal-admission-draft:${schoolId}`, initialValue: initialApplicationDraft });
   const form = applicationDraft.value;
   const setForm = applicationDraft.setValue;
+  useEffect(() => {
+    const applySuggestions = (event: Event) => {
+      const detail = (event as CustomEvent<{ target?: string; values?: Partial<BiodataAutofillProposal> }>).detail;
+      if (detail?.target !== "admission" || !detail.values) return;
+      const values = detail.values;
+      setForm(current => ({ ...current, ...(values.firstName ? { firstName: values.firstName } : {}), ...(values.lastName ? { lastName: values.lastName } : {}), ...(values.guardianName ? { guardianName: values.guardianName } : {}), ...(values.guardianPhone ? { guardianPhone: values.guardianPhone } : {}), ...(values.guardianEmail ? { guardianEmail: values.guardianEmail } : {}), ...(values.stateOfOrigin ? { stateOfOrigin: values.stateOfOrigin, localGovernmentOfOrigin: values.localGovernmentOfOrigin || "" } : {}), ...(values.localGovernmentOfOrigin && !values.stateOfOrigin ? { localGovernmentOfOrigin: values.localGovernmentOfOrigin } : {}) }));
+    };
+    const targetTimeout = window.setTimeout(() => window.dispatchEvent(new CustomEvent("nsos:biodata-autofill-target", { detail: { target: "admission" } })), 0);
+    window.addEventListener("nsos:biodata-autofill-apply", applySuggestions);
+    return () => { window.clearTimeout(targetTimeout); window.removeEventListener("nsos:biodata-autofill-apply", applySuggestions); window.dispatchEvent(new CustomEvent("nsos:biodata-autofill-target", { detail: { target: null } })); };
+  }, [setForm]);
   const documentTemplate = trpc.nsos.documentTemplates.get.useQuery({ schoolId });
   const completionTimestamp = useFormCompletionTimestamp(isAdmissionBiodataReady(form));
   const defaultHeader = biodataPdfHeaderDefaults({ organizationName: schoolName, tagline: documentTemplate.data?.headerTagline ?? undefined, logoUrl: documentTemplate.data?.headerLogoUrl ?? undefined });
@@ -244,6 +256,17 @@ const StudentFormWithOrigin = function StudentFormWithOrigin({ schoolId, schoolN
   const studentDraft = useSessionDraft({ storageKey: `nsos:student-biodata-draft:${schoolId}`, initialValue: initialStudentDraft });
   const form = studentDraft.value;
   const setForm = studentDraft.setValue;
+  useEffect(() => {
+    const applySuggestions = (event: Event) => {
+      const detail = (event as CustomEvent<{ target?: string; values?: Partial<BiodataAutofillProposal> }>).detail;
+      if (detail?.target !== "student" || !detail.values) return;
+      const values = detail.values;
+      setForm(current => ({ ...current, ...(values.firstName ? { firstName: values.firstName } : {}), ...(values.lastName ? { lastName: values.lastName } : {}), ...(values.stateOfOrigin ? { stateOfOrigin: values.stateOfOrigin, localGovernmentOfOrigin: values.localGovernmentOfOrigin || "" } : {}), ...(values.localGovernmentOfOrigin && !values.stateOfOrigin ? { localGovernmentOfOrigin: values.localGovernmentOfOrigin } : {}) }));
+    };
+    const targetTimeout = window.setTimeout(() => window.dispatchEvent(new CustomEvent("nsos:biodata-autofill-target", { detail: { target: "student" } })), 0);
+    window.addEventListener("nsos:biodata-autofill-apply", applySuggestions);
+    return () => { window.clearTimeout(targetTimeout); window.removeEventListener("nsos:biodata-autofill-apply", applySuggestions); window.dispatchEvent(new CustomEvent("nsos:biodata-autofill-target", { detail: { target: null } })); };
+  }, [setForm]);
   const documentTemplate = trpc.nsos.documentTemplates.get.useQuery({ schoolId });
   const completionTimestamp = useFormCompletionTimestamp(isStudentBiodataReady(form));
   const defaultHeader = biodataPdfHeaderDefaults({ organizationName: schoolName, tagline: documentTemplate.data?.headerTagline ?? undefined, logoUrl: documentTemplate.data?.headerLogoUrl ?? undefined });

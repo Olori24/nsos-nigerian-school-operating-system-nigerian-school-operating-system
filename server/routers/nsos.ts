@@ -196,6 +196,9 @@ export const nsosRouter = router({
   admissions: router({
     originOptions: publicProcedure.input(z.object({ state: z.string().max(120).optional() })).query(({ input }) => ({ states: listNigerianOriginStates(), lgas: input.state ? listNigerianLgas(input.state) : [] })),
     publicSchool: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getSchoolByCode(input.shortCode)),
+    extractBiodata: publicProcedure
+      .input(z.object({ upload: z.object({ base64: z.string().min(4).max(5_700_000), fileName: z.string().min(1).max(180), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]) }) }))
+      .mutation(({ input }) => db.extractBiodataFromDocument(input.upload)),
     publicSubmit: publicProcedure
       .input(z.object({ shortCode: z.string().min(2).max(32), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional(), supplementalData: z.record(z.string().min(1).max(40), z.string().trim().max(1000)).optional(), declarationAccepted: z.boolean().optional() }))
       .mutation(async ({ input }) => {
