@@ -46,6 +46,42 @@ button, input, select, textarea { font: inherit; }
 .noise { position: relative; }
 .noise::after { content: ""; position: absolute; inset: 0; opacity: 0.13; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.38'/%3E%3C/svg%3E"); }
 
+.dark {
+  --background: #0d1512;
+  --foreground: #edf5ef;
+  --card: #18231f;
+  --card-foreground: #edf5ef;
+  --popover: #18231f;
+  --popover-foreground: #edf5ef;
+  --secondary: #24332c;
+  --secondary-foreground: #e2ece5;
+  --muted: #22302a;
+  --muted-foreground: #b1c0b7;
+  --accent: #254638;
+  --accent-foreground: #e2f2e7;
+  --border: #34463e;
+  --input: #40534a;
+  --ring: #77bd92;
+  color-scheme: dark;
+}
+
+.dark .bg-white, .dark .bg-\[\#fbfcfa\], .dark .bg-\[\#f5f6f1\], .dark .bg-\[\#f4f8f4\], .dark .bg-\[\#fffdfc\] { background-color: #18231f !important; }
+.dark .bg-\[\#fff7f5\], .dark .bg-\[\#fff9f8\] { background-color: #30211f !important; }
+.dark input, .dark select, .dark textarea { background-color: #111c17 !important; border-color: #40534a !important; color: #edf5ef !important; }
+.dark input::placeholder, .dark textarea::placeholder { color: #a7b8ae; }
+.dark .text-\[\#15201c\], .dark .text-\[\#20342c\], .dark .text-\[\#243b31\], .dark .text-\[\#29473a\], .dark .text-\[\#43534c\], .dark .text-\[\#45584f\], .dark .text-\[\#486057\], .dark .text-\[\#542c28\] { color: #edf5ef !important; }
+.dark .text-\[\#6c7972\], .dark .text-\[\#6b7b73\], .dark .text-\[\#68776f\], .dark .text-\[\#708077\], .dark .text-\[\#735d59\], .dark .text-\[\#557168\] { color: #b8c8bf !important; }
+.dark .text-\[\#0f5c4f\], .dark .biodata-field-feedback { color: #8cd3a6 !important; }
+.dark .biodata-draft-notice { border-color: #3d604e !important; background: #183126 !important; color: #cce6d5 !important; }
+.dark .biodata-draft-notice .text-\[\#24563f\], .dark .biodata-draft-notice .text-\[\#0f5c4f\] { color: #a8dfba !important; }
+.dark .biodata-dialog { background: #18231f !important; border-color: #34463e !important; color: #edf5ef !important; }
+.dark .biodata-dialog .border-\[\#e4e9e4\], .dark .biodata-dialog .border-\[\#dce7df\], .dark .biodata-dialog .border-\[\#e1e8e1\] { border-color: #3b5046 !important; }
+.dark .biodata-preview-trigger { border-color: #3d554b !important; background: #1a2822 !important; color: #b7e4c5 !important; }
+.dark .biodata-clear-trigger { background: #2a211f !important; border-color: #704f49 !important; color: #ffb5ad !important; }
+.dark .biodata-clear-confirmation { background: #241c1b !important; border-color: #634946 !important; color: #f5e9e7 !important; }
+.dark .biodata-clear-confirmation .text-\[\#542c28\] { color: #ffd5cf !important; }
+.dark .biodata-clear-confirmation .text-\[\#735d59\] { color: #dec2bd !important; }
+
 @media (prefers-reduced-motion: no-preference) {
   .soft-enter { animation: soft-enter 360ms cubic-bezier(0.23, 1, 0.32, 1) both; }
   @keyframes soft-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

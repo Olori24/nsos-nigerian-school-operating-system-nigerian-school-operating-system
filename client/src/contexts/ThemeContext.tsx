@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { nextTheme, normaliseTheme, NSOS_THEME_STORAGE_KEY, type NsosTheme } from "@/lib/themePreference";
 
-type Theme = "light" | "dark";
+type Theme = NsosTheme;
 
 interface ThemeContextType {
   theme: Theme;
@@ -23,8 +24,7 @@ export function ThemeProvider({
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (switchable) {
-      const stored = localStorage.getItem("theme");
-      return (stored as Theme) || defaultTheme;
+      try { return normaliseTheme(localStorage.getItem(NSOS_THEME_STORAGE_KEY), defaultTheme); } catch { return defaultTheme; }
     }
     return defaultTheme;
   });
@@ -38,13 +38,13 @@ export function ThemeProvider({
     }
 
     if (switchable) {
-      localStorage.setItem("theme", theme);
+      try { localStorage.setItem(NSOS_THEME_STORAGE_KEY, theme); } catch { /* preference storage unavailable */ }
     }
   }, [theme, switchable]);
 
   const toggleTheme = switchable
     ? () => {
-        setTheme(prev => (prev === "light" ? "dark" : "light"));
+        setTheme(nextTheme);
       }
     : undefined;
 

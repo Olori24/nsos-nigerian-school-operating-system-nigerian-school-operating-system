@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
 import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
@@ -23,10 +24,11 @@ function Router() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
           <Toaster />
           <Router />
+          <div className="fixed bottom-5 right-5 z-[70]"><BiodataThemeToggle /></div>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

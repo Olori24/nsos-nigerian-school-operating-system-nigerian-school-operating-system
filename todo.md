@@ -124,3 +124,4 @@
 - [x] Add regression coverage for completion readiness and branded defaults across public and internal PDF previews.
 - [x] Verify public admissions passes approved school branding and a submit-ready completion timestamp into its PDF preview.
 - [x] Verify internal admissions and student forms pass active-school branding and submit-ready completion timestamps into their PDF previews.
+- [x] Add a persistent, accessible dark-mode toggle for biodata forms, including preview, validation, and recovery states.
