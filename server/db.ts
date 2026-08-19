@@ -1048,24 +1048,30 @@ async function storeFamilyEvidenceUpload(schoolId: number, caseId: number, userI
 export async function getFamilyCashAssuranceData(input: { schoolId: number; userId: number; role: FamilyPortalRole }) {
   const db = await database();
   const studentIds = await getFamilyStudentIds(input.schoolId, input.userId, input.role);
-  if (!studentIds.length) return { cases: [], paymentEvidence: [], promises: [] };
+  if (!studentIds.length) return { cases: [], paymentEvidence: [], promises: [], paymentHistory: [] };
   const allCases = await db.select().from(cashAssuranceCases).where(eq(cashAssuranceCases.schoolId, input.schoolId)).orderBy(desc(cashAssuranceCases.updatedAt));
   const caseRows = allCases.filter(item => studentIds.includes(item.studentId));
-  if (!caseRows.length) return { cases: [], paymentEvidence: [], promises: [] };
   const caseIds = new Set(caseRows.map(item => item.id));
-  const [links, allInvoices, allPromises, allEvidence, students] = await Promise.all([
+  const [links, allInvoices, allPromises, allEvidence, students, allPayments] = await Promise.all([
     db.select().from(cashAssuranceCaseInvoices),
     db.select().from(invoices).where(eq(invoices.schoolId, input.schoolId)),
     db.select().from(paymentPromises).where(eq(paymentPromises.schoolId, input.schoolId)).orderBy(desc(paymentPromises.createdAt)),
     db.select().from(paymentEvidence).where(eq(paymentEvidence.schoolId, input.schoolId)).orderBy(desc(paymentEvidence.createdAt)),
     db.select().from(studentProfiles).where(eq(studentProfiles.schoolId, input.schoolId)),
+    db.select().from(payments).where(eq(payments.schoolId, input.schoolId)).orderBy(desc(payments.paidOn)),
   ]);
   const invoiceById = new Map(allInvoices.map(item => [item.id, item]));
   const studentById = new Map(students.map(item => [item.id, item]));
+  const familyInvoiceIds = new Set(allInvoices.filter(item => studentIds.includes(item.studentId)).map(item => item.id));
   const evidence = allEvidence.filter(item => caseIds.has(item.caseId));
   const promises = allPromises.filter(item => caseIds.has(item.caseId));
   const safeEvidence = evidence.map(item => ({ id: item.id, caseId: item.caseId, invoiceId: item.invoiceId, amountClaimed: Number(item.amountClaimed), claimedPaidOn: item.claimedPaidOn, source: item.source, providerReference: item.providerReference, status: item.status, evidenceFileUrl: item.evidenceFileUrl, evidenceFileName: item.evidenceFileName, evidenceMimeType: item.evidenceMimeType, evidenceFileSize: item.evidenceFileSize, createdAt: item.createdAt, reviewedAt: item.reviewedAt }));
   const safePromises = promises.map(item => ({ id: item.id, caseId: item.caseId, promisedAmount: Number(item.promisedAmount), promisedOn: item.promisedOn, status: item.status, createdAt: item.createdAt }));
+  const paymentHistory = allPayments.filter(item => familyInvoiceIds.has(item.invoiceId)).map(item => {
+    const invoice = invoiceById.get(item.invoiceId);
+    const student = invoice ? studentById.get(invoice.studentId) : null;
+    return { id: item.id, receiptNo: item.receiptNo, amount: Number(item.amount), paidOn: item.paidOn, method: item.method, reference: item.reference, invoiceNo: invoice?.invoiceNo ?? null, student: student ? { id: student.id, firstName: student.firstName, lastName: student.lastName, admissionNo: student.admissionNo } : null };
+  });
   return {
     cases: caseRows.map(item => {
       const linkedInvoices = links.filter(link => link.caseId === item.id).map(link => invoiceById.get(link.invoiceId)).filter(Boolean).map(invoice => ({ id: invoice!.id, invoiceNo: invoice!.invoiceNo, dueDate: invoice!.dueDate, total: Number(invoice!.total), amountPaid: Number(invoice!.amountPaid), outstanding: invoiceOutstanding(invoice!) }));
@@ -1073,6 +1079,7 @@ export async function getFamilyCashAssuranceData(input: { schoolId: number; user
     }),
     paymentEvidence: safeEvidence,
     promises: safePromises,
+    paymentHistory,
   };
 }
 

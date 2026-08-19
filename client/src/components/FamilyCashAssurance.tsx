@@ -1,5 +1,5 @@
 import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import { AlertCircle, FileUp, HandCoins, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertCircle, Download, FileUp, HandCoins, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
@@ -28,6 +28,8 @@ function displayDate(value?: string | Date | null) {
   return value ? new Date(value).toLocaleDateString() : "—";
 }
 
+const statementMoney = (amount: number) => `NGN ${new Intl.NumberFormat("en-NG", { maximumFractionDigits: 2 }).format(amount || 0)}`;
+
 export function FamilyCashAssurance({ schoolId, role, onDone }: { schoolId: number; role: "parent" | "student"; onDone: () => void }) {
   const utils = trpc.useUtils();
   const query = trpc.nsos.portal.cashAssurance.useQuery({ schoolId });
@@ -40,6 +42,8 @@ export function FamilyCashAssurance({ schoolId, role, onDone }: { schoolId: numb
   const [file, setFile] = useState<File | null>(null);
   const [scanResult, setScanResult] = useState<{ amountNgn: number | null; paidOn: string | null; confidence: "low" | "medium" | "high"; requiresConfirmation: boolean } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [isBuildingStatement, setIsBuildingStatement] = useState(false);
+  const [statementError, setStatementError] = useState<string | null>(null);
 
   const selectedCase = useMemo(() => query.data?.cases.find((item: any) => String(item.id) === caseId), [caseId, query.data]);
   const selectedInvoice = selectedCase?.invoices?.[0];
@@ -47,6 +51,64 @@ export function FamilyCashAssurance({ schoolId, role, onDone }: { schoolId: numb
   const totalOutstanding = (query.data?.cases ?? []).reduce((sum: number, item: any) => sum + Number(item.outstanding ?? 0), 0);
   const pendingEvidence = evidenceRows.filter((item: any) => item.status === "submitted" || item.status === "under_review");
   const pendingEvidenceAmount = pendingEvidence.reduce((sum: number, item: any) => sum + Number(item.amountClaimed ?? 0), 0);
+  const paymentHistory = query.data?.paymentHistory ?? [];
+
+  const downloadStatement = async () => {
+    setStatementError(null);
+    setIsBuildingStatement(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const margin = 42;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let y = 50;
+      const ensureSpace = (needed = 22) => { if (y + needed > pageHeight - 44) { doc.addPage(); y = 48; } };
+      const write = (text: string, options: { size?: number; bold?: boolean; color?: [number, number, number]; gap?: number } = {}) => {
+        const size = options.size ?? 10;
+        const lines = doc.splitTextToSize(text, 510);
+        ensureSpace(lines.length * (size + 4) + 4);
+        doc.setFont("helvetica", options.bold ? "bold" : "normal");
+        doc.setFontSize(size);
+        doc.setTextColor(...(options.color ?? [47, 71, 59]));
+        doc.text(lines, margin, y);
+        y += lines.length * (size + 4) + (options.gap ?? 6);
+      };
+      const rule = () => { ensureSpace(12); doc.setDrawColor(220, 230, 222); doc.line(margin, y, 553, y); y += 14; };
+      const heading = (text: string) => { ensureSpace(30); doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(20, 74, 59); doc.text(text, margin, y); y += 20; };
+      const paymentText = (payment: any) => {
+        const learner = payment.student ? `${payment.student.firstName} ${payment.student.lastName}` : "Linked learner";
+        const method = String(payment.method).replaceAll("_", " ");
+        return `${displayDate(payment.paidOn)}  |  ${statementMoney(Number(payment.amount))}  |  ${learner}  |  Receipt ${payment.receiptNo}${payment.invoiceNo ? `  |  Invoice ${payment.invoiceNo}` : ""}  |  ${method}`;
+      };
+
+      doc.setFillColor(15, 92, 79); doc.rect(0, 0, 595, 92, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(22); doc.setTextColor(255, 255, 255); doc.text("NSOS", margin, 42);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text("NIGERIAN SCHOOL OPERATING SYSTEM", margin, 59);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text("Family Finance Statement", margin, 78);
+      y = 122;
+      write(`Generated ${new Date().toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}`, { size: 9, color: [102, 120, 109], gap: 12 });
+      heading("Current position");
+      write(`Total outstanding balance: ${statementMoney(totalOutstanding)}`, { size: 12, bold: true, color: [24, 59, 46], gap: 4 });
+      write(`Payment evidence awaiting finance review: ${statementMoney(pendingEvidenceAmount)} across ${pendingEvidence.length} submission${pendingEvidence.length === 1 ? "" : "s"}. Pending evidence is not deducted from the outstanding balance until finance completes its review.`, { size: 9, color: [92, 109, 99], gap: 12 });
+      rule();
+      heading("Confirmed payment history");
+      if (paymentHistory.length) paymentHistory.forEach((payment: any) => write(paymentText(payment), { size: 9, gap: 7 }));
+      else write("No confirmed payments are available for the learners linked to this portal account.", { size: 9, color: [102, 120, 109], gap: 12 });
+      rule();
+      heading("Payment evidence status");
+      if (evidenceRows.length) evidenceRows.forEach((evidence: any) => {
+        const outcome = evidenceOutcome(evidence.status);
+        write(`${displayDate(evidence.createdAt)}  |  ${statementMoney(Number(evidence.amountClaimed))}  |  ${outcome.label}  |  Payment date ${displayDate(evidence.claimedPaidOn)}`, { size: 9, bold: true, gap: 2 });
+        write(outcome.detail, { size: 8, color: [102, 120, 109], gap: 7 });
+      });
+      else write("No payment evidence has been submitted from this portal account.", { size: 9, color: [102, 120, 109], gap: 12 });
+      rule();
+      write("This statement is generated from the signed-in family portal. It is an information summary, not a payment receipt or a final finance decision. Contact the school finance office if you need help with a payment record.", { size: 8, color: [102, 120, 109], gap: 0 });
+      doc.save(`nsos-family-statement-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch {
+      setStatementError("The statement could not be generated in this browser. Please try again, or contact the school finance office for assistance.");
+    } finally { setIsBuildingStatement(false); }
+  };
   const submit = trpc.nsos.portal.submitPaymentEvidence.useMutation({
     onSuccess: async () => {
       toast.success("Payment evidence was sent to the school finance team for review. Your balance has not been changed automatically.");
@@ -113,6 +175,8 @@ export function FamilyCashAssurance({ schoolId, role, onDone }: { schoolId: numb
     <div className="rounded-2xl border border-[#cce2d0] bg-[#f5fbf5] p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#0f5c4f] text-white"><HandCoins className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-[#1c4033]">Payment promises & evidence</p><p className="mt-1 max-w-2xl text-xs leading-5 text-[#587267]">View payment commitments for {role === "parent" ? "your linked learners" : "your school account"} and send proof of payment directly to the finance team.</p></div></div><Badge tone="good">Finance reviewed</Badge></div><p className="mt-4 flex items-center gap-2 text-[11px] text-[#567466]"><ShieldCheck className="h-3.5 w-3.5" />Submitting evidence does not record a payment or change your balance. The school must review it first.</p></div>
 
     <div className="grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border border-[#e1e8e1] bg-white p-5"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#728178]">Total outstanding balance</p><p className="mt-3 text-2xl font-semibold tracking-[-0.035em] text-[#193b2e]">{currency(totalOutstanding)}</p><p className="mt-1 text-xs leading-5 text-[#758079]">Across the payment cases available to this portal account.</p></div><div className="rounded-2xl border border-[#e7d9b8] bg-[#fffaf0] p-5"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8b6d2e]">Evidence pending review</p><p className="mt-3 text-2xl font-semibold tracking-[-0.035em] text-[#6f551a]">{currency(pendingEvidenceAmount)}</p><p className="mt-1 text-xs leading-5 text-[#8a7346]">{pendingEvidence.length} submission{pendingEvidence.length === 1 ? "" : "s"} awaiting finance review. This is not yet deducted from the outstanding balance.</p></div></div>
+    <div className="flex flex-col gap-3 rounded-2xl border border-[#dce7de] bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-[#294239]">Family finance statement</p><p className="mt-1 text-xs text-[#758079]">Download your current balance, confirmed payment history, and payment-evidence status as a PDF.</p></div><button type="button" onClick={downloadStatement} disabled={isBuildingStatement} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0f5c4f] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" />{isBuildingStatement ? "Preparing statement…" : "Download statement"}</button></div>
+    {statementError && <div role="alert" className="rounded-xl border border-[#f0c9c3] bg-[#fff5f3] px-4 py-3 text-xs leading-5 text-[#9a5a4d]">{statementError}</div>}
 
     <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]"><div className="overflow-hidden rounded-2xl border border-[#e1e8e1] bg-white"><div className="border-b border-[#edf0eb] px-5 py-4"><p className="text-sm font-semibold text-[#294239]">Your payment cases</p><p className="mt-1 text-xs text-[#758079]">Only cases linked to your own learner record are shown here.</p></div>{query.data?.cases?.length ? <div>{query.data.cases.map((item: any) => <div key={item.id} className="border-b border-[#edf0eb] px-5 py-4 last:border-0"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[#30473b]">{item.student ? `${item.student.firstName} ${item.student.lastName}` : "Linked learner"}</p><Badge tone={item.status === "disputed" ? "warn" : item.status === "settled" ? "good" : "neutral"}>{String(item.status).replaceAll("_", " ")}</Badge></div><p className="mono mt-1 text-[10px] text-[#7a847e]">{item.invoices.map((invoice: any) => invoice.invoiceNo).join(", ")}</p>{item.pausedReason && <p className="mt-2 text-xs text-[#a26b1e]">Finance follow-up is paused while a school dispute is reviewed.</p>}</div><p className="text-sm font-bold text-[#0f5c4f]">{currency(item.outstanding)}</p></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{item.promises?.length ? <div className="rounded-lg bg-[#fafcf9] p-3"><p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#758079]">Latest payment promise</p>{item.promises.slice(0, 1).map((promise: any) => <p key={promise.id} className="mt-1 text-xs font-semibold text-[#40584d]">{currency(promise.promisedAmount)} by {new Date(promise.promisedOn).toLocaleDateString()}</p>)}</div> : <div className="rounded-lg bg-[#fafcf9] p-3 text-xs text-[#758079]">No payment promise has been recorded.</div>}<div className="rounded-lg bg-[#fafcf9] p-3"><p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#758079]">Evidence status</p>{item.evidence?.length ? <div className="mt-1 flex flex-wrap gap-1">{item.evidence.slice(0, 3).map((evidence: any) => <Badge key={evidence.id} tone={evidence.status === "accepted" ? "good" : evidence.status === "rejected" ? "danger" : "warn"}>{evidence.status.replaceAll("_", " ")}</Badge>)}</div> : <p className="mt-1 text-xs text-[#758079]">No evidence submitted.</p>}</div></div></div>)}</div> : <div className="p-5 text-sm text-[#758079]">There are no payment promises or evidence requests linked to this portal account.</div>}</div>
 
