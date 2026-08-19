@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
+import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
 import { platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
@@ -129,6 +130,20 @@ export const nsosRouter = router({
         const result = await db.createDraftFeesFromTemplate(input);
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "termly_fee_template_adopted", targetType: "fee_structure", metadata: { termId: input.termId, classScoped: Boolean(input.classId), createdCount: result.createdCount, status: "draft" } });
         return result;
+      }),
+  }),
+
+  copilot: router({
+    ask: protectedProcedure
+      .input(schoolInput.extend({ message: z.string().trim().min(2).max(600) }))
+      .mutation(async ({ ctx, input }) => {
+        const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-copilot", route: "navigation", clientKey: String(ctx.user.id), limit: 24, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Copilot is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const role = membership.role as SchoolRole;
+        const guidance = await getCopilotGuidance({ role, message: input.message });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "copilot_navigation_requested", targetType: "copilot_navigation", targetId: guidance.destination ?? undefined, metadata: { source: guidance.source, role, destinationProvided: Boolean(guidance.destination) } });
+        return { ...guidance, destinations: destinationsForRole(role).map(destination => ({ id: destination.id, label: destination.label, description: destination.description })) };
       }),
   }),
 
