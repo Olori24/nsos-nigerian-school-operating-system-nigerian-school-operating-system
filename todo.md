@@ -114,3 +114,4 @@
 - [x] Add a safe Copilot speech-end auto-submit flow with a brief cancellation option and unchanged typed submission behavior.
 - [x] Add configurable Nigerian State of Origin and Local Government Area of Origin fields to admissions and student biodata with validation and safe enrollment continuity.
 - [x] Add accessible LGA loading feedback and recovery messaging when origin options cannot be loaded for a selected State.
+- [x] Add browser-local, refresh-safe draft recovery for internal admissions, student biodata, and public admissions forms, with clear controls and successful-submit cleanup.
