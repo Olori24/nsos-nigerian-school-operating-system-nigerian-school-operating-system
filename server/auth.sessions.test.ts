@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sessionDb = vi.hoisted(() => ({
   listActiveUserSessions: vi.fn(),
+  updateUserSessionLocation: vi.fn(),
   revokeUserSession: vi.fn(),
   revokeOtherUserSessions: vi.fn(),
 }));
@@ -35,11 +36,13 @@ describe("auth.sessions", () => {
 
   it("marks only the caller's matching active session as current", async () => {
     sessionDb.listActiveUserSessions.mockResolvedValue([
-      { id: "session-current", deviceLabel: "Chrome on Windows device", source: "email", createdAt: new Date(), lastSeenAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000) },
-      { id: "session-other", deviceLabel: "Safari on iPhone or iPad", source: "email", createdAt: new Date(), lastSeenAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000) },
+      { id: "session-current", deviceLabel: "Chrome on Windows device", deviceKind: "desktop", locationLabel: "Nigeria · Africa/Lagos", source: "email", createdAt: new Date(), lastSeenAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000) },
+      { id: "session-other", deviceLabel: "Safari on iPhone or iPad", deviceKind: "mobile", locationLabel: null, source: "email", createdAt: new Date(), lastSeenAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000) },
     ]);
     const sessions = await appRouter.createCaller(context()).auth.sessions.list();
     expect(sessions.map(session => session.current)).toEqual([true, false]);
+    expect(sessions.map(session => session.locationLabel)).toEqual(["Nigeria · Africa/Lagos", null]);
+    expect(sessions.map(session => session.deviceKind)).toEqual(["desktop", "mobile"]);
     expect(sessionDb.listActiveUserSessions).toHaveBeenCalledWith(41);
   });
 
@@ -54,6 +57,13 @@ describe("auth.sessions", () => {
     const result = await appRouter.createCaller(context()).auth.sessions.revoke({ sessionId: "session-other" });
     expect(result).toEqual({ success: true });
     expect(sessionDb.revokeUserSession).toHaveBeenCalledWith({ userId: 41, sessionId: "session-other", reason: "Revoked by account owner" });
+  });
+
+  it("records a validated coarse location only for the caller's current session", async () => {
+    sessionDb.updateUserSessionLocation.mockResolvedValue(true);
+    const result = await appRouter.createCaller(context()).auth.sessions.recordLocation({ timeZone: "Africa/Lagos" });
+    expect(result).toEqual({ success: true });
+    expect(sessionDb.updateUserSessionLocation).toHaveBeenCalledWith({ userId: 41, sessionId: "session-current", timeZone: "Africa/Lagos" });
   });
 
   it("signs out other devices while retaining the current session", async () => {

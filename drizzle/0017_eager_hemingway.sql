@@ -1,0 +1,1 @@
+ALTER TABLE `userSessions` ADD `locationLabel` varchar(160);

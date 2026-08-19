@@ -69,6 +69,7 @@ export const userSessions = mysqlTable(
     source: varchar("source", { length: 32 }).notNull().default("session"),
     deviceLabel: varchar("deviceLabel", { length: 160 }).notNull(),
     userAgent: varchar("userAgent", { length: 512 }),
+    locationLabel: varchar("locationLabel", { length: 160 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
     expiresAt: timestamp("expiresAt").notNull(),

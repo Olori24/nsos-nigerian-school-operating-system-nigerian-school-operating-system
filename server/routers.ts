@@ -25,6 +25,11 @@ export const appRouter = router({
         const sessions = await db.listActiveUserSessions(ctx.user.id);
         return sessions.map(session => ({ ...session, current: session.id === ctx.user.sessionId }));
       }),
+      recordLocation: protectedProcedure.input(z.object({ timeZone: z.string().min(1).max(80) })).mutation(async ({ ctx, input }) => {
+        if (!ctx.user.sessionId) throw new Error("This session cannot be updated from the dashboard.");
+        const updated = await db.updateUserSessionLocation({ userId: ctx.user.id, sessionId: ctx.user.sessionId, timeZone: input.timeZone });
+        return { success: updated } as const;
+      }),
       revoke: protectedProcedure.input(z.object({ sessionId: z.string().min(1).max(64) })).mutation(async ({ ctx, input }) => {
         if (!ctx.user.sessionId) throw new Error("This session cannot be managed from the dashboard.");
         if (input.sessionId === ctx.user.sessionId) throw new Error("Use Sign out to end this current session.");

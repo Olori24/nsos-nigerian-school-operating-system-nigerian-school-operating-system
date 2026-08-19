@@ -346,18 +346,35 @@ export function sessionDeviceLabel(userAgent: string | undefined) {
   return `${browser} on ${platform}`;
 }
 
+export type SessionDeviceKind = "desktop" | "mobile" | "tablet" | "unknown";
+
+export function sessionDeviceKind(userAgent: string | undefined): SessionDeviceKind {
+  const value = userAgent ?? "";
+  if (/iPad|Tablet|Kindle|Silk\//i.test(value)) return "tablet";
+  if (/iPhone|iPod|Android.*Mobile|Windows Phone/i.test(value)) return "mobile";
+  if (/Windows|Macintosh|Mac OS X|Linux|CrOS/i.test(value)) return "desktop";
+  return "unknown";
+}
+
+export function sessionLocationLabel(timeZone: string | undefined) {
+  const value = timeZone?.trim();
+  if (!value || value.length > 80 || !/^[A-Za-z]+(?:\/[A-Za-z_+-]+)+$/.test(value)) return null;
+  const country = value === "Africa/Lagos" ? "Nigeria" : value === "Africa/Accra" ? "Ghana" : value === "Africa/Nairobi" ? "Kenya" : value === "Africa/Johannesburg" ? "South Africa" : undefined;
+  return country ? `${country} · ${value}` : value.replace(/_/g, " ");
+}
+
 export function legacySessionId(sessionToken: string) {
   return `legacy:${createHmac("sha256", encryptionKey()).update(sessionToken).digest("hex").slice(0, 48)}`;
 }
 
-export async function createUserSession(input: { userId: number; source: string; userAgent?: string; expiresAt: Date }) {
+export async function createUserSession(input: { userId: number; source: string; userAgent?: string; timeZone?: string; expiresAt: Date }) {
   const id = crypto.randomUUID();
   const userAgent = input.userAgent?.slice(0, 512) || null;
-  await (await database()).insert(userSessions).values({ id, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, expiresAt: input.expiresAt });
+  await (await database()).insert(userSessions).values({ id, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, locationLabel: sessionLocationLabel(input.timeZone), expiresAt: input.expiresAt });
   return id;
 }
 
-export async function ensureActiveUserSession(input: { userId: number; sessionId: string; source: string; userAgent?: string; expiresAt: Date }) {
+export async function ensureActiveUserSession(input: { userId: number; sessionId: string; source: string; userAgent?: string; timeZone?: string; expiresAt: Date }) {
   const db = await database();
   const now = new Date();
   const existing = (await db.select().from(userSessions).where(eq(userSessions.id, input.sessionId)).limit(1))[0];
@@ -367,13 +384,20 @@ export async function ensureActiveUserSession(input: { userId: number; sessionId
     return true;
   }
   const userAgent = input.userAgent?.slice(0, 512) || null;
-  await db.insert(userSessions).values({ id: input.sessionId, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, expiresAt: input.expiresAt, lastSeenAt: now });
+  await db.insert(userSessions).values({ id: input.sessionId, userId: input.userId, source: input.source.slice(0, 32), deviceLabel: sessionDeviceLabel(userAgent ?? undefined), userAgent, locationLabel: sessionLocationLabel(input.timeZone), expiresAt: input.expiresAt, lastSeenAt: now });
   return true;
 }
 
 export async function listActiveUserSessions(userId: number) {
   const now = new Date();
-  return (await (await database()).select({ id: userSessions.id, source: userSessions.source, deviceLabel: userSessions.deviceLabel, createdAt: userSessions.createdAt, lastSeenAt: userSessions.lastSeenAt, expiresAt: userSessions.expiresAt }).from(userSessions).where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt), gt(userSessions.expiresAt, now))).orderBy(desc(userSessions.lastSeenAt))).map(session => ({ ...session, userAgent: undefined }));
+  return (await (await database()).select({ id: userSessions.id, source: userSessions.source, deviceLabel: userSessions.deviceLabel, userAgent: userSessions.userAgent, locationLabel: userSessions.locationLabel, createdAt: userSessions.createdAt, lastSeenAt: userSessions.lastSeenAt, expiresAt: userSessions.expiresAt }).from(userSessions).where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt), gt(userSessions.expiresAt, now))).orderBy(desc(userSessions.lastSeenAt))).map(({ userAgent, ...session }) => ({ ...session, deviceKind: sessionDeviceKind(userAgent ?? undefined) }));
+}
+
+export async function updateUserSessionLocation(input: { userId: number; sessionId: string; timeZone?: string }) {
+  const locationLabel = sessionLocationLabel(input.timeZone);
+  if (!locationLabel) return false;
+  const updated = await (await database()).update(userSessions).set({ locationLabel, lastSeenAt: new Date() }).where(and(eq(userSessions.id, input.sessionId), eq(userSessions.userId, input.userId), isNull(userSessions.revokedAt)));
+  return Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0) === 1;
 }
 
 export async function revokeUserSession(input: { userId: number; sessionId: string; reason: string }) {

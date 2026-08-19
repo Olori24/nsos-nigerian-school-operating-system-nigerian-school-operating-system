@@ -88,3 +88,7 @@
 - [x] Add route-level authentication tests for Google callback state and provider failures, passwordless email delivery failures, and single-use email verification outcomes.
 - [x] Add explicit Resend sender-address validation for the configured NSOS passwordless-email sender.
 - [x] Add user-facing active-session visibility and secure per-session or all-other-device revocation in the NSOS dashboard.
+- [x] Add device-specific icons and privacy-conscious geographic location labels to each active NSOS session entry.
+- [x] Capture and refresh coarse client time zones during normal authenticated app startup so all active devices can report approximate session locations.
+- [x] Add regression coverage for stored session locations, legacy fallback text, and multi-device session-list presentation.
+- [x] Add frontend session-list presentation coverage for stored location labels, legacy fallback text, and device icon choices.
