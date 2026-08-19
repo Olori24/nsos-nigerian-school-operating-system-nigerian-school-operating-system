@@ -98,4 +98,5 @@
 - [x] Manually trigger and verify the NSOS scheduled CI-status monitoring workflow end to end.
 - [x] Capture the scheduled monitor’s own report with a verified GitHub or Gmail source label plus workflow, commit, status, conclusion, and job or failed-step details.
 - [x] Repair the Google OAuth `redirect_uri_mismatch` against the deployed NSOS domain and verify the sign-in start flow.
+- [x] Show a one-time success toast after a verified Google sign-in completes, without exposing account details in the URL or UI.
 - [ ] Add a user-facing security activity log for revoked sessions and automated security-check events, with safe scoped details and timestamps.

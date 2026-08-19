@@ -8,6 +8,7 @@ import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
+const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
 const STATE_TTL_MS = 10 * 60_000;
 const MAGIC_LINK_TTL_LABEL = "15 minutes";
 
@@ -60,6 +61,10 @@ function readGoogleLoginState(req: Request) {
 
 function clearGoogleStateCookie(req: Request, res: Response) {
   res.clearCookie(GOOGLE_STATE_COOKIE, { path: "/", secure: true, sameSite: "lax", httpOnly: true });
+}
+
+function setGoogleSignInNotice(res: Response) {
+  res.cookie(GOOGLE_SIGNIN_NOTICE_COOKIE, "google_success", { path: "/", secure: true, sameSite: "lax", httpOnly: false, maxAge: 60_000 });
 }
 
 async function createSession(req: Request, res: Response, user: { id: number; openId: string; name: string | null; email: string | null; loginMethod: string | null }, fallbackName: string) {
@@ -118,6 +123,7 @@ export function registerGoogleAuthRoutes(app: Express) {
       if (!profileResponse.ok || typeof profile.sub !== "string" || typeof profile.email !== "string" || profile.email_verified !== true) throw new Error("Google account does not provide a verified email address.");
       const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null });
       await createSession(req, res, user, profile.email);
+      setGoogleSignInNotice(res);
       res.redirect(302, `${loginState.origin}/`);
     } catch (error) {
       console.error("[Auth] Google callback failed", error);

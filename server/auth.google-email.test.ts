@@ -124,6 +124,23 @@ describe("external authentication policy", () => {
     });
   });
 
+  it("issues a short-lived non-sensitive success notice only after verified Google sign-in completes", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sub: "google-subject", email: "school.user@example.ng", email_verified: true, name: "School User" }), { status: 200 })));
+    vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 12, openId: "external:google:12", name: "School User", email: "school.user@example.ng", loginMethod: "google" } as any);
+    vi.spyOn(database, "createUserSession").mockResolvedValue("google-test-session");
+    await withAuthRouteServer(async origin => {
+      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos-system-uhkdscaf.manus.space")}`);
+      const state = getGoogleState(start.headers["set-cookie"]);
+      const callback = await requestRoute(`${origin}/api/auth/google/callback?code=verified-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
+      expect(callback.status).toBe(302);
+      expect(callback.headers.location).toBe("https://nsos-system-uhkdscaf.manus.space/");
+      expect(headerText(callback.headers["set-cookie"])).toContain("__Host-google_signin_notice=google_success");
+      expect(headerText(callback.headers["set-cookie"])).toContain("Max-Age=60");
+    });
+  });
+
   it("accepts a passwordless-email request only after the provider accepts delivery", async () => {
     const token = "a".repeat(43);
     vi.spyOn(database, "createAuthMagicLink").mockResolvedValue(token);

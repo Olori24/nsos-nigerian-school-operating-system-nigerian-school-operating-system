@@ -17,6 +17,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { nigerianStates } from "@/lib/nigerianStates";
 import { sessionPresentation, sessionRevokeConfirmation } from "@/lib/sessionPresentation";
+import { clearGoogleSignInNotice, hasGoogleSignInNotice } from "@/lib/authNotice";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
@@ -270,6 +271,13 @@ function SetupSchool({ onCreated }: { onCreated: () => void }) {
 
 function SetupStep({ no, label }: { no: string; label: string }) { return <div className="rounded-xl border border-[#e3e8e1] bg-[#fafbf8] p-3"><span className="mono text-[10px] text-[#0f5c4f]">{no}</span><p className="mt-3 text-xs font-semibold text-[#35463e]">{label}</p></div>; }
 
+function consumeGoogleSignInNotice() {
+  if (typeof document === "undefined") return false;
+  if (!hasGoogleSignInNotice(document.cookie)) return false;
+  document.cookie = clearGoogleSignInNotice();
+  return true;
+}
+
 export default function Home() {
   if (!isNsosPlatformHost()) return <DomainSchoolWebsite />;
   const { user, loading, logout } = useAuth();
@@ -278,6 +286,10 @@ export default function Home() {
   const [activeView, setActiveView] = useState<View>("overview");
   const [mobileNav, setMobileNav] = useState(false);
   const [platformRevenueOpen, setPlatformRevenueOpen] = useState(false);
+
+  useEffect(() => {
+    if (user && consumeGoogleSignInNotice()) toast.success("Signed in with Google.", { description: "Your secure NSOS session is ready." });
+  }, [user?.id]);
 
   useEffect(() => {
     if (!schoolId && schoolsQuery.data?.[0]?.id) setSchoolId(schoolsQuery.data[0].id);
