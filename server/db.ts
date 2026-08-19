@@ -52,6 +52,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { invokeLLM } from "./_core/llm";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
 
@@ -960,7 +961,7 @@ export async function recordCashAssurancePromise(input: { schoolId: number; case
   return { promiseId: Number(inserted[0].insertId) };
 }
 
-export async function submitPaymentEvidence(input: { schoolId: number; caseId: number; invoiceId: number; amountClaimed: number; source: "manual_receipt" | "bank_reference" | "provider_event" | "other"; providerReference?: string; note?: string; createdBy: number; evidenceFile?: { key: string; url: string; name: string; mimeType: string; size: number } }) {
+export async function submitPaymentEvidence(input: { schoolId: number; caseId: number; invoiceId: number; amountClaimed: number; claimedPaidOn?: string; source: "manual_receipt" | "bank_reference" | "provider_event" | "other"; providerReference?: string; note?: string; createdBy: number; evidenceFile?: { key: string; url: string; name: string; mimeType: string; size: number } }) {
   const db = await database();
   const [item, invoice, link] = await Promise.all([
     getCashAssuranceCaseOrThrow(input.schoolId, input.caseId),
@@ -970,7 +971,7 @@ export async function submitPaymentEvidence(input: { schoolId: number; caseId: n
   if (!invoice[0] || !link[0] || invoice[0].studentId !== item.studentId) throw new Error("Payment evidence must reference an invoice linked to this case.");
   if (item.status === "disputed" || !isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus)) throw new Error("Payment evidence cannot be added to this case in its current status.");
   if (input.amountClaimed > invoiceOutstanding(invoice[0]) + 0.009) throw new Error("Claimed amount exceeds the invoice’s current outstanding balance.");
-  const inserted = await db.insert(paymentEvidence).values({ schoolId: input.schoolId, caseId: input.caseId, invoiceId: input.invoiceId, amountClaimed: String(input.amountClaimed), source: input.source, providerReference: input.providerReference ?? null, note: input.note ?? null, evidenceFileKey: input.evidenceFile?.key ?? null, evidenceFileUrl: input.evidenceFile?.url ?? null, evidenceFileName: input.evidenceFile?.name ?? null, evidenceMimeType: input.evidenceFile?.mimeType ?? null, evidenceFileSize: input.evidenceFile?.size ?? null, createdBy: input.createdBy });
+  const inserted = await db.insert(paymentEvidence).values({ schoolId: input.schoolId, caseId: input.caseId, invoiceId: input.invoiceId, amountClaimed: String(input.amountClaimed), claimedPaidOn: asDate(input.claimedPaidOn), source: input.source, providerReference: input.providerReference ?? null, note: input.note ?? null, evidenceFileKey: input.evidenceFile?.key ?? null, evidenceFileUrl: input.evidenceFile?.url ?? null, evidenceFileName: input.evidenceFile?.name ?? null, evidenceMimeType: input.evidenceFile?.mimeType ?? null, evidenceFileSize: input.evidenceFile?.size ?? null, createdBy: input.createdBy });
   await db.update(cashAssuranceCases).set({ status: "payment_under_review" }).where(eq(cashAssuranceCases.id, input.caseId));
   await addCashAssuranceEvent({ schoolId: input.schoolId, caseId: input.caseId, eventType: "payment_evidence_submitted", actorUserId: input.createdBy, note: input.note });
   return { evidenceId: Number(inserted[0].insertId) };
@@ -1063,7 +1064,7 @@ export async function getFamilyCashAssuranceData(input: { schoolId: number; user
   const studentById = new Map(students.map(item => [item.id, item]));
   const evidence = allEvidence.filter(item => caseIds.has(item.caseId));
   const promises = allPromises.filter(item => caseIds.has(item.caseId));
-  const safeEvidence = evidence.map(item => ({ id: item.id, caseId: item.caseId, invoiceId: item.invoiceId, amountClaimed: Number(item.amountClaimed), source: item.source, providerReference: item.providerReference, status: item.status, evidenceFileUrl: item.evidenceFileUrl, evidenceFileName: item.evidenceFileName, evidenceMimeType: item.evidenceMimeType, evidenceFileSize: item.evidenceFileSize, createdAt: item.createdAt, reviewedAt: item.reviewedAt }));
+  const safeEvidence = evidence.map(item => ({ id: item.id, caseId: item.caseId, invoiceId: item.invoiceId, amountClaimed: Number(item.amountClaimed), claimedPaidOn: item.claimedPaidOn, source: item.source, providerReference: item.providerReference, status: item.status, evidenceFileUrl: item.evidenceFileUrl, evidenceFileName: item.evidenceFileName, evidenceMimeType: item.evidenceMimeType, evidenceFileSize: item.evidenceFileSize, createdAt: item.createdAt, reviewedAt: item.reviewedAt }));
   const safePromises = promises.map(item => ({ id: item.id, caseId: item.caseId, promisedAmount: Number(item.promisedAmount), promisedOn: item.promisedOn, status: item.status, createdAt: item.createdAt }));
   return {
     cases: caseRows.map(item => {
@@ -1075,12 +1076,51 @@ export async function getFamilyCashAssuranceData(input: { schoolId: number; user
   };
 }
 
-export async function submitFamilyPaymentEvidence(input: { schoolId: number; userId: number; role: FamilyPortalRole; caseId: number; invoiceId: number; amountClaimed: number; source: "manual_receipt" | "bank_reference" | "provider_event" | "other"; providerReference?: string; note?: string; upload?: EvidenceUpload }) {
+export async function submitFamilyPaymentEvidence(input: { schoolId: number; userId: number; role: FamilyPortalRole; caseId: number; invoiceId: number; amountClaimed: number; claimedPaidOn?: string; source: "manual_receipt" | "bank_reference" | "provider_event" | "other"; providerReference?: string; note?: string; upload?: EvidenceUpload }) {
   const allowedStudentIds = await getFamilyStudentIds(input.schoolId, input.userId, input.role);
   const item = await getCashAssuranceCaseOrThrow(input.schoolId, input.caseId);
   if (!allowedStudentIds.includes(item.studentId)) throw new Error("You can only submit payment evidence for a learner linked to your portal.");
   const evidenceFile = input.upload ? await storeFamilyEvidenceUpload(input.schoolId, input.caseId, input.userId, input.upload) : undefined;
-  return submitPaymentEvidence({ schoolId: input.schoolId, caseId: input.caseId, invoiceId: input.invoiceId, amountClaimed: input.amountClaimed, source: input.source, providerReference: input.providerReference, note: input.note, createdBy: input.userId, evidenceFile });
+  return submitPaymentEvidence({ schoolId: input.schoolId, caseId: input.caseId, invoiceId: input.invoiceId, amountClaimed: input.amountClaimed, claimedPaidOn: input.claimedPaidOn, source: input.source, providerReference: input.providerReference, note: input.note, createdBy: input.userId, evidenceFile });
+}
+
+export async function scanFamilyPaymentEvidence(input: { schoolId: number; userId: number; role: FamilyPortalRole; caseId: number; invoiceId: number; upload: EvidenceUpload }) {
+  const allowedStudentIds = await getFamilyStudentIds(input.schoolId, input.userId, input.role);
+  const item = await getCashAssuranceCaseOrThrow(input.schoolId, input.caseId);
+  if (!allowedStudentIds.includes(item.studentId)) throw new Error("You can only scan evidence for a learner linked to your portal.");
+  const db = await database();
+  const linkedInvoice = (await db.select().from(cashAssuranceCaseInvoices).where(and(eq(cashAssuranceCaseInvoices.caseId, input.caseId), eq(cashAssuranceCaseInvoices.invoiceId, input.invoiceId))).limit(1))[0];
+  if (!linkedInvoice) throw new Error("The selected invoice is not linked to this payment case.");
+  const supportedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+  if (!supportedMimeTypes.has(input.upload.mimeType)) throw new Error("Scan a JPG, PNG, WEBP, or PDF payment document.");
+  const byteLength = Buffer.byteLength(input.upload.base64, "base64");
+  if (!byteLength || byteLength > 5 * 1024 * 1024) throw new Error("The receipt scan supports documents between 1 byte and 5 MB.");
+  const documentUrl = `data:${input.upload.mimeType};base64,${input.upload.base64}`;
+  const response = await invokeLLM({
+    model: "gemini-3-flash-preview",
+    maxTokens: 400,
+    messages: [
+      { role: "system", content: "You extract only payment receipt information. Never make a payment decision. Do not infer a value from an invoice due date, filename, or unrelated text. If a value is unclear, use 0 for amount or an empty string for date. Return only the requested JSON." },
+      { role: "user", content: [{ type: "text", text: "Inspect this payment receipt or transfer proof. Extract the single most likely amount actually paid in Nigerian Naira and the actual payment date in YYYY-MM-DD. Ignore invoice totals, balances, due dates, and reference numbers unless they identify the payment. Set confidence to low, medium, or high." }, input.upload.mimeType === "application/pdf" ? { type: "file_url", file_url: { url: documentUrl, mime_type: "application/pdf" } } : { type: "image_url", image_url: { url: documentUrl, detail: "high" } }] },
+    ],
+    outputSchema: {
+      name: "receipt_extraction",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: { amountNgn: { type: "number" }, paidOn: { type: "string" }, confidence: { type: "string", enum: ["low", "medium", "high"] } },
+        required: ["amountNgn", "paidOn", "confidence"],
+        additionalProperties: false,
+      },
+    },
+  });
+  const content = response.choices[0]?.message.content;
+  const raw = typeof content === "string" ? content : (content ?? []).filter(part => part.type === "text").map(part => part.text).join("");
+  let parsed: { amountNgn: number; paidOn: string; confidence: "low" | "medium" | "high" };
+  try { parsed = JSON.parse(raw) as typeof parsed; } catch { throw new Error("The receipt scan did not return a readable result. Enter the amount and date manually."); }
+  const amountNgn = Number.isFinite(parsed.amountNgn) && parsed.amountNgn > 0 ? Math.round(parsed.amountNgn * 100) / 100 : null;
+  const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(parsed.paidOn) && !Number.isNaN(Date.parse(`${parsed.paidOn}T00:00:00.000Z`)) ? parsed.paidOn : null;
+  return { amountNgn, paidOn, confidence: parsed.confidence, requiresConfirmation: true };
 }
 
 export async function listStaff(schoolId: number) { return (await database()).select().from(staffProfiles).where(eq(staffProfiles.schoolId, schoolId)).orderBy(staffProfiles.lastName); }

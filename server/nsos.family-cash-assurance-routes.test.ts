@@ -4,6 +4,7 @@ vi.mock("./db", () => ({
   getSchoolMembership: vi.fn(),
   getFamilyCashAssuranceData: vi.fn(),
   submitFamilyPaymentEvidence: vi.fn(),
+  scanFamilyPaymentEvidence: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
   recordPayment: vi.fn(),
 }));
@@ -38,6 +39,17 @@ describe("Family Cash Assurance portal routes", () => {
     expect(db.submitFamilyPaymentEvidence).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 8, userId: 42, role: "student", caseId: 19, invoiceId: 66, amountClaimed: 12000, upload: expect.objectContaining({ fileName: "transfer-proof.pdf" }) }));
     expect(db.recordPayment).not.toHaveBeenCalled();
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 8, actorUserId: 42, eventType: "family_payment_evidence_submitted", targetId: 71, metadata: { source: "bank_reference", attachmentIncluded: true, ledgerChanged: false } }));
+  });
+
+  it("returns a confirmation-only AI receipt suggestion without posting a payment", async () => {
+    vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 4, schoolId: 8, userId: 42, role: "student", status: "active", createdAt: new Date(), updatedAt: new Date() });
+    vi.mocked(db.scanFamilyPaymentEvidence).mockResolvedValue({ amountNgn: 12000, paidOn: "2026-08-18", confidence: "medium", requiresConfirmation: true });
+
+    await expect(callerFor(42).nsos.portal.scanPaymentEvidence({ schoolId: 8, caseId: 19, invoiceId: 66, upload: { base64: "aGVsbG8=", fileName: "transfer-proof.png", mimeType: "image/png" } })).resolves.toEqual({ amountNgn: 12000, paidOn: "2026-08-18", confidence: "medium", requiresConfirmation: true });
+
+    expect(db.scanFamilyPaymentEvidence).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 8, userId: 42, role: "student", caseId: 19, invoiceId: 66 }));
+    expect(db.recordPayment).not.toHaveBeenCalled();
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "family_payment_receipt_scanned", targetId: 19, metadata: { fileType: "image/png", requiresConfirmation: true, ledgerChanged: false } }));
   });
 
   it("rejects finance and staff roles from family portal evidence controls", async () => {

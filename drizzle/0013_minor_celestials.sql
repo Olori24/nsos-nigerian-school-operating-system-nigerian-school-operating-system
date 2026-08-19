@@ -1,0 +1,1 @@
+ALTER TABLE `paymentEvidence` ADD `claimedPaidOn` date;

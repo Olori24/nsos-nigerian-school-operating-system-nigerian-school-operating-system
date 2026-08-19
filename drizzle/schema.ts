@@ -673,6 +673,7 @@ export const paymentEvidence = mysqlTable(
     caseId: int("caseId").notNull(),
     invoiceId: int("invoiceId").notNull(),
     amountClaimed: decimal("amountClaimed", { precision: 12, scale: 2 }).notNull(),
+    claimedPaidOn: date("claimedPaidOn"),
     source: mysqlEnum("source", ["manual_receipt", "bank_reference", "provider_event", "other"]).notNull().default("manual_receipt"),
     providerReference: varchar("providerReference", { length: 160 }),
     note: text("note"),

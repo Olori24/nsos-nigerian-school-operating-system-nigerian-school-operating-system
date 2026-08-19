@@ -92,6 +92,13 @@
       "when": 1787118117701,
       "tag": "0012_free_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1787118626111,
+      "tag": "0013_minor_celestials",
+      "breakpoints": true
     }
   ]
 }
