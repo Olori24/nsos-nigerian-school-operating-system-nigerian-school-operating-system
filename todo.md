@@ -116,3 +116,4 @@
 - [x] Add accessible LGA loading feedback and recovery messaging when origin options cannot be loaded for a selected State.
 - [x] Add browser-local, refresh-safe draft recovery for internal admissions, student biodata, and public admissions forms, with clear controls and successful-submit cleanup.
 - [x] Add pre-submission biodata preview and client-side PDF export for admissions and student record forms without transmitting draft data.
+- [x] Add a confirmation-protected Clear Form action that resets biodata fields and removes the matching browser-session draft.
