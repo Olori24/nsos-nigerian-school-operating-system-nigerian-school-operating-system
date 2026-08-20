@@ -5,6 +5,7 @@ import { resolveTxt } from "node:dns/promises";
 import {
   academicSessions,
   academicTerms,
+  advertisingCampaigns,
   admissionDocuments,
   admissionsApplications,
   announcements,
@@ -39,6 +40,7 @@ import {
   providerConfigurations,
   rateLimitBuckets,
   resultPublications,
+  schoolAdvertisingAccounts,
   schoolSubscriptions,
   securityAuditEvents,
   schoolMemberships,
@@ -104,6 +106,8 @@ export function isActivePublishedDomain(website: { domainStatus: string; publish
 type ProviderCategory = "payment" | "notification";
 type ProviderCredentials = { apiKey?: string; secretKey?: string; webhookSecret?: string };
 export type SmsDeliveryState = "pending" | "delivered" | "failed";
+export type AdvertisingCampaignStatus = "draft" | "pending_approval" | "approved" | "launching" | "active" | "paused" | "completed" | "failed" | "archived";
+type AdvertisingAudience = { locations: string[]; ageMin?: number; ageMax?: number; note?: string };
 
 const NSOS_WEBHOOK_ORIGIN = "https://nsos-system-uhkdscaf.manus.space";
 
@@ -643,6 +647,150 @@ export async function testProviderConnection(schoolId: number, category: Provide
   } catch (error) {
     const timedOut = error instanceof DOMException && error.name === "AbortError";
     return { ok: false, message: timedOut ? "The provider did not respond within eight seconds." : "NSOS could not reach the provider. Check network access and provider availability.", testedAt: new Date() };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function metaAccountId(value: string) {
+  const normalized = value.trim().replace(/^act_/i, "");
+  if (!/^\d{3,80}$/.test(normalized)) throw new Error("Enter the numeric Meta ad account ID, with or without the act_ prefix.");
+  return `act_${normalized}`;
+}
+
+function advertisingAccountView(account?: typeof schoolAdvertisingAccounts.$inferSelect) {
+  return account
+    ? { id: account.id, provider: account.provider, status: account.status, accountName: account.accountName, externalAccountId: account.externalAccountId, currency: account.currency, hasAccessToken: Boolean(account.encryptedCredentials && openProviderCredentials(account.encryptedCredentials).apiKey), webhookStatus: account.webhookStatus, lastValidatedAt: account.lastValidatedAt, updatedAt: account.updatedAt }
+    : { id: null, provider: "meta" as const, status: "not_connected" as const, accountName: null, externalAccountId: null, currency: "NGN", hasAccessToken: false, webhookStatus: "not_configured" as const, lastValidatedAt: null, updatedAt: null };
+}
+
+export async function getAdvertisingWorkspace(schoolId: number) {
+  const db = await database();
+  const account = (await db.select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.schoolId, schoolId), eq(schoolAdvertisingAccounts.provider, "meta"))).limit(1))[0];
+  const campaigns = await db.select().from(advertisingCampaigns).where(eq(advertisingCampaigns.schoolId, schoolId)).orderBy(desc(advertisingCampaigns.updatedAt));
+  return {
+    account: advertisingAccountView(account),
+    campaigns: campaigns.map(campaign => ({ ...campaign, dailyBudget: Number(campaign.dailyBudget), totalBudget: Number(campaign.totalBudget), audienceSummary: campaign.audienceSummary as AdvertisingAudience })),
+    summary: {
+      draft: campaigns.filter(campaign => campaign.status === "draft").length,
+      awaitingApproval: campaigns.filter(campaign => campaign.status === "pending_approval").length,
+      approved: campaigns.filter(campaign => campaign.status === "approved").length,
+      live: campaigns.filter(campaign => campaign.status === "active").length,
+    },
+  };
+}
+
+export async function saveMetaAdvertisingAccount(input: { schoolId: number; accountName: string; externalAccountId: string; accessToken?: string; clearAccessToken?: boolean; connectedBy: number }) {
+  const db = await database();
+  const existing = (await db.select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.schoolId, input.schoolId), eq(schoolAdvertisingAccounts.provider, "meta"))).limit(1))[0];
+  const encryptedCredentials = input.clearAccessToken ? null : sealProviderCredentials({ apiKey: input.accessToken }) ?? existing?.encryptedCredentials ?? null;
+  if (!encryptedCredentials) throw new Error("Save a Meta access token for this school before connecting the advertising account.");
+  const values = { schoolId: input.schoolId, provider: "meta" as const, status: "connected" as const, accountName: input.accountName.trim().slice(0, 160), externalAccountId: metaAccountId(input.externalAccountId), encryptedCredentials, connectedBy: input.connectedBy, lastValidatedAt: null, webhookStatus: "not_configured" as const };
+  await db.insert(schoolAdvertisingAccounts).values(values).onDuplicateKeyUpdate({ set: values });
+  const account = (await db.select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.schoolId, input.schoolId), eq(schoolAdvertisingAccounts.provider, "meta"))).limit(1))[0];
+  return advertisingAccountView(account);
+}
+
+export async function testMetaAdvertisingAccount(schoolId: number) {
+  const db = await database();
+  const account = (await db.select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.schoolId, schoolId), eq(schoolAdvertisingAccounts.provider, "meta"))).limit(1))[0];
+  if (!account?.externalAccountId || !account.encryptedCredentials) throw new Error("Connect a Meta ad account and save its access token before testing the connection.");
+  const accessToken = openProviderCredentials(account.encryptedCredentials).apiKey;
+  if (!accessToken) throw new Error("The Meta access token is unavailable. Save the account connection again.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(`https://graph.facebook.com/v26.0/${encodeURIComponent(account.externalAccountId)}?fields=id,name,account_status,currency`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }, signal: controller.signal });
+    if (!response.ok) {
+      await db.update(schoolAdvertisingAccounts).set({ status: "attention" }).where(eq(schoolAdvertisingAccounts.id, account.id));
+      return { ok: false, message: `Meta rejected the account verification (HTTP ${response.status}). Check the token and ad-account permissions.`, testedAt: new Date() };
+    }
+    const verified = await response.json() as { name?: string; currency?: string };
+    const testedAt = new Date();
+    await db.update(schoolAdvertisingAccounts).set({ status: "connected", accountName: verified.name?.slice(0, 160) || account.accountName, currency: verified.currency?.slice(0, 8) || account.currency, lastValidatedAt: testedAt }).where(eq(schoolAdvertisingAccounts.id, account.id));
+    return { ok: true, message: "Meta ad account verified. No campaign was created and no spend was incurred.", testedAt };
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    return { ok: false, message: timedOut ? "Meta did not respond within eight seconds." : "NSOS could not reach Meta. Check network availability and try again.", testedAt: new Date() };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function advertisingAccountForDraft(schoolId: number) {
+  const db = await database();
+  let account = (await db.select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.schoolId, schoolId), eq(schoolAdvertisingAccounts.provider, "meta"))).limit(1))[0];
+  if (!account) {
+    await db.insert(schoolAdvertisingAccounts).values({ schoolId, provider: "meta", status: "not_connected", currency: "NGN", webhookStatus: "not_configured" });
+    account = (await db.select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.schoolId, schoolId), eq(schoolAdvertisingAccounts.provider, "meta"))).limit(1))[0];
+  }
+  if (!account) throw new Error("NSOS could not prepare the school advertising workspace.");
+  return account;
+}
+
+export async function createAdvertisingCampaign(input: { schoolId: number; name: string; objective: "lead_generation" | "website_visits" | "awareness"; destinationUrl?: string; primaryText: string; headline: string; callToAction: "learn_more" | "apply_now" | "contact_us"; audienceSummary: AdvertisingAudience; dailyBudget: number; totalBudget: number; startsAt?: string; endsAt?: string; createdBy: number }) {
+  if (input.totalBudget < input.dailyBudget) throw new Error("The total budget must be at least the daily budget.");
+  const startsAt = input.startsAt ? new Date(input.startsAt) : null;
+  const endsAt = input.endsAt ? new Date(input.endsAt) : null;
+  if (startsAt && endsAt && endsAt <= startsAt) throw new Error("The campaign end date must be after its start date.");
+  const account = await advertisingAccountForDraft(input.schoolId);
+  const db = await database();
+  const created = await db.insert(advertisingCampaigns).values({ schoolId: input.schoolId, advertisingAccountId: account.id, provider: "meta", name: input.name.trim(), objective: input.objective, destinationUrl: input.destinationUrl?.trim() || null, primaryText: input.primaryText.trim(), headline: input.headline.trim(), callToAction: input.callToAction, audienceSummary: { locations: input.audienceSummary.locations.map(location => location.trim()).filter(Boolean).slice(0, 12), ageMin: input.audienceSummary.ageMin, ageMax: input.audienceSummary.ageMax, note: input.audienceSummary.note?.trim().slice(0, 500) }, dailyBudget: String(input.dailyBudget), totalBudget: String(input.totalBudget), currency: account.currency, startsAt, endsAt, status: "draft", createdBy: input.createdBy });
+  return { campaignId: Number(created[0].insertId), accountConnected: account.status === "connected" };
+}
+
+async function advertisingCampaignForSchool(schoolId: number, campaignId: number) {
+  const campaign = (await (await database()).select().from(advertisingCampaigns).where(and(eq(advertisingCampaigns.id, campaignId), eq(advertisingCampaigns.schoolId, schoolId))).limit(1))[0];
+  if (!campaign) throw new Error("Advertising campaign not found in this school workspace.");
+  return campaign;
+}
+
+export async function requestAdvertisingCampaignApproval(input: { schoolId: number; campaignId: number }) {
+  const campaign = await advertisingCampaignForSchool(input.schoolId, input.campaignId);
+  if (campaign.status !== "draft") throw new Error("Only draft campaigns can be submitted for approval.");
+  await (await database()).update(advertisingCampaigns).set({ status: "pending_approval" }).where(and(eq(advertisingCampaigns.id, campaign.id), eq(advertisingCampaigns.status, "draft")));
+  return { campaignId: campaign.id, status: "pending_approval" as const };
+}
+
+export async function approveAdvertisingCampaign(input: { schoolId: number; campaignId: number; approvedBy: number }) {
+  const campaign = await advertisingCampaignForSchool(input.schoolId, input.campaignId);
+  if (campaign.status !== "pending_approval") throw new Error("Only a campaign awaiting approval can be approved for launch preparation.");
+  await (await database()).update(advertisingCampaigns).set({ status: "approved", approvedBy: input.approvedBy, approvedAt: new Date() }).where(and(eq(advertisingCampaigns.id, campaign.id), eq(advertisingCampaigns.status, "pending_approval")));
+  return { campaignId: campaign.id, status: "approved" as const };
+}
+
+function metaCampaignObjective(objective: "lead_generation" | "website_visits" | "awareness") {
+  return objective === "lead_generation" ? "LEAD_GENERATION" : objective === "awareness" ? "BRAND_AWARENESS" : "LINK_CLICKS";
+}
+
+export async function preparePausedMetaCampaign(input: { schoolId: number; campaignId: number; launchedBy: number }) {
+  const campaign = await advertisingCampaignForSchool(input.schoolId, input.campaignId);
+  if (campaign.status !== "approved") throw new Error("Only an explicitly approved campaign can be prepared in Meta.");
+  const db = await database();
+  const account = (await db.select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.id, campaign.advertisingAccountId), eq(schoolAdvertisingAccounts.schoolId, input.schoolId), eq(schoolAdvertisingAccounts.status, "connected"))).limit(1))[0];
+  if (!account?.externalAccountId || !account.encryptedCredentials) throw new Error("Connect and verify the school’s Meta ad account before preparing a campaign in Meta.");
+  const accessToken = openProviderCredentials(account.encryptedCredentials).apiKey;
+  if (!accessToken) throw new Error("The Meta access token is unavailable. Save the school account connection again.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  await db.update(advertisingCampaigns).set({ status: "launching", lastProviderError: null }).where(and(eq(advertisingCampaigns.id, campaign.id), eq(advertisingCampaigns.status, "approved")));
+  try {
+    const body = new URLSearchParams({ name: campaign.name, objective: metaCampaignObjective(campaign.objective), status: "PAUSED", access_token: accessToken });
+    const response = await fetch(`https://graph.facebook.com/v26.0/${encodeURIComponent(account.externalAccountId)}/campaigns`, { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, body });
+    const payload = await response.json().catch(() => ({})) as { id?: string; error?: { message?: string } };
+    if (!response.ok || !payload.id) {
+      const message = (payload.error?.message || `Meta rejected the paused-campaign request (HTTP ${response.status}).`).slice(0, 500);
+      await db.update(advertisingCampaigns).set({ status: "failed", lastProviderError: message }).where(eq(advertisingCampaigns.id, campaign.id));
+      throw new Error("Meta could not prepare this campaign. Check the school account permissions and campaign settings, then try again.");
+    }
+    const launchedAt = new Date();
+    await db.update(advertisingCampaigns).set({ status: "paused", providerCampaignId: payload.id, providerStatus: "PAUSED", launchedBy: input.launchedBy, launchedAt, lastProviderError: null }).where(eq(advertisingCampaigns.id, campaign.id));
+    return { campaignId: campaign.id, providerCampaignId: payload.id, status: "paused" as const, message: "Meta campaign created in a paused state. No advert is active and no spend can begin until ad-set, creative, and final launch controls are completed." };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Meta could not")) throw error;
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    await db.update(advertisingCampaigns).set({ status: "failed", lastProviderError: timedOut ? "Meta preparation request timed out." : "NSOS could not reach Meta for this preparation request." }).where(eq(advertisingCampaigns.id, campaign.id));
+    throw new Error(timedOut ? "Meta did not respond within twelve seconds. No active advert was created." : "NSOS could not reach Meta. No active advert was created.");
   } finally {
     clearTimeout(timeout);
   }

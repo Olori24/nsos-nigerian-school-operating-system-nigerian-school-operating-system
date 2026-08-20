@@ -53,6 +53,12 @@ const providerAdminProcedure = protectedProcedure.input(schoolInput).use(async (
   return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
 });
 
+const advertisingAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can manage advertising accounts or approve campaign spend." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
 const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
 const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
@@ -183,6 +189,48 @@ export const nsosRouter = router({
     webhookUrls: providerAdminProcedure.input(schoolInput).query(({ input }) => db.getSmsDeliveryWebhookUrls(input.schoolId)),
     sendTestSms: providerAdminProcedure.input(schoolInput.extend({ to: z.string().min(7).max(24), confirmed: z.literal(true) })).mutation(({ ctx, input }) => db.sendProviderSmsTest({ ...input, createdBy: ctx.user.id })),
     checkTestSmsDelivery: providerAdminProcedure.input(schoolInput.extend({ messageLogId: z.number().int().positive() })).mutation(({ input }) => db.checkProviderSmsTestDelivery(input)),
+  }),
+
+  advertising: router({
+    workspace: advertisingAdminProcedure.input(schoolInput).query(({ input }) => db.getAdvertisingWorkspace(input.schoolId)),
+    saveMetaAccount: advertisingAdminProcedure
+      .input(schoolInput.extend({ accountName: z.string().trim().min(2).max(160), externalAccountId: z.string().trim().min(3).max(100), accessToken: z.string().trim().min(20).max(2000).optional(), clearAccessToken: z.boolean().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await db.saveMetaAdvertisingAccount({ ...input, connectedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: input.clearAccessToken ? "advertising_meta_access_cleared" : "advertising_meta_account_saved", targetType: "advertising_account", targetId: account.id ?? undefined, metadata: { provider: "meta", accountConfigured: true, accessTokenState: input.clearAccessToken ? "cleared" : input.accessToken ? "updated" : "retained" } });
+        return account;
+      }),
+    testMetaAccount: advertisingAdminProcedure.input(schoolInput).mutation(async ({ ctx, input }) => {
+      const limit = await db.consumeSharedRateLimit({ namespace: "advertising", route: "meta-account-test", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+      if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Try the Meta connection test again in about ${limit.retryAfterSeconds} seconds.` });
+      const result = await db.testMetaAdvertisingAccount(input.schoolId);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_account_tested", targetType: "advertising_account", metadata: { provider: "meta", verified: result.ok } });
+      return result;
+    }),
+    createCampaign: advertisingAdminProcedure
+      .input(schoolInput.extend({ name: z.string().trim().min(3).max(160), objective: z.enum(["lead_generation", "website_visits", "awareness"]), destinationUrl: z.string().trim().url().max(2048).optional(), primaryText: z.string().trim().min(5).max(5000), headline: z.string().trim().min(3).max(255), callToAction: z.enum(["learn_more", "apply_now", "contact_us"]), audienceSummary: z.object({ locations: z.array(z.string().trim().min(2).max(120)).min(1).max(12), ageMin: z.number().int().min(18).max(64).optional(), ageMax: z.number().int().min(18).max(65).optional(), note: z.string().trim().max(500).optional() }).refine(value => !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin, "Audience maximum age must not be lower than the minimum."), dailyBudget: z.number().positive().max(10_000_000), totalBudget: z.number().positive().max(100_000_000), startsAt: z.string().datetime().optional(), endsAt: z.string().datetime().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const limit = await db.consumeSharedRateLimit({ namespace: "advertising", route: "campaign-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 30, windowMs: 10 * 60_000 });
+        if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `You have reached the campaign-draft limit. Try again in about ${limit.retryAfterSeconds} seconds.` });
+        const result = await db.createAdvertisingCampaign({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_campaign_draft_created", targetType: "advertising_campaign", targetId: result.campaignId, metadata: { provider: "meta", objective: input.objective, dailyBudget: input.dailyBudget, totalBudget: input.totalBudget, accountConnected: result.accountConnected } });
+        return result;
+      }),
+    submitForApproval: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await db.requestAdvertisingCampaignApproval(input);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_campaign_submitted_for_approval", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status } });
+      return result;
+    }),
+    approveCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.approveAdvertisingCampaign({ schoolId: input.schoolId, campaignId: input.campaignId, approvedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_campaign_spend_approved", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, explicitConfirmation: true } });
+      return result;
+    }),
+    preparePausedMetaCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.preparePausedMetaCampaign({ schoolId: input.schoolId, campaignId: input.campaignId, launchedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_campaign_prepared_paused", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, externalCampaignPrepared: true, activeAdvertCreated: false } });
+      return result;
+    }),
   }),
 
   security: router({

@@ -943,6 +943,60 @@ export const providerConfigurations = mysqlTable(
   table => ({ schoolCategory: uniqueIndex("providerConfiguration_school_category_unique").on(table.schoolId, table.category), schoolIndex: index("providerConfiguration_school_idx").on(table.schoolId) }),
 );
 
+export const schoolAdvertisingAccounts = mysqlTable(
+  "schoolAdvertisingAccounts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    provider: mysqlEnum("provider", ["meta"]).notNull().default("meta"),
+    status: mysqlEnum("status", ["not_connected", "connected", "attention", "disabled"]).notNull().default("not_connected"),
+    accountName: varchar("accountName", { length: 160 }),
+    externalAccountId: varchar("externalAccountId", { length: 160 }),
+    currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+    encryptedCredentials: text("encryptedCredentials"),
+    connectedBy: int("connectedBy"),
+    lastValidatedAt: timestamp("lastValidatedAt"),
+    webhookStatus: mysqlEnum("webhookStatus", ["not_configured", "pending", "active"]).notNull().default("not_configured"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProvider: uniqueIndex("schoolAdvertisingAccount_school_provider_unique").on(table.schoolId, table.provider), schoolIndex: index("schoolAdvertisingAccount_school_idx").on(table.schoolId) }),
+);
+
+export const advertisingCampaigns = mysqlTable(
+  "advertisingCampaigns",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    advertisingAccountId: int("advertisingAccountId").notNull(),
+    provider: mysqlEnum("provider", ["meta"]).notNull().default("meta"),
+    name: varchar("name", { length: 160 }).notNull(),
+    objective: mysqlEnum("objective", ["lead_generation", "website_visits", "awareness"]).notNull(),
+    destinationUrl: varchar("destinationUrl", { length: 2048 }),
+    primaryText: text("primaryText").notNull(),
+    headline: varchar("headline", { length: 255 }).notNull(),
+    callToAction: mysqlEnum("callToAction", ["learn_more", "apply_now", "contact_us"]).notNull().default("learn_more"),
+    audienceSummary: json("audienceSummary").$type<{ locations: string[]; ageMin?: number; ageMax?: number; note?: string }>().notNull(),
+    dailyBudget: decimal("dailyBudget", { precision: 12, scale: 2 }).notNull(),
+    totalBudget: decimal("totalBudget", { precision: 12, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+    startsAt: timestamp("startsAt"),
+    endsAt: timestamp("endsAt"),
+    status: mysqlEnum("status", ["draft", "pending_approval", "approved", "launching", "active", "paused", "completed", "failed", "archived"]).notNull().default("draft"),
+    providerCampaignId: varchar("providerCampaignId", { length: 160 }),
+    providerStatus: varchar("providerStatus", { length: 96 }),
+    lastProviderError: varchar("lastProviderError", { length: 500 }),
+    createdBy: int("createdBy").notNull(),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    launchedBy: int("launchedBy"),
+    launchedAt: timestamp("launchedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolStatus: index("advertisingCampaign_school_status_idx").on(table.schoolId, table.status), accountStatus: index("advertisingCampaign_account_status_idx").on(table.advertisingAccountId, table.status), providerId: index("advertisingCampaign_provider_id_idx").on(table.providerCampaignId) }),
+);
+
 export const securityAuditEvents = mysqlTable(
   "securityAuditEvents",
   {

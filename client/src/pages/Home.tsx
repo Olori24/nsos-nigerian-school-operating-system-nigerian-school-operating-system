@@ -12,6 +12,7 @@ import { SubscriptionStatusCard } from "@/components/SubscriptionStatusCard";
 import { AcademicHistoryStation } from "@/components/AcademicHistoryStation";
 import { StaffAssignments } from "@/components/StaffAssignments";
 import { WebsiteStudio } from "@/components/WebsiteStudio";
+import { AdvertisingWorkspace } from "@/components/AdvertisingWorkspace";
 import { AdmissionTemplateCard, FeeScheduleTemplateCard } from "@/components/DocumentTemplateStudio";
 import { NsosCopilot } from "@/components/NsosCopilot";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
@@ -75,7 +76,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type View = "overview" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "portal" | "communications" | "reports" | "website" | "account";
+type View = "overview" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "portal" | "communications" | "reports" | "website" | "advertising" | "account";
 type Role = "owner" | "admin" | "staff" | "teacher" | "finance" | "parent" | "student";
 
 const navGroups: { label: string; items: { id: View; label: string; icon: typeof LayoutDashboard; roles: Role[] }[] }[] = [
@@ -109,6 +110,7 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
     label: "Brand & publishing",
     items: [
       { id: "website", label: "School website", icon: Globe2, roles: ["owner", "admin"] },
+      { id: "advertising", label: "Advertising", icon: Megaphone, roles: ["owner", "admin"] },
     ],
   },
   {
@@ -131,6 +133,7 @@ const viewTitles: Record<View, { eyebrow: string; title: string; description: st
   portal: { eyebrow: "Family portal", title: "A closer view of your ward’s progress.", description: "Attendance, results, fees, and school updates, presented with clarity." },
   communications: { eyebrow: "School communication", title: "Speak once. Reach the right people.", description: "Announcements, noticeboard updates, and targeted communication history." },
   website: { eyebrow: "School website", title: "A public home for your school.", description: "Shape the school’s website, admissions entry point, and domain readiness from one controlled workspace." },
+  advertising: { eyebrow: "Advertising", title: "Reach families with control.", description: "Prepare and approve school-owned Meta advertising campaigns with clear budgets and auditable safeguards." },
   reports: { eyebrow: "Reporting", title: "Operational clarity for better decisions.", description: "A live term-level view of enrollment, attendance, fees, and results operations." },
   account: { eyebrow: "Account & security", title: "Your access, under your control.", description: "Review the devices signed in to your NSOS account and end sessions you no longer recognize." },
 };
@@ -467,6 +470,7 @@ function Workspace({ view, schoolId, schoolName, role, summary, applications, st
   if (view === "staff") return <><Staff schoolId={schoolId} staff={staff} operations={staffOperations} onRefresh={onRefresh} /><DepartmentStation schoolId={schoolId} onDone={onRefresh} /><StaffAssignments schoolId={schoolId} staff={staff.data ?? []} onDone={onRefresh} /></>;
   if (view === "communications") return <><CommunicationsWithBulk schoolId={schoolId} announcements={announcements} onRefresh={onRefresh} /><MessageHistory schoolId={schoolId} /></>;
   if (view === "website") return <WebsiteStudio schoolId={schoolId} />;
+  if (view === "advertising") return <AdvertisingWorkspace schoolId={schoolId} />;
   if (view === "portal") return <><FamilyPortalWithDetails schoolId={schoolId} role={role} guardian={guardianPortal} student={studentPortal} onRefresh={onRefresh} /><PortalResults data={role === "parent" ? guardianPortal.data : studentPortal.data} /></>;
   return <Reports schoolId={schoolId} summary={summary} applications={applications} finance={finance} attendance={attendance} />;
 }
