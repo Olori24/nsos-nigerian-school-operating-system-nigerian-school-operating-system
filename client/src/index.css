@@ -98,4 +98,12 @@ button, input, select, textarea { font: inherit; }
 
   .nsos-success-toast { animation: nsos-success-toast-slide-in 260ms cubic-bezier(0.23, 1, 0.32, 1) both; }
   @keyframes nsos-success-toast-slide-in { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: translateX(0); } }
+
+  .onboarding-completion-celebration { animation: onboarding-completion-celebration-enter 280ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+  .onboarding-completion-confetti { animation: onboarding-completion-confetti 560ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+  .onboarding-completion-confetti:nth-child(2) { animation-delay: 45ms; }
+  .onboarding-completion-confetti:nth-child(3) { animation-delay: 90ms; }
+  .onboarding-completion-confetti:nth-child(4) { animation-delay: 135ms; }
+  @keyframes onboarding-completion-celebration-enter { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes onboarding-completion-confetti { from { opacity: 0; transform: translateY(8px) rotate(0deg); } to { opacity: 1; transform: translateY(0) rotate(28deg); } }
 }

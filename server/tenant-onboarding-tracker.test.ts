@@ -22,4 +22,14 @@ describe("tenant onboarding tracker wiring", () => {
     expect(tracker).toContain("onNavigate(step.destination!)");
     expect(home).toContain("<TenantOnboardingTracker schoolId={schoolId} onNavigate={onNavigate} />");
   });
+
+  it("shows a dismissible, reduced-motion-safe celebration only for a fully completed tenant setup", () => {
+    expect(tracker).toContain("shouldShowTenantOnboardingCelebration(data.completionPercent, celebrationDismissed)");
+    expect(tracker).toContain('data-onboarding-completion-celebration');
+    expect(tracker).toContain('aria-label="Dismiss setup completion celebration"');
+    expect(tracker).toContain("tenantOnboardingCelebrationStorageKey(schoolId)");
+    const styles = readFileSync(resolve(root, "client/src/index.css"), "utf8");
+    expect(styles).toContain("@media (prefers-reduced-motion: no-preference)");
+    expect(styles).toContain(".onboarding-completion-celebration");
+  });
 });

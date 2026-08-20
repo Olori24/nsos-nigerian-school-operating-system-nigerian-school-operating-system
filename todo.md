@@ -139,3 +139,4 @@
 - [x] Add transparent feedback-informed AI tutor teaching preferences that adapt explanation format from each student’s prior ratings, remain student-controlled and reversible, and never use private feedback comments as prompt data.
 - [x] Add teacher-scoped AI tutor adaptation analytics that explain aggregate teaching-style changes for authorised learners without exposing tutor conversations or private feedback notes.
 - [x] Add an accessible, role-safe tenant onboarding progress tracker that shows completion, the next setup action, and direct routes into essential school configuration tasks.
+- [x] Add a dismissible, reduced-motion-safe completion celebration for fully configured school tenants, with a school-scoped remembered dismissal.
