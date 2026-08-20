@@ -176,6 +176,13 @@
       "when": 1787193690069,
       "tag": "0024_ambiguous_zeigeist",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1787202910442,
+      "tag": "0025_new_zodiak",
+      "breakpoints": true
     }
   ]
 }

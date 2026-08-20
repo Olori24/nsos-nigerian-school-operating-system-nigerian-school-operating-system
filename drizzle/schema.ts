@@ -1003,6 +1003,56 @@ export const advertisingCampaigns = mysqlTable(
   table => ({ schoolStatus: index("advertisingCampaign_school_status_idx").on(table.schoolId, table.status), accountStatus: index("advertisingCampaign_account_status_idx").on(table.advertisingAccountId, table.status), providerId: index("advertisingCampaign_provider_id_idx").on(table.providerCampaignId) }),
 );
 
+export const aiTutors = mysqlTable(
+  "aiTutors",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    subjectId: int("subjectId").notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    curriculumScope: text("curriculumScope").notNull(),
+    allowedLevels: json("allowedLevels").$type<string[]>().notNull(),
+    supervisorUserId: int("supervisorUserId").notNull(),
+    status: mysqlEnum("status", ["draft", "active", "paused", "retired"]).notNull().default("draft"),
+    dailyQuestionLimit: int("dailyQuestionLimit").notNull().default(20),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolSubject: uniqueIndex("aiTutor_school_subject_unique").on(table.schoolId, table.subjectId), schoolStatus: index("aiTutor_school_status_idx").on(table.schoolId, table.status), supervisorStatus: index("aiTutor_supervisor_status_idx").on(table.supervisorUserId, table.status) }),
+);
+
+export const aiTutorSessionSummaries = mysqlTable(
+  "aiTutorSessionSummaries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    tutorId: int("tutorId").notNull(),
+    studentId: int("studentId").notNull(),
+    sessionDate: date("sessionDate").notNull(),
+    questionCount: int("questionCount").notNull().default(0),
+    escalationCount: int("escalationCount").notNull().default(0),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ tutorStudentDate: uniqueIndex("aiTutorSession_tutor_student_date_unique").on(table.tutorId, table.studentId, table.sessionDate), schoolStudent: index("aiTutorSession_school_student_idx").on(table.schoolId, table.studentId) }),
+);
+
+export const aiTutorEscalations = mysqlTable(
+  "aiTutorEscalations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    tutorId: int("tutorId").notNull(),
+    studentId: int("studentId").notNull(),
+    reason: mysqlEnum("reason", ["learner_requested", "safeguarding", "out_of_scope", "needs_teacher_review"]).notNull(),
+    status: mysqlEnum("status", ["open", "acknowledged", "closed"]).notNull().default("open"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    acknowledgedAt: timestamp("acknowledgedAt"),
+    acknowledgedBy: int("acknowledgedBy"),
+  },
+  table => ({ schoolStatus: index("aiTutorEscalation_school_status_idx").on(table.schoolId, table.status), tutorStudent: index("aiTutorEscalation_tutor_student_idx").on(table.tutorId, table.studentId) }),
+);
+
 export const securityAuditEvents = mysqlTable(
   "securityAuditEvents",
   {

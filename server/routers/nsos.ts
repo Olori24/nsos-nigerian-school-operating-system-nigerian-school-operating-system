@@ -59,6 +59,18 @@ const advertisingAdminProcedure = protectedProcedure.input(schoolInput).use(asyn
   return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
 });
 
+const aiTutorAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "academics.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can configure supervised AI tutors." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const aiTutorStudentProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "portal.read");
+  if (membership.role !== "student") throw new TRPCError({ code: "FORBIDDEN", message: "AI study tutors are available only through a linked student account." });
+  return next({ ctx: { ...ctx, schoolRole: "student" as const } });
+});
+
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
 const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
 const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
@@ -258,6 +270,33 @@ export const nsosRouter = router({
     syncMetaCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const result = await db.syncMetaAdvertisingCampaign(input);
       await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_ad_status_synced", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, providerStatus: result.providerStatus } });
+      return result;
+    }),
+  }),
+
+  aiTutors: router({
+    workspace: aiTutorAdminProcedure.input(schoolInput).query(({ input }) => db.getAiTutorWorkspace(input.schoolId)),
+    create: aiTutorAdminProcedure.input(schoolInput.extend({ subjectId: z.number().int().positive(), name: z.string().trim().min(3).max(120), curriculumScope: z.string().trim().min(30).max(3000), allowedLevels: z.array(z.string().trim().min(2).max(80)).min(1).max(12), supervisorUserId: z.number().int().positive(), dailyQuestionLimit: z.number().int().min(1).max(50).default(20) })).mutation(async ({ ctx, input }) => {
+      const result = await db.createAiTutor({ ...input, createdBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_created", targetType: "ai_tutor", targetId: result.tutorId, metadata: { subjectId: input.subjectId, supervisorUserId: input.supervisorUserId, status: result.status, dailyQuestionLimit: input.dailyQuestionLimit } });
+      return result;
+    }),
+    setStatus: aiTutorAdminProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive(), status: z.enum(["active", "paused", "retired"]) })).mutation(async ({ ctx, input }) => {
+      const result = await db.setAiTutorStatus(input);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_status_changed", targetType: "ai_tutor", targetId: input.tutorId, metadata: { status: input.status } });
+      return result;
+    }),
+    studentHub: aiTutorStudentProcedure.input(schoolInput).query(({ ctx, input }) => db.listStudentAiTutors(input.schoolId, ctx.user.id)),
+    ask: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive(), question: z.string().trim().min(3).max(1800) })).mutation(async ({ ctx, input }) => {
+      const limit = await db.consumeSharedRateLimit({ namespace: "ai-tutor", route: "study-question", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+      if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Take a short break and try another tutor question in about ${limit.retryAfterSeconds} seconds.` });
+      const result = await db.askAiTutor({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_study_response", targetType: "ai_tutor", targetId: input.tutorId, metadata: { needsTeacherSupport: result.needsTeacherSupport, escalationReason: result.escalationReason, conversationStored: false } });
+      return result;
+    }),
+    requestTeacherSupport: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await db.requestAiTutorEscalation({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_teacher_support_requested", targetType: "ai_tutor", targetId: input.tutorId, metadata: { conversationStored: false } });
       return result;
     }),
   }),

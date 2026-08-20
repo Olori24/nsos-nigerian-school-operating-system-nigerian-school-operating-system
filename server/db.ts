@@ -6,6 +6,9 @@ import {
   academicSessions,
   academicTerms,
   advertisingCampaigns,
+  aiTutorEscalations,
+  aiTutorSessionSummaries,
+  aiTutors,
   admissionDocuments,
   admissionsApplications,
   announcements,
@@ -62,6 +65,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { invokeLLM } from "./_core/llm";
+import { generateSupervisedTutorResponse } from "./aiTutor";
 import { generateReviewableAdCopy } from "./advertisingCopy";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
@@ -685,6 +689,85 @@ export async function generateAdvertisingCopySuggestions(input: { schoolId: numb
   const school = (await (await database()).select({ name: schools.name }).from(schools).where(eq(schools.id, input.schoolId)).limit(1))[0];
   if (!school) throw new Error("School workspace not found.");
   return generateReviewableAdCopy({ schoolName: school.name, objective: input.objective, locations: input.audienceSummary.locations, ageMin: input.audienceSummary.ageMin, ageMax: input.audienceSummary.ageMax, audienceNote: input.audienceSummary.note, guidance: input.guidance });
+}
+
+async function tutorWithSubject(schoolId: number, tutorId: number) {
+  const row = (await (await database()).select({ tutor: aiTutors, subjectName: subjects.name, subjectCode: subjects.code }).from(aiTutors).innerJoin(subjects, and(eq(aiTutors.subjectId, subjects.id), eq(subjects.schoolId, schoolId))).where(and(eq(aiTutors.id, tutorId), eq(aiTutors.schoolId, schoolId))).limit(1))[0];
+  if (!row) throw new Error("AI tutor not found in this school workspace.");
+  return row;
+}
+
+export async function getAiTutorWorkspace(schoolId: number) {
+  const db = await database();
+  const tutors = await db.select({ tutor: aiTutors, subjectName: subjects.name, subjectCode: subjects.code, supervisorName: users.name }).from(aiTutors).innerJoin(subjects, eq(aiTutors.subjectId, subjects.id)).leftJoin(users, eq(aiTutors.supervisorUserId, users.id)).where(eq(aiTutors.schoolId, schoolId)).orderBy(desc(aiTutors.updatedAt));
+  const subjectList = await db.select().from(subjects).where(and(eq(subjects.schoolId, schoolId), eq(subjects.status, "active"))).orderBy(subjects.name);
+  const supervisors = await db.select({ userId: schoolMemberships.userId, name: users.name, role: schoolMemberships.role }).from(schoolMemberships).innerJoin(users, eq(schoolMemberships.userId, users.id)).where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.status, "active"), or(eq(schoolMemberships.role, "owner"), eq(schoolMemberships.role, "admin"), eq(schoolMemberships.role, "teacher")))).orderBy(users.name);
+  const openEscalations = await db.select({ tutorId: aiTutorEscalations.tutorId, count: sql<number>`count(*)` }).from(aiTutorEscalations).where(and(eq(aiTutorEscalations.schoolId, schoolId), eq(aiTutorEscalations.status, "open"))).groupBy(aiTutorEscalations.tutorId);
+  const escalationCounts = new Map(openEscalations.map(item => [item.tutorId, Number(item.count)]));
+  return { tutors: tutors.map(item => ({ ...item.tutor, subjectName: item.subjectName, subjectCode: item.subjectCode, supervisorName: item.supervisorName ?? "Assigned school supervisor", openEscalations: escalationCounts.get(item.tutor.id) ?? 0 })), subjects: subjectList, supervisors };
+}
+
+export async function createAiTutor(input: { schoolId: number; subjectId: number; name: string; curriculumScope: string; allowedLevels: string[]; supervisorUserId: number; dailyQuestionLimit: number; createdBy: number }) {
+  const db = await database();
+  const subject = (await db.select().from(subjects).where(and(eq(subjects.id, input.subjectId), eq(subjects.schoolId, input.schoolId), eq(subjects.status, "active"))).limit(1))[0];
+  if (!subject) throw new Error("Choose an active subject in this school.");
+  const supervisor = (await db.select().from(schoolMemberships).where(and(eq(schoolMemberships.schoolId, input.schoolId), eq(schoolMemberships.userId, input.supervisorUserId), eq(schoolMemberships.status, "active"), or(eq(schoolMemberships.role, "owner"), eq(schoolMemberships.role, "admin"), eq(schoolMemberships.role, "teacher")))).limit(1))[0];
+  if (!supervisor) throw new Error("Choose an active owner, administrator, or teacher as the accountable tutor supervisor.");
+  const created = await db.insert(aiTutors).values({ schoolId: input.schoolId, subjectId: input.subjectId, name: input.name.trim(), curriculumScope: input.curriculumScope.trim(), allowedLevels: input.allowedLevels.map(value => value.trim()).filter(Boolean).slice(0, 12), supervisorUserId: input.supervisorUserId, dailyQuestionLimit: input.dailyQuestionLimit, status: "draft", createdBy: input.createdBy });
+  return { tutorId: Number(created[0].insertId), status: "draft" as const };
+}
+
+export async function setAiTutorStatus(input: { schoolId: number; tutorId: number; status: "active" | "paused" | "retired" }) {
+  await tutorWithSubject(input.schoolId, input.tutorId);
+  await (await database()).update(aiTutors).set({ status: input.status }).where(and(eq(aiTutors.id, input.tutorId), eq(aiTutors.schoolId, input.schoolId)));
+  return { tutorId: input.tutorId, status: input.status };
+}
+
+async function currentStudentTutorContext(schoolId: number, userId: number, tutorId: number) {
+  const db = await database();
+  const student = (await db.select().from(studentProfiles).where(and(eq(studentProfiles.schoolId, schoolId), eq(studentProfiles.userId, userId), eq(studentProfiles.status, "active"))).limit(1))[0];
+  if (!student) throw new Error("Your student profile is not linked to this school account. Ask the school office for support.");
+  const tutorRow = await tutorWithSubject(schoolId, tutorId);
+  if (tutorRow.tutor.status !== "active") throw new Error("This AI tutor is not available right now.");
+  const enrollment = (await db.select({ level: classes.level }).from(enrollments).innerJoin(classes, eq(enrollments.classId, classes.id)).where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.studentId, student.id), eq(enrollments.status, "active"))).orderBy(desc(enrollments.enrolledOn)).limit(1))[0];
+  const allowedLevels = tutorRow.tutor.allowedLevels as string[];
+  if (!allowedLevels.some(level => level.toLowerCase() === "all learners") && (!enrollment?.level || !allowedLevels.includes(enrollment.level))) throw new Error("This tutor is not configured for your current class level. Ask your school supervisor for guidance.");
+  return { student, tutor: tutorRow.tutor, subjectName: tutorRow.subjectName, classLevel: enrollment?.level ?? "All learners" };
+}
+
+export async function listStudentAiTutors(schoolId: number, userId: number) {
+  const db = await database();
+  const student = (await db.select().from(studentProfiles).where(and(eq(studentProfiles.schoolId, schoolId), eq(studentProfiles.userId, userId), eq(studentProfiles.status, "active"))).limit(1))[0];
+  if (!student) return { tutors: [], studentLinked: false };
+  const enrollment = (await db.select({ level: classes.level }).from(enrollments).innerJoin(classes, eq(enrollments.classId, classes.id)).where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.studentId, student.id), eq(enrollments.status, "active"))).orderBy(desc(enrollments.enrolledOn)).limit(1))[0];
+  const activeTutors = await db.select({ tutor: aiTutors, subjectName: subjects.name }).from(aiTutors).innerJoin(subjects, eq(aiTutors.subjectId, subjects.id)).where(and(eq(aiTutors.schoolId, schoolId), eq(aiTutors.status, "active"))).orderBy(subjects.name);
+  return { studentLinked: true, tutors: activeTutors.filter(item => { const levels = item.tutor.allowedLevels as string[]; return levels.some(level => level.toLowerCase() === "all learners") || (!!enrollment?.level && levels.includes(enrollment.level)); }).map(item => ({ id: item.tutor.id, name: item.tutor.name, subjectName: item.subjectName, curriculumScope: item.tutor.curriculumScope, allowedLevels: item.tutor.allowedLevels, classLevel: enrollment?.level ?? "All learners", dailyQuestionLimit: item.tutor.dailyQuestionLimit })) };
+}
+
+function tutorSessionDate() { return new Date(); }
+
+async function incrementTutorSession(schoolId: number, tutorId: number, studentId: number, kind: "question" | "escalation", dailyLimit?: number) {
+  const db = await database();
+  const sessionDate = tutorSessionDate();
+  const existing = (await db.select().from(aiTutorSessionSummaries).where(and(eq(aiTutorSessionSummaries.tutorId, tutorId), eq(aiTutorSessionSummaries.studentId, studentId), eq(aiTutorSessionSummaries.sessionDate, sessionDate))).limit(1))[0];
+  if (kind === "question" && dailyLimit && existing && existing.questionCount >= dailyLimit) throw new Error(`You have reached this tutor’s daily question limit of ${dailyLimit}. Please continue with your supervising teacher tomorrow.`);
+  if (existing) { await db.update(aiTutorSessionSummaries).set(kind === "question" ? { questionCount: existing.questionCount + 1 } : { escalationCount: existing.escalationCount + 1 }).where(eq(aiTutorSessionSummaries.id, existing.id)); return; }
+  await db.insert(aiTutorSessionSummaries).values({ schoolId, tutorId, studentId, sessionDate, questionCount: kind === "question" ? 1 : 0, escalationCount: kind === "escalation" ? 1 : 0 });
+}
+
+export async function askAiTutor(input: { schoolId: number; userId: number; tutorId: number; question: string }) {
+  const context = await currentStudentTutorContext(input.schoolId, input.userId, input.tutorId);
+  await incrementTutorSession(input.schoolId, input.tutorId, context.student.id, "question", context.tutor.dailyQuestionLimit);
+  const result = await generateSupervisedTutorResponse({ tutorName: context.tutor.name, subjectName: context.subjectName, curriculumScope: context.tutor.curriculumScope, allowedLevels: context.tutor.allowedLevels as string[], question: input.question });
+  if (result.needsTeacherSupport) { const reason = (result.escalationReason || "needs_teacher_review") as "safeguarding" | "out_of_scope" | "needs_teacher_review"; await incrementTutorSession(input.schoolId, input.tutorId, context.student.id, "escalation"); await (await database()).insert(aiTutorEscalations).values({ schoolId: input.schoolId, tutorId: input.tutorId, studentId: context.student.id, reason }); }
+  return { ...result, tutorName: context.tutor.name, conversationStored: false };
+}
+
+export async function requestAiTutorEscalation(input: { schoolId: number; userId: number; tutorId: number }) {
+  const context = await currentStudentTutorContext(input.schoolId, input.userId, input.tutorId);
+  await incrementTutorSession(input.schoolId, input.tutorId, context.student.id, "escalation");
+  await (await database()).insert(aiTutorEscalations).values({ schoolId: input.schoolId, tutorId: input.tutorId, studentId: context.student.id, reason: "learner_requested" });
+  return { requested: true, message: "Your request has been sent to the school’s supervising team. Your tutor conversation is not stored by NSOS." };
 }
 
 export async function saveMetaAdvertisingAccount(input: { schoolId: number; accountName: string; externalAccountId: string; accessToken?: string; clearAccessToken?: boolean; connectedBy: number }) {

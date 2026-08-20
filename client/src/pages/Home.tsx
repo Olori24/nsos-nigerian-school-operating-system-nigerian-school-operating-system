@@ -13,6 +13,8 @@ import { AcademicHistoryStation } from "@/components/AcademicHistoryStation";
 import { StaffAssignments } from "@/components/StaffAssignments";
 import { WebsiteStudio } from "@/components/WebsiteStudio";
 import { AdvertisingWorkspace } from "@/components/AdvertisingWorkspace";
+import { AiTutorWorkspace } from "@/components/AiTutorWorkspace";
+import { StudentAiTutorHub } from "@/components/StudentAiTutorHub";
 import { AdmissionTemplateCard, FeeScheduleTemplateCard } from "@/components/DocumentTemplateStudio";
 import { NsosCopilot } from "@/components/NsosCopilot";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
@@ -76,7 +78,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type View = "overview" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "portal" | "communications" | "reports" | "website" | "advertising" | "account";
+type View = "overview" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "account";
 type Role = "owner" | "admin" | "staff" | "teacher" | "finance" | "parent" | "student";
 
 const navGroups: { label: string; items: { id: View; label: string; icon: typeof LayoutDashboard; roles: Role[] }[] }[] = [
@@ -95,6 +97,7 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
       { id: "academics", label: "Academics", icon: BookOpenCheck, roles: ["owner", "admin", "teacher"] },
       { id: "attendance", label: "Attendance", icon: ClipboardCheck, roles: ["owner", "admin", "staff", "teacher"] },
       { id: "results", label: "Results", icon: GraduationCap, roles: ["owner", "admin", "teacher"] },
+      { id: "ai-tutors", label: "AI study tutors", icon: Sparkles, roles: ["owner", "admin", "student"] },
     ],
   },
   {
@@ -134,6 +137,7 @@ const viewTitles: Record<View, { eyebrow: string; title: string; description: st
   communications: { eyebrow: "School communication", title: "Speak once. Reach the right people.", description: "Announcements, noticeboard updates, and targeted communication history." },
   website: { eyebrow: "School website", title: "A public home for your school.", description: "Shape the school’s website, admissions entry point, and domain readiness from one controlled workspace." },
   advertising: { eyebrow: "Advertising", title: "Reach families with control.", description: "Prepare and approve school-owned Meta advertising campaigns with clear budgets and auditable safeguards." },
+  "ai-tutors": { eyebrow: "AI study tutors", title: "Subject help with human accountability.", description: "Configure supervised AI study support for approved subjects, or access an available tutor through a linked student account." },
   reports: { eyebrow: "Reporting", title: "Operational clarity for better decisions.", description: "A live term-level view of enrollment, attendance, fees, and results operations." },
   account: { eyebrow: "Account & security", title: "Your access, under your control.", description: "Review the devices signed in to your NSOS account and end sessions you no longer recognize." },
 };
@@ -471,6 +475,7 @@ function Workspace({ view, schoolId, schoolName, role, summary, applications, st
   if (view === "communications") return <><CommunicationsWithBulk schoolId={schoolId} announcements={announcements} onRefresh={onRefresh} /><MessageHistory schoolId={schoolId} /></>;
   if (view === "website") return <WebsiteStudio schoolId={schoolId} />;
   if (view === "advertising") return <AdvertisingWorkspace schoolId={schoolId} />;
+  if (view === "ai-tutors") return role === "student" ? <StudentAiTutorHub schoolId={schoolId} /> : <AiTutorWorkspace schoolId={schoolId} />;
   if (view === "portal") return <><FamilyPortalWithDetails schoolId={schoolId} role={role} guardian={guardianPortal} student={studentPortal} onRefresh={onRefresh} /><PortalResults data={role === "parent" ? guardianPortal.data : studentPortal.data} /></>;
   return <Reports schoolId={schoolId} summary={summary} applications={applications} finance={finance} attendance={attendance} />;
 }
