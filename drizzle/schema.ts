@@ -1081,6 +1081,20 @@ export const aiTutorFeedback = mysqlTable(
   table => ({ interactionUnique: uniqueIndex("aiTutorFeedback_interaction_unique").on(table.interactionId), schoolTutor: index("aiTutorFeedback_school_tutor_idx").on(table.schoolId, table.tutorId), studentTutor: index("aiTutorFeedback_student_tutor_idx").on(table.studentId, table.tutorId) }),
 );
 
+export const aiTutorTeachingPreferences = mysqlTable(
+  "aiTutorTeachingPreferences",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    tutorId: int("tutorId").notNull(),
+    studentId: int("studentId").notNull(),
+    adaptationEnabled: boolean("adaptationEnabled").notNull().default(true),
+    preferredStyle: mysqlEnum("preferredStyle", ["balanced", "step_by_step", "worked_examples", "concise_review"]).notNull().default("balanced"),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ studentTutor: uniqueIndex("aiTutorTeachingPreference_student_tutor_unique").on(table.studentId, table.tutorId), schoolTutor: index("aiTutorTeachingPreference_school_tutor_idx").on(table.schoolId, table.tutorId) }),
+);
+
 export const securityAuditEvents = mysqlTable(
   "securityAuditEvents",
   {

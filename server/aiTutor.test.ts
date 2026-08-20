@@ -21,4 +21,12 @@ describe("supervised AI tutor response boundaries", () => {
     expect(result.studySteps).toHaveLength(2);
     expect(invokeLLM).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-5-mini", outputSchema: expect.anything() }));
   });
+
+  it("uses a bounded teaching-format instruction without widening tutor input data", async () => {
+    invokeLLM.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ answer: "Work through one line at a time.", studySteps: ["Identify known values"], needsTeacherSupport: false, escalationReason: "" }) } }] });
+    await generateSupervisedTutorResponse({ tutorName: "Mathematics study guide", subjectName: "Mathematics", curriculumScope: "Algebraic expressions only", allowedLevels: ["JSS 2"], question: "Explain how to simplify this expression.", teachingStyle: "step_by_step" });
+    const request = invokeLLM.mock.calls[0]?.[0] as any;
+    expect(request.messages[1].content).toContain("Use numbered, small steps");
+    expect(request.messages[1].content).not.toContain("feedback comment");
+  });
 });

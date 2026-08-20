@@ -9,6 +9,7 @@ vi.mock("./db", () => ({
   askAiTutor: vi.fn(),
   requestAiTutorEscalation: vi.fn(),
   submitAiTutorFeedback: vi.fn(),
+  setAiTutorTeachingPreference: vi.fn(),
   consumeSharedRateLimit: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
 }));
@@ -70,5 +71,15 @@ describe("NSOS supervised AI tutor routes", () => {
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "ai_tutor_feedback_submitted", metadata: expect.objectContaining({ helpfulness: "helpful", commentStored: true, conversationStored: false }) }));
     const auditCall = vi.mocked(db.recordSecurityAuditEvent).mock.calls.at(-1)?.[0] as any;
     expect(auditCall.metadata).not.toHaveProperty("comment");
+  });
+
+  it("lets only a linked student enable or disable feedback-informed teaching format", async () => {
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("student") as any);
+    vi.mocked(db.setAiTutorTeachingPreference).mockResolvedValue({ adaptationEnabled: false, teachingStyle: "balanced" });
+    await expect(caller().nsos.aiTutors.setTeachingPreference({ schoolId: 4, tutorId: 12, adaptationEnabled: false })).resolves.toMatchObject({ adaptationEnabled: false, teachingStyle: "balanced" });
+    expect(db.setAiTutorTeachingPreference).toHaveBeenCalledWith({ schoolId: 4, tutorId: 12, adaptationEnabled: false, userId: 27 });
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "ai_tutor_teaching_preference_changed", metadata: expect.objectContaining({ feedbackCommentsUsed: false }) }));
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("teacher") as any);
+    await expect(caller().nsos.aiTutors.setTeachingPreference({ schoolId: 4, tutorId: 12, adaptationEnabled: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

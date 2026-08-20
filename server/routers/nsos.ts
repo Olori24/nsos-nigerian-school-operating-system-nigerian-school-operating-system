@@ -291,7 +291,7 @@ export const nsosRouter = router({
       const limit = await db.consumeSharedRateLimit({ namespace: "ai-tutor", route: "study-question", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
       if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Take a short break and try another tutor question in about ${limit.retryAfterSeconds} seconds.` });
       const result = await db.askAiTutor({ ...input, userId: ctx.user.id });
-      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_study_response", targetType: "ai_tutor", targetId: input.tutorId, metadata: { needsTeacherSupport: result.needsTeacherSupport, escalationReason: result.escalationReason, conversationStored: false } });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_study_response", targetType: "ai_tutor", targetId: input.tutorId, metadata: { needsTeacherSupport: result.needsTeacherSupport, escalationReason: result.escalationReason, adaptationEnabled: result.adaptationEnabled, teachingStyle: result.teachingStyle, conversationStored: false } });
       return result;
     }),
     requestTeacherSupport: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
@@ -304,6 +304,11 @@ export const nsosRouter = router({
       if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Please wait about ${limit.retryAfterSeconds} seconds before sharing more tutor feedback.` });
       const result = await db.submitAiTutorFeedback({ ...input, userId: ctx.user.id });
       await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_feedback_submitted", targetType: "ai_tutor_response", targetId: input.interactionKey, metadata: { helpfulness: input.helpfulness, commentStored: Boolean(input.comment?.trim()), conversationStored: false } });
+      return result;
+    }),
+    setTeachingPreference: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive(), adaptationEnabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+      const result = await db.setAiTutorTeachingPreference({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_teaching_preference_changed", targetType: "ai_tutor", targetId: input.tutorId, metadata: { adaptationEnabled: result.adaptationEnabled, teachingStyle: result.teachingStyle, feedbackCommentsUsed: false } });
       return result;
     }),
   }),

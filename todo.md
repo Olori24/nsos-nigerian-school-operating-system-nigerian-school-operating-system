@@ -136,3 +136,4 @@
 - [x] Add a review-first AI Meta ad-copy generator that produces editable, audience-aware campaign text without publishing ads or modifying budgets.
 - [x] Add supervised AI tutor roles for approved subjects, with school configuration, curriculum boundaries, learner disclosure, escalation to accountable staff, and no autonomous grading or high-stakes decisions.
 - [x] Add student AI tutor response feedback with helpfulness ratings, optional non-sensitive comments, one response-linked submission per learner, and tenant-scoped quality summaries for authorised school oversight.
+- [x] Add transparent feedback-informed AI tutor teaching preferences that adapt explanation format from each student’s prior ratings, remain student-controlled and reversible, and never use private feedback comments as prompt data.

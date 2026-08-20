@@ -10,6 +10,7 @@ import {
   aiTutorFeedback,
   aiTutorInteractions,
   aiTutorSessionSummaries,
+  aiTutorTeachingPreferences,
   aiTutors,
   admissionDocuments,
   admissionsApplications,
@@ -745,7 +746,38 @@ export async function listStudentAiTutors(schoolId: number, userId: number) {
   if (!student) return { tutors: [], studentLinked: false };
   const enrollment = (await db.select({ level: classes.level }).from(enrollments).innerJoin(classes, eq(enrollments.classId, classes.id)).where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.studentId, student.id), eq(enrollments.status, "active"))).orderBy(desc(enrollments.enrolledOn)).limit(1))[0];
   const activeTutors = await db.select({ tutor: aiTutors, subjectName: subjects.name }).from(aiTutors).innerJoin(subjects, eq(aiTutors.subjectId, subjects.id)).where(and(eq(aiTutors.schoolId, schoolId), eq(aiTutors.status, "active"))).orderBy(subjects.name);
-  return { studentLinked: true, tutors: activeTutors.filter(item => { const levels = item.tutor.allowedLevels as string[]; return levels.some(level => level.toLowerCase() === "all learners") || (!!enrollment?.level && levels.includes(enrollment.level)); }).map(item => ({ id: item.tutor.id, name: item.tutor.name, subjectName: item.subjectName, curriculumScope: item.tutor.curriculumScope, allowedLevels: item.tutor.allowedLevels, classLevel: enrollment?.level ?? "All learners", dailyQuestionLimit: item.tutor.dailyQuestionLimit })) };
+  const preferences = await db.select().from(aiTutorTeachingPreferences).where(and(eq(aiTutorTeachingPreferences.schoolId, schoolId), eq(aiTutorTeachingPreferences.studentId, student.id)));
+  const preferenceByTutor = new Map(preferences.map(item => [item.tutorId, item]));
+  const feedbackSummary = await db.select({ tutorId: aiTutorFeedback.tutorId, total: sql<number>`count(*)`, helpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'helpful' then 1 else 0 end)`, partlyHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'partly_helpful' then 1 else 0 end)`, notHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'not_helpful' then 1 else 0 end)` }).from(aiTutorFeedback).where(and(eq(aiTutorFeedback.schoolId, schoolId), eq(aiTutorFeedback.studentId, student.id))).groupBy(aiTutorFeedback.tutorId);
+  const feedbackByTutor = new Map(feedbackSummary.map(item => [item.tutorId, { total: Number(item.total), helpful: Number(item.helpful ?? 0), partlyHelpful: Number(item.partlyHelpful ?? 0), notHelpful: Number(item.notHelpful ?? 0) }]));
+  return { studentLinked: true, tutors: activeTutors.filter(item => { const levels = item.tutor.allowedLevels as string[]; return levels.some(level => level.toLowerCase() === "all learners") || (!!enrollment?.level && levels.includes(enrollment.level)); }).map(item => { const preference = preferenceByTutor.get(item.tutor.id); const derivedStyle = deriveTeachingStyle(feedbackByTutor.get(item.tutor.id)); return { id: item.tutor.id, name: item.tutor.name, subjectName: item.subjectName, curriculumScope: item.tutor.curriculumScope, allowedLevels: item.tutor.allowedLevels, classLevel: enrollment?.level ?? "All learners", dailyQuestionLimit: item.tutor.dailyQuestionLimit, adaptationEnabled: preference?.adaptationEnabled ?? true, teachingStyle: preference?.adaptationEnabled === false ? "balanced" : (preference?.preferredStyle ?? derivedStyle) }; }) };
+}
+
+type TeachingStyle = "balanced" | "step_by_step" | "worked_examples" | "concise_review";
+type RatingSummary = { total: number; helpful: number; partlyHelpful: number; notHelpful: number } | undefined;
+
+function deriveTeachingStyle(summary: RatingSummary): TeachingStyle {
+  if (!summary || summary.total < 3) return "balanced";
+  if (summary.notHelpful / summary.total >= 0.4) return "step_by_step";
+  if (summary.partlyHelpful / summary.total >= 0.4) return "worked_examples";
+  if (summary.helpful / summary.total >= 0.75) return "concise_review";
+  return "balanced";
+}
+
+async function getStudentTeachingPreference(schoolId: number, tutorId: number, studentId: number) {
+  const db = await database();
+  const preference = (await db.select().from(aiTutorTeachingPreferences).where(and(eq(aiTutorTeachingPreferences.schoolId, schoolId), eq(aiTutorTeachingPreferences.tutorId, tutorId), eq(aiTutorTeachingPreferences.studentId, studentId))).limit(1))[0];
+  if (preference?.adaptationEnabled === false) return { adaptationEnabled: false, teachingStyle: "balanced" as TeachingStyle };
+  const summary = (await db.select({ total: sql<number>`count(*)`, helpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'helpful' then 1 else 0 end)`, partlyHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'partly_helpful' then 1 else 0 end)`, notHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'not_helpful' then 1 else 0 end)` }).from(aiTutorFeedback).where(and(eq(aiTutorFeedback.schoolId, schoolId), eq(aiTutorFeedback.tutorId, tutorId), eq(aiTutorFeedback.studentId, studentId))))[0];
+  return { adaptationEnabled: true, teachingStyle: deriveTeachingStyle(summary ? { total: Number(summary.total), helpful: Number(summary.helpful ?? 0), partlyHelpful: Number(summary.partlyHelpful ?? 0), notHelpful: Number(summary.notHelpful ?? 0) } : undefined) };
+}
+
+export async function setAiTutorTeachingPreference(input: { schoolId: number; userId: number; tutorId: number; adaptationEnabled: boolean }) {
+  const context = await currentStudentTutorContext(input.schoolId, input.userId, input.tutorId);
+  const derived = await getStudentTeachingPreference(input.schoolId, input.tutorId, context.student.id);
+  const values = { schoolId: input.schoolId, tutorId: input.tutorId, studentId: context.student.id, adaptationEnabled: input.adaptationEnabled, preferredStyle: derived.teachingStyle };
+  await (await database()).insert(aiTutorTeachingPreferences).values(values).onDuplicateKeyUpdate({ set: { adaptationEnabled: input.adaptationEnabled, preferredStyle: derived.teachingStyle } });
+  return { adaptationEnabled: input.adaptationEnabled, teachingStyle: input.adaptationEnabled ? derived.teachingStyle : "balanced" as TeachingStyle };
 }
 
 function tutorSessionDate() { return new Date(); }
@@ -761,12 +793,13 @@ async function incrementTutorSession(schoolId: number, tutorId: number, studentI
 
 export async function askAiTutor(input: { schoolId: number; userId: number; tutorId: number; question: string }) {
   const context = await currentStudentTutorContext(input.schoolId, input.userId, input.tutorId);
+  const teachingPreference = await getStudentTeachingPreference(input.schoolId, input.tutorId, context.student.id);
   await incrementTutorSession(input.schoolId, input.tutorId, context.student.id, "question", context.tutor.dailyQuestionLimit);
-  const result = await generateSupervisedTutorResponse({ tutorName: context.tutor.name, subjectName: context.subjectName, curriculumScope: context.tutor.curriculumScope, allowedLevels: context.tutor.allowedLevels as string[], question: input.question });
+  const result = await generateSupervisedTutorResponse({ tutorName: context.tutor.name, subjectName: context.subjectName, curriculumScope: context.tutor.curriculumScope, allowedLevels: context.tutor.allowedLevels as string[], question: input.question, teachingStyle: teachingPreference.teachingStyle });
   if (result.needsTeacherSupport) { const reason = (result.escalationReason || "needs_teacher_review") as "safeguarding" | "out_of_scope" | "needs_teacher_review"; await incrementTutorSession(input.schoolId, input.tutorId, context.student.id, "escalation"); await (await database()).insert(aiTutorEscalations).values({ schoolId: input.schoolId, tutorId: input.tutorId, studentId: context.student.id, reason }); }
   const interactionKey = crypto.randomUUID();
   await (await database()).insert(aiTutorInteractions).values({ schoolId: input.schoolId, tutorId: input.tutorId, studentId: context.student.id, interactionKey });
-  return { ...result, tutorName: context.tutor.name, interactionKey, conversationStored: false };
+  return { ...result, tutorName: context.tutor.name, interactionKey, adaptationEnabled: teachingPreference.adaptationEnabled, teachingStyle: teachingPreference.teachingStyle, conversationStored: false };
 }
 
 const feedbackSensitivePattern = /\b(suicide|self[-\s]?harm|abuse|assault|pregnan|medical|medicine|drug|sex|nude|bully|threat|unsafe|hurt me)\b/i;
