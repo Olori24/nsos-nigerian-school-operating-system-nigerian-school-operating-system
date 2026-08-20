@@ -7,6 +7,8 @@ import {
   academicTerms,
   advertisingCampaigns,
   aiTutorEscalations,
+  aiTutorFeedback,
+  aiTutorInteractions,
   aiTutorSessionSummaries,
   aiTutors,
   admissionDocuments,
@@ -703,8 +705,10 @@ export async function getAiTutorWorkspace(schoolId: number) {
   const subjectList = await db.select().from(subjects).where(and(eq(subjects.schoolId, schoolId), eq(subjects.status, "active"))).orderBy(subjects.name);
   const supervisors = await db.select({ userId: schoolMemberships.userId, name: users.name, role: schoolMemberships.role }).from(schoolMemberships).innerJoin(users, eq(schoolMemberships.userId, users.id)).where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.status, "active"), or(eq(schoolMemberships.role, "owner"), eq(schoolMemberships.role, "admin"), eq(schoolMemberships.role, "teacher")))).orderBy(users.name);
   const openEscalations = await db.select({ tutorId: aiTutorEscalations.tutorId, count: sql<number>`count(*)` }).from(aiTutorEscalations).where(and(eq(aiTutorEscalations.schoolId, schoolId), eq(aiTutorEscalations.status, "open"))).groupBy(aiTutorEscalations.tutorId);
+  const feedbackSummaries = await db.select({ tutorId: aiTutorFeedback.tutorId, total: sql<number>`count(*)`, helpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'helpful' then 1 else 0 end)`, partlyHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'partly_helpful' then 1 else 0 end)`, notHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'not_helpful' then 1 else 0 end)` }).from(aiTutorFeedback).where(eq(aiTutorFeedback.schoolId, schoolId)).groupBy(aiTutorFeedback.tutorId);
   const escalationCounts = new Map(openEscalations.map(item => [item.tutorId, Number(item.count)]));
-  return { tutors: tutors.map(item => ({ ...item.tutor, subjectName: item.subjectName, subjectCode: item.subjectCode, supervisorName: item.supervisorName ?? "Assigned school supervisor", openEscalations: escalationCounts.get(item.tutor.id) ?? 0 })), subjects: subjectList, supervisors };
+  const feedbackByTutor = new Map(feedbackSummaries.map(item => [item.tutorId, { total: Number(item.total), helpful: Number(item.helpful ?? 0), partlyHelpful: Number(item.partlyHelpful ?? 0), notHelpful: Number(item.notHelpful ?? 0) }]));
+  return { tutors: tutors.map(item => ({ ...item.tutor, subjectName: item.subjectName, subjectCode: item.subjectCode, supervisorName: item.supervisorName ?? "Assigned school supervisor", openEscalations: escalationCounts.get(item.tutor.id) ?? 0, feedback: feedbackByTutor.get(item.tutor.id) ?? { total: 0, helpful: 0, partlyHelpful: 0, notHelpful: 0 } })), subjects: subjectList, supervisors };
 }
 
 export async function createAiTutor(input: { schoolId: number; subjectId: number; name: string; curriculumScope: string; allowedLevels: string[]; supervisorUserId: number; dailyQuestionLimit: number; createdBy: number }) {
@@ -760,7 +764,26 @@ export async function askAiTutor(input: { schoolId: number; userId: number; tuto
   await incrementTutorSession(input.schoolId, input.tutorId, context.student.id, "question", context.tutor.dailyQuestionLimit);
   const result = await generateSupervisedTutorResponse({ tutorName: context.tutor.name, subjectName: context.subjectName, curriculumScope: context.tutor.curriculumScope, allowedLevels: context.tutor.allowedLevels as string[], question: input.question });
   if (result.needsTeacherSupport) { const reason = (result.escalationReason || "needs_teacher_review") as "safeguarding" | "out_of_scope" | "needs_teacher_review"; await incrementTutorSession(input.schoolId, input.tutorId, context.student.id, "escalation"); await (await database()).insert(aiTutorEscalations).values({ schoolId: input.schoolId, tutorId: input.tutorId, studentId: context.student.id, reason }); }
-  return { ...result, tutorName: context.tutor.name, conversationStored: false };
+  const interactionKey = crypto.randomUUID();
+  await (await database()).insert(aiTutorInteractions).values({ schoolId: input.schoolId, tutorId: input.tutorId, studentId: context.student.id, interactionKey });
+  return { ...result, tutorName: context.tutor.name, interactionKey, conversationStored: false };
+}
+
+const feedbackSensitivePattern = /\b(suicide|self[-\s]?harm|abuse|assault|pregnan|medical|medicine|drug|sex|nude|bully|threat|unsafe|hurt me)\b/i;
+const feedbackContactPattern = /\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b|(?:\+?234|0)\d[\d\s-]{7,}/i;
+
+export async function submitAiTutorFeedback(input: { schoolId: number; userId: number; interactionKey: string; helpfulness: "helpful" | "partly_helpful" | "not_helpful"; comment?: string }) {
+  const db = await database();
+  const student = (await db.select().from(studentProfiles).where(and(eq(studentProfiles.schoolId, input.schoolId), eq(studentProfiles.userId, input.userId), eq(studentProfiles.status, "active"))).limit(1))[0];
+  if (!student) throw new Error("Your student profile is not linked to this school account.");
+  const interaction = (await db.select().from(aiTutorInteractions).where(and(eq(aiTutorInteractions.schoolId, input.schoolId), eq(aiTutorInteractions.studentId, student.id), eq(aiTutorInteractions.interactionKey, input.interactionKey))).limit(1))[0];
+  if (!interaction) throw new Error("This tutor response is unavailable for feedback. Refresh and try again.");
+  const existing = (await db.select({ id: aiTutorFeedback.id }).from(aiTutorFeedback).where(eq(aiTutorFeedback.interactionId, interaction.id)).limit(1))[0];
+  if (existing) throw new Error("You have already shared feedback for this tutor response.");
+  const comment = input.comment?.trim().slice(0, 500) || undefined;
+  if (comment && (feedbackSensitivePattern.test(comment) || feedbackContactPattern.test(comment))) throw new Error("Keep tutor feedback free of personal, contact, health, safety, or sensitive information. Speak to a trusted adult or school staff member directly for support.");
+  await db.insert(aiTutorFeedback).values({ schoolId: input.schoolId, tutorId: interaction.tutorId, studentId: student.id, interactionId: interaction.id, helpfulness: input.helpfulness, comment });
+  return { submitted: true, conversationStored: false };
 }
 
 export async function requestAiTutorEscalation(input: { schoolId: number; userId: number; tutorId: number }) {

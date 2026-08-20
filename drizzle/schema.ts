@@ -1053,6 +1053,34 @@ export const aiTutorEscalations = mysqlTable(
   table => ({ schoolStatus: index("aiTutorEscalation_school_status_idx").on(table.schoolId, table.status), tutorStudent: index("aiTutorEscalation_tutor_student_idx").on(table.tutorId, table.studentId) }),
 );
 
+export const aiTutorInteractions = mysqlTable(
+  "aiTutorInteractions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    tutorId: int("tutorId").notNull(),
+    studentId: int("studentId").notNull(),
+    interactionKey: varchar("interactionKey", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ interactionKeyUnique: uniqueIndex("aiTutorInteraction_key_unique").on(table.interactionKey), schoolTutor: index("aiTutorInteraction_school_tutor_idx").on(table.schoolId, table.tutorId), studentTutor: index("aiTutorInteraction_student_tutor_idx").on(table.studentId, table.tutorId) }),
+);
+
+export const aiTutorFeedback = mysqlTable(
+  "aiTutorFeedback",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    tutorId: int("tutorId").notNull(),
+    studentId: int("studentId").notNull(),
+    interactionId: int("interactionId").notNull(),
+    helpfulness: mysqlEnum("helpfulness", ["helpful", "partly_helpful", "not_helpful"]).notNull(),
+    comment: varchar("comment", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ interactionUnique: uniqueIndex("aiTutorFeedback_interaction_unique").on(table.interactionId), schoolTutor: index("aiTutorFeedback_school_tutor_idx").on(table.schoolId, table.tutorId), studentTutor: index("aiTutorFeedback_student_tutor_idx").on(table.studentId, table.tutorId) }),
+);
+
 export const securityAuditEvents = mysqlTable(
   "securityAuditEvents",
   {

@@ -183,6 +183,13 @@
       "when": 1787202910442,
       "tag": "0025_new_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1787203659486,
+      "tag": "0026_flawless_kid_colt",
+      "breakpoints": true
     }
   ]
 }

@@ -299,6 +299,13 @@ export const nsosRouter = router({
       await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_teacher_support_requested", targetType: "ai_tutor", targetId: input.tutorId, metadata: { conversationStored: false } });
       return result;
     }),
+    submitFeedback: aiTutorStudentProcedure.input(schoolInput.extend({ interactionKey: z.string().uuid(), helpfulness: z.enum(["helpful", "partly_helpful", "not_helpful"]), comment: z.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => {
+      const limit = await db.consumeSharedRateLimit({ namespace: "ai-tutor", route: "response-feedback", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 20, windowMs: 10 * 60_000 });
+      if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Please wait about ${limit.retryAfterSeconds} seconds before sharing more tutor feedback.` });
+      const result = await db.submitAiTutorFeedback({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_feedback_submitted", targetType: "ai_tutor_response", targetId: input.interactionKey, metadata: { helpfulness: input.helpfulness, commentStored: Boolean(input.comment?.trim()), conversationStored: false } });
+      return result;
+    }),
   }),
 
   security: router({

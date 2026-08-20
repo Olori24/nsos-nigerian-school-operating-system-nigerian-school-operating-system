@@ -8,6 +8,7 @@ vi.mock("./db", () => ({
   listStudentAiTutors: vi.fn(),
   askAiTutor: vi.fn(),
   requestAiTutorEscalation: vi.fn(),
+  submitAiTutorFeedback: vi.fn(),
   consumeSharedRateLimit: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
 }));
@@ -57,5 +58,17 @@ describe("NSOS supervised AI tutor routes", () => {
     vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("teacher") as any);
     await expect(caller().nsos.aiTutors.studentHub({ schoolId: 4 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(db.listStudentAiTutors).not.toHaveBeenCalled();
+  });
+
+  it("accepts one student feedback rating through the response reference without writing the optional comment to audit metadata", async () => {
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("student") as any);
+    vi.mocked(db.submitAiTutorFeedback).mockResolvedValue({ submitted: true, conversationStored: false });
+    const interactionKey = "c7b2a927-5a64-4a21-a021-e9944544e2b1";
+    await expect(caller().nsos.aiTutors.submitFeedback({ schoolId: 4, interactionKey, helpfulness: "helpful", comment: "The steps were clear." })).resolves.toMatchObject({ submitted: true, conversationStored: false });
+    expect(db.consumeSharedRateLimit).toHaveBeenCalledWith(expect.objectContaining({ namespace: "ai-tutor", route: "response-feedback", clientKey: "4:27" }));
+    expect(db.submitAiTutorFeedback).toHaveBeenCalledWith({ schoolId: 4, interactionKey, helpfulness: "helpful", comment: "The steps were clear.", userId: 27 });
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "ai_tutor_feedback_submitted", metadata: expect.objectContaining({ helpfulness: "helpful", commentStored: true, conversationStored: false }) }));
+    const auditCall = vi.mocked(db.recordSecurityAuditEvent).mock.calls.at(-1)?.[0] as any;
+    expect(auditCall.metadata).not.toHaveProperty("comment");
   });
 });
