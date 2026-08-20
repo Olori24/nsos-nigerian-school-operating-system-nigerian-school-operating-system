@@ -28,8 +28,11 @@ describe("tenant onboarding tracker wiring", () => {
     expect(tracker).toContain('data-onboarding-completion-celebration');
     expect(tracker).toContain('aria-label="Dismiss setup completion celebration"');
     expect(tracker).toContain("tenantOnboardingCelebrationStorageKey(schoolId)");
+    expect(tracker).toContain("const celebrationConfetti");
+    expect(tracker).toContain("data-confetti-piece={index + 1}");
     const styles = readFileSync(resolve(root, "client/src/index.css"), "utf8");
     expect(styles).toContain("@media (prefers-reduced-motion: no-preference)");
     expect(styles).toContain(".onboarding-completion-celebration");
+    expect(styles).toContain("onboarding-completion-confetti-fall");
   });
 });

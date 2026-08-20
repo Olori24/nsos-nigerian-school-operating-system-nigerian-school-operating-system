@@ -140,3 +140,4 @@
 - [x] Add teacher-scoped AI tutor adaptation analytics that explain aggregate teaching-style changes for authorised learners without exposing tutor conversations or private feedback notes.
 - [x] Add an accessible, role-safe tenant onboarding progress tracker that shows completion, the next setup action, and direct routes into essential school configuration tasks.
 - [x] Add a dismissible, reduced-motion-safe completion celebration for fully configured school tenants, with a school-scoped remembered dismissal.
+- [x] Enhance the completion celebration with lightweight visual confetti that stays still for users who prefer reduced motion.
