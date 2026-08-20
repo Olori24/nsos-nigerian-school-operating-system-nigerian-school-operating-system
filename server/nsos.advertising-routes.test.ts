@@ -9,6 +9,9 @@ vi.mock("./db", () => ({
   requestAdvertisingCampaignApproval: vi.fn(),
   approveAdvertisingCampaign: vi.fn(),
   preparePausedMetaCampaign: vi.fn(),
+  preparePausedMetaDelivery: vi.fn(),
+  setMetaAdvertisingAdStatus: vi.fn(),
+  syncMetaAdvertisingCampaign: vi.fn(),
   consumeSharedRateLimit: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
 }));
@@ -70,5 +73,29 @@ describe("NSOS advertising routes", () => {
     expect(db.preparePausedMetaCampaign).toHaveBeenCalledWith({ schoolId: 4, campaignId: 22, launchedBy: 15 });
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "advertising_meta_campaign_prepared_paused", metadata: expect.objectContaining({ activeAdvertCreated: false }) }));
     await expect(caller().nsos.advertising.preparePausedMetaCampaign({ schoolId: 4, campaignId: 22, confirmed: false as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("records paused delivery preparation separately from active-ad activation", async () => {
+    vi.mocked(db.preparePausedMetaDelivery).mockResolvedValue({ campaignId: 22, providerAdId: "meta-ad-22", status: "paused", message: "Paused Meta delivery assets are ready." });
+    await expect(caller().nsos.advertising.preparePausedMetaDelivery({ schoolId: 4, campaignId: 22, confirmed: true })).resolves.toMatchObject({ status: "paused" });
+    expect(db.preparePausedMetaDelivery).toHaveBeenCalledWith({ schoolId: 4, campaignId: 22, preparedBy: 15 });
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "advertising_meta_delivery_prepared_paused", metadata: expect.objectContaining({ activeAdvertCreated: false }) }));
+  });
+
+  it("requires confirmation before activating or pausing a spend-bearing Meta advert", async () => {
+    vi.mocked(db.setMetaAdvertisingAdStatus).mockResolvedValue({ campaignId: 22, status: "active", message: "Meta advert activated." });
+    await expect(caller().nsos.advertising.activateMetaAd({ schoolId: 4, campaignId: 22, confirmed: true })).resolves.toMatchObject({ status: "active" });
+    expect(db.setMetaAdvertisingAdStatus).toHaveBeenCalledWith({ schoolId: 4, campaignId: 22, status: "ACTIVE", changedBy: 15 });
+    await expect(caller().nsos.advertising.activateMetaAd({ schoolId: 4, campaignId: 22, confirmed: false as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    vi.mocked(db.setMetaAdvertisingAdStatus).mockResolvedValue({ campaignId: 22, status: "paused", message: "Meta advert paused." });
+    await expect(caller().nsos.advertising.pauseMetaAd({ schoolId: 4, campaignId: 22, confirmed: true })).resolves.toMatchObject({ status: "paused" });
+    expect(db.setMetaAdvertisingAdStatus).toHaveBeenLastCalledWith({ schoolId: 4, campaignId: 22, status: "PAUSED", changedBy: 15 });
+  });
+
+  it("keeps external Meta status synchronization tenant-scoped and non-spending", async () => {
+    vi.mocked(db.syncMetaAdvertisingCampaign).mockResolvedValue({ campaignId: 22, status: "active", providerStatus: "ACTIVE", syncedAt: new Date() });
+    await expect(caller().nsos.advertising.syncMetaCampaign({ schoolId: 4, campaignId: 22 })).resolves.toMatchObject({ providerStatus: "ACTIVE" });
+    expect(db.syncMetaAdvertisingCampaign).toHaveBeenCalledWith({ schoolId: 4, campaignId: 22 });
   });
 });

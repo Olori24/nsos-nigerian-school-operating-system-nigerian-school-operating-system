@@ -169,6 +169,13 @@
       "when": 1787192891138,
       "tag": "0023_fresh_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1787193690069,
+      "tag": "0024_ambiguous_zeigeist",
+      "breakpoints": true
     }
   ]
 }

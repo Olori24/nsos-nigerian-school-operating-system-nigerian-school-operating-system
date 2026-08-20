@@ -728,14 +728,14 @@ async function advertisingAccountForDraft(schoolId: number) {
   return account;
 }
 
-export async function createAdvertisingCampaign(input: { schoolId: number; name: string; objective: "lead_generation" | "website_visits" | "awareness"; destinationUrl?: string; primaryText: string; headline: string; callToAction: "learn_more" | "apply_now" | "contact_us"; audienceSummary: AdvertisingAudience; dailyBudget: number; totalBudget: number; startsAt?: string; endsAt?: string; createdBy: number }) {
+export async function createAdvertisingCampaign(input: { schoolId: number; name: string; objective: "lead_generation" | "website_visits" | "awareness"; destinationUrl?: string; facebookPageId?: string; creativeImageUrl?: string; primaryText: string; headline: string; callToAction: "learn_more" | "apply_now" | "contact_us"; audienceSummary: AdvertisingAudience; dailyBudget: number; totalBudget: number; startsAt?: string; endsAt?: string; createdBy: number }) {
   if (input.totalBudget < input.dailyBudget) throw new Error("The total budget must be at least the daily budget.");
   const startsAt = input.startsAt ? new Date(input.startsAt) : null;
   const endsAt = input.endsAt ? new Date(input.endsAt) : null;
   if (startsAt && endsAt && endsAt <= startsAt) throw new Error("The campaign end date must be after its start date.");
   const account = await advertisingAccountForDraft(input.schoolId);
   const db = await database();
-  const created = await db.insert(advertisingCampaigns).values({ schoolId: input.schoolId, advertisingAccountId: account.id, provider: "meta", name: input.name.trim(), objective: input.objective, destinationUrl: input.destinationUrl?.trim() || null, primaryText: input.primaryText.trim(), headline: input.headline.trim(), callToAction: input.callToAction, audienceSummary: { locations: input.audienceSummary.locations.map(location => location.trim()).filter(Boolean).slice(0, 12), ageMin: input.audienceSummary.ageMin, ageMax: input.audienceSummary.ageMax, note: input.audienceSummary.note?.trim().slice(0, 500) }, dailyBudget: String(input.dailyBudget), totalBudget: String(input.totalBudget), currency: account.currency, startsAt, endsAt, status: "draft", createdBy: input.createdBy });
+  const created = await db.insert(advertisingCampaigns).values({ schoolId: input.schoolId, advertisingAccountId: account.id, provider: "meta", name: input.name.trim(), objective: input.objective, destinationUrl: input.destinationUrl?.trim() || null, facebookPageId: input.facebookPageId?.trim() || null, creativeImageUrl: input.creativeImageUrl?.trim() || null, primaryText: input.primaryText.trim(), headline: input.headline.trim(), callToAction: input.callToAction, audienceSummary: { locations: input.audienceSummary.locations.map(location => location.trim()).filter(Boolean).slice(0, 12), ageMin: input.audienceSummary.ageMin, ageMax: input.audienceSummary.ageMax, note: input.audienceSummary.note?.trim().slice(0, 500) }, dailyBudget: String(input.dailyBudget), totalBudget: String(input.totalBudget), currency: account.currency, startsAt, endsAt, status: "draft", createdBy: input.createdBy });
   return { campaignId: Number(created[0].insertId), accountConnected: account.status === "connected" };
 }
 
@@ -791,6 +791,120 @@ export async function preparePausedMetaCampaign(input: { schoolId: number; campa
     const timedOut = error instanceof DOMException && error.name === "AbortError";
     await db.update(advertisingCampaigns).set({ status: "failed", lastProviderError: timedOut ? "Meta preparation request timed out." : "NSOS could not reach Meta for this preparation request." }).where(eq(advertisingCampaigns.id, campaign.id));
     throw new Error(timedOut ? "Meta did not respond within twelve seconds. No active advert was created." : "NSOS could not reach Meta. No active advert was created.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function metaAccountForCampaign(schoolId: number, campaign: typeof advertisingCampaigns.$inferSelect) {
+  const account = (await (await database()).select().from(schoolAdvertisingAccounts).where(and(eq(schoolAdvertisingAccounts.id, campaign.advertisingAccountId), eq(schoolAdvertisingAccounts.schoolId, schoolId), eq(schoolAdvertisingAccounts.status, "connected"))).limit(1))[0];
+  if (!account?.externalAccountId || !account.encryptedCredentials) throw new Error("Connect and verify the school’s Meta ad account before preparing delivery assets.");
+  const externalAccountId = account.externalAccountId;
+  const accessToken = openProviderCredentials(account.encryptedCredentials).apiKey;
+  if (!accessToken) throw new Error("The Meta access token is unavailable. Save the school account connection again.");
+  return { externalAccountId, accessToken };
+}
+
+async function postMetaForm(path: string, fields: Record<string, string>, accessToken: string, signal: AbortSignal) {
+  const response = await fetch(`https://graph.facebook.com/v26.0/${path}`, { method: "POST", signal, headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, body: new URLSearchParams({ ...fields, access_token: accessToken }) });
+  const payload = await response.json().catch(() => ({})) as { id?: string; success?: boolean; error?: { message?: string } };
+  if (!response.ok) throw new Error((payload.error?.message || `Meta request failed with HTTP ${response.status}.`).slice(0, 500));
+  return payload;
+}
+
+function metaCallToAction(value: "learn_more" | "apply_now" | "contact_us") {
+  return value === "apply_now" ? "APPLY_NOW" : value === "contact_us" ? "CONTACT_US" : "LEARN_MORE";
+}
+
+export async function preparePausedMetaDelivery(input: { schoolId: number; campaignId: number; preparedBy: number }) {
+  const campaign = await advertisingCampaignForSchool(input.schoolId, input.campaignId);
+  if (campaign.status !== "paused") throw new Error("Create the paused Meta campaign before preparing its delivery assets.");
+  if (!campaign.providerCampaignId) throw new Error("The Meta campaign identifier is missing. Create the paused Meta campaign again.");
+  if (!campaign.facebookPageId || !campaign.creativeImageUrl || !campaign.destinationUrl) throw new Error("Add the school Facebook Page ID, an HTTPS creative image URL, and a destination URL to this campaign before preparing delivery assets.");
+  if (!/^https:\/\//i.test(campaign.creativeImageUrl) || !/^https:\/\//i.test(campaign.destinationUrl)) throw new Error("Creative media and the destination URL must use HTTPS before Meta delivery assets are prepared.");
+  const { externalAccountId, accessToken } = await metaAccountForCampaign(input.schoolId, campaign);
+  const providerCampaignId = campaign.providerCampaignId;
+  const facebookPageId = campaign.facebookPageId;
+  const creativeImageUrl = campaign.creativeImageUrl;
+  const destinationUrl = campaign.destinationUrl;
+  const db = await database();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  await db.update(advertisingCampaigns).set({ status: "launching", lastProviderError: null }).where(and(eq(advertisingCampaigns.id, campaign.id), eq(advertisingCampaigns.status, "paused")));
+  try {
+    let adSetId = campaign.providerAdSetId;
+    if (!adSetId) {
+      const adSet = await postMetaForm(`${encodeURIComponent(externalAccountId)}/adsets`, { name: `${campaign.name} — audience`, campaign_id: providerCampaignId!, daily_budget: String(Math.round(Number(campaign.dailyBudget) * 100)), targeting: JSON.stringify({ geo_locations: { countries: ["NG"] }, age_min: (campaign.audienceSummary as AdvertisingAudience).ageMin ?? 18, age_max: (campaign.audienceSummary as AdvertisingAudience).ageMax ?? 65 }), status: "PAUSED" }, accessToken, controller.signal);
+      if (!adSet.id) throw new Error("Meta did not return an ad-set identifier.");
+      adSetId = adSet.id;
+      await db.update(advertisingCampaigns).set({ providerAdSetId: adSetId }).where(eq(advertisingCampaigns.id, campaign.id));
+    }
+    let creativeId = campaign.providerCreativeId;
+    if (!creativeId) {
+      const creative = await postMetaForm(`${encodeURIComponent(externalAccountId)}/adcreatives`, { name: `${campaign.name} — creative`, object_story_spec: JSON.stringify({ page_id: facebookPageId!, link_data: { message: campaign.primaryText, link: destinationUrl!, picture: creativeImageUrl!, name: campaign.headline, call_to_action: { type: metaCallToAction(campaign.callToAction) } } }) }, accessToken, controller.signal);
+      if (!creative.id) throw new Error("Meta did not return a creative identifier.");
+      creativeId = creative.id;
+      await db.update(advertisingCampaigns).set({ providerCreativeId: creativeId }).where(eq(advertisingCampaigns.id, campaign.id));
+    }
+    let adId = campaign.providerAdId;
+    if (!adId) {
+      const ad = await postMetaForm(`${encodeURIComponent(externalAccountId)}/ads`, { name: `${campaign.name} — ad`, adset_id: adSetId!, creative: JSON.stringify({ creative_id: creativeId! }), status: "PAUSED" }, accessToken, controller.signal);
+      if (!ad.id) throw new Error("Meta did not return an ad identifier.");
+      adId = ad.id;
+    }
+    const syncedAt = new Date();
+    await db.update(advertisingCampaigns).set({ status: "paused", providerAdSetId: adSetId, providerCreativeId: creativeId, providerAdId: adId, providerStatus: "PAUSED", lastSyncedAt: syncedAt, lastProviderError: null }).where(eq(advertisingCampaigns.id, campaign.id));
+    return { campaignId: campaign.id, providerAdId: adId, status: "paused" as const, message: "Paused Meta delivery assets are ready. The advert is inactive and cannot spend until an administrator confirms activation." };
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    const message = timedOut ? "Meta delivery preparation timed out." : error instanceof Error ? error.message.slice(0, 500) : "Meta delivery preparation failed.";
+    await db.update(advertisingCampaigns).set({ status: "failed", lastProviderError: message }).where(eq(advertisingCampaigns.id, campaign.id));
+    throw new Error(timedOut ? "Meta did not respond within fifteen seconds. No active advert was created." : "Meta could not prepare inactive delivery assets. Check the school Page, creative media, and ad-account permissions.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function setMetaAdvertisingAdStatus(input: { schoolId: number; campaignId: number; status: "ACTIVE" | "PAUSED"; changedBy: number }) {
+  const campaign = await advertisingCampaignForSchool(input.schoolId, input.campaignId);
+  if (!campaign.providerAdId) throw new Error("Prepare the paused Meta delivery assets before changing the advert status.");
+  if (input.status === "ACTIVE" && campaign.status !== "paused") throw new Error("Only a paused Meta advert can be activated.");
+  if (input.status === "PAUSED" && campaign.status !== "active") throw new Error("Only an active Meta advert can be paused.");
+  const { accessToken } = await metaAccountForCampaign(input.schoolId, campaign);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    await postMetaForm(encodeURIComponent(campaign.providerAdId), { status: input.status }, accessToken, controller.signal);
+    const nextStatus = input.status === "ACTIVE" ? "active" : "paused" as const;
+    const updatedAt = new Date();
+    await (await database()).update(advertisingCampaigns).set({ status: nextStatus, providerStatus: input.status, lastSyncedAt: updatedAt, lastProviderError: null }).where(eq(advertisingCampaigns.id, campaign.id));
+    return { campaignId: campaign.id, status: nextStatus, message: input.status === "ACTIVE" ? "Meta advert activated. The school’s connected Meta account can now begin delivery and incur spend under its approved budget." : "Meta advert paused. New delivery and spend are stopped at Meta." };
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    throw new Error(timedOut ? "Meta did not respond within twelve seconds. The advert status was not changed by NSOS." : "Meta could not update the advert status. Check Meta Ads Manager before retrying.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function syncMetaAdvertisingCampaign(input: { schoolId: number; campaignId: number }) {
+  const campaign = await advertisingCampaignForSchool(input.schoolId, input.campaignId);
+  if (!campaign.providerAdId) throw new Error("Prepare the Meta delivery assets before syncing their external status.");
+  const { accessToken } = await metaAccountForCampaign(input.schoolId, campaign);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(`https://graph.facebook.com/v26.0/${encodeURIComponent(campaign.providerAdId)}?fields=status,effective_status`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }, signal: controller.signal });
+    const payload = await response.json().catch(() => ({})) as { status?: string; effective_status?: string; error?: { message?: string } };
+    if (!response.ok) throw new Error(payload.error?.message || `Meta status sync failed with HTTP ${response.status}.`);
+    const providerStatus = payload.effective_status || payload.status || "UNKNOWN";
+    const status = providerStatus === "ACTIVE" ? "active" : providerStatus === "PAUSED" ? "paused" : campaign.status;
+    const syncedAt = new Date();
+    await (await database()).update(advertisingCampaigns).set({ status, providerStatus, lastSyncedAt: syncedAt, lastProviderError: null }).where(eq(advertisingCampaigns.id, campaign.id));
+    return { campaignId: campaign.id, status, providerStatus, syncedAt };
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    throw new Error(timedOut ? "Meta did not respond within eight seconds. No status was changed." : "NSOS could not sync this Meta advert. Check the school ad account and try again.");
   } finally {
     clearTimeout(timeout);
   }

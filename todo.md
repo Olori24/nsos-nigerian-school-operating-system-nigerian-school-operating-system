@@ -131,5 +131,5 @@
 - [x] Diagnose and restore the role-safe school website publishing flow, including actionable failure feedback for school administrators.
 - [x] Add a live, draft-aware website preview that reflects school branding, content, and admissions visibility before publication.
 - [x] Outline the matching live-preview website section when an administrator hovers over an editable studio field.
-- [ ] Add tenant-scoped social-media advertising integration so authorised school administrators can create, approve, launch, and track compliant campaigns from NSOS.
+- [x] Add tenant-scoped social-media advertising integration so authorised school administrators can create, approve, launch, and track compliant campaigns from NSOS.
 - [x] Implement the Meta-first Facebook and Instagram campaign workspace with school-owned account connections, draft-first spend approval, tenant-scoped audit logs, and extension points for TikTok and LinkedIn.

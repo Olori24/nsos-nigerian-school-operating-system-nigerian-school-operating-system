@@ -208,7 +208,7 @@ export const nsosRouter = router({
       return result;
     }),
     createCampaign: advertisingAdminProcedure
-      .input(schoolInput.extend({ name: z.string().trim().min(3).max(160), objective: z.enum(["lead_generation", "website_visits", "awareness"]), destinationUrl: z.string().trim().url().max(2048).optional(), primaryText: z.string().trim().min(5).max(5000), headline: z.string().trim().min(3).max(255), callToAction: z.enum(["learn_more", "apply_now", "contact_us"]), audienceSummary: z.object({ locations: z.array(z.string().trim().min(2).max(120)).min(1).max(12), ageMin: z.number().int().min(18).max(64).optional(), ageMax: z.number().int().min(18).max(65).optional(), note: z.string().trim().max(500).optional() }).refine(value => !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin, "Audience maximum age must not be lower than the minimum."), dailyBudget: z.number().positive().max(10_000_000), totalBudget: z.number().positive().max(100_000_000), startsAt: z.string().datetime().optional(), endsAt: z.string().datetime().optional() }))
+      .input(schoolInput.extend({ name: z.string().trim().min(3).max(160), objective: z.enum(["lead_generation", "website_visits", "awareness"]), destinationUrl: z.string().trim().url().max(2048).optional(), facebookPageId: z.string().trim().regex(/^\d{3,80}$/, "Enter the numeric Facebook Page ID.").optional(), creativeImageUrl: z.string().trim().url().max(2048).refine(value => new URL(value).protocol === "https:", "Use an HTTPS creative image URL.").optional(), primaryText: z.string().trim().min(5).max(5000), headline: z.string().trim().min(3).max(255), callToAction: z.enum(["learn_more", "apply_now", "contact_us"]), audienceSummary: z.object({ locations: z.array(z.string().trim().min(2).max(120)).min(1).max(12), ageMin: z.number().int().min(18).max(64).optional(), ageMax: z.number().int().min(18).max(65).optional(), note: z.string().trim().max(500).optional() }).refine(value => !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin, "Audience maximum age must not be lower than the minimum."), dailyBudget: z.number().positive().max(10_000_000), totalBudget: z.number().positive().max(100_000_000), startsAt: z.string().datetime().optional(), endsAt: z.string().datetime().optional() }))
       .mutation(async ({ ctx, input }) => {
         const limit = await db.consumeSharedRateLimit({ namespace: "advertising", route: "campaign-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 30, windowMs: 10 * 60_000 });
         if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `You have reached the campaign-draft limit. Try again in about ${limit.retryAfterSeconds} seconds.` });
@@ -229,6 +229,26 @@ export const nsosRouter = router({
     preparePausedMetaCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
       const result = await db.preparePausedMetaCampaign({ schoolId: input.schoolId, campaignId: input.campaignId, launchedBy: ctx.user.id });
       await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_campaign_prepared_paused", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, externalCampaignPrepared: true, activeAdvertCreated: false } });
+      return result;
+    }),
+    preparePausedMetaDelivery: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.preparePausedMetaDelivery({ schoolId: input.schoolId, campaignId: input.campaignId, preparedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_delivery_prepared_paused", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, externalAdPrepared: true, activeAdvertCreated: false } });
+      return result;
+    }),
+    activateMetaAd: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.setMetaAdvertisingAdStatus({ schoolId: input.schoolId, campaignId: input.campaignId, status: "ACTIVE", changedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_ad_activated", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, explicitConfirmation: true, spendMayBegin: true } });
+      return result;
+    }),
+    pauseMetaAd: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.setMetaAdvertisingAdStatus({ schoolId: input.schoolId, campaignId: input.campaignId, status: "PAUSED", changedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_ad_paused", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, explicitConfirmation: true, spendStopped: true } });
+      return result;
+    }),
+    syncMetaCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await db.syncMetaAdvertisingCampaign(input);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_ad_status_synced", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, providerStatus: result.providerStatus } });
       return result;
     }),
   }),

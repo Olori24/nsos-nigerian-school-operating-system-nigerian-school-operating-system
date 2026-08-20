@@ -8,6 +8,8 @@ Meta’s current ad-creation guidance confirms that creating a campaign requires
 
 Meta’s creative flow additionally requires an ad-creative name and an `object_story_spec`; the documented link-ad example includes the school’s Facebook Page ID, message, destination URL, image or video URL, and call to action. [5] The final ad requires an ad-set ID, creative ID, and status; `ACTIVE` launches the ad while `PAUSED` keeps it inactive. [6] Therefore, NSOS’s present approval step is deliberately non-spending: a complete direct-launch module must first collect a school page ID and verified media, construct the campaign/ad-set/creative/ad chain as paused assets, present a final spend confirmation, and only then set the final ad to active.
 
+NSOS now follows that sequence for the Meta-first workspace. It validates a tenant-owned Meta account, creates a paused campaign, then creates a paused ad set, creative, and ad when the administrator supplies a numeric Facebook Page ID, a public HTTPS creative-image URL, and a destination URL. The final `ACTIVE` request is isolated behind a separate confirmation dialog that states the campaign’s approved NGN daily and total budget. A corresponding pause action and an external-status sync endpoint keep the displayed state reconciled with Meta without exposing access tokens or provider identifiers outside the tenant-scoped service layer.
+
 ## References
 
 [1]: https://developers.facebook.com/documentation/ads-commerce/marketing-api "Meta Marketing API documentation"
