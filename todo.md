@@ -126,3 +126,4 @@
 - [x] Verify internal admissions and student forms pass active-school branding and submit-ready completion timestamps into their PDF previews.
 - [x] Add a persistent, accessible dark-mode toggle for biodata forms, including preview, validation, and recovery states.
 - [x] Add a consent-led AI document auto-fill workflow for resume and ID uploads that proposes biodata values for user review before applying them.
+- [x] Visually highlight biodata fields populated from user-approved AI suggestions, with accessible review wording and normal editing behavior.

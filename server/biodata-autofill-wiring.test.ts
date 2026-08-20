@@ -7,6 +7,7 @@ const publicAdmissions = readFileSync(resolve(projectRoot, "client/src/pages/Pub
 const home = readFileSync(resolve(projectRoot, "client/src/pages/Home.tsx"), "utf8");
 const app = readFileSync(resolve(projectRoot, "client/src/App.tsx"), "utf8");
 const autoFill = readFileSync(resolve(projectRoot, "client/src/components/BiodataDocumentAutofill.tsx"), "utf8");
+const aiCue = readFileSync(resolve(projectRoot, "client/src/components/AiAppliedFieldCue.tsx"), "utf8");
 const server = readFileSync(resolve(projectRoot, "server/_core/index.ts"), "utf8");
 
 describe("biodata document auto-fill integration wiring", () => {
@@ -14,6 +15,8 @@ describe("biodata document auto-fill integration wiring", () => {
     expect(publicAdmissions).toContain("BiodataDocumentAutofill");
     expect(autoFill).toContain("Apply selected suggestions");
     expect(publicAdmissions).toContain("onApply={values =>");
+    expect(publicAdmissions).toContain("setAiAppliedFields(suggestedFieldKeys(values))");
+    expect(publicAdmissions).toContain("AiAppliedFieldProvider");
     expect(publicAdmissions).toContain("submit.mutate({ shortCode, ...form");
   });
 
@@ -22,6 +25,9 @@ describe("biodata document auto-fill integration wiring", () => {
     expect(app).toContain("nsos:biodata-autofill-apply");
     expect(home).toContain('target: "admission"');
     expect(home).toContain('target: "student"');
+    expect(home).toContain("setAiAppliedFields(suggestedFieldKeys(values))");
+    expect(home).toContain("AiAppliedFieldProvider");
+    expect(aiCue).toContain("AI added — review");
     expect(home).toContain("setForm(current =>");
     expect(server).toContain('namespace: "biodata-document-extraction"');
     expect(server).toContain('limit: 8');
