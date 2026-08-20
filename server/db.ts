@@ -72,6 +72,7 @@ import { generateSupervisedTutorResponse } from "./aiTutor";
 import { generateReviewableAdCopy } from "./advertisingCopy";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
+import { deriveTenantOnboardingStatus } from "./tenantOnboarding";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -1416,6 +1417,34 @@ export async function getDashboardSummary(schoolId: number) {
     latestApplications,
     latestAnnouncements,
   };
+}
+
+export async function getTenantOnboardingStatus(schoolId: number) {
+  const db = await database();
+  const [school, sessionsCount, termsCount, classesCount, subjectsCount, staffCount, studentsCount, feeStructuresCount, website] = await Promise.all([
+    db.select({ name: schools.name, shortCode: schools.shortCode, state: schools.state }).from(schools).where(eq(schools.id, schoolId)).limit(1),
+    db.select({ value: sql<number>`count(*)` }).from(academicSessions).where(eq(academicSessions.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(academicTerms).where(eq(academicTerms.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(classes).where(eq(classes.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(subjects).where(eq(subjects.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.employmentStatus, "active"))),
+    db.select({ value: sql<number>`count(*)` }).from(studentProfiles).where(and(eq(studentProfiles.schoolId, schoolId), eq(studentProfiles.status, "active"))),
+    db.select({ value: sql<number>`count(*)` }).from(feeStructures).where(eq(feeStructures.schoolId, schoolId)),
+    db.select({ published: schoolWebsites.published }).from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1),
+  ]);
+  const profile = school[0];
+  if (!profile) throw new Error("School not found.");
+  return deriveTenantOnboardingStatus({
+    schoolProfileReady: Boolean(profile.name.trim() && profile.shortCode.trim() && profile.state?.trim()),
+    sessions: Number(sessionsCount[0]?.value ?? 0),
+    terms: Number(termsCount[0]?.value ?? 0),
+    classes: Number(classesCount[0]?.value ?? 0),
+    subjects: Number(subjectsCount[0]?.value ?? 0),
+    activeStaff: Number(staffCount[0]?.value ?? 0),
+    activeStudents: Number(studentsCount[0]?.value ?? 0),
+    feeStructures: Number(feeStructuresCount[0]?.value ?? 0),
+    websitePublished: Boolean(website[0]?.published),
+  });
 }
 
 export async function listApplications(schoolId: number, status?: "submitted" | "under_review" | "accepted" | "declined" | "enrolled") {

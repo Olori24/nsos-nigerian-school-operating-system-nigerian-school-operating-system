@@ -53,6 +53,12 @@ const providerAdminProcedure = protectedProcedure.input(schoolInput).use(async (
   return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
 });
 
+const onboardingAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "students.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can view tenant onboarding progress." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
 const advertisingAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
   const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
   if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can manage advertising accounts or approve campaign spend." });
@@ -326,6 +332,10 @@ export const nsosRouter = router({
 
   dashboard: router({
     summary: managementProcedure("students.read").query(({ input }) => db.getDashboardSummary(input.schoolId)),
+  }),
+
+  onboarding: router({
+    status: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getTenantOnboardingStatus(input.schoolId)),
   }),
 
   admissions: router({
