@@ -62,6 +62,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { invokeLLM } from "./_core/llm";
+import { generateReviewableAdCopy } from "./advertisingCopy";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
 
@@ -678,6 +679,12 @@ export async function getAdvertisingWorkspace(schoolId: number) {
       live: campaigns.filter(campaign => campaign.status === "active").length,
     },
   };
+}
+
+export async function generateAdvertisingCopySuggestions(input: { schoolId: number; objective: "lead_generation" | "website_visits" | "awareness"; audienceSummary: AdvertisingAudience; guidance?: string }) {
+  const school = (await (await database()).select({ name: schools.name }).from(schools).where(eq(schools.id, input.schoolId)).limit(1))[0];
+  if (!school) throw new Error("School workspace not found.");
+  return generateReviewableAdCopy({ schoolName: school.name, objective: input.objective, locations: input.audienceSummary.locations, ageMin: input.audienceSummary.ageMin, ageMax: input.audienceSummary.ageMax, audienceNote: input.audienceSummary.note, guidance: input.guidance });
 }
 
 export async function saveMetaAdvertisingAccount(input: { schoolId: number; accountName: string; externalAccountId: string; accessToken?: string; clearAccessToken?: boolean; connectedBy: number }) {

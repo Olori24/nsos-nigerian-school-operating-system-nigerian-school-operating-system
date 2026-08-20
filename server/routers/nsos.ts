@@ -193,6 +193,15 @@ export const nsosRouter = router({
 
   advertising: router({
     workspace: advertisingAdminProcedure.input(schoolInput).query(({ input }) => db.getAdvertisingWorkspace(input.schoolId)),
+    generateCopy: advertisingAdminProcedure
+      .input(schoolInput.extend({ objective: z.enum(["lead_generation", "website_visits", "awareness"]), audienceSummary: z.object({ locations: z.array(z.string().trim().min(2).max(120)).min(1).max(12), ageMin: z.number().int().min(18).max(64).optional(), ageMax: z.number().int().min(18).max(65).optional(), note: z.string().trim().max(500).optional() }).refine(value => !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin, "Audience maximum age must not be lower than the minimum."), guidance: z.string().trim().max(600).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const limit = await db.consumeSharedRateLimit({ namespace: "advertising", route: "copy-generate", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+        if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Try another AI copy suggestion in about ${limit.retryAfterSeconds} seconds.` });
+        const result = await db.generateAdvertisingCopySuggestions(input);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_ai_copy_generated", targetType: "advertising_campaign_draft", metadata: { objective: input.objective, locationCount: input.audienceSummary.locations.length, suggestionCount: result.suggestions.length, requiresReview: result.requiresReview, publishingAction: result.publishingAction } });
+        return result;
+      }),
     saveMetaAccount: advertisingAdminProcedure
       .input(schoolInput.extend({ accountName: z.string().trim().min(2).max(160), externalAccountId: z.string().trim().min(3).max(100), accessToken: z.string().trim().min(20).max(2000).optional(), clearAccessToken: z.boolean().optional() }))
       .mutation(async ({ ctx, input }) => {

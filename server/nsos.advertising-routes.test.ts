@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./db", () => ({
   getSchoolMembership: vi.fn(),
   getAdvertisingWorkspace: vi.fn(),
+  generateAdvertisingCopySuggestions: vi.fn(),
   saveMetaAdvertisingAccount: vi.fn(),
   testMetaAdvertisingAccount: vi.fn(),
   createAdvertisingCampaign: vi.fn(),
@@ -38,6 +39,14 @@ describe("NSOS advertising routes", () => {
     vi.mocked(db.getAdvertisingWorkspace).mockResolvedValue({ account: { status: "not_connected" }, campaigns: [], summary: { draft: 0, awaitingApproval: 0, approved: 0, live: 0 } } as any);
     await expect(caller().nsos.advertising.workspace({ schoolId: 4 })).resolves.toMatchObject({ summary: { draft: 0 } });
     expect(db.getAdvertisingWorkspace).toHaveBeenCalledWith(4);
+  });
+
+  it("returns review-only AI copy suggestions from the current school context", async () => {
+    vi.mocked(db.generateAdvertisingCopySuggestions).mockResolvedValue({ suggestions: [{ primaryText: "Explore our school.", headline: "Admissions enquiry", callToAction: "learn_more", reviewNote: "Confirm all details before use." }, { primaryText: "Plan a visit.", headline: "Connect with us", callToAction: "contact_us", reviewNote: "Confirm all details before use." }, { primaryText: "Learn more today.", headline: "School information", callToAction: "learn_more", reviewNote: "Confirm all details before use." }], requiresReview: true, publishingAction: "none" });
+    await expect(caller().nsos.advertising.generateCopy({ schoolId: 4, objective: "lead_generation", audienceSummary: { locations: ["Abeokuta"] }, guidance: "Use a welcoming tone." })).resolves.toMatchObject({ requiresReview: true, publishingAction: "none" });
+    expect(db.consumeSharedRateLimit).toHaveBeenCalledWith(expect.objectContaining({ route: "copy-generate", clientKey: "4:15" }));
+    expect(db.generateAdvertisingCopySuggestions).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 4, objective: "lead_generation", guidance: "Use a welcoming tone." }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "advertising_ai_copy_generated", metadata: expect.objectContaining({ requiresReview: true, publishingAction: "none" }) }));
   });
 
   it("sends a Meta token only to the server-side encrypted-account service and records no token in the audit call", async () => {

@@ -133,3 +133,4 @@
 - [x] Outline the matching live-preview website section when an administrator hovers over an editable studio field.
 - [x] Add tenant-scoped social-media advertising integration so authorised school administrators can create, approve, launch, and track compliant campaigns from NSOS.
 - [x] Implement the Meta-first Facebook and Instagram campaign workspace with school-owned account connections, draft-first spend approval, tenant-scoped audit logs, and extension points for TikTok and LinkedIn.
+- [x] Add a review-first AI Meta ad-copy generator that produces editable, audience-aware campaign text without publishing ads or modifying budgets.
