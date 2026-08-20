@@ -71,6 +71,12 @@ const aiTutorStudentProcedure = protectedProcedure.input(schoolInput).use(async 
   return next({ ctx: { ...ctx, schoolRole: "student" as const } });
 });
 
+const aiTutorTeacherProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "academics.read");
+  if (membership.role !== "teacher") throw new TRPCError({ code: "FORBIDDEN", message: "AI tutor adaptation analytics are available only to active teacher accounts." });
+  return next({ ctx: { ...ctx, schoolRole: "teacher" as const } });
+});
+
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
 const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
 const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
@@ -287,6 +293,7 @@ export const nsosRouter = router({
       return result;
     }),
     studentHub: aiTutorStudentProcedure.input(schoolInput).query(({ ctx, input }) => db.listStudentAiTutors(input.schoolId, ctx.user.id)),
+    teacherAnalytics: aiTutorTeacherProcedure.input(schoolInput).query(({ ctx, input }) => db.getTeacherAiTutorAnalytics(input.schoolId, ctx.user.id)),
     ask: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive(), question: z.string().trim().min(3).max(1800) })).mutation(async ({ ctx, input }) => {
       const limit = await db.consumeSharedRateLimit({ namespace: "ai-tutor", route: "study-question", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
       if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Take a short break and try another tutor question in about ${limit.retryAfterSeconds} seconds.` });

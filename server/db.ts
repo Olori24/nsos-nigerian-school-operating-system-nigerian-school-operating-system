@@ -712,6 +712,54 @@ export async function getAiTutorWorkspace(schoolId: number) {
   return { tutors: tutors.map(item => ({ ...item.tutor, subjectName: item.subjectName, subjectCode: item.subjectCode, supervisorName: item.supervisorName ?? "Assigned school supervisor", openEscalations: escalationCounts.get(item.tutor.id) ?? 0, feedback: feedbackByTutor.get(item.tutor.id) ?? { total: 0, helpful: 0, partlyHelpful: 0, notHelpful: 0 } })), subjects: subjectList, supervisors };
 }
 
+export async function getTeacherAiTutorAnalytics(schoolId: number, userId: number) {
+  const db = await database();
+  const staff = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.userId, userId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+  if (!staff) return { linkedTeacher: false, assignments: [], summary: { activeTutors: 0, eligibleLearners: 0, adaptationEnabled: 0, feedbackSignals: 0, styles: emptyTeachingStyleCounts() }, tutorClasses: [], learners: [] };
+  const assignments = await db.select({ classId: classSubjects.classId, subjectId: classSubjects.subjectId, className: classes.name, classLevel: classes.level, subjectName: subjects.name, subjectCode: subjects.code }).from(classSubjects).innerJoin(classes, eq(classSubjects.classId, classes.id)).innerJoin(subjects, eq(classSubjects.subjectId, subjects.id)).where(and(eq(classSubjects.schoolId, schoolId), eq(classSubjects.teacherId, staff.id), eq(classes.status, "active"), eq(subjects.status, "active")));
+  if (!assignments.length) return { linkedTeacher: true, assignments: [], summary: { activeTutors: 0, eligibleLearners: 0, adaptationEnabled: 0, feedbackSignals: 0, styles: emptyTeachingStyleCounts() }, tutorClasses: [], learners: [] };
+  const assignmentByClassSubject = new Map(assignments.map(item => [`${item.classId}:${item.subjectId}`, item]));
+  const assignedClassIds = new Set(assignments.map(item => item.classId));
+  const assignedSubjectIds = new Set(assignments.map(item => item.subjectId));
+  const [tutors, enrolled, preferences, feedback] = await Promise.all([
+    db.select({ tutor: aiTutors, subjectName: subjects.name }).from(aiTutors).innerJoin(subjects, eq(aiTutors.subjectId, subjects.id)).where(and(eq(aiTutors.schoolId, schoolId), eq(aiTutors.status, "active"))),
+    db.select({ studentId: studentProfiles.id, firstName: studentProfiles.firstName, lastName: studentProfiles.lastName, admissionNo: studentProfiles.admissionNo, classId: enrollments.classId }).from(enrollments).innerJoin(studentProfiles, eq(enrollments.studentId, studentProfiles.id)).where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.status, "active"), eq(studentProfiles.status, "active"))),
+    db.select().from(aiTutorTeachingPreferences).where(eq(aiTutorTeachingPreferences.schoolId, schoolId)),
+    db.select({ tutorId: aiTutorFeedback.tutorId, studentId: aiTutorFeedback.studentId, total: sql<number>`count(*)`, helpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'helpful' then 1 else 0 end)`, partlyHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'partly_helpful' then 1 else 0 end)`, notHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'not_helpful' then 1 else 0 end)` }).from(aiTutorFeedback).where(eq(aiTutorFeedback.schoolId, schoolId)).groupBy(aiTutorFeedback.tutorId, aiTutorFeedback.studentId),
+  ]);
+  const eligibleTutors = tutors.filter(item => assignedSubjectIds.has(item.tutor.subjectId));
+  const learnerRows = enrolled.filter(student => assignedClassIds.has(student.classId));
+  const preferenceByStudentTutor = new Map(preferences.map(item => [`${item.studentId}:${item.tutorId}`, item]));
+  const feedbackByStudentTutor = new Map(feedback.map(item => [`${item.studentId}:${item.tutorId}`, { total: Number(item.total), helpful: Number(item.helpful ?? 0), partlyHelpful: Number(item.partlyHelpful ?? 0), notHelpful: Number(item.notHelpful ?? 0) }]));
+  const learners: Array<{ studentId: number; learnerName: string; admissionNo: string; className: string; tutorId: number; tutorName: string; subjectName: string; adaptationEnabled: boolean; teachingStyle: TeachingStyle; feedbackSignals: number }> = [];
+  for (const learner of learnerRows) for (const tutor of eligibleTutors) {
+    const assignment = assignmentByClassSubject.get(`${learner.classId}:${tutor.tutor.subjectId}`);
+    if (!assignment) continue;
+    const levels = tutor.tutor.allowedLevels as string[];
+    if (!levels.some(level => level.toLowerCase() === "all learners") && (!assignment.classLevel || !levels.includes(assignment.classLevel))) continue;
+    const preference = preferenceByStudentTutor.get(`${learner.studentId}:${tutor.tutor.id}`);
+    const ratingSummary = feedbackByStudentTutor.get(`${learner.studentId}:${tutor.tutor.id}`);
+    learners.push({ studentId: learner.studentId, learnerName: `${learner.firstName} ${learner.lastName}`.trim(), admissionNo: learner.admissionNo, className: assignment.className, tutorId: tutor.tutor.id, tutorName: tutor.tutor.name, subjectName: tutor.subjectName, adaptationEnabled: preference?.adaptationEnabled ?? true, teachingStyle: preference?.adaptationEnabled === false ? "balanced" : deriveTeachingStyle(ratingSummary), feedbackSignals: ratingSummary?.total ?? 0 });
+  }
+  const styles = emptyTeachingStyleCounts();
+  for (const learner of learners) styles[learner.teachingStyle] += 1;
+  const tutorClasses = assignments.flatMap(assignment => {
+    const matchingTutors = eligibleTutors.filter(tutor => {
+      const levels = tutor.tutor.allowedLevels as string[];
+      return tutor.tutor.subjectId === assignment.subjectId && (levels.some(level => level.toLowerCase() === "all learners") || (!!assignment.classLevel && levels.includes(assignment.classLevel)));
+    });
+    return matchingTutors.map(tutor => {
+      const rows = learners.filter(learner => learner.tutorId === tutor.tutor.id && learner.className === assignment.className);
+      const styleCounts = emptyTeachingStyleCounts();
+      rows.forEach(row => { styleCounts[row.teachingStyle] += 1; });
+      return { tutorId: tutor.tutor.id, tutorName: tutor.tutor.name, subjectName: tutor.subjectName, className: assignment.className, learners: rows.length, adaptationEnabled: rows.filter(row => row.adaptationEnabled).length, feedbackSignals: rows.reduce((sum, row) => sum + row.feedbackSignals, 0), styles: styleCounts };
+    });
+  });
+  return { linkedTeacher: true, assignments: assignments.map(item => ({ className: item.className, subjectName: item.subjectName, subjectCode: item.subjectCode })), summary: { activeTutors: new Set(learners.map(item => item.tutorId)).size, eligibleLearners: new Set(learners.map(item => item.studentId)).size, adaptationEnabled: learners.filter(item => item.adaptationEnabled).length, feedbackSignals: learners.reduce((sum, item) => sum + item.feedbackSignals, 0), styles }, tutorClasses, learners: learners.sort((a, b) => a.className.localeCompare(b.className) || a.learnerName.localeCompare(b.learnerName) || a.subjectName.localeCompare(b.subjectName)) };
+}
+
+function emptyTeachingStyleCounts(): Record<TeachingStyle, number> { return { balanced: 0, step_by_step: 0, worked_examples: 0, concise_review: 0 }; }
+
 export async function createAiTutor(input: { schoolId: number; subjectId: number; name: string; curriculumScope: string; allowedLevels: string[]; supervisorUserId: number; dailyQuestionLimit: number; createdBy: number }) {
   const db = await database();
   const subject = (await db.select().from(subjects).where(and(eq(subjects.id, input.subjectId), eq(subjects.schoolId, input.schoolId), eq(subjects.status, "active"))).limit(1))[0];

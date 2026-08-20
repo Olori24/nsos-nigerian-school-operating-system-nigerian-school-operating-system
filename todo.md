@@ -137,3 +137,4 @@
 - [x] Add supervised AI tutor roles for approved subjects, with school configuration, curriculum boundaries, learner disclosure, escalation to accountable staff, and no autonomous grading or high-stakes decisions.
 - [x] Add student AI tutor response feedback with helpfulness ratings, optional non-sensitive comments, one response-linked submission per learner, and tenant-scoped quality summaries for authorised school oversight.
 - [x] Add transparent feedback-informed AI tutor teaching preferences that adapt explanation format from each student’s prior ratings, remain student-controlled and reversible, and never use private feedback comments as prompt data.
+- [x] Add teacher-scoped AI tutor adaptation analytics that explain aggregate teaching-style changes for authorised learners without exposing tutor conversations or private feedback notes.

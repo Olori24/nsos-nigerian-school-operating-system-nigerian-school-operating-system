@@ -10,6 +10,7 @@ vi.mock("./db", () => ({
   requestAiTutorEscalation: vi.fn(),
   submitAiTutorFeedback: vi.fn(),
   setAiTutorTeachingPreference: vi.fn(),
+  getTeacherAiTutorAnalytics: vi.fn(),
   consumeSharedRateLimit: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
 }));
@@ -81,5 +82,14 @@ describe("NSOS supervised AI tutor routes", () => {
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "ai_tutor_teaching_preference_changed", metadata: expect.objectContaining({ feedbackCommentsUsed: false }) }));
     vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("teacher") as any);
     await expect(caller().nsos.aiTutors.setTeachingPreference({ schoolId: 4, tutorId: 12, adaptationEnabled: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("allows tutor adaptation analytics only to a teacher account", async () => {
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("teacher") as any);
+    vi.mocked(db.getTeacherAiTutorAnalytics).mockResolvedValue({ linkedTeacher: true, assignments: [], summary: {}, tutorClasses: [], learners: [] } as any);
+    await expect(caller().nsos.aiTutors.teacherAnalytics({ schoolId: 4 })).resolves.toMatchObject({ linkedTeacher: true });
+    expect(db.getTeacherAiTutorAnalytics).toHaveBeenCalledWith(4, 27);
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("admin") as any);
+    await expect(caller().nsos.aiTutors.teacherAnalytics({ schoolId: 4 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
