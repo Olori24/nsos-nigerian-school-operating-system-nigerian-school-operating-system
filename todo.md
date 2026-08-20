@@ -127,3 +127,5 @@
 - [x] Add a persistent, accessible dark-mode toggle for biodata forms, including preview, validation, and recovery states.
 - [x] Add a consent-led AI document auto-fill workflow for resume and ID uploads that proposes biodata values for user review before applying them.
 - [x] Visually highlight biodata fields populated from user-approved AI suggestions, with accessible review wording and normal editing behavior.
+- [x] Refine dark-mode contrast, theming scope, and control behavior based on school feedback.
+- [x] Diagnose and restore the role-safe school website publishing flow, including actionable failure feedback for school administrators.

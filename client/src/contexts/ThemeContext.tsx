@@ -30,13 +30,6 @@ export function ThemeProvider({
   });
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-
     if (switchable) {
       try { localStorage.setItem(NSOS_THEME_STORAGE_KEY, theme); } catch { /* preference storage unavailable */ }
     }
@@ -50,7 +43,7 @@ export function ThemeProvider({
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, switchable }}>
-      {children}
+      <div className={`nsos-theme-scope ${theme === "dark" ? "dark" : ""}`}>{children}</div>
     </ThemeContext.Provider>
   );
 }

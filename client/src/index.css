@@ -46,6 +46,7 @@ button, input, select, textarea { font: inherit; }
 .noise { position: relative; }
 .noise::after { content: ""; position: absolute; inset: 0; opacity: 0.13; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.38'/%3E%3C/svg%3E"); }
 
+.nsos-theme-scope { min-height: 100vh; background: var(--background); color: var(--foreground); }
 .dark {
   --background: #0d1512;
   --foreground: #edf5ef;
@@ -81,6 +82,15 @@ button, input, select, textarea { font: inherit; }
 .dark .biodata-clear-confirmation { background: #241c1b !important; border-color: #634946 !important; color: #f5e9e7 !important; }
 .dark .biodata-clear-confirmation .text-\[\#542c28\] { color: #ffd5cf !important; }
 .dark .biodata-clear-confirmation .text-\[\#735d59\] { color: #dec2bd !important; }
+.dark .school-website-studio .bg-\[\#f8faf7\], .dark .school-website-studio .bg-\[\#f1f4f0\], .dark .school-website-studio .bg-\[\#edf3ed\], .dark .school-website-studio .bg-\[\#f6faf6\] { background-color: #1d2b24 !important; }
+.dark .school-website-studio .text-\[\#2d4439\], .dark .school-website-studio .text-\[\#37564b\], .dark .school-website-studio .text-\[\#406056\], .dark .school-website-studio .text-\[\#536159\] { color: #e5f1e9 !important; }
+.dark .school-website-studio .text-\[\#758079\], .dark .school-website-studio .text-\[\#7a847e\] { color: #b8c8bf !important; }
+.dark .school-website-studio .border-\[\#e0e5df\], .dark .school-website-studio .border-\[\#dfe5df\], .dark .school-website-studio .border-\[\#d8e2d9\] { border-color: #40574c !important; }
+.dark .school-public-site { background: #0e1713 !important; color: #eef6f0 !important; }
+.dark .school-public-site .bg-white { background-color: #18251f !important; }
+.dark .school-public-site .text-\[\#152b23\], .dark .school-public-site .text-\[\#1c3028\], .dark .school-public-site .text-\[\#31463d\] { color: #edf5ef !important; }
+.dark .school-public-site .text-\[\#617069\], .dark .school-public-site .text-\[\#65736b\], .dark .school-public-site .text-\[\#758079\], .dark .school-public-site .text-\[\#7a847e\] { color: #bccbc2 !important; }
+.dark .school-public-site .border-\[\#e0e5df\] { border-color: #3d5147 !important; }
 
 @media (prefers-reduced-motion: no-preference) {
   .soft-enter { animation: soft-enter 360ms cubic-bezier(0.23, 1, 0.32, 1) both; }
