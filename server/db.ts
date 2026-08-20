@@ -1,5 +1,6 @@
 import { and, desc, eq, gt, isNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { createPool, type Pool } from "mysql2";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import {
@@ -75,9 +76,29 @@ import { storagePut } from "./storage";
 import { deriveTenantOnboardingStatus } from "./tenantOnboarding";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: Pool | null = null;
+
+export const DB_POOL_CONNECTION_LIMIT = 5;
+export const DB_POOL_QUEUE_LIMIT = 20;
+
+export function databasePoolOptions(uri: string) {
+  return {
+    uri,
+    connectionLimit: DB_POOL_CONNECTION_LIMIT,
+    maxIdle: DB_POOL_CONNECTION_LIMIT,
+    idleTimeout: 60_000,
+    waitForConnections: true,
+    queueLimit: DB_POOL_QUEUE_LIMIT,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+  };
+}
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) _db = drizzle(process.env.DATABASE_URL);
+  if (!_db && process.env.DATABASE_URL) {
+    _pool ??= createPool(databasePoolOptions(process.env.DATABASE_URL));
+    _db = drizzle({ client: _pool });
+  }
   return _db;
 }
 

@@ -271,6 +271,7 @@ const normalizeResponseFormat = ({
 const RETRY_MAX_RETRIES = 4;
 const RETRY_BASE_DELAY_MS = 500;
 const RETRY_MAX_DELAY_MS = 30_000;
+export const LLM_REQUEST_TIMEOUT_MS = 30_000;
 
 type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
 
@@ -307,7 +308,11 @@ const fetchWithBackoff = async (
 
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, init);
+      const deadline = AbortSignal.timeout(LLM_REQUEST_TIMEOUT_MS);
+      const signal = init.signal
+        ? AbortSignal.any([init.signal, deadline])
+        : deadline;
+      const response = await fetch(url, { ...init, signal });
       if (response.ok || attempt === RETRY_MAX_RETRIES) {
         return response;
       }

@@ -152,6 +152,7 @@ describe("external authentication policy", () => {
       expect(response.status).toBe(202);
       expect(response.body).toContain("sign-in links");
       expect(providerFetch).toHaveBeenCalledTimes(1);
+      expect((providerFetch.mock.calls[0]?.[1] as RequestInit).signal).toBeTruthy();
     });
   });
 
@@ -162,6 +163,28 @@ describe("external authentication policy", () => {
       const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos-system-uhkdscaf.manus.space", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos-system-uhkdscaf.manus.space" }) });
       expect(response.status).toBe(503);
       expect(response.body).toContain("could not send");
+    });
+  });
+
+  it("fails closed when the passwordless-email provider times out", async () => {
+    vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("a".repeat(43));
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("provider deadline exceeded", "TimeoutError")));
+    await withAuthRouteServer(async origin => {
+      const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos-system-uhkdscaf.manus.space", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos-system-uhkdscaf.manus.space" }) });
+      expect(response.status).toBe(503);
+      expect(response.body).toContain("could not send");
+    });
+  });
+
+  it("fails closed when the Google token provider times out", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("provider deadline exceeded", "TimeoutError")));
+    const createSession = vi.spyOn(database, "createUserSession");
+    await withAuthRouteServer(async origin => {
+      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos-system-uhkdscaf.manus.space")}`);
+      const state = getGoogleState(start.headers["set-cookie"]);
+      const callback = await requestRoute(`${origin}/api/auth/google/callback?code=slow-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
+      expect(callback.status).toBe(502);
+      expect(createSession).not.toHaveBeenCalled();
     });
   });
 

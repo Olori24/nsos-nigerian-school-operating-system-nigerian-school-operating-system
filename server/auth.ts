@@ -11,6 +11,7 @@ const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
 const STATE_TTL_MS = 10 * 60_000;
 const MAGIC_LINK_TTL_LABEL = "15 minutes";
+const EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS = 10_000;
 
 function getStringQuery(req: Request, key: string) {
   const value = req.query[key];
@@ -78,6 +79,7 @@ async function sendMagicLinkEmail(email: string, link: string) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
     body: JSON.stringify({
       from: normaliseAuthSender(ENV.authEmailFrom),
       to: email,
@@ -114,11 +116,12 @@ export function registerGoogleAuthRoutes(app: Express) {
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
         body: new URLSearchParams({ code, client_id: ENV.googleClientId, client_secret: ENV.googleClientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }),
       });
       const tokenPayload = await tokenResponse.json().catch(() => ({})) as { access_token?: unknown };
       if (!tokenResponse.ok || typeof tokenPayload.access_token !== "string") throw new Error("Google token exchange failed.");
-      const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${tokenPayload.access_token}` } });
+      const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${tokenPayload.access_token}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
       const profile = await profileResponse.json().catch(() => ({})) as { sub?: unknown; email?: unknown; email_verified?: unknown; name?: unknown; picture?: unknown };
       if (!profileResponse.ok || typeof profile.sub !== "string" || typeof profile.email !== "string" || profile.email_verified !== true) throw new Error("Google account does not provide a verified email address.");
       const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.picture === "string" ? profile.picture : null });
