@@ -129,3 +129,4 @@
 - [x] Visually highlight biodata fields populated from user-approved AI suggestions, with accessible review wording and normal editing behavior.
 - [x] Refine dark-mode contrast, theming scope, and control behavior based on school feedback.
 - [x] Diagnose and restore the role-safe school website publishing flow, including actionable failure feedback for school administrators.
+- [x] Add a live, draft-aware website preview that reflects school branding, content, and admissions visibility before publication.
