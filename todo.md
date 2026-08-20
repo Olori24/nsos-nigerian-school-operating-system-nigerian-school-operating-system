@@ -76,7 +76,7 @@
 - [x] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
 - [x] Verify one daily NSOS CI status check retrieves and reports a real latest workflow outcome automatically.
 - [x] Perform the scheduled 08:00 Africa/Lagos NSOS CI review using GitHub API first and the repository-specific Gmail fallback only when needed.
-- [ ] Capture evidence from one scheduler-originated 08:00 Africa/Lagos NSOS CI monitor run, including the delivered verified source and outcome.
+- [x] Capture evidence from one scheduler-originated 08:00 Africa/Lagos NSOS CI monitor run, including the delivered verified source and outcome.
 - [x] Add Gmail-based GitHub Actions notification fallback and confidence states to the daily NSOS CI status monitor.
 - [x] Build the NSOS revenue foundation with school subscription plans, owner-controlled account lifecycle, onboarding billing records, and renewal-ready administration.
 - [x] Restrict platform revenue overview, plan creation, subscription assignment, and billing mutations to the configured NSOS platform owner rather than every global admin.
