@@ -27,4 +27,9 @@ describe("teacher revised-plan notification filters", () => {
     expect(reviewDesk).toContain("alert.pinnedAt ?");
     expect(reviewDesk).toContain("Pin high-priority items to keep them at the top of every filtered view.");
   });
+
+  it("distinguishes a leader recommendation from a teacher-owned priority pin", () => {
+    expect(reviewDesk).toContain("Leader recommended");
+    expect(reviewDesk).toContain("This recommendation does not change your personal pins or approval decision.");
+  });
 });

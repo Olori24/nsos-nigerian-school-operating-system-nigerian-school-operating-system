@@ -153,3 +153,4 @@
 - [x] Notify the assigned teacher in-app when an administrator re-imports a revised scheme of work for that teacher’s class-subject.
 - [x] Add accessible teacher-alert filters for all, unread, read, and subject-specific revised weekly-plan notifications.
 - [x] Allow teachers to pin and unpin their revised weekly-plan alerts so pinned alerts stay at the top of filtered notification lists.
+- [x] Allow school owners and administrators to flag a revised weekly-plan alert as recommended priority for the assigned teacher, without changing that teacher’s personal pins.

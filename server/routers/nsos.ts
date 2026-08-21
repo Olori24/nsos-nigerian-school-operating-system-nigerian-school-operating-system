@@ -427,6 +427,10 @@ export const nsosRouter = router({
     setSchemeRevisionNotificationPinned: aiTutorTeacherProcedure
       .input(schoolInput.extend({ notificationId: z.number().int().positive(), pinned: z.boolean() }))
       .mutation(({ ctx, input }) => db.setTeacherSchemeRevisionNotificationPinned({ ...input, userId: ctx.user.id })),
+    schemeRevisionNotificationsForManagement: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listSchoolLeaderSchemeRevisionNotifications(input.schoolId)),
+    setSchemeRevisionNotificationRecommended: onboardingAdminProcedure
+      .input(schoolInput.extend({ notificationId: z.number().int().positive(), recommended: z.boolean() }))
+      .mutation(({ ctx, input }) => db.setSchoolLeaderSchemeRevisionNotificationRecommended({ ...input, userId: ctx.user.id })),
     addSchemeRowInlineComment: aiTutorTeacherProcedure
       .input(schoolInput.extend({ rowId: z.number().int().positive(), anchor: z.enum(["topic", "objectives", "resources"]), body: z.string().trim().min(1).max(1200) }))
       .mutation(({ ctx, input }) => db.addAssignedSchemeRowInlineComment({ ...input, createdByUserId: ctx.user.id })),

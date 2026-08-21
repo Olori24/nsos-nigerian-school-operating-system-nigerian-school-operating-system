@@ -1755,6 +1755,20 @@ export async function setTeacherSchemeRevisionNotificationPinned(input: { school
   return { success: true, pinned: input.pinned };
 }
 
+export async function listSchoolLeaderSchemeRevisionNotifications(schoolId: number) {
+  const rows = await (await database()).select({ notification: teacherSchemeRevisionNotifications, recipientName: users.name }).from(teacherSchemeRevisionNotifications).innerJoin(users, eq(teacherSchemeRevisionNotifications.recipientUserId, users.id)).where(eq(teacherSchemeRevisionNotifications.schoolId, schoolId)).orderBy(desc(teacherSchemeRevisionNotifications.recommendedAt), desc(teacherSchemeRevisionNotifications.createdAt));
+  return rows.map(row => ({ ...row.notification, recipientName: row.recipientName }));
+}
+
+export async function setSchoolLeaderSchemeRevisionNotificationRecommended(input: { schoolId: number; notificationId: number; userId: number; recommended: boolean }) {
+  const db = await database();
+  const notification = (await db.select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId))).limit(1))[0];
+  if (!notification) throw new Error("Revised weekly-plan notification not found.");
+  await db.update(teacherSchemeRevisionNotifications).set({ recommendedAt: input.recommended ? new Date() : null, recommendedBy: input.recommended ? input.userId : null }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId)));
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.userId, eventType: input.recommended ? "weekly_plan_revision_alert_recommended" : "weekly_plan_revision_alert_recommendation_cleared", targetType: "teacher_scheme_revision_notification", targetId: input.notificationId, metadata: { recommended: input.recommended } });
+  return { success: true, recommended: input.recommended };
+}
+
 export async function listTeacherSchemeReviews(schoolId: number, userId: number) {
   const db = await database();
   const staff = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.userId, userId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
