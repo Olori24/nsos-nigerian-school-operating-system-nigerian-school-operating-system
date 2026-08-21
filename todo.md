@@ -151,3 +151,4 @@
 - [x] Add assigned-teacher review and approval for imported weekly plans, with pending, approved, returned, and published safeguards before plans become usable in classroom workflows.
 - [x] Add teacher-only inline comments anchored to weekly-plan sections, with tenant-scoped persistence, administrator visibility, and publication safeguards.
 - [x] Notify the assigned teacher in-app when an administrator re-imports a revised scheme of work for that teacher’s class-subject.
+- [x] Add accessible teacher-alert filters for all, unread, read, and subject-specific revised weekly-plan notifications.
