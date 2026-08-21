@@ -75,20 +75,32 @@ async function createSession(req: Request, res: Response, user: { id: number; op
   res.cookie(COOKIE_NAME, sessionToken, { ...getSessionCookieOptions(req), maxAge: ONE_YEAR_MS });
 }
 
-async function sendMagicLinkEmail(email: string, link: string) {
+async function sendMagicLinkEmail(input: { email: string; link: string; subject?: string; text?: string; html?: string }) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json" },
     signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
     body: JSON.stringify({
       from: normaliseAuthSender(ENV.authEmailFrom),
-      to: email,
-      subject: "Your NSOS sign-in link",
-      text: `Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}: ${link}`,
-      html: `<p>Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}.</p><p><a href="${link}">Sign in to NSOS</a></p><p>If you did not request this, you can safely ignore this email.</p>`,
+      to: input.email,
+      subject: input.subject ?? "Your NSOS sign-in link",
+      text: input.text ?? `Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}: ${input.link}`,
+      html: input.html ?? `<p>Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}.</p><p><a href="${input.link}">Sign in to NSOS</a></p><p>If you did not request this, you can safely ignore this email.</p>`,
     }),
   });
   if (!response.ok) throw new Error(`Resend rejected email delivery with status ${response.status}`);
+}
+
+export async function sendStaffSetupInvitationEmail(input: { email: string; schoolName: string; role: "admin" | "staff" | "teacher" | "finance"; jobTitle: string; origin: string }) {
+  const origin = validOrigin(input.origin);
+  if (!origin) throw new Error("Use a valid NSOS application address before sending the invitation.");
+  const email = db.normaliseAuthEmail(input.email);
+  const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
+  const link = `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`;
+  const schoolName = input.schoolName.replace(/[<>]/g, "").trim().slice(0, 255);
+  const jobTitle = input.jobTitle.replace(/[<>]/g, "").trim().slice(0, 120);
+  const roleLabel = input.role === "admin" ? "administrator" : input.role;
+  await sendMagicLinkEmail({ email, link, subject: `You are invited to ${schoolName} on NSOS`, text: `${schoolName} invited you to join NSOS as ${roleLabel} (${jobTitle}). Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>${schoolName} invited you to join NSOS as <strong>${roleLabel}</strong> (${jobTitle}).</p><p><a href="${link}">Accept invitation and sign in</a></p><p>This link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
 }
 
 export function registerGoogleAuthRoutes(app: Express) {
@@ -143,7 +155,7 @@ export function registerEmailAuthRoutes(app: Express) {
     try {
       const email = db.normaliseAuthEmail(req.body?.email ?? "");
       const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
-      await sendMagicLinkEmail(email, `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`);
+      await sendMagicLinkEmail({ email, link: `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}` });
       res.status(202).json({ success: true, message: "If this email can receive NSOS sign-in links, one is on its way." });
     } catch (error) {
       if (error instanceof Error && error.message === "Enter a valid email address.") return res.status(400).json({ error: error.message });
@@ -160,6 +172,7 @@ export function registerEmailAuthRoutes(app: Express) {
       const origin = validOrigin(link.redirectOrigin);
       if (!origin) throw new Error("The sign-in link does not have a valid destination.");
       const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
+      await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);
       res.redirect(302, `${origin}/`);
     } catch (error) {

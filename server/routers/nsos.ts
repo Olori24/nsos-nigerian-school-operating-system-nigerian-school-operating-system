@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
+import { sendStaffSetupInvitationEmail } from "../auth";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
@@ -209,12 +210,49 @@ export const nsosRouter = router({
   setupAgent: router({
     assess: onboardingAdminProcedure.input(schoolInput).query(async ({ input }) => buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId))),
     history: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentHistory(input.schoolId)),
+    staffInvitations: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentStaffInvitations(input.schoolId)),
+    financeDrafts: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentFinanceDrafts(input.schoolId)),
     applyAcademicFoundation: onboardingAdminProcedure
       .input(schoolInput.extend({ sessionName: z.string().trim().min(3).max(64), sessionStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), sessionEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), termName: z.string().trim().min(3).max(64), termStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), termEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), classes: z.array(z.object({ name: z.string().trim().min(2).max(120), level: z.string().trim().max(64).optional() })).min(1).max(30), templateId: z.enum(["basic_primary", "basic_junior_secondary", "senior_secondary_review"]), includeOptional: z.boolean().default(false), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
         const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "academic-foundation", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         return db.runCopilotSetupAgentAcademicFoundation({ ...input, executedBy: ctx.user.id });
+      }),
+    prepareStaffInvitation: onboardingAdminProcedure
+      .input(schoolInput.extend({ firstName: z.string().trim().min(1).max(120), lastName: z.string().trim().min(1).max(120), email: z.string().trim().email().max(320), employeeNo: z.string().trim().min(2).max(48), jobTitle: z.string().trim().min(2).max(120), role: z.enum(["admin", "staff", "teacher", "finance"]), employmentType: z.enum(["full_time", "part_time", "contract", "temporary"]).default("full_time"), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "staff-invitation-prepare", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.prepareCopilotSetupAgentStaffInvitation({ ...input, preparedBy: ctx.user.id });
+      }),
+    sendStaffInvitation: onboardingAdminProcedure
+      .input(schoolInput.extend({ invitationId: z.number().int().positive(), origin: z.string().trim().min(1).max(512), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "staff-invitation-send", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const invitation = await db.claimCopilotSetupAgentStaffInvitationForDelivery({ schoolId: input.schoolId, invitationId: input.invitationId });
+        try {
+          await sendStaffSetupInvitationEmail({ email: invitation.email, schoolName: invitation.schoolName, role: invitation.role, jobTitle: invitation.jobTitle, origin: input.origin });
+          return await db.markCopilotSetupAgentStaffInvitationSent({ schoolId: input.schoolId, invitationId: input.invitationId, sentBy: ctx.user.id });
+        } catch (error) {
+          await db.releaseCopilotSetupAgentStaffInvitationDelivery({ schoolId: input.schoolId, invitationId: input.invitationId });
+          throw error;
+        }
+      }),
+    prepareFinanceDraft: onboardingAdminProcedure
+      .input(schoolInput.extend({ name: z.string().trim().min(2).max(255), amount: z.number().positive().max(10_000_000), termId: z.number().int().positive().optional(), classId: z.number().int().positive().optional(), mandatory: z.boolean().default(true), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "finance-draft-prepare", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.prepareCopilotSetupAgentFinanceDraft({ ...input, preparedBy: ctx.user.id });
+      }),
+    activateFinanceDraft: onboardingAdminProcedure
+      .input(schoolInput.extend({ feeStructureId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "finance-draft-activate", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.activateCopilotSetupAgentFinanceDraft({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, approvedBy: ctx.user.id });
       }),
   }),
 

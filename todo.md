@@ -161,3 +161,7 @@
 - [x] Audit and repair incomplete or blocked NSOS workflows, beginning with the mobile scheme-of-work import path where class, subject, and term choices are unavailable without visible prerequisite recovery.
 - [x] Transform the NSOS Copilot into a supervised setup agent that assesses tenant readiness, proposes an end-to-end setup plan, and executes only authorised configuration actions with audit history and explicit approvals.
 - [x] Execute and document a controlled end-to-end Copilot setup-agent validation, including owner/admin approval, academic record persistence, audit history, and role-boundary checks; then push the validated release to the connected private GitHub repository.
+- [x] Reconcile the divergent GitHub main history through a reviewed, non-destructive merge path without discarding remote commits.
+- [x] Add a supervised setup-agent workflow that prepares staff invitations from school-approved name, email, and role details, requiring final confirmation before invitations are sent.
+- [x] Add a setup-agent finance draft workflow that prepares fee structures from school-approved details and requires final school approval before finance records become active.
+- [x] Maintain a daily 08:00 Africa/Lagos NSOS CI status monitor that verifies the newest GitHub Actions run via GitHub API, uses repository-scoped GitHub email notifications only after a 403 response, and reports an unavailable status without inference when neither source can verify an outcome.

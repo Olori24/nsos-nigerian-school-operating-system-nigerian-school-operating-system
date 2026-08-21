@@ -325,6 +325,32 @@ export const staffProfiles = mysqlTable(
   }),
 );
 
+export const staffSetupInvitations = mysqlTable(
+  "staffSetupInvitations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    firstName: varchar("firstName", { length: 120 }).notNull(),
+    lastName: varchar("lastName", { length: 120 }).notNull(),
+    email: varchar("email", { length: 320 }).notNull(),
+    employeeNo: varchar("employeeNo", { length: 48 }).notNull(),
+    jobTitle: varchar("jobTitle", { length: 120 }).notNull(),
+    role: mysqlEnum("role", ["admin", "staff", "teacher", "finance"]).notNull(),
+    employmentType: mysqlEnum("employmentType", ["full_time", "part_time", "contract", "temporary"]).notNull().default("full_time"),
+    status: mysqlEnum("status", ["draft", "sending", "sent", "accepted", "cancelled"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    acceptedUserId: int("acceptedUserId"),
+    sentAt: timestamp("sentAt"),
+    acceptedAt: timestamp("acceptedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolStatus: index("staff_setup_invitation_school_status_idx").on(table.schoolId, table.status),
+    schoolEmail: index("staff_setup_invitation_school_email_idx").on(table.schoolId, table.email),
+  }),
+);
+
 export const staffDuties = mysqlTable(
   "staffDuties",
   {

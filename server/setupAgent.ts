@@ -38,9 +38,9 @@ export function buildSetupAgentAssessment(onboarding: {
     totalSteps: onboarding.totalSteps,
     actions: [
       action("academic_foundation", academic, true, ["Uses only the session, term, real class names, and reviewed curriculum template you approve.", "Never creates learners, staff identities, payment accounts, provider credentials, or published content."]),
-      action("team", team, false, ["A school must provide real staff identity, employment, and safeguarding information."]),
+      action("team", team, true, ["Uses only the real name, email, employee number, role, and employment details the school approves. An invitation is never sent without a second explicit confirmation."]),
       action("learners", learners, false, ["A school must provide authorised learner and guardian data; the agent never invents records."]),
-      action("finance", fees, false, ["Fee policy and bank-account information require an authorised school decision and explicit finance review."]),
+      action("finance", fees, true, ["Creates fee structures as inactive drafts only. A separate school-approved activation is required before any fee structure becomes active."]),
       action("public_presence", website, false, ["School-owned website content, contact details, images, and publication must be reviewed before public release."]),
     ],
   };

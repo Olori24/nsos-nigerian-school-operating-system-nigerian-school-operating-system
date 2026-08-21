@@ -24,4 +24,13 @@ describe("NSOS Copilot setup agent interface", () => {
     expect(agent).toContain("Open workspace");
     expect(agent).toContain("never invents staff, learners, bank accounts, provider credentials, or public content");
   });
+
+  it("stages staff invitations and finance data with distinct explicit delivery and activation approvals", () => {
+    expect(agent).toContain("Prepare invitation draft");
+    expect(agent).toContain("I approve sending this invitation to the named school email.");
+    expect(agent).toContain("Send approved invitation");
+    expect(agent).toContain("Save inactive finance draft");
+    expect(agent).toContain("I give final school approval to activate this fee structure.");
+    expect(agent).toContain("Activate approved fee");
+  });
 });

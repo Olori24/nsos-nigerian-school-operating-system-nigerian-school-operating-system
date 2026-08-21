@@ -62,6 +62,7 @@ import {
   scores,
   staffDuties,
   staffProfiles,
+  staffSetupInvitations,
   studentGuardians,
   studentProfiles,
   subscriptionPlans,
@@ -1557,6 +1558,112 @@ export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: 
 
 export async function listCopilotSetupAgentHistory(schoolId: number) {
   return (await listSecurityAuditEvents(schoolId, 100)).filter(event => event.eventType.startsWith("copilot_setup_agent_")).slice(0, 20);
+}
+
+type StaffInvitationRole = "admin" | "staff" | "teacher" | "finance";
+type StaffInvitationEmploymentType = "full_time" | "part_time" | "contract" | "temporary";
+
+function normaliseStaffInvitationEmployeeNo(value: string) {
+  const employeeNo = value.trim().toUpperCase().replace(/\s+/g, " ");
+  if (employeeNo.length < 2 || employeeNo.length > 48) throw new Error("Enter a school-approved employee number between 2 and 48 characters.");
+  return employeeNo;
+}
+
+export async function prepareCopilotSetupAgentStaffInvitation(input: { schoolId: number; preparedBy: number; firstName: string; lastName: string; email: string; employeeNo: string; jobTitle: string; role: StaffInvitationRole; employmentType: StaffInvitationEmploymentType }) {
+  const db = await database();
+  const email = normaliseAuthEmail(input.email);
+  const employeeNo = normaliseStaffInvitationEmployeeNo(input.employeeNo);
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const jobTitle = input.jobTitle.trim();
+  const [staffWithEmployeeNo, openInvitation] = await Promise.all([
+    db.select({ id: staffProfiles.id }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), eq(staffProfiles.employeeNo, employeeNo))).limit(1),
+    db.select({ id: staffSetupInvitations.id }).from(staffSetupInvitations).where(and(eq(staffSetupInvitations.schoolId, input.schoolId), eq(staffSetupInvitations.email, email), inArray(staffSetupInvitations.status, ["draft", "sending", "sent"]))).limit(1),
+  ]);
+  if (staffWithEmployeeNo[0]) throw new Error("This employee number already belongs to a staff profile in this school.");
+  if (openInvitation[0]) throw new Error("A pending invitation already exists for this email address in this school.");
+  const created = await db.insert(staffSetupInvitations).values({ schoolId: input.schoolId, firstName, lastName, email, employeeNo, jobTitle, role: input.role, employmentType: input.employmentType, status: "draft", createdBy: input.preparedBy });
+  const invitationId = Number(created[0].insertId);
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.preparedBy, eventType: "copilot_setup_agent_staff_invitation_prepared", targetType: "staff_setup_invitation", targetId: invitationId, metadata: { role: input.role, employmentType: input.employmentType, invitationPrepared: true, confirmationRequired: true } });
+  return { invitationId, status: "draft" as const };
+}
+
+export async function listCopilotSetupAgentStaffInvitations(schoolId: number) {
+  return (await (await database()).select({ id: staffSetupInvitations.id, firstName: staffSetupInvitations.firstName, lastName: staffSetupInvitations.lastName, email: staffSetupInvitations.email, employeeNo: staffSetupInvitations.employeeNo, jobTitle: staffSetupInvitations.jobTitle, role: staffSetupInvitations.role, employmentType: staffSetupInvitations.employmentType, status: staffSetupInvitations.status, sentAt: staffSetupInvitations.sentAt, acceptedAt: staffSetupInvitations.acceptedAt, createdAt: staffSetupInvitations.createdAt }).from(staffSetupInvitations).where(eq(staffSetupInvitations.schoolId, schoolId)).orderBy(desc(staffSetupInvitations.createdAt)).limit(20));
+}
+
+export async function claimCopilotSetupAgentStaffInvitationForDelivery(input: { schoolId: number; invitationId: number }) {
+  const db = await database();
+  const updated = await db.update(staffSetupInvitations).set({ status: "sending" }).where(and(eq(staffSetupInvitations.id, input.invitationId), eq(staffSetupInvitations.schoolId, input.schoolId), inArray(staffSetupInvitations.status, ["draft", "sent"])));
+  const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This invitation is no longer available to send. Refresh the setup agent and review its status.");
+  const invitation = (await db.select({ id: staffSetupInvitations.id, schoolId: staffSetupInvitations.schoolId, firstName: staffSetupInvitations.firstName, lastName: staffSetupInvitations.lastName, email: staffSetupInvitations.email, role: staffSetupInvitations.role, jobTitle: staffSetupInvitations.jobTitle, schoolName: schools.name }).from(staffSetupInvitations).innerJoin(schools, eq(staffSetupInvitations.schoolId, schools.id)).where(and(eq(staffSetupInvitations.id, input.invitationId), eq(staffSetupInvitations.schoolId, input.schoolId))).limit(1))[0];
+  if (!invitation) throw new Error("Staff invitation not found.");
+  return invitation;
+}
+
+export async function releaseCopilotSetupAgentStaffInvitationDelivery(input: { schoolId: number; invitationId: number }) {
+  await (await database()).update(staffSetupInvitations).set({ status: "draft" }).where(and(eq(staffSetupInvitations.id, input.invitationId), eq(staffSetupInvitations.schoolId, input.schoolId), eq(staffSetupInvitations.status, "sending")));
+}
+
+export async function markCopilotSetupAgentStaffInvitationSent(input: { schoolId: number; invitationId: number; sentBy: number }) {
+  const db = await database();
+  await db.update(staffSetupInvitations).set({ status: "sent", sentAt: new Date() }).where(and(eq(staffSetupInvitations.id, input.invitationId), eq(staffSetupInvitations.schoolId, input.schoolId), eq(staffSetupInvitations.status, "sending")));
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.sentBy, eventType: "copilot_setup_agent_staff_invitation_sent", targetType: "staff_setup_invitation", targetId: input.invitationId, metadata: { invitationSent: true, confirmationRequired: true } });
+  return { invitationId: input.invitationId, status: "sent" as const };
+}
+
+export async function acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail(input: { email: string; userId: number }) {
+  const db = await database();
+  const email = normaliseAuthEmail(input.email);
+  const invitations = await db.select().from(staffSetupInvitations).where(and(eq(staffSetupInvitations.email, email), eq(staffSetupInvitations.status, "sent")));
+  let acceptedCount = 0;
+  for (const invitation of invitations) {
+    const [membership, linkedStaff] = await Promise.all([
+      db.select().from(schoolMemberships).where(and(eq(schoolMemberships.schoolId, invitation.schoolId), eq(schoolMemberships.userId, input.userId))).limit(1),
+      db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, invitation.schoolId), eq(staffProfiles.userId, input.userId))).limit(1),
+    ]);
+    if (membership[0] && membership[0].role !== invitation.role) continue;
+    if (linkedStaff[0]) continue;
+    const duplicateEmployeeNo = (await db.select({ id: staffProfiles.id }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, invitation.schoolId), eq(staffProfiles.employeeNo, invitation.employeeNo))).limit(1))[0];
+    if (duplicateEmployeeNo) continue;
+    await db.insert(schoolMemberships).values({ schoolId: invitation.schoolId, userId: input.userId, role: invitation.role, status: "active" }).onDuplicateKeyUpdate({ set: { role: invitation.role, status: "active" } });
+    await db.insert(staffProfiles).values({ schoolId: invitation.schoolId, userId: input.userId, employeeNo: invitation.employeeNo, firstName: invitation.firstName, lastName: invitation.lastName, email: invitation.email, jobTitle: invitation.jobTitle, employmentType: invitation.employmentType, employmentStatus: "active" });
+    await db.update(staffSetupInvitations).set({ status: "accepted", acceptedUserId: input.userId, acceptedAt: new Date() }).where(eq(staffSetupInvitations.id, invitation.id));
+    await recordSecurityAuditEvent({ schoolId: invitation.schoolId, actorUserId: input.userId, eventType: "copilot_setup_agent_staff_invitation_accepted", targetType: "staff_setup_invitation", targetId: invitation.id, metadata: { role: invitation.role, staffProfileCreated: true } });
+    acceptedCount += 1;
+  }
+  return { acceptedCount };
+}
+
+export async function prepareCopilotSetupAgentFinanceDraft(input: { schoolId: number; preparedBy: number; name: string; amount: number; termId?: number; classId?: number; mandatory: boolean; dueOn?: string }) {
+  const db = await database();
+  if (!Number.isFinite(input.amount) || input.amount <= 0 || input.amount > 10_000_000) throw new Error("Enter a fee amount between ₦0.01 and ₦10,000,000.");
+  if (input.termId) {
+    const term = (await db.select({ id: academicTerms.id }).from(academicTerms).where(and(eq(academicTerms.id, input.termId), eq(academicTerms.schoolId, input.schoolId))).limit(1))[0];
+    if (!term) throw new Error("Select a term that belongs to this school.");
+  }
+  if (input.classId) {
+    const classRow = (await db.select({ id: classes.id }).from(classes).where(and(eq(classes.id, input.classId), eq(classes.schoolId, input.schoolId))).limit(1))[0];
+    if (!classRow) throw new Error("Select a class that belongs to this school.");
+  }
+  const created = await db.insert(feeStructures).values({ schoolId: input.schoolId, name: input.name.trim(), amount: String(input.amount), termId: input.termId ?? null, classId: input.classId ?? null, mandatory: input.mandatory, dueOn: asDate(input.dueOn), status: "draft" });
+  const feeStructureId = Number(created[0].insertId);
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.preparedBy, eventType: "copilot_setup_agent_finance_draft_prepared", targetType: "fee_structure", targetId: feeStructureId, metadata: { mandatory: input.mandatory, termScoped: Boolean(input.termId), classScoped: Boolean(input.classId), status: "draft", confirmationRequired: true } });
+  return { feeStructureId, status: "draft" as const };
+}
+
+export async function listCopilotSetupAgentFinanceDrafts(schoolId: number) {
+  return (await (await database()).select({ id: feeStructures.id, name: feeStructures.name, amount: feeStructures.amount, termId: feeStructures.termId, classId: feeStructures.classId, mandatory: feeStructures.mandatory, dueOn: feeStructures.dueOn, status: feeStructures.status, createdAt: feeStructures.createdAt }).from(feeStructures).where(and(eq(feeStructures.schoolId, schoolId), eq(feeStructures.status, "draft"))).orderBy(desc(feeStructures.createdAt)).limit(30)).map(item => ({ ...item, amount: Number(item.amount) }));
+}
+
+export async function activateCopilotSetupAgentFinanceDraft(input: { schoolId: number; feeStructureId: number; approvedBy: number }) {
+  const db = await database();
+  const draft = (await db.select().from(feeStructures).where(and(eq(feeStructures.id, input.feeStructureId), eq(feeStructures.schoolId, input.schoolId), eq(feeStructures.status, "draft"))).limit(1))[0];
+  if (!draft) throw new Error("Only a current draft fee structure can be activated.");
+  await db.update(feeStructures).set({ status: "active" }).where(and(eq(feeStructures.id, input.feeStructureId), eq(feeStructures.schoolId, input.schoolId), eq(feeStructures.status, "draft")));
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.approvedBy, eventType: "copilot_setup_agent_finance_draft_activated", targetType: "fee_structure", targetId: input.feeStructureId, metadata: { mandatory: draft.mandatory, activatedFromDraft: true, explicitApproval: true } });
+  return { feeStructureId: input.feeStructureId, status: "active" as const };
 }
 
 export async function listApplications(schoolId: number, status?: "submitted" | "under_review" | "accepted" | "declined" | "enrolled") {
