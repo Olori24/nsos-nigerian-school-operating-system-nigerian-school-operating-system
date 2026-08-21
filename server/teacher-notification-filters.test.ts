@@ -19,4 +19,12 @@ describe("teacher revised-plan notification filters", () => {
     expect(reviewDesk).toContain('subjectFilter === "all" || alert.subjectLabel === subjectFilter');
     expect(reviewDesk).toContain("No revised-plan alerts match these filters.");
   });
+
+  it("shows teacher-owned pin controls and preserves pinned-first priority order inside filtered alerts", () => {
+    expect(reviewDesk).toContain("setSchemeRevisionNotificationPinned.useMutation");
+    expect(reviewDesk).toContain("pinnedAlertCount");
+    expect(reviewDesk).toContain("Pinned priority");
+    expect(reviewDesk).toContain("alert.pinnedAt ?");
+    expect(reviewDesk).toContain("Pin high-priority items to keep them at the top of every filtered view.");
+  });
 });

@@ -1733,7 +1733,7 @@ async function activeTeacherStaffProfile(schoolId: number, userId: number) {
 
 export async function listTeacherSchemeRevisionNotifications(schoolId: number, userId: number) {
   await activeTeacherStaffProfile(schoolId, userId);
-  return (await database()).select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.schoolId, schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, userId))).orderBy(desc(teacherSchemeRevisionNotifications.createdAt));
+  return (await database()).select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.schoolId, schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, userId))).orderBy(desc(teacherSchemeRevisionNotifications.pinnedAt), desc(teacherSchemeRevisionNotifications.createdAt));
 }
 
 export async function markTeacherSchemeRevisionNotificationRead(input: { schoolId: number; notificationId: number; userId: number }) {
@@ -1743,6 +1743,16 @@ export async function markTeacherSchemeRevisionNotificationRead(input: { schoolI
   if (!notification) throw new Error("Revised weekly-plan notification not found.");
   if (!notification.readAt) await db.update(teacherSchemeRevisionNotifications).set({ readAt: new Date() }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.recipientUserId, input.userId)));
   return { success: true, importId: notification.importId };
+}
+
+export async function setTeacherSchemeRevisionNotificationPinned(input: { schoolId: number; notificationId: number; userId: number; pinned: boolean }) {
+  await activeTeacherStaffProfile(input.schoolId, input.userId);
+  const db = await database();
+  const notification = (await db.select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, input.userId))).limit(1))[0];
+  if (!notification) throw new Error("Revised weekly-plan notification not found.");
+  await db.update(teacherSchemeRevisionNotifications).set({ pinnedAt: input.pinned ? new Date() : null }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, input.userId)));
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.userId, eventType: input.pinned ? "weekly_plan_revision_alert_pinned" : "weekly_plan_revision_alert_unpinned", targetType: "teacher_scheme_revision_notification", targetId: input.notificationId, metadata: { pinned: input.pinned } });
+  return { success: true, pinned: input.pinned };
 }
 
 export async function listTeacherSchemeReviews(schoolId: number, userId: number) {

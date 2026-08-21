@@ -1,0 +1,1 @@
+ALTER TABLE `teacherSchemeRevisionNotifications` ADD `pinnedAt` timestamp;

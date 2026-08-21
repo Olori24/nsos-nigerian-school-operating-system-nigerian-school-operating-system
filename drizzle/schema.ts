@@ -574,6 +574,7 @@ export const teacherSchemeRevisionNotifications = mysqlTable(
     subjectLabel: varchar("subjectLabel", { length: 160 }).notNull(),
     termLabel: varchar("termLabel", { length: 64 }).notNull(),
     readAt: timestamp("readAt"),
+    pinnedAt: timestamp("pinnedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({

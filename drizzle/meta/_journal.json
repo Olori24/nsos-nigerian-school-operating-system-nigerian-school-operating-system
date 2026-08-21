@@ -239,6 +239,13 @@
       "when": 1787273978600,
       "tag": "0033_light_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1787275418966,
+      "tag": "0034_slim_richard_fisk",
+      "breakpoints": true
     }
   ]
 }

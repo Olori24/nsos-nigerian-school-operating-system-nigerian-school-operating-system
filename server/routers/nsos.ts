@@ -424,6 +424,9 @@ export const nsosRouter = router({
     markSchemeRevisionNotificationRead: aiTutorTeacherProcedure
       .input(schoolInput.extend({ notificationId: z.number().int().positive() }))
       .mutation(({ ctx, input }) => db.markTeacherSchemeRevisionNotificationRead({ ...input, userId: ctx.user.id })),
+    setSchemeRevisionNotificationPinned: aiTutorTeacherProcedure
+      .input(schoolInput.extend({ notificationId: z.number().int().positive(), pinned: z.boolean() }))
+      .mutation(({ ctx, input }) => db.setTeacherSchemeRevisionNotificationPinned({ ...input, userId: ctx.user.id })),
     addSchemeRowInlineComment: aiTutorTeacherProcedure
       .input(schoolInput.extend({ rowId: z.number().int().positive(), anchor: z.enum(["topic", "objectives", "resources"]), body: z.string().trim().min(1).max(1200) }))
       .mutation(({ ctx, input }) => db.addAssignedSchemeRowInlineComment({ ...input, createdByUserId: ctx.user.id })),
