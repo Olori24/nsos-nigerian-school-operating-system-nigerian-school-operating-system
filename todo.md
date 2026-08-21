@@ -149,3 +149,4 @@
 - [x] Complete and test the essential school setup journey across school profile, academic calendar, curriculum, classes, staff, finance, communications, and website readiness.
 - [x] Add a secure, review-before-apply import workflow for owner/admin school-approved schemes of work, including subject, class, term, and week mapping with tenant-scoped persistence.
 - [x] Add assigned-teacher review and approval for imported weekly plans, with pending, approved, returned, and published safeguards before plans become usable in classroom workflows.
+- [x] Add teacher-only inline comments anchored to weekly-plan sections, with tenant-scoped persistence, administrator visibility, and publication safeguards.

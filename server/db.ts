@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool, type Pool } from "mysql2";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -48,6 +48,7 @@ import {
   rateLimitBuckets,
   resultPublications,
   schemeOfWorkImports,
+  schemeOfWorkInlineComments,
   schemeOfWorkRows,
   schoolAdvertisingAccounts,
   schoolBankAccounts,
@@ -1718,7 +1719,35 @@ export async function listTeacherSchemeReviews(schoolId: number, userId: number)
   const staff = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.userId, userId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
   if (!staff) throw new Error("Your teacher account is not linked to an active staff profile for this school.");
   const rows = await db.select({ row: schemeOfWorkRows, import: schemeOfWorkImports, className: classes.name, subjectName: subjects.name, termName: academicTerms.name }).from(schemeOfWorkRows).innerJoin(schemeOfWorkImports, eq(schemeOfWorkRows.importId, schemeOfWorkImports.id)).innerJoin(classes, eq(schemeOfWorkImports.classId, classes.id)).innerJoin(subjects, eq(schemeOfWorkImports.subjectId, subjects.id)).innerJoin(academicTerms, eq(schemeOfWorkImports.termId, academicTerms.id)).where(and(eq(schemeOfWorkRows.schoolId, schoolId), eq(schemeOfWorkRows.assignedTeacherId, staff.id))).orderBy(schemeOfWorkRows.importId, schemeOfWorkRows.weekNo);
-  return rows.map(item => ({ id: item.row.id, importId: item.row.importId, weekNo: item.row.weekNo, topic: item.row.topic, objectives: item.row.objectives, resources: item.row.resources, reviewStatus: item.row.reviewStatus, reviewNote: item.row.reviewNote, className: item.className, subjectName: item.subjectName, termName: item.termName }));
+  const rowIds = rows.map(item => item.row.id);
+  const comments = rowIds.length ? await db.select().from(schemeOfWorkInlineComments).where(and(eq(schemeOfWorkInlineComments.schoolId, schoolId), inArray(schemeOfWorkInlineComments.rowId, rowIds))).orderBy(schemeOfWorkInlineComments.createdAt) : [];
+  const commentsByRow = new Map<number, typeof comments>();
+  for (const comment of comments) commentsByRow.set(comment.rowId, [...(commentsByRow.get(comment.rowId) ?? []), comment]);
+  return rows.map(item => ({ id: item.row.id, importId: item.row.importId, weekNo: item.row.weekNo, topic: item.row.topic, objectives: item.row.objectives, resources: item.row.resources, reviewStatus: item.row.reviewStatus, reviewNote: item.row.reviewNote, className: item.className, subjectName: item.subjectName, termName: item.termName, comments: commentsByRow.get(item.row.id) ?? [] }));
+}
+
+export async function addAssignedSchemeRowInlineComment(input: { schoolId: number; rowId: number; anchor: "topic" | "objectives" | "resources"; body: string; createdByUserId: number }) {
+  const db = await database();
+  const staff = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), eq(staffProfiles.userId, input.createdByUserId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+  if (!staff) throw new Error("Your teacher account is not linked to an active staff profile for this school.");
+  const row = (await db.select().from(schemeOfWorkRows).where(and(eq(schemeOfWorkRows.id, input.rowId), eq(schemeOfWorkRows.schoolId, input.schoolId), eq(schemeOfWorkRows.assignedTeacherId, staff.id))).limit(1))[0];
+  if (!row) throw new Error("This weekly plan is not assigned to your teacher profile.");
+  if (row.reviewStatus === "published") throw new Error("Published weekly plans cannot receive new review comments.");
+  const body = input.body.trim();
+  if (!body) throw new Error("Write a concise comment before saving it.");
+  const result = await db.insert(schemeOfWorkInlineComments).values({ schoolId: input.schoolId, rowId: input.rowId, anchor: input.anchor, body, createdBy: input.createdByUserId });
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.createdByUserId, eventType: "weekly_plan_inline_comment_added", targetType: "scheme_of_work_row", targetId: input.rowId, metadata: { anchor: input.anchor, bodyStored: true } });
+  return { success: true, commentId: Number(result[0].insertId) };
+}
+
+export async function listSchemeImportInlineComments(schoolId: number, importId: number) {
+  const db = await database();
+  const imported = (await db.select().from(schemeOfWorkImports).where(and(eq(schemeOfWorkImports.id, importId), eq(schemeOfWorkImports.schoolId, schoolId))).limit(1))[0];
+  if (!imported) throw new Error("Imported scheme not found.");
+  const rows = await db.select().from(schemeOfWorkRows).where(and(eq(schemeOfWorkRows.importId, importId), eq(schemeOfWorkRows.schoolId, schoolId))).orderBy(schemeOfWorkRows.weekNo);
+  const rowIds = rows.map(row => row.id);
+  const comments = rowIds.length ? await db.select().from(schemeOfWorkInlineComments).where(and(eq(schemeOfWorkInlineComments.schoolId, schoolId), inArray(schemeOfWorkInlineComments.rowId, rowIds))).orderBy(schemeOfWorkInlineComments.createdAt) : [];
+  return rows.map(row => ({ rowId: row.id, weekNo: row.weekNo, topic: row.topic, comments: comments.filter(comment => comment.rowId === row.id) }));
 }
 
 export async function reviewAssignedSchemeRow(input: { schoolId: number; rowId: number; decision: "approved" | "returned"; reviewNote?: string; reviewedByUserId: number }) {

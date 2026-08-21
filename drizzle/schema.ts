@@ -543,6 +543,23 @@ export const schemeOfWorkRows = mysqlTable(
   table => ({ importWeek: uniqueIndex("schemeOfWorkRow_import_week_unique").on(table.importId, table.weekNo), schoolClass: index("schemeOfWorkRow_school_idx").on(table.schoolId, table.createdAt), teacherReview: index("schemeOfWorkRow_teacher_review_idx").on(table.assignedTeacherId, table.reviewStatus) }),
 );
 
+export const schemeOfWorkInlineComments = mysqlTable(
+  "schemeOfWorkInlineComments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    rowId: int("rowId").notNull(),
+    anchor: mysqlEnum("anchor", ["topic", "objectives", "resources"]).notNull(),
+    body: text("body").notNull(),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    rowCreated: index("schemeInlineComment_row_created_idx").on(table.rowId, table.createdAt),
+    schoolCreated: index("schemeInlineComment_school_created_idx").on(table.schoolId, table.createdAt),
+  }),
+);
+
 export const classSubjects = mysqlTable(
   "classSubjects",
   {
