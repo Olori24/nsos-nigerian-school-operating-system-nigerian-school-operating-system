@@ -9,6 +9,7 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain("Enroll & send admission letter");
     expect(enrollmentStation).toContain("approved admission biodata");
     expect(enrollmentStation).toContain("not_sent_no_guardian_email");
+    expect(enrollmentStation).toContain("guardian record was created and linked");
   });
 
   it("maps approved admission biodata into the student profile rather than discarding it", () => {
@@ -17,5 +18,8 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(dbSource).toContain("medicalNotes: supplement.medicalHistory?.trim() || null");
     expect(dbSource).toContain("stateOfOrigin");
     expect(dbSource).toContain("localGovernment");
+    expect(dbSource).toContain("eq(guardians.schoolId, input.schoolId)");
+    expect(dbSource).toContain("await db.insert(studentGuardians).values({ studentId, guardianId, isPrimary: true })");
+    expect(dbSource).toContain("relationship: \"Parent/Guardian\"");
   });
 });

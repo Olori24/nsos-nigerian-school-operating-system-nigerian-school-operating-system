@@ -455,7 +455,7 @@ export const nsosRouter = router({
             letterDelivery = "failed";
           }
         }
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_enrolled", targetType: "admissions_application", targetId: input.applicationId, metadata: { outcome: "student_created", biodataTransferred: enrollment.biodataTransferred, admissionLetterDelivery: letterDelivery, messageLogCreated: Boolean(messageLogId) } });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_enrolled", targetType: "admissions_application", targetId: input.applicationId, metadata: { outcome: "student_created", biodataTransferred: enrollment.biodataTransferred, guardianLinked: enrollment.guardianLinked, guardianCreated: enrollment.guardianCreated, admissionLetterDelivery: letterDelivery, messageLogCreated: Boolean(messageLogId) } });
         return { ...enrollment, letterDelivery };
       }),
   }),

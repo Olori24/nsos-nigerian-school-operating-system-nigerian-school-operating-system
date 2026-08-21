@@ -1719,9 +1719,22 @@ export async function enrolApplication(input: { schoolId: number; applicationId:
   const localGovernment = supplement.localGovernmentOfOrigin?.trim() || undefined;
   const created = await db.insert(studentProfiles).values({ schoolId: input.schoolId, admissionNo: input.admissionNo, firstName: application.firstName, lastName: application.lastName, middleName: supplement.middleName?.trim() || null, dateOfBirth: application.dateOfBirth, gender: application.gender, address: supplement.residentialAddress?.trim() || null, stateOfOrigin, localGovernment, medicalNotes: supplement.medicalHistory?.trim() || null, admittedOn: asDate(input.admittedOn) });
   const studentId = Number(created[0].insertId);
+  const guardianName = application.guardianName.trim();
+  const [guardianFirstName = guardianName, ...guardianSurnameParts] = guardianName.split(/\s+/).filter(Boolean);
+  const guardianLastName = guardianSurnameParts.join(" ");
+  const guardianEmail = application.guardianEmail?.trim().toLowerCase() || null;
+  const guardianPhone = application.guardianPhone.trim();
+  const existingGuardian = (await db.select({ id: guardians.id }).from(guardians).where(and(eq(guardians.schoolId, input.schoolId), or(guardianEmail ? eq(guardians.email, guardianEmail) : sql`false`, eq(guardians.phone, guardianPhone)))).limit(1))[0];
+  let guardianId = existingGuardian?.id;
+  const guardianCreated = !guardianId;
+  if (!guardianId) {
+    const guardian = await db.insert(guardians).values({ schoolId: input.schoolId, firstName: guardianFirstName, lastName: guardianLastName, relationship: "Parent/Guardian", email: guardianEmail, phone: guardianPhone, address: supplement.residentialAddress?.trim() || supplement.postalAddress?.trim() || null, occupation: supplement.guardianOccupation?.trim() || null, isPrimaryContact: true });
+    guardianId = Number(guardian[0].insertId);
+  }
+  await db.insert(studentGuardians).values({ studentId, guardianId, isPrimary: true });
   await db.insert(enrollments).values({ schoolId: input.schoolId, studentId, classId: input.classId, sessionId: input.sessionId, enrolledOn: asDate(input.admittedOn)! });
   await db.update(admissionsApplications).set({ status: "enrolled" }).where(eq(admissionsApplications.id, input.applicationId));
-  return { studentId, biodataTransferred: true, admissionLetter: { guardianEmail: application.guardianEmail ?? null, guardianName: application.guardianName, studentName: [application.firstName, supplement.middleName?.trim(), application.lastName].filter(Boolean).join(" "), schoolName: school.name, schoolAddress: school.address ?? school.state, admissionNo: input.admissionNo, className: classRow.name, sessionName: session.name, admittedOn: input.admittedOn } };
+  return { studentId, biodataTransferred: true, guardianLinked: true, guardianCreated, admissionLetter: { guardianEmail: application.guardianEmail ?? null, guardianName: application.guardianName, studentName: [application.firstName, supplement.middleName?.trim(), application.lastName].filter(Boolean).join(" "), schoolName: school.name, schoolAddress: school.address ?? school.state, admissionNo: input.admissionNo, className: classRow.name, sessionName: session.name, admittedOn: input.admittedOn } };
 }
 
 export async function listStudents(schoolId: number, search?: string) {

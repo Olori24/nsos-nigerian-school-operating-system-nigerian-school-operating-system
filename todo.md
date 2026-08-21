@@ -168,3 +168,4 @@
 - [x] Add an owner-only dashboard that consolidates pending staff invitations and inactive fee drafts with clear review and approval actions.
 - [x] Add optional owner approval notes to fee activation and preserve the note in the tenant-scoped finance audit trail.
 - [x] Transfer approved admission biodata into the enrolled student record and generate a school-branded admission letter for email delivery to the parent or guardian on confirmed enrollment.
+- [x] Create and link a real guardian record from approved admission contact details during confirmed student enrollment.
