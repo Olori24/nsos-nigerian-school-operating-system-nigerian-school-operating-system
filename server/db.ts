@@ -68,6 +68,7 @@ import {
   subjects,
   timetableEntries,
   teacherSchemeRevisionNotifications,
+  teacherSchemeRevisionRecommendationOutcomes,
   type InsertUser,
   userSecurityActivity,
   userSessions,
@@ -1739,10 +1740,12 @@ export async function listTeacherSchemeRevisionNotifications(schoolId: number, u
 
 export async function markTeacherSchemeRevisionNotificationRead(input: { schoolId: number; notificationId: number; userId: number }) {
   await activeTeacherStaffProfile(input.schoolId, input.userId);
+  await clearExpiredSchoolLeaderSchemeRecommendations(input.schoolId);
   const db = await database();
   const notification = (await db.select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, input.userId))).limit(1))[0];
   if (!notification) throw new Error("Revised weekly-plan notification not found.");
   if (!notification.readAt) await db.update(teacherSchemeRevisionNotifications).set({ readAt: new Date() }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.recipientUserId, input.userId)));
+  await db.update(teacherSchemeRevisionRecommendationOutcomes).set({ acknowledgedAt: new Date() }).where(and(eq(teacherSchemeRevisionRecommendationOutcomes.schoolId, input.schoolId), eq(teacherSchemeRevisionRecommendationOutcomes.notificationId, input.notificationId), isNull(teacherSchemeRevisionRecommendationOutcomes.acknowledgedAt), isNull(teacherSchemeRevisionRecommendationOutcomes.expiredAt), isNull(teacherSchemeRevisionRecommendationOutcomes.clearedAt)));
   return { success: true, importId: notification.importId };
 }
 
@@ -1764,7 +1767,9 @@ export async function listSchoolLeaderSchemeRevisionNotifications(schoolId: numb
 
 async function clearExpiredSchoolLeaderSchemeRecommendations(schoolId: number) {
   const now = new Date();
-  await (await database()).update(teacherSchemeRevisionNotifications).set({ recommendedAt: null, recommendedBy: null, recommendationExpiresAt: null }).where(and(eq(teacherSchemeRevisionNotifications.schoolId, schoolId), sql`${teacherSchemeRevisionNotifications.recommendationExpiresAt} IS NOT NULL AND ${teacherSchemeRevisionNotifications.recommendationExpiresAt} <= ${now}`));
+  const db = await database();
+  await db.update(teacherSchemeRevisionRecommendationOutcomes).set({ expiredAt: now }).where(and(eq(teacherSchemeRevisionRecommendationOutcomes.schoolId, schoolId), isNull(teacherSchemeRevisionRecommendationOutcomes.acknowledgedAt), isNull(teacherSchemeRevisionRecommendationOutcomes.expiredAt), sql`${teacherSchemeRevisionRecommendationOutcomes.expiresAt} <= ${now}`));
+  await db.update(teacherSchemeRevisionNotifications).set({ recommendedAt: null, recommendedBy: null, recommendationExpiresAt: null }).where(and(eq(teacherSchemeRevisionNotifications.schoolId, schoolId), sql`${teacherSchemeRevisionNotifications.recommendationExpiresAt} IS NOT NULL AND ${teacherSchemeRevisionNotifications.recommendationExpiresAt} <= ${now}`));
 }
 
 export async function setSchoolLeaderSchemeRevisionNotificationRecommended(input: { schoolId: number; notificationId: number; userId: number; recommended: boolean; recommendationExpiresAt?: Date }) {
@@ -1773,9 +1778,18 @@ export async function setSchoolLeaderSchemeRevisionNotificationRecommended(input
   if (!notification) throw new Error("Revised weekly-plan notification not found.");
   if (input.recommended && input.recommendationExpiresAt && input.recommendationExpiresAt.getTime() <= Date.now()) throw new Error("Recommendation expiry must be in the future.");
   const expiresAt = input.recommended ? input.recommendationExpiresAt ?? null : null;
-  await db.update(teacherSchemeRevisionNotifications).set({ recommendedAt: input.recommended ? new Date() : null, recommendedBy: input.recommended ? input.userId : null, recommendationExpiresAt: expiresAt }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId)));
+  const now = new Date();
+  await db.update(teacherSchemeRevisionNotifications).set({ recommendedAt: input.recommended ? now : null, recommendedBy: input.recommended ? input.userId : null, recommendationExpiresAt: expiresAt }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId)));
+  if (input.recommended && expiresAt) await db.insert(teacherSchemeRevisionRecommendationOutcomes).values({ schoolId: input.schoolId, notificationId: input.notificationId, recipientUserId: notification.recipientUserId, classLabel: notification.classLabel, subjectLabel: notification.subjectLabel, termLabel: notification.termLabel, expiresAt, acknowledgedAt: null, expiredAt: null, clearedAt: null }).onDuplicateKeyUpdate({ set: { expiresAt, acknowledgedAt: null, expiredAt: null, clearedAt: null, createdAt: now } });
+  if (!input.recommended) await db.update(teacherSchemeRevisionRecommendationOutcomes).set({ clearedAt: now }).where(and(eq(teacherSchemeRevisionRecommendationOutcomes.schoolId, input.schoolId), eq(teacherSchemeRevisionRecommendationOutcomes.notificationId, input.notificationId), isNull(teacherSchemeRevisionRecommendationOutcomes.acknowledgedAt), isNull(teacherSchemeRevisionRecommendationOutcomes.expiredAt), isNull(teacherSchemeRevisionRecommendationOutcomes.clearedAt)));
   await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.userId, eventType: input.recommended ? "weekly_plan_revision_alert_recommended" : "weekly_plan_revision_alert_recommendation_cleared", targetType: "teacher_scheme_revision_notification", targetId: input.notificationId, metadata: { recommended: input.recommended, expiresAt: expiresAt?.toISOString() ?? null } });
   return { success: true, recommended: input.recommended, recommendationExpiresAt: expiresAt };
+}
+
+export async function listExpiredBeforeAcknowledgementRecommendationReport(schoolId: number) {
+  await clearExpiredSchoolLeaderSchemeRecommendations(schoolId);
+  const rows = await (await database()).select({ outcome: teacherSchemeRevisionRecommendationOutcomes, recipientName: users.name }).from(teacherSchemeRevisionRecommendationOutcomes).innerJoin(users, eq(teacherSchemeRevisionRecommendationOutcomes.recipientUserId, users.id)).where(and(eq(teacherSchemeRevisionRecommendationOutcomes.schoolId, schoolId), isNull(teacherSchemeRevisionRecommendationOutcomes.acknowledgedAt), sql`${teacherSchemeRevisionRecommendationOutcomes.expiredAt} IS NOT NULL`)).orderBy(desc(teacherSchemeRevisionRecommendationOutcomes.expiredAt));
+  return rows.map(row => ({ ...row.outcome, recipientName: row.recipientName }));
 }
 
 export async function listTeacherSchemeReviews(schoolId: number, userId: number) {

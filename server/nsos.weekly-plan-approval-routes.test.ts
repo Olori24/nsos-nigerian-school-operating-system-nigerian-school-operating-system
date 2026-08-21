@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
-  return { ...actual, getSchoolMembership: vi.fn(), listTeacherSchemeReviews: vi.fn(), listTeacherSchemeRevisionNotifications: vi.fn(), listSchoolLeaderSchemeRevisionNotifications: vi.fn(), markTeacherSchemeRevisionNotificationRead: vi.fn(), setTeacherSchemeRevisionNotificationPinned: vi.fn(), setSchoolLeaderSchemeRevisionNotificationRecommended: vi.fn(), addAssignedSchemeRowInlineComment: vi.fn(), listSchemeImportInlineComments: vi.fn(), reviewAssignedSchemeRow: vi.fn(), publishApprovedSchemeImport: vi.fn() };
+  return { ...actual, getSchoolMembership: vi.fn(), listTeacherSchemeReviews: vi.fn(), listTeacherSchemeRevisionNotifications: vi.fn(), listSchoolLeaderSchemeRevisionNotifications: vi.fn(), listExpiredBeforeAcknowledgementRecommendationReport: vi.fn(), markTeacherSchemeRevisionNotificationRead: vi.fn(), setTeacherSchemeRevisionNotificationPinned: vi.fn(), setSchoolLeaderSchemeRevisionNotificationRecommended: vi.fn(), addAssignedSchemeRowInlineComment: vi.fn(), listSchemeImportInlineComments: vi.fn(), reviewAssignedSchemeRow: vi.fn(), publishApprovedSchemeImport: vi.fn() };
 });
 
 import * as db from "./db";
@@ -65,6 +65,15 @@ describe("NSOS weekly-plan teacher approval routes", () => {
     await expect(caller().nsos.academics.setSchemeRevisionNotificationRecommended({ schoolId: 17, notificationId: 33, recommended: true, recommendationExpiresAt: new Date(Date.now() - 1_000) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("teacher") as any);
     await expect(caller().nsos.academics.setSchemeRevisionNotificationRecommended({ schoolId: 17, notificationId: 33, recommended: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("limits expired-before-acknowledgement recommendation reporting to school leadership", async () => {
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("admin") as any);
+    vi.mocked(db.listExpiredBeforeAcknowledgementRecommendationReport).mockResolvedValue([{ id: 41, recipientName: "Teacher Example", subjectLabel: "Basic Science", expiredAt: new Date() }] as any);
+    await expect(caller().nsos.academics.expiredSchemeRevisionRecommendationReport({ schoolId: 17 })).resolves.toHaveLength(1);
+    expect(db.listExpiredBeforeAcknowledgementRecommendationReport).toHaveBeenCalledWith(17);
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("teacher") as any);
+    await expect(caller().nsos.academics.expiredSchemeRevisionRecommendationReport({ schoolId: 17 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("requires an owner or administrator to publish plans after teacher approval", async () => {

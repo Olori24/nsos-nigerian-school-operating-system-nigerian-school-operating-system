@@ -17,4 +17,11 @@ describe("leader recommendation expiry safeguards", () => {
     expect(routerSource).toContain("Recommendation expiry must be in the future.");
     expect(dbSource).toContain("input.recommendationExpiresAt.getTime() <= Date.now()");
   });
+
+  it("retains an expired, unacknowledged outcome separately from the live recommendation flag", () => {
+    expect(dbSource).toContain("teacherSchemeRevisionRecommendationOutcomes");
+    expect(dbSource).toContain("expiredAt: now");
+    expect(dbSource).toContain("acknowledgedAt: new Date()");
+    expect(dbSource).toContain("listExpiredBeforeAcknowledgementRecommendationReport");
+  });
 });

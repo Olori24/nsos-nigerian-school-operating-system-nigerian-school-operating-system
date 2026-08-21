@@ -586,6 +586,28 @@ export const teacherSchemeRevisionNotifications = mysqlTable(
   }),
 );
 
+export const teacherSchemeRevisionRecommendationOutcomes = mysqlTable(
+  "teacherSchemeRevisionRecommendationOutcomes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    notificationId: int("notificationId").notNull(),
+    recipientUserId: int("recipientUserId").notNull(),
+    classLabel: varchar("classLabel", { length: 120 }).notNull(),
+    subjectLabel: varchar("subjectLabel", { length: 160 }).notNull(),
+    termLabel: varchar("termLabel", { length: 64 }).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    acknowledgedAt: timestamp("acknowledgedAt"),
+    expiredAt: timestamp("expiredAt"),
+    clearedAt: timestamp("clearedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    notification: uniqueIndex("teacherSchemeRecommendation_notification_unique").on(table.notificationId),
+    schoolExpiry: index("teacherSchemeRecommendation_school_expiry_idx").on(table.schoolId, table.expiresAt),
+  }),
+);
+
 export const classSubjects = mysqlTable(
   "classSubjects",
   {

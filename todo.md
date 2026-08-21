@@ -155,3 +155,4 @@
 - [x] Allow teachers to pin and unpin their revised weekly-plan alerts so pinned alerts stay at the top of filtered notification lists.
 - [x] Allow school owners and administrators to flag a revised weekly-plan alert as recommended priority for the assigned teacher, without changing that teacher’s personal pins.
 - [x] Allow school leaders to set an optional future expiry for recommended-priority alerts so expired recommendations no longer appear as active teacher priorities.
+- [x] Provide owners and administrators a tenant-scoped report of recommended revision alerts that expired before the assigned teacher acknowledged them.
