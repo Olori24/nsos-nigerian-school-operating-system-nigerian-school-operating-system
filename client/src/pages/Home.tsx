@@ -22,6 +22,7 @@ import { SchemeOfWorkImporter } from "@/components/SchemeOfWorkImporter";
 import { TeacherWeeklyPlanReview } from "@/components/TeacherWeeklyPlanReview";
 import { AdmissionTemplateCard, FeeScheduleTemplateCard } from "@/components/DocumentTemplateStudio";
 import { NsosCopilot } from "@/components/NsosCopilot";
+import { OwnerSetupManagementDashboard } from "@/components/OwnerSetupManagementDashboard";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -83,7 +84,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type View = "overview" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "tutor-analytics" | "account";
+type View = "overview" | "setup-management" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "tutor-analytics" | "account";
 type Role = "owner" | "admin" | "staff" | "teacher" | "finance" | "parent" | "student";
 
 const navGroups: { label: string; items: { id: View; label: string; icon: typeof LayoutDashboard; roles: Role[] }[] }[] = [
@@ -92,6 +93,12 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard, roles: ["owner", "admin", "staff", "teacher", "finance", "parent", "student"] },
       { id: "reports", label: "Reports", icon: FileText, roles: ["owner", "admin", "finance"] },
+    ],
+  },
+  {
+    label: "Owner controls",
+    items: [
+      { id: "setup-management", label: "Setup approvals", icon: ShieldCheck, roles: ["owner"] },
     ],
   },
   {
@@ -132,6 +139,7 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
 
 const viewTitles: Record<View, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "Command center", title: "The school, in one considered view.", description: "A clear operating picture for leaders and teams." },
+  "setup-management": { eyebrow: "Owner controls", title: "Approve setup work with confidence.", description: "Review pending staff invitations and inactive fee drafts from one controlled workspace." },
   admissions: { eyebrow: "Admissions", title: "From application to arrival.", description: "Review, decide, document, and enroll without disconnected hand-offs." },
   students: { eyebrow: "Student records", title: "Every learner’s journey, kept intact.", description: "Profiles, assignments, guardians, promotions, and academic history in one record." },
   academics: { eyebrow: "Academic management", title: "Design the learning year with intent.", description: "Sessions, terms, classes, subjects, timetables, planning, and curriculum progress." },
@@ -472,6 +480,7 @@ type Query<T> = { data?: T; isLoading: boolean; error?: { message: string } | nu
 function Workspace({ view, schoolId, schoolName, role, summary, applications, students, academics, attendance, absenceAlerts, results, finance, staff, staffOperations, announcements, guardianPortal, studentPortal, onRefresh, onNavigate }: { view: View; schoolId: number; schoolName: string; role: Role; summary: Query<any>; applications: Query<any[]>; students: Query<any[]>; academics: Query<any>; attendance: Query<any[]>; absenceAlerts: Query<any[]>; results: Query<any>; finance: Query<any>; staff: Query<any[]>; staffOperations: Query<any>; announcements: Query<any[]>; guardianPortal: Query<any>; studentPortal: Query<any>; onRefresh: () => void; onNavigate: (view: View) => void }) {
   if (view === "account") return <AccountSecurity />;
   if (view === "overview") return <Overview schoolId={schoolId} role={role} summary={summary} announcements={announcements} onRefresh={onRefresh} onNavigate={onNavigate} />;
+  if (view === "setup-management") return role === "owner" ? <OwnerSetupManagementDashboard schoolId={schoolId} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "admissions") return <><Admissions schoolId={schoolId} schoolName={schoolName} applications={applications} academics={academics} canManageTemplates={role === "owner" || role === "admin"} onRefresh={onRefresh} /><AdmissionDocumentReview schoolId={schoolId} applications={applications.data ?? []} onDone={onRefresh} /><EnrollmentStation schoolId={schoolId} applications={applications.data ?? []} academic={academics.data} onDone={onRefresh} /></>;
   if (view === "students") return <><StudentsWithPromotion schoolId={schoolId} schoolName={schoolName} students={students} academics={academics} onRefresh={onRefresh} /><StudentLifecycleControls schoolId={schoolId} students={students.data ?? []} onDone={onRefresh} /><AcademicHistoryStation schoolId={schoolId} students={students.data ?? []} /></>;
   if (view === "academics") return <><Academics schoolId={schoolId} data={academics} staff={staff} role={role} onRefresh={onRefresh} /><CurriculumStation schoolId={schoolId} academic={academics.data} onDone={onRefresh} /></>;
