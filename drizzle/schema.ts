@@ -527,13 +527,20 @@ export const schemeOfWorkRows = mysqlTable(
     importId: int("importId").notNull(),
     schoolId: int("schoolId").notNull(),
     milestoneId: int("milestoneId").notNull(),
+    assignedTeacherId: int("assignedTeacherId").notNull(),
     weekNo: int("weekNo").notNull(),
     topic: varchar("topic", { length: 255 }).notNull(),
     objectives: text("objectives"),
     resources: text("resources"),
+    reviewStatus: mysqlEnum("reviewStatus", ["pending_review", "approved", "returned", "published"]).notNull().default("pending_review"),
+    reviewNote: text("reviewNote"),
+    reviewedBy: int("reviewedBy"),
+    reviewedAt: timestamp("reviewedAt"),
+    publishedBy: int("publishedBy"),
+    publishedAt: timestamp("publishedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ importWeek: uniqueIndex("schemeOfWorkRow_import_week_unique").on(table.importId, table.weekNo), schoolClass: index("schemeOfWorkRow_school_idx").on(table.schoolId, table.createdAt) }),
+  table => ({ importWeek: uniqueIndex("schemeOfWorkRow_import_week_unique").on(table.importId, table.weekNo), schoolClass: index("schemeOfWorkRow_school_idx").on(table.schoolId, table.createdAt), teacherReview: index("schemeOfWorkRow_teacher_review_idx").on(table.assignedTeacherId, table.reviewStatus) }),
 );
 
 export const classSubjects = mysqlTable(

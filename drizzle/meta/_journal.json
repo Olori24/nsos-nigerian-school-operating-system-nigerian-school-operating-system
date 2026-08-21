@@ -218,6 +218,13 @@
       "when": 1787272164172,
       "tag": "0030_sparkling_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1787272673628,
+      "tag": "0031_awesome_beast",
+      "breakpoints": true
     }
   ]
 }

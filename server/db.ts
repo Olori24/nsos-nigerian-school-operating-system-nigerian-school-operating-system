@@ -1599,7 +1599,7 @@ export async function linkGuardianToStudent(input: { schoolId: number; studentId
 
 export async function listAcademicData(schoolId: number) {
   const db = await database();
-  const [sessions, terms, classList, subjectList, classSubjectList, timetable, lessonPlanList, curriculum, curriculumProfile, schemeImports] = await Promise.all([
+  const [sessions, terms, classList, subjectList, classSubjectList, timetable, lessonPlanList, curriculum, curriculumProfile, schemeImports, schemeRows] = await Promise.all([
     db.select().from(academicSessions).where(eq(academicSessions.schoolId, schoolId)).orderBy(desc(academicSessions.startsOn)),
     db.select().from(academicTerms).where(eq(academicTerms.schoolId, schoolId)).orderBy(desc(academicTerms.startsOn)),
     db.select().from(classes).where(eq(classes.schoolId, schoolId)).orderBy(classes.name),
@@ -1610,8 +1610,12 @@ export async function listAcademicData(schoolId: number) {
     db.select().from(curriculumMilestones).where(eq(curriculumMilestones.schoolId, schoolId)).orderBy(curriculumMilestones.targetWeek),
     db.select().from(schoolCurriculumProfiles).where(eq(schoolCurriculumProfiles.schoolId, schoolId)).limit(1),
     db.select().from(schemeOfWorkImports).where(eq(schemeOfWorkImports.schoolId, schoolId)).orderBy(desc(schemeOfWorkImports.importedAt)),
+    db.select().from(schemeOfWorkRows).where(eq(schemeOfWorkRows.schoolId, schoolId)),
   ]);
-  const importHistory = schemeImports.map(item => ({ id: item.id, classId: item.classId, subjectId: item.subjectId, termId: item.termId, fileName: item.fileName, mimeType: item.mimeType, rowCount: item.rowCount, importedAt: item.importedAt }));
+  const importHistory = schemeImports.map(item => {
+    const rows = schemeRows.filter(row => row.importId === item.id);
+    return { id: item.id, classId: item.classId, subjectId: item.subjectId, termId: item.termId, fileName: item.fileName, mimeType: item.mimeType, rowCount: item.rowCount, importedAt: item.importedAt, reviewSummary: { pending: rows.filter(row => row.reviewStatus === "pending_review").length, approved: rows.filter(row => row.reviewStatus === "approved").length, returned: rows.filter(row => row.reviewStatus === "returned").length, published: rows.filter(row => row.reviewStatus === "published").length } };
+  });
   return { sessions, terms, classes: classList, subjects: subjectList, classSubjects: classSubjectList, timetable, lessonPlans: lessonPlanList, curriculum, curriculumProfile: curriculumProfile[0] ?? null, schemeImports: importHistory };
 }
 
@@ -1686,6 +1690,7 @@ export async function importApprovedSchemeOfWork(input: { schoolId: number; clas
     db.select().from(classSubjects).where(and(eq(classSubjects.schoolId, input.schoolId), eq(classSubjects.classId, input.classId), eq(classSubjects.subjectId, input.subjectId))).limit(1),
   ]);
   if (!classRow[0] || !subjectRow[0] || !termRow[0] || !classSubject[0]) throw new Error("Map the scheme to a class, approved subject, and term that belong to this school.");
+  if (!classSubject[0].teacherId) throw new Error("Assign the class-subject teacher before importing a scheme for review.");
   const priorImports = await db.select().from(schemeOfWorkImports).where(and(eq(schemeOfWorkImports.schoolId, input.schoolId), eq(schemeOfWorkImports.classId, input.classId), eq(schemeOfWorkImports.subjectId, input.subjectId), eq(schemeOfWorkImports.termId, input.termId)));
   if (priorImports.length && !input.replaceExisting) throw new Error("An approved scheme already exists for this class, subject, and term. Review it and explicitly replace it to continue.");
   if (priorImports.length) {
@@ -1702,10 +1707,48 @@ export async function importApprovedSchemeOfWork(input: { schoolId: number; clas
   const importId = Number(imported[0].insertId);
   for (const row of rows) {
     const milestone = await db.insert(curriculumMilestones).values({ schoolId: input.schoolId, classSubjectId: classSubject[0].id, termId: input.termId, title: row.topic, targetWeek: row.weekNo });
-    await db.insert(schemeOfWorkRows).values({ importId, schoolId: input.schoolId, milestoneId: Number(milestone[0].insertId), weekNo: row.weekNo, topic: row.topic, objectives: row.objectives ?? null, resources: row.resources ?? null });
+    await db.insert(schemeOfWorkRows).values({ importId, schoolId: input.schoolId, milestoneId: Number(milestone[0].insertId), assignedTeacherId: classSubject[0].teacherId, weekNo: row.weekNo, topic: row.topic, objectives: row.objectives ?? null, resources: row.resources ?? null, reviewStatus: "pending_review" });
   }
   await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.importedBy, eventType: "scheme_of_work_imported", targetType: "scheme_of_work_import", targetId: importId, metadata: { classId: input.classId, subjectId: input.subjectId, termId: input.termId, rowCount: rows.length, replacedExisting: input.replaceExisting, fileType: input.mimeType } });
   return { importId, rowCount: rows.length, fileName, replacedExisting: input.replaceExisting };
+}
+
+export async function listTeacherSchemeReviews(schoolId: number, userId: number) {
+  const db = await database();
+  const staff = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.userId, userId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+  if (!staff) throw new Error("Your teacher account is not linked to an active staff profile for this school.");
+  const rows = await db.select({ row: schemeOfWorkRows, import: schemeOfWorkImports, className: classes.name, subjectName: subjects.name, termName: academicTerms.name }).from(schemeOfWorkRows).innerJoin(schemeOfWorkImports, eq(schemeOfWorkRows.importId, schemeOfWorkImports.id)).innerJoin(classes, eq(schemeOfWorkImports.classId, classes.id)).innerJoin(subjects, eq(schemeOfWorkImports.subjectId, subjects.id)).innerJoin(academicTerms, eq(schemeOfWorkImports.termId, academicTerms.id)).where(and(eq(schemeOfWorkRows.schoolId, schoolId), eq(schemeOfWorkRows.assignedTeacherId, staff.id))).orderBy(schemeOfWorkRows.importId, schemeOfWorkRows.weekNo);
+  return rows.map(item => ({ id: item.row.id, importId: item.row.importId, weekNo: item.row.weekNo, topic: item.row.topic, objectives: item.row.objectives, resources: item.row.resources, reviewStatus: item.row.reviewStatus, reviewNote: item.row.reviewNote, className: item.className, subjectName: item.subjectName, termName: item.termName }));
+}
+
+export async function reviewAssignedSchemeRow(input: { schoolId: number; rowId: number; decision: "approved" | "returned"; reviewNote?: string; reviewedByUserId: number }) {
+  const db = await database();
+  const staff = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), eq(staffProfiles.userId, input.reviewedByUserId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+  if (!staff) throw new Error("Your teacher account is not linked to an active staff profile for this school.");
+  const row = (await db.select().from(schemeOfWorkRows).where(and(eq(schemeOfWorkRows.id, input.rowId), eq(schemeOfWorkRows.schoolId, input.schoolId), eq(schemeOfWorkRows.assignedTeacherId, staff.id))).limit(1))[0];
+  if (!row) throw new Error("This weekly plan is not assigned to your teacher profile.");
+  if (row.reviewStatus === "published") throw new Error("A published weekly plan cannot be changed through teacher review.");
+  if (input.decision === "returned" && !input.reviewNote?.trim()) throw new Error("Add a short return note so the school can revise the plan.");
+  await db.update(schemeOfWorkRows).set({ reviewStatus: input.decision, reviewNote: input.reviewNote?.trim() || null, reviewedBy: input.reviewedByUserId, reviewedAt: new Date() }).where(and(eq(schemeOfWorkRows.id, input.rowId), eq(schemeOfWorkRows.assignedTeacherId, staff.id), eq(schemeOfWorkRows.schoolId, input.schoolId)));
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.reviewedByUserId, eventType: "weekly_plan_teacher_reviewed", targetType: "scheme_of_work_row", targetId: input.rowId, metadata: { decision: input.decision, noteProvided: Boolean(input.reviewNote?.trim()) } });
+  return { success: true };
+}
+
+export async function publishApprovedSchemeImport(input: { schoolId: number; importId: number; publishedBy: number }) {
+  const db = await database();
+  const imported = (await db.select().from(schemeOfWorkImports).where(and(eq(schemeOfWorkImports.id, input.importId), eq(schemeOfWorkImports.schoolId, input.schoolId))).limit(1))[0];
+  if (!imported) throw new Error("Imported scheme not found.");
+  const rows = await db.select().from(schemeOfWorkRows).where(and(eq(schemeOfWorkRows.importId, input.importId), eq(schemeOfWorkRows.schoolId, input.schoolId)));
+  if (!rows.length) throw new Error("This import has no weekly plans to publish.");
+  if (rows.some(row => row.reviewStatus !== "approved" && row.reviewStatus !== "published")) throw new Error("Every weekly plan must be approved by its assigned teacher before publication.");
+  const now = new Date();
+  for (const row of rows) {
+    if (row.reviewStatus === "published") continue;
+    await db.update(schemeOfWorkRows).set({ reviewStatus: "published", publishedBy: input.publishedBy, publishedAt: now }).where(eq(schemeOfWorkRows.id, row.id));
+    await db.update(curriculumMilestones).set({ status: "in_progress" }).where(and(eq(curriculumMilestones.id, row.milestoneId), eq(curriculumMilestones.schoolId, input.schoolId)));
+  }
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.publishedBy, eventType: "approved_weekly_plans_published", targetType: "scheme_of_work_import", targetId: input.importId, metadata: { rowCount: rows.length, publicationGate: "teacher_approved" } });
+  return { success: true, rowCount: rows.length };
 }
 
 export async function listAttendance(schoolId: number, filters: { attendanceDate?: string; attendeeType?: "student" | "staff" }) {
