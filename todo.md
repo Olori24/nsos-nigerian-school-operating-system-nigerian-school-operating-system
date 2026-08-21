@@ -157,3 +157,5 @@
 - [x] Allow school leaders to set an optional future expiry for recommended-priority alerts so expired recommendations no longer appear as active teacher priorities.
 - [x] Provide owners and administrators a tenant-scoped report of recommended revision alerts that expired before the assigned teacher acknowledged them.
 - [x] Add a leader-only CSV download for the tenant-scoped expired recommendation report, with term-review-ready headings and safe CSV escaping.
+- [ ] Remove the visible “Made by Manus” attribution from the NSOS user interface while preserving NSOS branding.
+- [x] Audit and repair incomplete or blocked NSOS workflows, beginning with the mobile scheme-of-work import path where class, subject, and term choices are unavailable without visible prerequisite recovery.
