@@ -17,4 +17,10 @@ describe("expired recommendation leadership report UI", () => {
     expect(controls).toContain("No leader recommendations have expired before acknowledgement for this school.");
     expect(controls).toContain("Auto-clears");
   });
+
+  it("offers a disabled-until-ready CSV download from the same management-scoped report data", () => {
+    expect(controls).toContain("Download CSV for term review");
+    expect(controls).toContain("buildExpiredRecommendationCsv(rows)");
+    expect(controls).toContain("expiredSchemeRevisionRecommendationReport.useQuery");
+  });
 });

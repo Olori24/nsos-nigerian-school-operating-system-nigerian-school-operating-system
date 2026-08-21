@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
-import { Flag, FlagOff, ShieldAlert, TimerOff } from "lucide-react";
+import { buildExpiredRecommendationCsv } from "@/lib/expiredRecommendationCsv";
+import { Download, Flag, FlagOff, ShieldAlert, TimerOff } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -34,4 +35,21 @@ export function ExpiredSchemeRecommendationReport({ schoolId }: { schoolId: numb
   const report = trpc.nsos.academics.expiredSchemeRevisionRecommendationReport.useQuery({ schoolId });
   const rows = (report.data ?? []) as ExpiredOutcome[];
   return <section className="rounded-[1.2rem] border border-[#ecd5cf] bg-white p-5 shadow-[0_10px_32px_rgba(86,39,29,0.035)] sm:p-6"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#fff0ec] text-[#a34a3c]"><TimerOff className="h-5 w-5" /></span><div><p className="text-sm font-semibold text-[#56352f]">Expired before acknowledgement</p><p className="mt-1 text-xs leading-5 text-[#7c655f]">This report shows recommendation alerts that reached their expiry before the assigned teacher acknowledged them. It is an operational follow-up signal, not a teacher performance score.</p></div></div>{report.isLoading ? <p className="mt-4 text-xs text-[#7c655f]">Loading recommendation outcomes…</p> : rows.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[590px] text-left text-xs"><thead className="border-b border-[#f0e3df] text-[10px] uppercase tracking-[0.1em] text-[#8c756e]"><tr><th className="px-2 py-2">Teacher</th><th className="px-2 py-2">Plan</th><th className="px-2 py-2">Expiry</th><th className="px-2 py-2">Recorded</th></tr></thead><tbody>{rows.map(row => <tr key={row.id} className="border-b border-[#f5ece9] last:border-0"><td className="px-2 py-3 font-semibold text-[#58413b]">{row.recipientName || "Assigned teacher"}</td><td className="px-2 py-3 text-[#68534d]">{row.classLabel} · {row.subjectLabel} · {row.termLabel}</td><td className="px-2 py-3 text-[#8a4539]">{displayDateTime(row.expiresAt)}</td><td className="px-2 py-3 text-[#75625d]">{row.expiredAt ? displayDateTime(row.expiredAt) : "—"}</td></tr>)}</tbody></table></div> : <div className="mt-4 rounded-xl border border-dashed border-[#e8d5d0] bg-[#fffaf9] p-4 text-xs leading-5 text-[#7c655f]">No leader recommendations have expired before acknowledgement for this school.</div>}</section>;
+}
+
+export function ExpiredSchemeRecommendationCsvExport({ schoolId }: { schoolId: number }) {
+  const report = trpc.nsos.academics.expiredSchemeRevisionRecommendationReport.useQuery({ schoolId });
+  const rows = (report.data ?? []) as ExpiredOutcome[];
+  const download = () => {
+    const blob = new Blob([buildExpiredRecommendationCsv(rows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nsos-expired-recommendations-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+  return <button type="button" disabled={report.isLoading || !rows.length} onClick={download} className="inline-flex w-fit items-center gap-2 rounded-lg border border-[#d6b8b0] bg-white px-3 py-2 text-xs font-bold text-[#93443a] disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-3.5 w-3.5" />Download CSV for term review</button>;
 }
