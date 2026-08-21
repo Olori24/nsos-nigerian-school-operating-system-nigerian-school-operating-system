@@ -485,6 +485,22 @@ export const subjects = mysqlTable(
   table => ({ schoolCode: uniqueIndex("subject_school_code_unique").on(table.schoolId, table.code) }),
 );
 
+export const schoolCurriculumProfiles = mysqlTable(
+  "schoolCurriculumProfiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    framework: mysqlEnum("framework", ["nerdc_basic", "nerdc_senior", "custom"]).notNull().default("custom"),
+    templateId: varchar("templateId", { length: 64 }),
+    sourceUrl: varchar("sourceUrl", { length: 2048 }),
+    appliedClassIds: json("appliedClassIds").$type<number[]>().notNull(),
+    appliedBy: int("appliedBy"),
+    appliedAt: timestamp("appliedAt"),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolUnique: uniqueIndex("curriculumProfile_school_unique").on(table.schoolId) }),
+);
+
 export const classSubjects = mysqlTable(
   "classSubjects",
   {
@@ -728,6 +744,26 @@ export const payments = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({ schoolReceipt: uniqueIndex("payment_school_receipt_unique").on(table.schoolId, table.receiptNo) }),
+);
+
+export const schoolBankAccounts = mysqlTable(
+  "schoolBankAccounts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    bankName: varchar("bankName", { length: 160 }).notNull(),
+    accountName: varchar("accountName", { length: 160 }).notNull(),
+    encryptedAccountNumber: text("encryptedAccountNumber").notNull(),
+    accountNumberLast4: varchar("accountNumberLast4", { length: 4 }).notNull(),
+    accountType: mysqlEnum("accountType", ["current", "savings", "corporate", "other"]).notNull().default("current"),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    isPrimary: boolean("isPrimary").notNull().default(false),
+    paymentReferenceGuidance: varchar("paymentReferenceGuidance", { length: 255 }),
+    configuredBy: int("configuredBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolStatus: index("schoolBankAccount_school_status_idx").on(table.schoolId, table.status), schoolPrimary: index("schoolBankAccount_school_primary_idx").on(table.schoolId, table.isPrimary) }),
 );
 
 export const cashAssuranceCases = mysqlTable(

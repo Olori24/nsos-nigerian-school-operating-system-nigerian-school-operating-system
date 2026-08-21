@@ -7,9 +7,12 @@ const readySignals = {
   terms: 3,
   classes: 8,
   subjects: 12,
+  classSubjects: 48,
+  curriculumConfigured: true,
   activeStaff: 4,
   activeStudents: 80,
   feeStructures: 6,
+  activeBankAccounts: 1,
   websitePublished: true,
 };
 
@@ -20,14 +23,14 @@ describe("tenant onboarding progress", () => {
     expect(status.steps.every(step => step.completed)).toBe(true);
   });
 
-  it("keeps the academic foundation incomplete until session, term, class, and subject records all exist", () => {
-    const status = deriveTenantOnboardingStatus({ ...readySignals, subjects: 0, activeStaff: 0, activeStudents: 0, feeStructures: 0, websitePublished: false });
+  it("keeps the academic foundation incomplete until core records, class-subject links, and a reviewed curriculum profile exist", () => {
+    const status = deriveTenantOnboardingStatus({ ...readySignals, curriculumConfigured: false, activeStaff: 0, activeStudents: 0, feeStructures: 0, activeBankAccounts: 0, websitePublished: false });
     expect(status.completedSteps).toBe(1);
     expect(status.nextStep).toMatchObject({ id: "academic-foundation", destination: "academics", actionLabel: "Set up academics" });
   });
 
   it("points the school administrator to the first unfinished actionable setup area", () => {
-    const status = deriveTenantOnboardingStatus({ ...readySignals, activeStaff: 0, activeStudents: 0, feeStructures: 0, websitePublished: false });
+    const status = deriveTenantOnboardingStatus({ ...readySignals, activeStaff: 0, activeStudents: 0, feeStructures: 0, activeBankAccounts: 0, websitePublished: false });
     expect(status.nextStep).toMatchObject({ id: "team", destination: "staff", actionLabel: "Add staff" });
     expect(status.completionPercent).toBe(33);
   });

@@ -6,9 +6,12 @@ export type TenantOnboardingSignals = {
   terms: number;
   classes: number;
   subjects: number;
+  classSubjects: number;
+  curriculumConfigured: boolean;
   activeStaff: number;
   activeStudents: number;
   feeStructures: number;
+  activeBankAccounts: number;
   websitePublished: boolean;
 };
 
@@ -32,8 +35,8 @@ export function deriveTenantOnboardingStatus(signals: TenantOnboardingSignals) {
     {
       id: "academic-foundation",
       label: "Academic foundation",
-      description: "Create a session, term, class, and subject before enrolling learners.",
-      completed: signals.sessions > 0 && signals.terms > 0 && signals.classes > 0 && signals.subjects > 0,
+      description: "Create a session, term, class, and subject, then apply or record your reviewed curriculum before enrolling learners.",
+      completed: signals.sessions > 0 && signals.terms > 0 && signals.classes > 0 && signals.subjects > 0 && signals.classSubjects > 0 && signals.curriculumConfigured,
       destination: "academics",
       actionLabel: "Set up academics",
     },
@@ -55,11 +58,11 @@ export function deriveTenantOnboardingStatus(signals: TenantOnboardingSignals) {
     },
     {
       id: "fees",
-      label: "Fee structure",
-      description: "Add at least one fee item to begin preparing family balances and receipts.",
-      completed: signals.feeStructures > 0,
+      label: "Finance & bank account",
+      description: "Add a fee item and an active school bank account before issuing transfer instructions to families.",
+      completed: signals.feeStructures > 0 && signals.activeBankAccounts > 0,
       destination: "finance",
-      actionLabel: "Set up fees",
+      actionLabel: "Set up finance",
     },
     {
       id: "public-presence",

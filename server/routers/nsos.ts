@@ -412,6 +412,10 @@ export const nsosRouter = router({
 
   academics: router({
     list: managementProcedure("academics.read").input(schoolInput).query(({ input }) => db.listAcademicData(input.schoolId)),
+    curriculumTemplates: managementProcedure("academics.read").input(schoolInput).query(() => db.getCurriculumTemplateCatalog()),
+    applyNigerianCurriculumTemplate: onboardingAdminProcedure
+      .input(schoolInput.extend({ templateId: z.enum(["basic_primary", "basic_junior_secondary", "senior_secondary_review"]), classIds: z.array(z.number().int().positive()).min(1).max(50), includeOptional: z.boolean().default(false) }))
+      .mutation(({ ctx, input }) => db.applyNigerianCurriculumTemplate({ ...input, appliedBy: ctx.user.id })),
     createSession: managementProcedure("academics.write")
       .input(schoolInput.extend({ name: z.string().min(3).max(64), startsOn: z.string().min(10).max(10), endsOn: z.string().min(10).max(10), isCurrent: z.boolean().optional() }))
       .mutation(({ input }) => db.createAcademicSession(input)),
@@ -424,6 +428,9 @@ export const nsosRouter = router({
     createSubject: managementProcedure("academics.write")
       .input(schoolInput.extend({ code: z.string().min(2).max(32), name: z.string().min(2).max(160), departmentId: z.number().int().positive().optional(), description: z.string().max(5000).optional() }))
       .mutation(({ input }) => db.createSubject(input)),
+    assignClassSubject: managementProcedure("academics.write")
+      .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), teacherId: z.number().int().positive().optional() }))
+      .mutation(({ input }) => db.assignClassSubject(input)),
     saveTimetable: managementProcedure("academics.write")
       .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), teacherId: z.number().int().positive().optional(), dayOfWeek: z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]), startsAt: z.string().min(4).max(8), endsAt: z.string().min(4).max(8), room: z.string().max(80).optional() }))
       .mutation(({ input }) => db.createTimetableEntry(input)),
@@ -479,6 +486,12 @@ export const nsosRouter = router({
 
   finance: router({
     list: managementProcedure("finance.read").input(schoolInput).query(({ input }) => db.listFinanceData(input.schoolId)),
+    createBankAccount: providerAdminProcedure
+      .input(schoolInput.extend({ bankName: z.string().trim().min(2).max(160), accountName: z.string().trim().min(2).max(160), accountNumber: z.string().min(10).max(24), accountType: z.enum(["current", "savings", "corporate", "other"]), status: z.enum(["draft", "active"]).default("draft"), isPrimary: z.boolean().default(false), paymentReferenceGuidance: z.string().trim().max(255).optional() }))
+      .mutation(({ ctx, input }) => db.createSchoolBankAccount({ ...input, configuredBy: ctx.user.id })),
+    updateBankAccountStatus: providerAdminProcedure
+      .input(schoolInput.extend({ bankAccountId: z.number().int().positive(), status: z.enum(["active", "archived"]), isPrimary: z.boolean().optional() }))
+      .mutation(({ ctx, input }) => db.updateSchoolBankAccountStatus({ ...input, configuredBy: ctx.user.id })),
     createFee: managementProcedure("finance.write")
       .input(schoolInput.extend({ name: z.string().min(2).max(255), amount: z.number().positive(), termId: z.number().int().positive().optional(), classId: z.number().int().positive().optional(), mandatory: z.boolean().optional(), dueOn: z.string().optional() }))
       .mutation(({ input }) => db.createFeeStructure(input)),

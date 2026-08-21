@@ -143,3 +143,7 @@
 - [x] Enhance the completion celebration with lightweight visual confetti that stays still for users who prefer reduced motion.
 - [x] Complete an evidence-based 100K-user production-readiness audit covering architecture, security, tenant isolation, core journeys, resilience, observability, measured performance, remediation, and an explicit readiness verdict.
 - [x] Test the reusable Production Readiness Audit skill against a separate safe public repository or staging service and document the evidence, limits, and skill improvements.
+- [x] Audit each claimed NSOS setup workflow, identify incomplete or non-persistent controls, and publish a verified functional-completeness register.
+- [x] Add a Nigerian curriculum setup workflow with selectable curriculum tracks, class-level subject templates, edit-before-apply review, and tenant-scoped academic persistence.
+- [x] Add physical school bank-account setup with account identity validation, finance-role visibility, safe payment-instruction presentation, lifecycle controls, and audit events.
+- [x] Complete and test the essential school setup journey across school profile, academic calendar, curriculum, classes, staff, finance, communications, and website readiness.

@@ -48,6 +48,8 @@ import {
   rateLimitBuckets,
   resultPublications,
   schoolAdvertisingAccounts,
+  schoolBankAccounts,
+  schoolCurriculumProfiles,
   schoolSubscriptions,
   securityAuditEvents,
   schoolMemberships,
@@ -74,6 +76,7 @@ import { generateReviewableAdCopy } from "./advertisingCopy";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
 import { deriveTenantOnboardingStatus } from "./tenantOnboarding";
+import { getNigerianCurriculumTemplate, type NigerianCurriculumTemplateId, listNigerianCurriculumTemplates } from "./nigerianCurriculum";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -162,6 +165,30 @@ export function openProviderCredentials(payload: string | null) {
   const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivValue, "base64url"));
   decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
   return JSON.parse(Buffer.concat([decipher.update(Buffer.from(ciphertextValue, "base64url")), decipher.final()]).toString("utf8")) as ProviderCredentials;
+}
+
+function bankAccountEncryptionKey() {
+  if (!ENV.cookieSecret) throw new Error("Bank account details cannot be stored until the application secret is configured.");
+  return createHash("sha256").update(`nsos-school-bank-account:${ENV.cookieSecret}`).digest();
+}
+
+export function normaliseNigerianBankAccountNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!/^\d{10}$/.test(digits)) throw new Error("Enter a valid 10-digit Nigerian bank account number.");
+  return digits;
+}
+
+export function maskBankAccountNumber(value: string) {
+  const accountNumber = normaliseNigerianBankAccountNumber(value);
+  return `••••••${accountNumber.slice(-4)}`;
+}
+
+export function sealBankAccountNumber(value: string) {
+  const accountNumber = normaliseNigerianBankAccountNumber(value);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", bankAccountEncryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(accountNumber, "utf8"), cipher.final()]);
+  return `v1:${iv.toString("base64url")}:${cipher.getAuthTag().toString("base64url")}:${ciphertext.toString("base64url")}`;
 }
 
 export function providerReadiness(category: ProviderCategory, provider: string, hasCredentials: boolean, status: "draft" | "ready" | "disabled") {
@@ -1442,15 +1469,18 @@ export async function getDashboardSummary(schoolId: number) {
 
 export async function getTenantOnboardingStatus(schoolId: number) {
   const db = await database();
-  const [school, sessionsCount, termsCount, classesCount, subjectsCount, staffCount, studentsCount, feeStructuresCount, website] = await Promise.all([
+  const [school, sessionsCount, termsCount, classesCount, subjectsCount, classSubjectsCount, curriculumProfile, staffCount, studentsCount, feeStructuresCount, activeBankAccountsCount, website] = await Promise.all([
     db.select({ name: schools.name, shortCode: schools.shortCode, state: schools.state }).from(schools).where(eq(schools.id, schoolId)).limit(1),
     db.select({ value: sql<number>`count(*)` }).from(academicSessions).where(eq(academicSessions.schoolId, schoolId)),
     db.select({ value: sql<number>`count(*)` }).from(academicTerms).where(eq(academicTerms.schoolId, schoolId)),
     db.select({ value: sql<number>`count(*)` }).from(classes).where(eq(classes.schoolId, schoolId)),
     db.select({ value: sql<number>`count(*)` }).from(subjects).where(eq(subjects.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(classSubjects).where(eq(classSubjects.schoolId, schoolId)),
+    db.select({ id: schoolCurriculumProfiles.id }).from(schoolCurriculumProfiles).where(eq(schoolCurriculumProfiles.schoolId, schoolId)).limit(1),
     db.select({ value: sql<number>`count(*)` }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.employmentStatus, "active"))),
     db.select({ value: sql<number>`count(*)` }).from(studentProfiles).where(and(eq(studentProfiles.schoolId, schoolId), eq(studentProfiles.status, "active"))),
     db.select({ value: sql<number>`count(*)` }).from(feeStructures).where(eq(feeStructures.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(schoolBankAccounts).where(and(eq(schoolBankAccounts.schoolId, schoolId), eq(schoolBankAccounts.status, "active"))),
     db.select({ published: schoolWebsites.published }).from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1),
   ]);
   const profile = school[0];
@@ -1461,9 +1491,12 @@ export async function getTenantOnboardingStatus(schoolId: number) {
     terms: Number(termsCount[0]?.value ?? 0),
     classes: Number(classesCount[0]?.value ?? 0),
     subjects: Number(subjectsCount[0]?.value ?? 0),
+    classSubjects: Number(classSubjectsCount[0]?.value ?? 0),
+    curriculumConfigured: Boolean(curriculumProfile[0]),
     activeStaff: Number(staffCount[0]?.value ?? 0),
     activeStudents: Number(studentsCount[0]?.value ?? 0),
     feeStructures: Number(feeStructuresCount[0]?.value ?? 0),
+    activeBankAccounts: Number(activeBankAccountsCount[0]?.value ?? 0),
     websitePublished: Boolean(website[0]?.published),
   });
 }
@@ -1563,7 +1596,7 @@ export async function linkGuardianToStudent(input: { schoolId: number; studentId
 
 export async function listAcademicData(schoolId: number) {
   const db = await database();
-  const [sessions, terms, classList, subjectList, classSubjectList, timetable, lessonPlanList, curriculum] = await Promise.all([
+  const [sessions, terms, classList, subjectList, classSubjectList, timetable, lessonPlanList, curriculum, curriculumProfile] = await Promise.all([
     db.select().from(academicSessions).where(eq(academicSessions.schoolId, schoolId)).orderBy(desc(academicSessions.startsOn)),
     db.select().from(academicTerms).where(eq(academicTerms.schoolId, schoolId)).orderBy(desc(academicTerms.startsOn)),
     db.select().from(classes).where(eq(classes.schoolId, schoolId)).orderBy(classes.name),
@@ -1572,8 +1605,9 @@ export async function listAcademicData(schoolId: number) {
     db.select().from(timetableEntries).where(eq(timetableEntries.schoolId, schoolId)),
     db.select().from(lessonPlans).where(eq(lessonPlans.schoolId, schoolId)).orderBy(desc(lessonPlans.createdAt)),
     db.select().from(curriculumMilestones).where(eq(curriculumMilestones.schoolId, schoolId)).orderBy(curriculumMilestones.targetWeek),
+    db.select().from(schoolCurriculumProfiles).where(eq(schoolCurriculumProfiles.schoolId, schoolId)).limit(1),
   ]);
-  return { sessions, terms, classes: classList, subjects: subjectList, classSubjects: classSubjectList, timetable, lessonPlans: lessonPlanList, curriculum };
+  return { sessions, terms, classes: classList, subjects: subjectList, classSubjects: classSubjectList, timetable, lessonPlans: lessonPlanList, curriculum, curriculumProfile: curriculumProfile[0] ?? null };
 }
 
 export const createAcademicSession = async (input: Record<string, unknown>) => (await database()).insert(academicSessions).values({ ...input, isCurrent: input.isCurrent ?? false } as typeof academicSessions.$inferInsert);
@@ -1583,6 +1617,55 @@ export const createSubject = async (input: Record<string, unknown>) => (await da
 export const createTimetableEntry = async (input: Record<string, unknown>) => (await database()).insert(timetableEntries).values(input as typeof timetableEntries.$inferInsert);
 export const createLessonPlan = async (input: Record<string, unknown>) => (await database()).insert(lessonPlans).values(input as typeof lessonPlans.$inferInsert);
 export const createCurriculumMilestone = async (input: Record<string, unknown>) => (await database()).insert(curriculumMilestones).values(input as typeof curriculumMilestones.$inferInsert);
+
+export function getCurriculumTemplateCatalog() {
+  return listNigerianCurriculumTemplates();
+}
+
+export async function assignClassSubject(input: { schoolId: number; classId: number; subjectId: number; teacherId?: number }) {
+  const db = await database();
+  const [targetClass, targetSubject] = await Promise.all([
+    db.select().from(classes).where(and(eq(classes.id, input.classId), eq(classes.schoolId, input.schoolId))).limit(1),
+    db.select().from(subjects).where(and(eq(subjects.id, input.subjectId), eq(subjects.schoolId, input.schoolId))).limit(1),
+  ]);
+  if (!targetClass[0] || !targetSubject[0]) throw new Error("Select a class and subject that belong to this school.");
+  if (input.teacherId) {
+    const teacher = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.id, input.teacherId), eq(staffProfiles.schoolId, input.schoolId))).limit(1))[0];
+    if (!teacher) throw new Error("Select a teacher profile that belongs to this school.");
+  }
+  await db.insert(classSubjects).values({ schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, teacherId: input.teacherId ?? null }).onDuplicateKeyUpdate({ set: { teacherId: input.teacherId ?? null } });
+  return { success: true };
+}
+
+export async function applyNigerianCurriculumTemplate(input: { schoolId: number; templateId: NigerianCurriculumTemplateId; classIds: number[]; includeOptional: boolean; appliedBy: number }) {
+  const db = await database();
+  const template = getNigerianCurriculumTemplate(input.templateId);
+  const requestedClassIds = Array.from(new Set(input.classIds));
+  const schoolClasses = await db.select().from(classes).where(eq(classes.schoolId, input.schoolId));
+  if (!requestedClassIds.length || requestedClassIds.some(classId => !schoolClasses.some(item => item.id === classId))) throw new Error("Select one or more classes that belong to this school.");
+  const subjectsToApply = template.subjects.filter(subject => input.includeOptional || !subject.optional);
+  const existingSubjects = await db.select().from(subjects).where(eq(subjects.schoolId, input.schoolId));
+  const byCode = new Map<string, { id: number }>(existingSubjects.map(subject => [subject.code, { id: subject.id }]));
+  let createdSubjectCount = 0;
+  for (const subject of subjectsToApply) {
+    if (byCode.has(subject.code)) continue;
+    const created = await db.insert(subjects).values({ schoolId: input.schoolId, code: subject.code, name: subject.name, description: `Added from ${template.name}.` });
+    byCode.set(subject.code, { id: Number(created[0].insertId) });
+    createdSubjectCount += 1;
+  }
+  let classSubjectLinks = 0;
+  for (const classId of requestedClassIds) {
+    for (const subject of subjectsToApply) {
+      const subjectId = byCode.get(subject.code)!.id;
+      await db.insert(classSubjects).values({ schoolId: input.schoolId, classId, subjectId }).onDuplicateKeyUpdate({ set: { schoolId: input.schoolId } });
+      classSubjectLinks += 1;
+    }
+  }
+  const profile = { schoolId: input.schoolId, framework: template.framework, templateId: template.id, sourceUrl: template.sourceUrl, appliedClassIds: requestedClassIds, appliedBy: input.appliedBy, appliedAt: new Date() } as typeof schoolCurriculumProfiles.$inferInsert;
+  await db.insert(schoolCurriculumProfiles).values(profile).onDuplicateKeyUpdate({ set: profile });
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.appliedBy, eventType: "nigerian_curriculum_template_applied", targetType: "school_curriculum_profile", targetId: input.schoolId, metadata: { templateId: template.id, classCount: requestedClassIds.length, subjectCount: subjectsToApply.length, optionalSubjectsIncluded: input.includeOptional } });
+  return { template: template.name, createdSubjectCount, classSubjectLinks, classIds: requestedClassIds };
+}
 
 export async function listAttendance(schoolId: number, filters: { attendanceDate?: string; attendeeType?: "student" | "staff" }) {
   const db = await database();
@@ -1667,12 +1750,35 @@ export async function getStudentReportCard(schoolId: number, studentId: number, 
 
 export async function listFinanceData(schoolId: number) {
   const db = await database();
-  const [fees, invoiceList, paymentList] = await Promise.all([
+  const [fees, invoiceList, paymentList, bankAccountRows] = await Promise.all([
     db.select().from(feeStructures).where(eq(feeStructures.schoolId, schoolId)).orderBy(desc(feeStructures.createdAt)),
     db.select().from(invoices).where(eq(invoices.schoolId, schoolId)).orderBy(desc(invoices.createdAt)),
     db.select().from(payments).where(eq(payments.schoolId, schoolId)).orderBy(desc(payments.createdAt)),
+    db.select().from(schoolBankAccounts).where(eq(schoolBankAccounts.schoolId, schoolId)).orderBy(desc(schoolBankAccounts.isPrimary), desc(schoolBankAccounts.updatedAt)),
   ]);
-  return { feeStructures: fees, invoices: invoiceList, payments: paymentList };
+  const bankAccounts = bankAccountRows.map(account => ({ id: account.id, bankName: account.bankName, accountName: account.accountName, accountNumberMasked: `••••••${account.accountNumberLast4}`, accountType: account.accountType, status: account.status, isPrimary: account.isPrimary, paymentReferenceGuidance: account.paymentReferenceGuidance, updatedAt: account.updatedAt }));
+  return { feeStructures: fees, invoices: invoiceList, payments: paymentList, bankAccounts };
+}
+
+export async function createSchoolBankAccount(input: { schoolId: number; bankName: string; accountName: string; accountNumber: string; accountType: "current" | "savings" | "corporate" | "other"; status: "draft" | "active"; isPrimary: boolean; paymentReferenceGuidance?: string; configuredBy: number }) {
+  const db = await database();
+  const accountNumber = normaliseNigerianBankAccountNumber(input.accountNumber);
+  if (input.isPrimary) await db.update(schoolBankAccounts).set({ isPrimary: false }).where(eq(schoolBankAccounts.schoolId, input.schoolId));
+  const created = await db.insert(schoolBankAccounts).values({ schoolId: input.schoolId, bankName: input.bankName.trim(), accountName: input.accountName.trim(), encryptedAccountNumber: sealBankAccountNumber(accountNumber), accountNumberLast4: accountNumber.slice(-4), accountType: input.accountType, status: input.status, isPrimary: input.isPrimary, paymentReferenceGuidance: input.paymentReferenceGuidance?.trim() || null, configuredBy: input.configuredBy });
+  const bankAccountId = Number(created[0].insertId);
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.configuredBy, eventType: "school_bank_account_created", targetType: "school_bank_account", targetId: bankAccountId, metadata: { bankName: input.bankName.trim(), accountType: input.accountType, status: input.status, isPrimary: input.isPrimary, accountNumberState: "encrypted" } });
+  return { bankAccountId, accountNumberMasked: maskBankAccountNumber(accountNumber) };
+}
+
+export async function updateSchoolBankAccountStatus(input: { schoolId: number; bankAccountId: number; status: "active" | "archived"; isPrimary?: boolean; configuredBy: number }) {
+  const db = await database();
+  const account = (await db.select().from(schoolBankAccounts).where(and(eq(schoolBankAccounts.id, input.bankAccountId), eq(schoolBankAccounts.schoolId, input.schoolId))).limit(1))[0];
+  if (!account) throw new Error("Bank account not found.");
+  const isPrimary = input.status === "active" && input.isPrimary === true;
+  if (isPrimary) await db.update(schoolBankAccounts).set({ isPrimary: false }).where(eq(schoolBankAccounts.schoolId, input.schoolId));
+  await db.update(schoolBankAccounts).set({ status: input.status, isPrimary: isPrimary || (input.status === "archived" ? false : account.isPrimary) }).where(and(eq(schoolBankAccounts.id, input.bankAccountId), eq(schoolBankAccounts.schoolId, input.schoolId)));
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.configuredBy, eventType: "school_bank_account_status_updated", targetType: "school_bank_account", targetId: input.bankAccountId, metadata: { status: input.status, isPrimary } });
+  return { success: true };
 }
 
 export const createFeeStructure = async (input: Record<string, unknown>) => (await database()).insert(feeStructures).values({ ...input, amount: String(input.amount), status: "active" } as typeof feeStructures.$inferInsert);
