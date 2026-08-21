@@ -56,8 +56,9 @@ describe("NSOS supervised setup agent routes", () => {
     await expect(caller().nsos.setupAgent.prepareFinanceDraft({ ...financeInput, confirmed: false as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     vi.mocked(db.activateCopilotSetupAgentFinanceDraft).mockResolvedValue({ feeStructureId: 55, status: "active" } as any);
-    await expect(caller().nsos.setupAgent.activateFinanceDraft({ schoolId: 7, feeStructureId: 55, confirmed: true })).resolves.toMatchObject({ feeStructureId: 55, status: "active" });
-    expect(db.activateCopilotSetupAgentFinanceDraft).toHaveBeenCalledWith({ schoolId: 7, feeStructureId: 55, approvedBy: 91 });
+    await expect(caller().nsos.setupAgent.activateFinanceDraft({ schoolId: 7, feeStructureId: 55, approvalNote: "Reviewed against the approved termly fee schedule.", confirmed: true })).resolves.toMatchObject({ feeStructureId: 55, status: "active" });
+    expect(db.activateCopilotSetupAgentFinanceDraft).toHaveBeenCalledWith({ schoolId: 7, feeStructureId: 55, approvedBy: 91, approvalNote: "Reviewed against the approved termly fee schedule." });
+    await expect(caller().nsos.setupAgent.activateFinanceDraft({ schoolId: 7, feeStructureId: 55, approvalNote: "x".repeat(161), confirmed: true })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(caller().nsos.setupAgent.activateFinanceDraft({ schoolId: 7, feeStructureId: 55, confirmed: false as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

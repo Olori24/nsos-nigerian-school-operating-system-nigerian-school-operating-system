@@ -32,5 +32,7 @@ describe("NSOS Copilot setup agent interface", () => {
     expect(agent).toContain("Save inactive finance draft");
     expect(agent).toContain("I give final school approval to activate this fee structure.");
     expect(agent).toContain("Activate approved fee");
+    expect(agent).toContain("Approval note");
+    expect(agent).toContain("approvalNote: activationNote.trim() || undefined");
   });
 });

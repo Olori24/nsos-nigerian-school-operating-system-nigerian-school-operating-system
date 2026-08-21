@@ -17,6 +17,12 @@ describe("owner setup management dashboard", () => {
     expect(dashboard).toContain("I give final owner approval to activate this fee structure.");
     expect(dashboard).toContain("sendStaffInvitation");
     expect(dashboard).toContain("activateFinanceDraft");
+    expect(dashboard).toContain("Approval note");
+    expect(dashboard).toContain("optional, 160 characters");
+    expect(dashboard).toContain("approvalNote: feeApprovalNote.trim() || undefined");
+    expect(dashboard).toContain("Recent finance approval notes");
+    expect(dashboard).toContain("copilot_setup_agent_finance_draft_activated");
+    expect(dashboard).toContain("No optional approval note was supplied.");
   });
 
   it("does not imply automatic invitation delivery or finance activation", () => {

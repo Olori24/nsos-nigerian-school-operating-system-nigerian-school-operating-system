@@ -248,11 +248,11 @@ export const nsosRouter = router({
         return db.prepareCopilotSetupAgentFinanceDraft({ ...input, preparedBy: ctx.user.id });
       }),
     activateFinanceDraft: onboardingAdminProcedure
-      .input(schoolInput.extend({ feeStructureId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .input(schoolInput.extend({ feeStructureId: z.number().int().positive(), approvalNote: z.string().trim().max(160).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
         const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "finance-draft-activate", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
-        return db.activateCopilotSetupAgentFinanceDraft({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, approvedBy: ctx.user.id });
+        return db.activateCopilotSetupAgentFinanceDraft({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, approvedBy: ctx.user.id, approvalNote: input.approvalNote });
       }),
   }),
 

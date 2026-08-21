@@ -1657,12 +1657,13 @@ export async function listCopilotSetupAgentFinanceDrafts(schoolId: number) {
   return (await (await database()).select({ id: feeStructures.id, name: feeStructures.name, amount: feeStructures.amount, termId: feeStructures.termId, classId: feeStructures.classId, mandatory: feeStructures.mandatory, dueOn: feeStructures.dueOn, status: feeStructures.status, createdAt: feeStructures.createdAt }).from(feeStructures).where(and(eq(feeStructures.schoolId, schoolId), eq(feeStructures.status, "draft"))).orderBy(desc(feeStructures.createdAt)).limit(30)).map(item => ({ ...item, amount: Number(item.amount) }));
 }
 
-export async function activateCopilotSetupAgentFinanceDraft(input: { schoolId: number; feeStructureId: number; approvedBy: number }) {
+export async function activateCopilotSetupAgentFinanceDraft(input: { schoolId: number; feeStructureId: number; approvedBy: number; approvalNote?: string }) {
   const db = await database();
   const draft = (await db.select().from(feeStructures).where(and(eq(feeStructures.id, input.feeStructureId), eq(feeStructures.schoolId, input.schoolId), eq(feeStructures.status, "draft"))).limit(1))[0];
   if (!draft) throw new Error("Only a current draft fee structure can be activated.");
   await db.update(feeStructures).set({ status: "active" }).where(and(eq(feeStructures.id, input.feeStructureId), eq(feeStructures.schoolId, input.schoolId), eq(feeStructures.status, "draft")));
-  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.approvedBy, eventType: "copilot_setup_agent_finance_draft_activated", targetType: "fee_structure", targetId: input.feeStructureId, metadata: { mandatory: draft.mandatory, activatedFromDraft: true, explicitApproval: true } });
+  const approvalNote = input.approvalNote?.trim();
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.approvedBy, eventType: "copilot_setup_agent_finance_draft_activated", targetType: "fee_structure", targetId: input.feeStructureId, metadata: { mandatory: draft.mandatory, activatedFromDraft: true, explicitApproval: true, ...(approvalNote ? { approvalNote } : {}) } });
   return { feeStructureId: input.feeStructureId, status: "active" as const };
 }
 
