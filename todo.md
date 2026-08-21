@@ -185,3 +185,6 @@
 - [x] Repair the runtime schema export fault for staff setup invitations and confirm a clean NSOS server startup path.
 - [x] Add a verified guardian portal onboarding checklist with tenant-scoped, read-only first-use guidance and regression coverage.
 - [x] Restrict guardian portal announcements to published, guardian-appropriate updates before surfacing onboarding guidance.
+- [x] Create an original NSOS logo and scalable app-icon system for the product interface and installable web app.
+- [x] Make NSOS installable as a web app with manifest metadata, application icons, and a safe offline shell.
+- [x] Add a user-facing install prompt that works where supported and remains unobtrusive elsewhere.

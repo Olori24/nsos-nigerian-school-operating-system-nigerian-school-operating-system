@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
 import { BiodataDocumentAutofill, type BiodataAutofillProposal } from "./components/BiodataDocumentAutofill";
+import { InstallNSOSPrompt } from "./components/InstallNSOSPrompt";
 import { useEffect, useState } from "react";
 import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
@@ -51,6 +52,7 @@ export default function App() {
           <Toaster />
           <Router />
           <InternalBiodataAutofillLauncher />
+          <InstallNSOSPrompt />
           <div className="fixed bottom-5 right-5 z-[70]"><BiodataThemeToggle /></div>
         </TooltipProvider>
       </ThemeProvider>

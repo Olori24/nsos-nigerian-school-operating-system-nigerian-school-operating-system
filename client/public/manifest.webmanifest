@@ -1,0 +1,19 @@
+{
+  "name": "NSOS — Nigerian School Operating System",
+  "short_name": "NSOS",
+  "description": "The operating system for well-run Nigerian schools.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1715",
+  "theme_color": "#0b1715",
+  "icons": [
+    {
+      "src": "/manus-storage/nsos-app-icon_63fa3e89.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
