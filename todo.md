@@ -147,3 +147,4 @@
 - [x] Add a Nigerian curriculum setup workflow with selectable curriculum tracks, class-level subject templates, edit-before-apply review, and tenant-scoped academic persistence.
 - [x] Add physical school bank-account setup with account identity validation, finance-role visibility, safe payment-instruction presentation, lifecycle controls, and audit events.
 - [x] Complete and test the essential school setup journey across school profile, academic calendar, curriculum, classes, staff, finance, communications, and website readiness.
+- [x] Add a secure, review-before-apply import workflow for owner/admin school-approved schemes of work, including subject, class, term, and week mapping with tenant-scoped persistence.

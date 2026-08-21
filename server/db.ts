@@ -47,6 +47,8 @@ import {
   providerConfigurations,
   rateLimitBuckets,
   resultPublications,
+  schemeOfWorkImports,
+  schemeOfWorkRows,
   schoolAdvertisingAccounts,
   schoolBankAccounts,
   schoolCurriculumProfiles,
@@ -77,6 +79,7 @@ import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
 import { deriveTenantOnboardingStatus } from "./tenantOnboarding";
 import { getNigerianCurriculumTemplate, type NigerianCurriculumTemplateId, listNigerianCurriculumTemplates } from "./nigerianCurriculum";
+import { MAX_SCHEME_FILE_BYTES, normaliseReviewedSchemeRows, safeSchemeFileName, type ReviewedSchemeRow } from "./schemeOfWork";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -1596,7 +1599,7 @@ export async function linkGuardianToStudent(input: { schoolId: number; studentId
 
 export async function listAcademicData(schoolId: number) {
   const db = await database();
-  const [sessions, terms, classList, subjectList, classSubjectList, timetable, lessonPlanList, curriculum, curriculumProfile] = await Promise.all([
+  const [sessions, terms, classList, subjectList, classSubjectList, timetable, lessonPlanList, curriculum, curriculumProfile, schemeImports] = await Promise.all([
     db.select().from(academicSessions).where(eq(academicSessions.schoolId, schoolId)).orderBy(desc(academicSessions.startsOn)),
     db.select().from(academicTerms).where(eq(academicTerms.schoolId, schoolId)).orderBy(desc(academicTerms.startsOn)),
     db.select().from(classes).where(eq(classes.schoolId, schoolId)).orderBy(classes.name),
@@ -1606,8 +1609,10 @@ export async function listAcademicData(schoolId: number) {
     db.select().from(lessonPlans).where(eq(lessonPlans.schoolId, schoolId)).orderBy(desc(lessonPlans.createdAt)),
     db.select().from(curriculumMilestones).where(eq(curriculumMilestones.schoolId, schoolId)).orderBy(curriculumMilestones.targetWeek),
     db.select().from(schoolCurriculumProfiles).where(eq(schoolCurriculumProfiles.schoolId, schoolId)).limit(1),
+    db.select().from(schemeOfWorkImports).where(eq(schemeOfWorkImports.schoolId, schoolId)).orderBy(desc(schemeOfWorkImports.importedAt)),
   ]);
-  return { sessions, terms, classes: classList, subjects: subjectList, classSubjects: classSubjectList, timetable, lessonPlans: lessonPlanList, curriculum, curriculumProfile: curriculumProfile[0] ?? null };
+  const importHistory = schemeImports.map(item => ({ id: item.id, classId: item.classId, subjectId: item.subjectId, termId: item.termId, fileName: item.fileName, mimeType: item.mimeType, rowCount: item.rowCount, importedAt: item.importedAt }));
+  return { sessions, terms, classes: classList, subjects: subjectList, classSubjects: classSubjectList, timetable, lessonPlans: lessonPlanList, curriculum, curriculumProfile: curriculumProfile[0] ?? null, schemeImports: importHistory };
 }
 
 export const createAcademicSession = async (input: Record<string, unknown>) => (await database()).insert(academicSessions).values({ ...input, isCurrent: input.isCurrent ?? false } as typeof academicSessions.$inferInsert);
@@ -1665,6 +1670,42 @@ export async function applyNigerianCurriculumTemplate(input: { schoolId: number;
   await db.insert(schoolCurriculumProfiles).values(profile).onDuplicateKeyUpdate({ set: profile });
   await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.appliedBy, eventType: "nigerian_curriculum_template_applied", targetType: "school_curriculum_profile", targetId: input.schoolId, metadata: { templateId: template.id, classCount: requestedClassIds.length, subjectCount: subjectsToApply.length, optionalSubjectsIncluded: input.includeOptional } });
   return { template: template.name, createdSubjectCount, classSubjectLinks, classIds: requestedClassIds };
+}
+
+export async function importApprovedSchemeOfWork(input: { schoolId: number; classId: number; subjectId: number; termId: number; fileName: string; mimeType: "text/csv" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; base64: string; rows: ReviewedSchemeRow[]; replaceExisting: boolean; importedBy: number }) {
+  const db = await database();
+  const fileName = safeSchemeFileName(input.fileName);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(input.base64)) throw new Error("The uploaded file could not be verified. Upload it again and review the rows.");
+  const fileBytes = Buffer.from(input.base64, "base64");
+  if (!fileBytes.length || fileBytes.length > MAX_SCHEME_FILE_BYTES) throw new Error("Upload a non-empty CSV or Excel file no larger than 2 MB.");
+  const rows = normaliseReviewedSchemeRows(input.rows);
+  const [classRow, subjectRow, termRow, classSubject] = await Promise.all([
+    db.select().from(classes).where(and(eq(classes.id, input.classId), eq(classes.schoolId, input.schoolId))).limit(1),
+    db.select().from(subjects).where(and(eq(subjects.id, input.subjectId), eq(subjects.schoolId, input.schoolId))).limit(1),
+    db.select().from(academicTerms).where(and(eq(academicTerms.id, input.termId), eq(academicTerms.schoolId, input.schoolId))).limit(1),
+    db.select().from(classSubjects).where(and(eq(classSubjects.schoolId, input.schoolId), eq(classSubjects.classId, input.classId), eq(classSubjects.subjectId, input.subjectId))).limit(1),
+  ]);
+  if (!classRow[0] || !subjectRow[0] || !termRow[0] || !classSubject[0]) throw new Error("Map the scheme to a class, approved subject, and term that belong to this school.");
+  const priorImports = await db.select().from(schemeOfWorkImports).where(and(eq(schemeOfWorkImports.schoolId, input.schoolId), eq(schemeOfWorkImports.classId, input.classId), eq(schemeOfWorkImports.subjectId, input.subjectId), eq(schemeOfWorkImports.termId, input.termId)));
+  if (priorImports.length && !input.replaceExisting) throw new Error("An approved scheme already exists for this class, subject, and term. Review it and explicitly replace it to continue.");
+  if (priorImports.length) {
+    for (const prior of priorImports) {
+      const priorRows = await db.select().from(schemeOfWorkRows).where(eq(schemeOfWorkRows.importId, prior.id));
+      for (const priorRow of priorRows) await db.delete(curriculumMilestones).where(and(eq(curriculumMilestones.id, priorRow.milestoneId), eq(curriculumMilestones.schoolId, input.schoolId)));
+      await db.delete(schemeOfWorkRows).where(eq(schemeOfWorkRows.importId, prior.id));
+      await db.delete(schemeOfWorkImports).where(eq(schemeOfWorkImports.id, prior.id));
+    }
+  }
+  const fileHash = createHash("sha256").update(fileBytes).digest("hex");
+  const stored = await storagePut(`schools/${input.schoolId}/curriculum-schemes/${crypto.randomUUID()}/${fileName}`, fileBytes, input.mimeType);
+  const imported = await db.insert(schemeOfWorkImports).values({ schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, termId: input.termId, fileName, fileKey: stored.key, mimeType: input.mimeType, contentSha256: fileHash, rowCount: rows.length, importedBy: input.importedBy });
+  const importId = Number(imported[0].insertId);
+  for (const row of rows) {
+    const milestone = await db.insert(curriculumMilestones).values({ schoolId: input.schoolId, classSubjectId: classSubject[0].id, termId: input.termId, title: row.topic, targetWeek: row.weekNo });
+    await db.insert(schemeOfWorkRows).values({ importId, schoolId: input.schoolId, milestoneId: Number(milestone[0].insertId), weekNo: row.weekNo, topic: row.topic, objectives: row.objectives ?? null, resources: row.resources ?? null });
+  }
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.importedBy, eventType: "scheme_of_work_imported", targetType: "scheme_of_work_import", targetId: importId, metadata: { classId: input.classId, subjectId: input.subjectId, termId: input.termId, rowCount: rows.length, replacedExisting: input.replaceExisting, fileType: input.mimeType } });
+  return { importId, rowCount: rows.length, fileName, replacedExisting: input.replaceExisting };
 }
 
 export async function listAttendance(schoolId: number, filters: { attendanceDate?: string; attendeeType?: "student" | "staff" }) {

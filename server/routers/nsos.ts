@@ -416,6 +416,9 @@ export const nsosRouter = router({
     applyNigerianCurriculumTemplate: onboardingAdminProcedure
       .input(schoolInput.extend({ templateId: z.enum(["basic_primary", "basic_junior_secondary", "senior_secondary_review"]), classIds: z.array(z.number().int().positive()).min(1).max(50), includeOptional: z.boolean().default(false) }))
       .mutation(({ ctx, input }) => db.applyNigerianCurriculumTemplate({ ...input, appliedBy: ctx.user.id })),
+    importSchemeOfWork: onboardingAdminProcedure
+      .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), termId: z.number().int().positive(), fileName: z.string().trim().min(5).max(255), mimeType: z.enum(["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]), base64: z.string().min(8).max(2_800_000), rows: z.array(z.object({ weekNo: z.number().int(), topic: z.string().max(255), objectives: z.string().max(5000).optional(), resources: z.string().max(5000).optional() })).min(1).max(60), replaceExisting: z.boolean().default(false) }))
+      .mutation(({ ctx, input }) => db.importApprovedSchemeOfWork({ ...input, importedBy: ctx.user.id })),
     createSession: managementProcedure("academics.write")
       .input(schoolInput.extend({ name: z.string().min(3).max(64), startsOn: z.string().min(10).max(10), endsOn: z.string().min(10).max(10), isCurrent: z.boolean().optional() }))
       .mutation(({ input }) => db.createAcademicSession(input)),

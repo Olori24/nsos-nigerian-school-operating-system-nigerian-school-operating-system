@@ -204,6 +204,20 @@
       "when": 1787271115366,
       "tag": "0028_amazing_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1787272090872,
+      "tag": "0029_pale_mentor",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1787272164172,
+      "tag": "0030_sparkling_blindfold",
+      "breakpoints": true
     }
   ]
 }

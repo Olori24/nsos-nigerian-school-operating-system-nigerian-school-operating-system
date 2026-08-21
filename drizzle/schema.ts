@@ -501,6 +501,41 @@ export const schoolCurriculumProfiles = mysqlTable(
   table => ({ schoolUnique: uniqueIndex("curriculumProfile_school_unique").on(table.schoolId) }),
 );
 
+export const schemeOfWorkImports = mysqlTable(
+  "schemeOfWorkImports",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    classId: int("classId").notNull(),
+    subjectId: int("subjectId").notNull(),
+    termId: int("termId").notNull(),
+    fileName: varchar("fileName", { length: 255 }).notNull(),
+    fileKey: varchar("fileKey", { length: 1024 }).notNull(),
+    mimeType: varchar("mimeType", { length: 120 }).notNull(),
+    contentSha256: varchar("contentSha256", { length: 64 }).notNull(),
+    rowCount: int("rowCount").notNull(),
+    importedBy: int("importedBy").notNull(),
+    importedAt: timestamp("importedAt").defaultNow().notNull(),
+  },
+  table => ({ schoolImported: index("schemeOfWorkImport_school_imported_idx").on(table.schoolId, table.importedAt), classSubjectTerm: index("schemeOfWorkImport_class_subject_term_idx").on(table.schoolId, table.classId, table.subjectId, table.termId) }),
+);
+
+export const schemeOfWorkRows = mysqlTable(
+  "schemeOfWorkRows",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    importId: int("importId").notNull(),
+    schoolId: int("schoolId").notNull(),
+    milestoneId: int("milestoneId").notNull(),
+    weekNo: int("weekNo").notNull(),
+    topic: varchar("topic", { length: 255 }).notNull(),
+    objectives: text("objectives"),
+    resources: text("resources"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ importWeek: uniqueIndex("schemeOfWorkRow_import_week_unique").on(table.importId, table.weekNo), schoolClass: index("schemeOfWorkRow_school_idx").on(table.schoolId, table.createdAt) }),
+);
+
 export const classSubjects = mysqlTable(
   "classSubjects",
   {
