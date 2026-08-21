@@ -118,6 +118,17 @@ export async function sendStaffSetupInvitationEmail(input: { email: string; scho
   await sendMagicLinkEmail({ email, link, subject: `You are invited to ${schoolName} on NSOS`, text: `${schoolName} invited you to join NSOS as ${roleLabel} (${jobTitle}). Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>${schoolName} invited you to join NSOS as <strong>${roleLabel}</strong> (${jobTitle}).</p><p><a href="${link}">Accept invitation and sign in</a></p><p>This link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
 }
 
+export async function sendGuardianPortalInvitationEmail(input: { email: string; schoolName: string; guardianName: string; origin: string }) {
+  const origin = validOrigin(input.origin);
+  if (!origin) throw new Error("Use a valid NSOS application address before sending the guardian portal invitation.");
+  const email = db.normaliseAuthEmail(input.email);
+  const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
+  const link = `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`;
+  const schoolName = input.schoolName.replace(/[<>]/g, "").trim().slice(0, 255);
+  const guardianName = input.guardianName.replace(/[<>]/g, "").trim().slice(0, 255);
+  await sendMagicLinkEmail({ email, link, subject: `Your ${schoolName} family portal invitation`, text: `Hello ${guardianName}, ${schoolName} has invited you to access the NSOS family portal. Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>Hello ${guardianName},</p><p>${schoolName} has invited you to access the NSOS family portal.</p><p><a href="${link}">Access family portal</a></p><p>This secure sign-in link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
+}
+
 export function registerGoogleAuthRoutes(app: Express) {
   app.get("/api/auth/google/start", (req: Request, res: Response) => {
     const origin = validOrigin(getStringQuery(req, "origin"));
@@ -188,6 +199,7 @@ export function registerEmailAuthRoutes(app: Express) {
       if (!origin) throw new Error("The sign-in link does not have a valid destination.");
       const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
       await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
+      await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);
       res.redirect(302, `${origin}/`);
     } catch (error) {

@@ -32,6 +32,7 @@ import {
   feeStructures,
   familyPaymentEvidenceNotifications,
   gradeScales,
+  guardianPortalInvitations,
   guardians,
   invoiceLineItems,
   invoices,
@@ -1794,6 +1795,43 @@ export async function updateStudentGuardian(input: { schoolId: number; studentId
   if (input.isPrimary) await db.update(studentGuardians).set({ isPrimary: false }).where(eq(studentGuardians.studentId, input.studentId));
   await db.update(studentGuardians).set({ isPrimary: input.isPrimary }).where(and(eq(studentGuardians.studentId, input.studentId), eq(studentGuardians.guardianId, input.guardianId)));
   return { guardianId: input.guardianId, updated: true };
+}
+
+export async function createGuardianPortalInvitationForDelivery(input: { schoolId: number; studentId: number; guardianId: number; sentBy: number }) {
+  const db = await database();
+  const guardian = (await db.select({ id: guardians.id, firstName: guardians.firstName, lastName: guardians.lastName, email: guardians.email, schoolName: schools.name }).from(studentGuardians).innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id)).innerJoin(studentProfiles, eq(studentGuardians.studentId, studentProfiles.id)).innerJoin(schools, eq(guardians.schoolId, schools.id)).where(and(eq(studentGuardians.studentId, input.studentId), eq(studentGuardians.guardianId, input.guardianId), eq(studentProfiles.schoolId, input.schoolId), eq(guardians.schoolId, input.schoolId))).limit(1))[0];
+  if (!guardian) throw new Error("Guardian record is not linked to this student in this school.");
+  const email = guardian.email?.trim().toLowerCase();
+  if (!email) throw new Error("Add a guardian email address before sending a portal invitation.");
+  const activeDelivery = (await db.select({ id: guardianPortalInvitations.id }).from(guardianPortalInvitations).where(and(eq(guardianPortalInvitations.schoolId, input.schoolId), eq(guardianPortalInvitations.guardianId, input.guardianId), eq(guardianPortalInvitations.status, "sending"))).limit(1))[0];
+  if (activeDelivery) throw new Error("A portal invitation is already being sent for this guardian. Please wait and refresh the review panel.");
+  const created = await db.insert(guardianPortalInvitations).values({ schoolId: input.schoolId, guardianId: input.guardianId, email, status: "sending", sentBy: input.sentBy });
+  return { invitationId: Number(created[0].insertId), email, guardianName: [guardian.firstName, guardian.lastName].filter(Boolean).join(" "), schoolName: guardian.schoolName };
+}
+
+export async function markGuardianPortalInvitationDelivery(input: { schoolId: number; invitationId: number; status: "sent" | "failed" }) {
+  await (await database()).update(guardianPortalInvitations).set({ status: input.status, sentAt: input.status === "sent" ? new Date() : null }).where(and(eq(guardianPortalInvitations.id, input.invitationId), eq(guardianPortalInvitations.schoolId, input.schoolId), eq(guardianPortalInvitations.status, "sending")));
+  return { invitationId: input.invitationId, status: input.status };
+}
+
+export async function acceptGuardianPortalInvitationsForVerifiedEmail(input: { email: string; userId: number }) {
+  const db = await database();
+  const email = normaliseAuthEmail(input.email);
+  const invitations = await db.select().from(guardianPortalInvitations).where(and(eq(guardianPortalInvitations.email, email), eq(guardianPortalInvitations.status, "sent")));
+  let acceptedCount = 0;
+  for (const invitation of invitations) {
+    const [guardian, membership] = await Promise.all([
+      (await db.select().from(guardians).where(and(eq(guardians.id, invitation.guardianId), eq(guardians.schoolId, invitation.schoolId), eq(guardians.email, email))).limit(1))[0],
+      (await db.select().from(schoolMemberships).where(and(eq(schoolMemberships.schoolId, invitation.schoolId), eq(schoolMemberships.userId, input.userId))).limit(1))[0],
+    ]);
+    if (!guardian || (guardian.userId && guardian.userId !== input.userId) || (membership && membership.role !== "parent")) continue;
+    await db.insert(schoolMemberships).values({ schoolId: invitation.schoolId, userId: input.userId, role: "parent", status: "active" }).onDuplicateKeyUpdate({ set: { role: "parent", status: "active" } });
+    await db.update(guardians).set({ userId: input.userId }).where(and(eq(guardians.id, guardian.id), eq(guardians.schoolId, invitation.schoolId)));
+    await db.update(guardianPortalInvitations).set({ status: "accepted", acceptedUserId: input.userId, acceptedAt: new Date() }).where(eq(guardianPortalInvitations.id, invitation.id));
+    await recordSecurityAuditEvent({ schoolId: invitation.schoolId, actorUserId: input.userId, eventType: "guardian_portal_invitation_accepted", targetType: "guardian", targetId: guardian.id, metadata: { guardianPortalLinked: true } });
+    acceptedCount += 1;
+  }
+  return { acceptedCount };
 }
 
 export async function listAcademicData(schoolId: number) {

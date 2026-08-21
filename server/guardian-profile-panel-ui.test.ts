@@ -11,6 +11,10 @@ describe("guardian profile panel interface", () => {
     expect(panel).toContain("Save guardian details");
     expect(panel).toContain("Primary contact for this student");
     expect(panel).toContain("updateGuardian");
+    expect(panel).toContain("Invite to portal");
+    expect(panel).toContain("Confirm family portal invitation");
+    expect(panel).toContain("Send confirmed invitation");
+    expect(panel).toContain("sendGuardianPortalInvitation");
   });
 
   it("places the panel in the student workspace only for owner and administrator roles", () => {

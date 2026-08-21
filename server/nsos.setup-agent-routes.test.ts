@@ -5,7 +5,7 @@ vi.mock("./db", async importOriginal => {
   return { ...actual, getSchoolMembership: vi.fn(), getTenantOnboardingStatus: vi.fn(), consumeSharedRateLimit: vi.fn(), runCopilotSetupAgentAcademicFoundation: vi.fn(), listCopilotSetupAgentHistory: vi.fn(), prepareCopilotSetupAgentStaffInvitation: vi.fn(), listCopilotSetupAgentStaffInvitations: vi.fn(), claimCopilotSetupAgentStaffInvitationForDelivery: vi.fn(), releaseCopilotSetupAgentStaffInvitationDelivery: vi.fn(), markCopilotSetupAgentStaffInvitationSent: vi.fn(), prepareCopilotSetupAgentFinanceDraft: vi.fn(), listCopilotSetupAgentFinanceDrafts: vi.fn(), activateCopilotSetupAgentFinanceDraft: vi.fn() };
 });
 
-vi.mock("./auth", () => ({ sendStaffSetupInvitationEmail: vi.fn() }));
+vi.mock("./auth", () => ({ sendGuardianPortalInvitationEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn() }));
 
 import * as db from "./db";
 import { sendStaffSetupInvitationEmail } from "./auth";

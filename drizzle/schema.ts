@@ -429,6 +429,23 @@ export const studentGuardians = mysqlTable(
   table => ({ relationship: uniqueIndex("student_guardian_unique").on(table.studentId, table.guardianId) }),
 );
 
+export const guardianPortalInvitations = mysqlTable(
+  "guardianPortalInvitations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    guardianId: int("guardianId").notNull(),
+    email: varchar("email", { length: 320 }).notNull(),
+    status: mysqlEnum("status", ["sending", "sent", "failed", "accepted"]).notNull().default("sending"),
+    sentBy: int("sentBy").notNull(),
+    acceptedUserId: int("acceptedUserId"),
+    sentAt: timestamp("sentAt"),
+    acceptedAt: timestamp("acceptedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ schoolGuardian: index("guardian_portal_invitation_school_guardian_idx").on(table.schoolId, table.guardianId), emailStatus: index("guardian_portal_invitation_email_status_idx").on(table.email, table.status) }),
+);
+
 export const admissionsApplications = mysqlTable(
   "admissionsApplications",
   {

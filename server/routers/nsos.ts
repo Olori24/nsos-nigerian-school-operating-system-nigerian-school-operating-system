@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import { sendAdmissionLetterEmail, sendStaffSetupInvitationEmail } from "../auth";
+import { sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffSetupInvitationEmail } from "../auth";
 import { buildAdmissionLetter } from "../admissionLetter";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildSetupAgentAssessment } from "../setupAgent";
@@ -484,6 +484,22 @@ export const nsosRouter = router({
         const result = await db.updateStudentGuardian(input);
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_guardian_updated", targetType: "guardian", targetId: input.guardianId, metadata: { studentId: input.studentId, guardianUpdated: true, primaryContact: input.isPrimary } });
         return result;
+      }),
+    sendGuardianPortalInvitation: onboardingAdminProcedure
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), guardianId: z.number().int().positive(), origin: z.string().trim().min(1).max(512), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "guardian-portal-invitation", route: "send", clientKey: `${input.schoolId}:${ctx.user.id}:${input.guardianId}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The guardian invitation service is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const invitation = await db.createGuardianPortalInvitationForDelivery({ schoolId: input.schoolId, studentId: input.studentId, guardianId: input.guardianId, sentBy: ctx.user.id });
+        try {
+          await sendGuardianPortalInvitationEmail({ email: invitation.email, schoolName: invitation.schoolName, guardianName: invitation.guardianName, origin: input.origin });
+          const result = await db.markGuardianPortalInvitationDelivery({ schoolId: input.schoolId, invitationId: invitation.invitationId, status: "sent" });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "guardian_portal_invitation_sent", targetType: "guardian", targetId: input.guardianId, metadata: { invitationSent: true, confirmationRequired: true } });
+          return result;
+        } catch (error) {
+          await db.markGuardianPortalInvitationDelivery({ schoolId: input.schoolId, invitationId: invitation.invitationId, status: "failed" });
+          throw error;
+        }
       }),
   }),
 

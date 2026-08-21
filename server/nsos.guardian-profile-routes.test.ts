@@ -5,7 +5,7 @@ vi.mock("./db", async importOriginal => {
   return { ...actual, getSchoolMembership: vi.fn(), listStudentGuardians: vi.fn(), updateStudentGuardian: vi.fn(), recordSecurityAuditEvent: vi.fn() };
 });
 
-vi.mock("./auth", () => ({ sendAdmissionLetterEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn() }));
+vi.mock("./auth", () => ({ sendAdmissionLetterEmail: vi.fn(), sendGuardianPortalInvitationEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn() }));
 
 import * as db from "./db";
 import { appRouter } from "./routers";
