@@ -2618,6 +2618,9 @@ export async function listStaffOperations(schoolId: number) {
 }
 
 export async function listAnnouncements(schoolId: number) { return (await database()).select().from(announcements).where(eq(announcements.schoolId, schoolId)).orderBy(desc(announcements.createdAt)); }
+async function listFamilyPortalAnnouncements(schoolId: number, audience: "guardians" | "students") {
+  return (await database()).select().from(announcements).where(and(eq(announcements.schoolId, schoolId), eq(announcements.status, "published"), inArray(announcements.audience, ["everyone", audience]))).orderBy(desc(announcements.publishedAt), desc(announcements.createdAt));
+}
 export async function createAnnouncement(input: { schoolId: number; title: string; body: string; audience: "everyone" | "staff" | "students" | "guardians" | "class"; classId?: number; publish?: boolean; createdBy: number }) { const now = new Date(); const result = await (await database()).insert(announcements).values({ ...input, classId: input.classId, status: input.publish ? "published" : "draft", publishedAt: input.publish ? now : null }); return { announcementId: Number(result[0].insertId) }; }
 export async function publishAnnouncement(announcementId: number) { await (await database()).update(announcements).set({ status: "published", publishedAt: new Date() }).where(eq(announcements.id, announcementId)); return { success: true }; }
 export async function createMessageLog(input: { schoolId: number; channel: "in_app" | "email" | "sms" | "whatsapp"; audience: "everyone" | "staff" | "students" | "guardians" | "class"; subject?: string; body: string; recipientCount: number; providerMessageId?: string; createdBy: number }) {
@@ -2652,25 +2655,27 @@ async function getPublishedReportCards(schoolId: number, studentIds: number[]) {
 export async function getGuardianPortal(schoolId: number, userId: number) {
   const db = await database();
   const guardian = (await db.select().from(guardians).where(and(eq(guardians.schoolId, schoolId), eq(guardians.userId, userId))).limit(1))[0];
-  if (!guardian) return { guardian: null, students: [], attendance: [], invoices: [], reportCards: [], announcements: await listAnnouncements(schoolId) };
+  if (!guardian) return { guardian: null, students: [], attendance: [], invoices: [], reportCards: [], announcements: [] };
   const wards = await db.select({ student: studentProfiles }).from(studentGuardians).innerJoin(studentProfiles, eq(studentGuardians.studentId, studentProfiles.id)).where(eq(studentGuardians.guardianId, guardian.id));
   const studentIds = wards.map(row => row.student.id);
-  const [attendance, invoiceRows, reportCards] = await Promise.all([
+  const [attendance, invoiceRows, reportCards, portalAnnouncements] = await Promise.all([
     db.select().from(attendanceRecords).where(eq(attendanceRecords.schoolId, schoolId)).orderBy(desc(attendanceRecords.attendanceDate)),
     db.select().from(invoices).where(eq(invoices.schoolId, schoolId)).orderBy(desc(invoices.createdAt)),
     getPublishedReportCards(schoolId, studentIds),
+    listFamilyPortalAnnouncements(schoolId, "guardians"),
   ]);
-  return { guardian, students: wards.map(row => row.student), attendance: attendance.filter(item => item.studentId && studentIds.includes(item.studentId)), invoices: invoiceRows.filter(item => studentIds.includes(item.studentId)), reportCards, announcements: await listAnnouncements(schoolId) };
+  return { guardian, students: wards.map(row => row.student), attendance: attendance.filter(item => item.studentId && studentIds.includes(item.studentId)), invoices: invoiceRows.filter(item => studentIds.includes(item.studentId)), reportCards, announcements: portalAnnouncements };
 }
 
 export async function getStudentPortal(schoolId: number, userId: number) {
   const db = await database();
   const student = (await db.select().from(studentProfiles).where(and(eq(studentProfiles.schoolId, schoolId), eq(studentProfiles.userId, userId))).limit(1))[0];
-  if (!student) return { student: null, attendance: [], invoices: [], reportCards: [], announcements: await listAnnouncements(schoolId) };
-  const [attendance, invoiceRows, reportCards] = await Promise.all([
+  if (!student) return { student: null, attendance: [], invoices: [], reportCards: [], announcements: [] };
+  const [attendance, invoiceRows, reportCards, portalAnnouncements] = await Promise.all([
     db.select().from(attendanceRecords).where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.studentId, student.id))).orderBy(desc(attendanceRecords.attendanceDate)),
     db.select().from(invoices).where(and(eq(invoices.schoolId, schoolId), eq(invoices.studentId, student.id))).orderBy(desc(invoices.createdAt)),
     getPublishedReportCards(schoolId, [student.id]),
+    listFamilyPortalAnnouncements(schoolId, "students"),
   ]);
-  return { student, attendance, invoices: invoiceRows, reportCards, announcements: await listAnnouncements(schoolId) };
+  return { student, attendance, invoices: invoiceRows, reportCards, announcements: portalAnnouncements };
 }

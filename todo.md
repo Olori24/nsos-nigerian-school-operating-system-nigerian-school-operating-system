@@ -171,3 +171,17 @@
 - [x] Create and link a real guardian record from approved admission contact details during confirmed student enrollment.
 - [x] Add an administrator-facing guardian review panel to the student profile with controlled editing of linked guardian details.
 - [x] Add a confirmation-gated portal invitation action for a linked guardian from the administrator review panel.
+- [x] Add a guardian portal onboarding checklist that guides verified parents through essential first-use steps without creating or changing school data automatically.
+- [ ] Diagnose and repair the 403 rejection affecting confirmed school invitation email delivery, while retaining durable sent-or-failed records and safe administrator feedback.
+- [x] Research current availability and pricing for a short, credible NSOS custom domain that can support the website and a verified invitation-email sender.
+- [x] Compare Nigeria-based and international registration processes and yearly renewal fees for nsos.ng, including DNS and verified-email readiness.
+- [x] Verify NiRA and DomainKing registrant contact and identification requirements for nsos.ng, then prepare a confirmation-gated purchase handoff.
+- [x] Independently verify NiRA accreditation, registrar identity, and payment-safety signals for any nsos.ng purchase path before sharing information or paying.
+- [ ] Verify the purchased nsos.edu.ng domain, connect it to the NSOS website, and configure a verified sender domain to repair invitation-email delivery.
+- [ ] Diagnose and safely recover from the DomainKing domain-management portal loading failure without retrying payment or exposing credentials.
+- [ ] Recover the DomainKing account through the user-controlled password-reset flow and verify the purchased nsos.edu.ng domain status.
+- [ ] Complete the replacement DomainKing password-reset flow only after explicit confirmation of the temporary password submission.
+- [ ] Correct the pending nsos.edu.ng registration without submitting ineligible educational documents, and secure a compliant unrestricted NSOS custom domain.
+- [x] Repair the runtime schema export fault for staff setup invitations and confirm a clean NSOS server startup path.
+- [x] Add a verified guardian portal onboarding checklist with tenant-scoped, read-only first-use guidance and regression coverage.
+- [x] Restrict guardian portal announcements to published, guardian-appropriate updates before surfacing onboarding guidance.
