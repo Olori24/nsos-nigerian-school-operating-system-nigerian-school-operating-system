@@ -420,6 +420,10 @@ export const nsosRouter = router({
       .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), termId: z.number().int().positive(), fileName: z.string().trim().min(5).max(255), mimeType: z.enum(["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]), base64: z.string().min(8).max(2_800_000), rows: z.array(z.object({ weekNo: z.number().int(), topic: z.string().max(255), objectives: z.string().max(5000).optional(), resources: z.string().max(5000).optional() })).min(1).max(60), replaceExisting: z.boolean().default(false) }))
       .mutation(({ ctx, input }) => db.importApprovedSchemeOfWork({ ...input, importedBy: ctx.user.id })),
     teacherSchemeReviews: aiTutorTeacherProcedure.input(schoolInput).query(({ ctx, input }) => db.listTeacherSchemeReviews(input.schoolId, ctx.user.id)),
+    schemeRevisionNotifications: aiTutorTeacherProcedure.input(schoolInput).query(({ ctx, input }) => db.listTeacherSchemeRevisionNotifications(input.schoolId, ctx.user.id)),
+    markSchemeRevisionNotificationRead: aiTutorTeacherProcedure
+      .input(schoolInput.extend({ notificationId: z.number().int().positive() }))
+      .mutation(({ ctx, input }) => db.markTeacherSchemeRevisionNotificationRead({ ...input, userId: ctx.user.id })),
     addSchemeRowInlineComment: aiTutorTeacherProcedure
       .input(schoolInput.extend({ rowId: z.number().int().positive(), anchor: z.enum(["topic", "objectives", "resources"]), body: z.string().trim().min(1).max(1200) }))
       .mutation(({ ctx, input }) => db.addAssignedSchemeRowInlineComment({ ...input, createdByUserId: ctx.user.id })),

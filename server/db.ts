@@ -67,6 +67,7 @@ import {
   subscriptionPlans,
   subjects,
   timetableEntries,
+  teacherSchemeRevisionNotifications,
   type InsertUser,
   userSecurityActivity,
   userSessions,
@@ -1710,8 +1711,38 @@ export async function importApprovedSchemeOfWork(input: { schoolId: number; clas
     const milestone = await db.insert(curriculumMilestones).values({ schoolId: input.schoolId, classSubjectId: classSubject[0].id, termId: input.termId, title: row.topic, targetWeek: row.weekNo });
     await db.insert(schemeOfWorkRows).values({ importId, schoolId: input.schoolId, milestoneId: Number(milestone[0].insertId), assignedTeacherId: classSubject[0].teacherId, weekNo: row.weekNo, topic: row.topic, objectives: row.objectives ?? null, resources: row.resources ?? null, reviewStatus: "pending_review" });
   }
+  let revisionNotificationCreated = false;
+  if (priorImports.length) {
+    const assignedTeacher = (await db.select({ userId: staffProfiles.userId }).from(staffProfiles).where(and(eq(staffProfiles.id, classSubject[0].teacherId), eq(staffProfiles.schoolId, input.schoolId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+    if (assignedTeacher?.userId) {
+      await db.insert(teacherSchemeRevisionNotifications).values({ schoolId: input.schoolId, recipientUserId: assignedTeacher.userId, importId, classId: input.classId, subjectId: input.subjectId, termId: input.termId, classLabel: classRow[0].name, subjectLabel: subjectRow[0].name, termLabel: termRow[0].name }).onDuplicateKeyUpdate({ set: { readAt: null, createdAt: new Date() } });
+      revisionNotificationCreated = true;
+      await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.importedBy, eventType: "weekly_plan_revision_teacher_notified", targetType: "scheme_of_work_import", targetId: importId, metadata: { recipientAssigned: true, classId: input.classId, subjectId: input.subjectId, termId: input.termId } });
+    }
+  }
   await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.importedBy, eventType: "scheme_of_work_imported", targetType: "scheme_of_work_import", targetId: importId, metadata: { classId: input.classId, subjectId: input.subjectId, termId: input.termId, rowCount: rows.length, replacedExisting: input.replaceExisting, fileType: input.mimeType } });
-  return { importId, rowCount: rows.length, fileName, replacedExisting: input.replaceExisting };
+  return { importId, rowCount: rows.length, fileName, replacedExisting: input.replaceExisting, revisionNotificationCreated };
+}
+
+async function activeTeacherStaffProfile(schoolId: number, userId: number) {
+  const db = await database();
+  const staff = (await db.select().from(staffProfiles).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.userId, userId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+  if (!staff) throw new Error("Your teacher account is not linked to an active staff profile for this school.");
+  return staff;
+}
+
+export async function listTeacherSchemeRevisionNotifications(schoolId: number, userId: number) {
+  await activeTeacherStaffProfile(schoolId, userId);
+  return (await database()).select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.schoolId, schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, userId))).orderBy(desc(teacherSchemeRevisionNotifications.createdAt));
+}
+
+export async function markTeacherSchemeRevisionNotificationRead(input: { schoolId: number; notificationId: number; userId: number }) {
+  await activeTeacherStaffProfile(input.schoolId, input.userId);
+  const db = await database();
+  const notification = (await db.select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, input.userId))).limit(1))[0];
+  if (!notification) throw new Error("Revised weekly-plan notification not found.");
+  if (!notification.readAt) await db.update(teacherSchemeRevisionNotifications).set({ readAt: new Date() }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.recipientUserId, input.userId)));
+  return { success: true, importId: notification.importId };
 }
 
 export async function listTeacherSchemeReviews(schoolId: number, userId: number) {

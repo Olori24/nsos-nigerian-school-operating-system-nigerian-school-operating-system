@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
-  return { ...actual, getSchoolMembership: vi.fn(), listTeacherSchemeReviews: vi.fn(), addAssignedSchemeRowInlineComment: vi.fn(), listSchemeImportInlineComments: vi.fn(), reviewAssignedSchemeRow: vi.fn(), publishApprovedSchemeImport: vi.fn() };
+  return { ...actual, getSchoolMembership: vi.fn(), listTeacherSchemeReviews: vi.fn(), listTeacherSchemeRevisionNotifications: vi.fn(), markTeacherSchemeRevisionNotificationRead: vi.fn(), addAssignedSchemeRowInlineComment: vi.fn(), listSchemeImportInlineComments: vi.fn(), reviewAssignedSchemeRow: vi.fn(), publishApprovedSchemeImport: vi.fn() };
 });
 
 import * as db from "./db";
@@ -38,6 +38,16 @@ describe("NSOS weekly-plan teacher approval routes", () => {
     expect(db.addAssignedSchemeRowInlineComment).toHaveBeenCalledWith({ schoolId: 17, rowId: 4, anchor: "objectives", body: "Add a measurable learning outcome for the practical activity.", createdByUserId: 91 });
     vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("admin") as any);
     await expect(caller().nsos.academics.addSchemeRowInlineComment({ schoolId: 17, rowId: 4, anchor: "topic", body: "Revise the topic wording." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("delivers revised-plan alerts only through the assigned teacher workflow", async () => {
+    vi.mocked(db.listTeacherSchemeRevisionNotifications).mockResolvedValue([{ id: 33, importId: 5, classLabel: "JSS 2", subjectLabel: "Basic Science", termLabel: "First Term", readAt: null }] as any);
+    vi.mocked(db.markTeacherSchemeRevisionNotificationRead).mockResolvedValue({ success: true, importId: 5 });
+    await expect(caller().nsos.academics.schemeRevisionNotifications({ schoolId: 17 })).resolves.toHaveLength(1);
+    await expect(caller().nsos.academics.markSchemeRevisionNotificationRead({ schoolId: 17, notificationId: 33 })).resolves.toMatchObject({ success: true });
+    expect(db.markTeacherSchemeRevisionNotificationRead).toHaveBeenCalledWith({ schoolId: 17, notificationId: 33, userId: 91 });
+    vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("admin") as any);
+    await expect(caller().nsos.academics.schemeRevisionNotifications({ schoolId: 17 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("requires an owner or administrator to publish plans after teacher approval", async () => {

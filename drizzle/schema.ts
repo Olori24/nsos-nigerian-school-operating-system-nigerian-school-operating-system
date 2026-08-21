@@ -560,6 +560,28 @@ export const schemeOfWorkInlineComments = mysqlTable(
   }),
 );
 
+export const teacherSchemeRevisionNotifications = mysqlTable(
+  "teacherSchemeRevisionNotifications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    recipientUserId: int("recipientUserId").notNull(),
+    importId: int("importId").notNull(),
+    classId: int("classId").notNull(),
+    subjectId: int("subjectId").notNull(),
+    termId: int("termId").notNull(),
+    classLabel: varchar("classLabel", { length: 120 }).notNull(),
+    subjectLabel: varchar("subjectLabel", { length: 160 }).notNull(),
+    termLabel: varchar("termLabel", { length: 64 }).notNull(),
+    readAt: timestamp("readAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    recipientCreated: index("teacherSchemeRevision_recipient_created_idx").on(table.schoolId, table.recipientUserId, table.createdAt),
+    importRecipient: uniqueIndex("teacherSchemeRevision_import_recipient_unique").on(table.importId, table.recipientUserId),
+  }),
+);
+
 export const classSubjects = mysqlTable(
   "classSubjects",
   {
