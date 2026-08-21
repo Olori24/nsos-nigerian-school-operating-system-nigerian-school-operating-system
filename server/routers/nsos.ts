@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
+import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
 import { listNigerianLgas, listNigerianOriginStates, normaliseNigerianOrigin } from "../nigerianOrigin";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
@@ -202,6 +203,18 @@ export const nsosRouter = router({
         const result = await db.clearCopilotRecentSearches({ userId: ctx.user.id, schoolId: input.schoolId });
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "copilot_recent_searches_cleared", targetType: "copilot_recent_searches", metadata: { deletedCount: result.deletedCount } });
         return result;
+      }),
+  }),
+
+  setupAgent: router({
+    assess: onboardingAdminProcedure.input(schoolInput).query(async ({ input }) => buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId))),
+    history: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentHistory(input.schoolId)),
+    applyAcademicFoundation: onboardingAdminProcedure
+      .input(schoolInput.extend({ sessionName: z.string().trim().min(3).max(64), sessionStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), sessionEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), termName: z.string().trim().min(3).max(64), termStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), termEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), classes: z.array(z.object({ name: z.string().trim().min(2).max(120), level: z.string().trim().max(64).optional() })).min(1).max(30), templateId: z.enum(["basic_primary", "basic_junior_secondary", "senior_secondary_review"]), includeOptional: z.boolean().default(false), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "academic-foundation", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.runCopilotSetupAgentAcademicFoundation({ ...input, executedBy: ctx.user.id });
       }),
   }),
 

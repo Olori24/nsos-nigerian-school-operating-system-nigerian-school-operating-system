@@ -159,3 +159,4 @@
 - [x] Add a leader-only CSV download for the tenant-scoped expired recommendation report, with term-review-ready headings and safe CSV escaping.
 - [x] Remove the visible “Made by Manus” attribution from the NSOS user interface while preserving NSOS branding.
 - [x] Audit and repair incomplete or blocked NSOS workflows, beginning with the mobile scheme-of-work import path where class, subject, and term choices are unavailable without visible prerequisite recovery.
+- [x] Transform the NSOS Copilot into a supervised setup agent that assesses tenant readiness, proposes an end-to-end setup plan, and executes only authorised configuration actions with audit history and explicit approvals.

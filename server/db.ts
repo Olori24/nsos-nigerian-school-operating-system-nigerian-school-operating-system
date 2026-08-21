@@ -1507,6 +1507,58 @@ export async function getTenantOnboardingStatus(schoolId: number) {
   });
 }
 
+export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: number; executedBy: number; sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean }) {
+  const db = await database();
+  const sessionName = input.sessionName.trim();
+  const termName = input.termName.trim();
+  const requestedClasses = Array.from(new Map(input.classes.map(item => [item.name.trim().toLowerCase(), { name: item.name.trim(), level: item.level?.trim() || undefined }])).values());
+  if (!requestedClasses.length) throw new Error("Add at least one real class name before the setup agent can continue.");
+  const sessionStartsOn = asDate(input.sessionStartsOn);
+  const sessionEndsOn = asDate(input.sessionEndsOn);
+  const termStartsOn = asDate(input.termStartsOn);
+  const termEndsOn = asDate(input.termEndsOn);
+  if (!sessionStartsOn || !sessionEndsOn || !termStartsOn || !termEndsOn || sessionStartsOn > sessionEndsOn || termStartsOn > termEndsOn) throw new Error("Use valid start and end dates for the academic session and term.");
+  if (termStartsOn < sessionStartsOn || termEndsOn > sessionEndsOn) throw new Error("Keep the term dates within the selected academic session.");
+
+  let session = (await db.select().from(academicSessions).where(and(eq(academicSessions.schoolId, input.schoolId), eq(academicSessions.name, sessionName))).limit(1))[0];
+  let sessionCreated = false;
+  if (!session) {
+    const created = await db.insert(academicSessions).values({ schoolId: input.schoolId, name: sessionName, startsOn: sessionStartsOn, endsOn: sessionEndsOn, status: "planning" });
+    session = (await db.select().from(academicSessions).where(eq(academicSessions.id, Number(created[0].insertId))).limit(1))[0]!;
+    sessionCreated = true;
+  }
+
+  let term = (await db.select().from(academicTerms).where(and(eq(academicTerms.schoolId, input.schoolId), eq(academicTerms.sessionId, session.id), eq(academicTerms.name, termName))).limit(1))[0];
+  let termCreated = false;
+  if (!term) {
+    const created = await db.insert(academicTerms).values({ schoolId: input.schoolId, sessionId: session.id, name: termName, startsOn: termStartsOn, endsOn: termEndsOn, status: "planning" });
+    term = (await db.select().from(academicTerms).where(eq(academicTerms.id, Number(created[0].insertId))).limit(1))[0]!;
+    termCreated = true;
+  }
+
+  const existingClasses = await db.select().from(classes).where(eq(classes.schoolId, input.schoolId));
+  const classesByName = new Map(existingClasses.map(item => [item.name.trim().toLowerCase(), item]));
+  const classIds: number[] = [];
+  let classesCreated = 0;
+  for (const classInput of requestedClasses) {
+    let classRow = classesByName.get(classInput.name.toLowerCase());
+    if (!classRow) {
+      const created = await db.insert(classes).values({ schoolId: input.schoolId, sessionId: session.id, name: classInput.name, level: classInput.level ?? null, status: "active" });
+      classRow = { id: Number(created[0].insertId) } as typeof classes.$inferSelect;
+      classesCreated += 1;
+    }
+    classIds.push(classRow.id);
+  }
+
+  const curriculum = await applyNigerianCurriculumTemplate({ schoolId: input.schoolId, templateId: input.templateId, classIds, includeOptional: input.includeOptional, appliedBy: input.executedBy });
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.executedBy, eventType: "copilot_setup_agent_academic_foundation_applied", targetType: "tenant_onboarding", targetId: input.schoolId, metadata: { sessionCreated, termCreated, classesCreated, classCount: classIds.length, templateId: input.templateId, includeOptional: input.includeOptional, confirmationRequired: true } });
+  return { sessionId: session.id, termId: term.id, sessionCreated, termCreated, classesCreated, classIds, curriculum };
+}
+
+export async function listCopilotSetupAgentHistory(schoolId: number) {
+  return (await listSecurityAuditEvents(schoolId, 100)).filter(event => event.eventType.startsWith("copilot_setup_agent_")).slice(0, 20);
+}
+
 export async function listApplications(schoolId: number, status?: "submitted" | "under_review" | "accepted" | "declined" | "enrolled") {
   const db = await database();
   return db.select().from(admissionsApplications).where(status ? and(eq(admissionsApplications.schoolId, schoolId), eq(admissionsApplications.status, status)) : eq(admissionsApplications.schoolId, schoolId)).orderBy(desc(admissionsApplications.submittedAt));
