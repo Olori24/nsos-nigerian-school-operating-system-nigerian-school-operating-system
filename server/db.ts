@@ -1779,6 +1779,23 @@ export async function linkGuardianToStudent(input: { schoolId: number; studentId
   return { guardianId };
 }
 
+export async function listStudentGuardians(input: { schoolId: number; studentId: number }) {
+  const db = await database();
+  const student = (await db.select({ id: studentProfiles.id }).from(studentProfiles).where(and(eq(studentProfiles.id, input.studentId), eq(studentProfiles.schoolId, input.schoolId))).limit(1))[0];
+  if (!student) throw new Error("Student record was not found in this school.");
+  return db.select({ id: guardians.id, firstName: guardians.firstName, lastName: guardians.lastName, relationship: guardians.relationship, email: guardians.email, phone: guardians.phone, address: guardians.address, occupation: guardians.occupation, isPrimaryContact: guardians.isPrimaryContact, isPrimaryForStudent: studentGuardians.isPrimary, createdAt: guardians.createdAt }).from(studentGuardians).innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id)).where(and(eq(studentGuardians.studentId, input.studentId), eq(guardians.schoolId, input.schoolId))).orderBy(desc(studentGuardians.isPrimary), guardians.firstName, guardians.lastName);
+}
+
+export async function updateStudentGuardian(input: { schoolId: number; studentId: number; guardianId: number; firstName: string; lastName: string; relationship: string; email?: string; phone?: string; address?: string; occupation?: string; isPrimary: boolean }) {
+  const db = await database();
+  const link = (await db.select({ guardianId: studentGuardians.guardianId }).from(studentGuardians).innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id)).innerJoin(studentProfiles, eq(studentGuardians.studentId, studentProfiles.id)).where(and(eq(studentGuardians.studentId, input.studentId), eq(studentGuardians.guardianId, input.guardianId), eq(studentProfiles.schoolId, input.schoolId), eq(guardians.schoolId, input.schoolId))).limit(1))[0];
+  if (!link) throw new Error("Guardian record is not linked to this student in this school.");
+  await db.update(guardians).set({ firstName: input.firstName.trim(), lastName: input.lastName.trim(), relationship: input.relationship.trim(), email: input.email?.trim().toLowerCase() || null, phone: input.phone?.trim() || null, address: input.address?.trim() || null, occupation: input.occupation?.trim() || null, isPrimaryContact: input.isPrimary }).where(and(eq(guardians.id, input.guardianId), eq(guardians.schoolId, input.schoolId)));
+  if (input.isPrimary) await db.update(studentGuardians).set({ isPrimary: false }).where(eq(studentGuardians.studentId, input.studentId));
+  await db.update(studentGuardians).set({ isPrimary: input.isPrimary }).where(and(eq(studentGuardians.studentId, input.studentId), eq(studentGuardians.guardianId, input.guardianId)));
+  return { guardianId: input.guardianId, updated: true };
+}
+
 export async function listAcademicData(schoolId: number) {
   const db = await database();
   const [sessions, terms, classList, subjectList, classSubjectList, timetable, lessonPlanList, curriculum, curriculumProfile, schemeImports, schemeRows] = await Promise.all([

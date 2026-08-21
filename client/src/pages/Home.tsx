@@ -10,6 +10,7 @@ import { ProviderConfigurationCenter } from "@/components/ProviderConfigurationC
 import { PlatformRevenueConsole } from "@/components/PlatformRevenueConsole";
 import { SubscriptionStatusCard } from "@/components/SubscriptionStatusCard";
 import { AcademicHistoryStation } from "@/components/AcademicHistoryStation";
+import { GuardianProfilePanel } from "@/components/GuardianProfilePanel";
 import { StaffAssignments } from "@/components/StaffAssignments";
 import { WebsiteStudio } from "@/components/WebsiteStudio";
 import { AdvertisingWorkspace } from "@/components/AdvertisingWorkspace";
@@ -482,7 +483,7 @@ function Workspace({ view, schoolId, schoolName, role, summary, applications, st
   if (view === "overview") return <Overview schoolId={schoolId} role={role} summary={summary} announcements={announcements} onRefresh={onRefresh} onNavigate={onNavigate} />;
   if (view === "setup-management") return role === "owner" ? <OwnerSetupManagementDashboard schoolId={schoolId} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "admissions") return <><Admissions schoolId={schoolId} schoolName={schoolName} applications={applications} academics={academics} canManageTemplates={role === "owner" || role === "admin"} onRefresh={onRefresh} /><AdmissionDocumentReview schoolId={schoolId} applications={applications.data ?? []} onDone={onRefresh} /><EnrollmentStation schoolId={schoolId} applications={applications.data ?? []} academic={academics.data} onDone={onRefresh} /></>;
-  if (view === "students") return <><StudentsWithPromotion schoolId={schoolId} schoolName={schoolName} students={students} academics={academics} onRefresh={onRefresh} /><StudentLifecycleControls schoolId={schoolId} students={students.data ?? []} onDone={onRefresh} /><AcademicHistoryStation schoolId={schoolId} students={students.data ?? []} /></>;
+  if (view === "students") return <><StudentsWithPromotion schoolId={schoolId} schoolName={schoolName} students={students} academics={academics} onRefresh={onRefresh} /><StudentLifecycleControls schoolId={schoolId} students={students.data ?? []} onDone={onRefresh} />{(role === "owner" || role === "admin") && <GuardianProfilePanel schoolId={schoolId} students={students.data ?? []} onDone={onRefresh} />}<AcademicHistoryStation schoolId={schoolId} students={students.data ?? []} /></>;
   if (view === "academics") return <><Academics schoolId={schoolId} data={academics} staff={staff} role={role} onRefresh={onRefresh} /><CurriculumStation schoolId={schoolId} academic={academics.data} onDone={onRefresh} /></>;
   if (view === "attendance") return <><Attendance schoolId={schoolId} records={attendance} alerts={absenceAlerts} students={students} staff={staff} academics={academics} onRefresh={onRefresh} /><AttendanceExport records={attendance.data ?? []} /></>;
   if (view === "results") return <><ResultsWithControls schoolId={schoolId} data={results} students={students} academics={academics} onRefresh={onRefresh} /><ResultApprovalControl schoolId={schoolId} academic={academics.data} onDone={onRefresh} /><ReportCardPrint schoolId={schoolId} students={students.data ?? []} terms={academics.data?.terms ?? []} /></>;

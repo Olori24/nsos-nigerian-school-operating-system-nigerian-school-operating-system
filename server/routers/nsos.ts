@@ -475,6 +475,16 @@ export const nsosRouter = router({
     linkGuardian: managementProcedure("students.write")
       .input(schoolInput.extend({ studentId: z.number().int().positive(), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), relationship: z.string().min(2).max(80), email: z.string().email().optional(), phone: z.string().max(48).optional(), isPrimary: z.boolean().optional() }))
       .mutation(({ input }) => db.linkGuardianToStudent(input)),
+    guardians: onboardingAdminProcedure
+      .input(schoolInput.extend({ studentId: z.number().int().positive() }))
+      .query(({ input }) => db.listStudentGuardians(input)),
+    updateGuardian: onboardingAdminProcedure
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), guardianId: z.number().int().positive(), firstName: z.string().trim().min(1).max(120), lastName: z.string().trim().max(120), relationship: z.string().trim().min(2).max(80), email: z.string().email().optional(), phone: z.string().trim().max(48).optional(), address: z.string().trim().max(2000).optional(), occupation: z.string().trim().max(160).optional(), isPrimary: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.updateStudentGuardian(input);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_guardian_updated", targetType: "guardian", targetId: input.guardianId, metadata: { studentId: input.studentId, guardianUpdated: true, primaryContact: input.isPrimary } });
+        return result;
+      }),
   }),
 
   academics: router({
