@@ -88,7 +88,22 @@ async function sendMagicLinkEmail(input: { email: string; link: string; subject?
       html: input.html ?? `<p>Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}.</p><p><a href="${input.link}">Sign in to NSOS</a></p><p>If you did not request this, you can safely ignore this email.</p>`,
     }),
   });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) throw new Error(`Resend rejected email delivery with status ${response.status}`);
+  return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
+}
+
+export async function sendAdmissionLetterEmail(input: { email: string; subject: string; text: string; html: string }) {
+  const email = db.normaliseAuthEmail(input.email);
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
+    body: JSON.stringify({ from: normaliseAuthSender(ENV.authEmailFrom), to: email, subject: input.subject.slice(0, 255), text: input.text, html: input.html }),
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) throw new Error(`Resend rejected admission-letter delivery with status ${response.status}`);
+  return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
 }
 
 export async function sendStaffSetupInvitationEmail(input: { email: string; schoolName: string; role: "admin" | "staff" | "teacher" | "finance"; jobTitle: string; origin: string }) {

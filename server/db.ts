@@ -1706,16 +1706,22 @@ export async function reviewAdmissionDocument(documentId: number, status: "verif
 
 export async function enrolApplication(input: { schoolId: number; applicationId: number; admissionNo: string; classId: number; sessionId: number; admittedOn: string }) {
   const db = await database();
-  const application = (await db.select().from(admissionsApplications).where(and(eq(admissionsApplications.id, input.applicationId), eq(admissionsApplications.schoolId, input.schoolId))).limit(1))[0];
+  const [application, classRow, session, school] = await Promise.all([
+    (await db.select().from(admissionsApplications).where(and(eq(admissionsApplications.id, input.applicationId), eq(admissionsApplications.schoolId, input.schoolId))).limit(1))[0],
+    (await db.select({ id: classes.id, name: classes.name }).from(classes).where(and(eq(classes.id, input.classId), eq(classes.schoolId, input.schoolId))).limit(1))[0],
+    (await db.select({ id: academicSessions.id, name: academicSessions.name }).from(academicSessions).where(and(eq(academicSessions.id, input.sessionId), eq(academicSessions.schoolId, input.schoolId))).limit(1))[0],
+    (await db.select({ name: schools.name, address: schools.address, state: schools.state }).from(schools).where(eq(schools.id, input.schoolId)).limit(1))[0],
+  ]);
   if (!application || application.status !== "accepted") throw new Error("Only accepted applications can be enrolled.");
+  if (!classRow || !session || !school) throw new Error("Choose a class and academic session that belong to this school.");
   const supplement = (application.supplementalData ?? {}) as Record<string, string>;
   const stateOfOrigin = supplement.stateOfOrigin?.trim() || undefined;
   const localGovernment = supplement.localGovernmentOfOrigin?.trim() || undefined;
-  const created = await db.insert(studentProfiles).values({ schoolId: input.schoolId, admissionNo: input.admissionNo, firstName: application.firstName, lastName: application.lastName, dateOfBirth: application.dateOfBirth, gender: application.gender, stateOfOrigin, localGovernment, admittedOn: asDate(input.admittedOn) });
+  const created = await db.insert(studentProfiles).values({ schoolId: input.schoolId, admissionNo: input.admissionNo, firstName: application.firstName, lastName: application.lastName, middleName: supplement.middleName?.trim() || null, dateOfBirth: application.dateOfBirth, gender: application.gender, address: supplement.residentialAddress?.trim() || null, stateOfOrigin, localGovernment, medicalNotes: supplement.medicalHistory?.trim() || null, admittedOn: asDate(input.admittedOn) });
   const studentId = Number(created[0].insertId);
   await db.insert(enrollments).values({ schoolId: input.schoolId, studentId, classId: input.classId, sessionId: input.sessionId, enrolledOn: asDate(input.admittedOn)! });
   await db.update(admissionsApplications).set({ status: "enrolled" }).where(eq(admissionsApplications.id, input.applicationId));
-  return { studentId };
+  return { studentId, biodataTransferred: true, admissionLetter: { guardianEmail: application.guardianEmail ?? null, guardianName: application.guardianName, studentName: [application.firstName, supplement.middleName?.trim(), application.lastName].filter(Boolean).join(" "), schoolName: school.name, schoolAddress: school.address ?? school.state, admissionNo: input.admissionNo, className: classRow.name, sessionName: session.name, admittedOn: input.admittedOn } };
 }
 
 export async function listStudents(schoolId: number, search?: string) {
@@ -2554,6 +2560,10 @@ export async function createMessageLog(input: { schoolId: number; channel: "in_a
     await db.insert(announcements).values({ schoolId: input.schoolId, title: input.subject ?? "School message", body: input.body, audience: input.audience, status: "published", publishedAt: new Date(), createdBy: input.createdBy });
   }
   return { messageId: Number(result[0].insertId) };
+}
+
+export async function updateMessageLogDelivery(input: { schoolId: number; messageId: number; status: "sent" | "failed"; providerMessageId?: string }) {
+  await (await database()).update(messageLogs).set({ status: input.status, providerMessageId: input.providerMessageId ?? null, sentAt: input.status === "sent" ? new Date() : null }).where(and(eq(messageLogs.id, input.messageId), eq(messageLogs.schoolId, input.schoolId)));
 }
 
 export async function listMessageLogs(schoolId: number) {

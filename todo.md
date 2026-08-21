@@ -167,3 +167,4 @@
 - [x] Maintain a daily 08:00 Africa/Lagos NSOS CI status monitor that verifies the newest GitHub Actions run via GitHub API, uses repository-scoped GitHub email notifications only after a 403 response, and reports an unavailable status without inference when neither source can verify an outcome.
 - [x] Add an owner-only dashboard that consolidates pending staff invitations and inactive fee drafts with clear review and approval actions.
 - [x] Add optional owner approval notes to fee activation and preserve the note in the tenant-scoped finance audit trail.
+- [x] Transfer approved admission biodata into the enrolled student record and generate a school-branded admission letter for email delivery to the parent or guardian on confirmed enrollment.

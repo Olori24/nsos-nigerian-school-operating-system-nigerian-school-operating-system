@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import { sendStaffSetupInvitationEmail } from "../auth";
+import { sendAdmissionLetterEmail, sendStaffSetupInvitationEmail } from "../auth";
+import { buildAdmissionLetter } from "../admissionLetter";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
@@ -438,9 +439,24 @@ export const nsosRouter = router({
     enrol: managementProcedure("students.write")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), admissionNo: z.string().min(2).max(64), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.enrolApplication(input);
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_enrolled", targetType: "admissions_application", targetId: input.applicationId, metadata: { outcome: "student_created" } });
-        return result;
+        const { admissionLetter, ...enrollment } = await db.enrolApplication(input);
+        let letterDelivery: "sent" | "failed" | "not_sent_no_guardian_email" = "not_sent_no_guardian_email";
+        let messageLogId: number | undefined;
+        if (admissionLetter.guardianEmail) {
+          const letter = buildAdmissionLetter(admissionLetter);
+          const messageLog = await db.createMessageLog({ schoolId: input.schoolId, channel: "email", audience: "guardians", subject: "Admission letter delivery", body: "Admission letter prepared after confirmed enrollment.", recipientCount: 1, createdBy: ctx.user.id });
+          messageLogId = messageLog.messageId;
+          try {
+            const providerMessageId = await sendAdmissionLetterEmail({ email: admissionLetter.guardianEmail, ...letter });
+            await db.updateMessageLogDelivery({ schoolId: input.schoolId, messageId: messageLog.messageId, status: "sent", providerMessageId });
+            letterDelivery = "sent";
+          } catch {
+            await db.updateMessageLogDelivery({ schoolId: input.schoolId, messageId: messageLog.messageId, status: "failed" });
+            letterDelivery = "failed";
+          }
+        }
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_enrolled", targetType: "admissions_application", targetId: input.applicationId, metadata: { outcome: "student_created", biodataTransferred: enrollment.biodataTransferred, admissionLetterDelivery: letterDelivery, messageLogCreated: Boolean(messageLogId) } });
+        return { ...enrollment, letterDelivery };
       }),
   }),
 
