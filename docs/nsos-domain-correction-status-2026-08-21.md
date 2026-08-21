@@ -10,6 +10,8 @@ DomainKing’s published policy states that registered domains are non-refundabl
 
 The support request should ask for a written confirmation that `nsos.edu.ng` will remain pending without the ineligible documents, together with a clear answer on whether DomainKing can offer any credit, cancellation exception, or account-level remedy. It must not ask for activation and must not attach or create inaccurate institutional documents.
 
+On 21 August 2026, DomainKing opened support ticket **#738576** (email reference **#556391**) for this correction request. The acknowledgement confirms that the request is queued for a substantive response; it does not itself grant a cancellation, credit, or domain substitution. No follow-up purchase or ineligible-document submission is authorized while that response is pending.
+
 ## Recommended compliant domain
 
 DomainKing’s live public search confirmed on 21 August 2026 that `nsos.ng` is available at **₦17,500 for one year**. The registrar identifies `.ng` as an unrestricted Nigerian presence domain, and it is a concise, credible brand match for the Nigerian School Operating System. The same search showed `nsos.com.ng` at ₦6,449 for one year as a lower-cost fallback.
