@@ -577,6 +577,7 @@ export const teacherSchemeRevisionNotifications = mysqlTable(
     pinnedAt: timestamp("pinnedAt"),
     recommendedAt: timestamp("recommendedAt"),
     recommendedBy: int("recommendedBy"),
+    recommendationExpiresAt: timestamp("recommendationExpiresAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({

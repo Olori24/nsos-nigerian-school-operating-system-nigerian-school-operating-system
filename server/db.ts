@@ -1733,6 +1733,7 @@ async function activeTeacherStaffProfile(schoolId: number, userId: number) {
 
 export async function listTeacherSchemeRevisionNotifications(schoolId: number, userId: number) {
   await activeTeacherStaffProfile(schoolId, userId);
+  await clearExpiredSchoolLeaderSchemeRecommendations(schoolId);
   return (await database()).select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.schoolId, schoolId), eq(teacherSchemeRevisionNotifications.recipientUserId, userId))).orderBy(desc(teacherSchemeRevisionNotifications.pinnedAt), desc(teacherSchemeRevisionNotifications.createdAt));
 }
 
@@ -1756,17 +1757,25 @@ export async function setTeacherSchemeRevisionNotificationPinned(input: { school
 }
 
 export async function listSchoolLeaderSchemeRevisionNotifications(schoolId: number) {
+  await clearExpiredSchoolLeaderSchemeRecommendations(schoolId);
   const rows = await (await database()).select({ notification: teacherSchemeRevisionNotifications, recipientName: users.name }).from(teacherSchemeRevisionNotifications).innerJoin(users, eq(teacherSchemeRevisionNotifications.recipientUserId, users.id)).where(eq(teacherSchemeRevisionNotifications.schoolId, schoolId)).orderBy(desc(teacherSchemeRevisionNotifications.recommendedAt), desc(teacherSchemeRevisionNotifications.createdAt));
   return rows.map(row => ({ ...row.notification, recipientName: row.recipientName }));
 }
 
-export async function setSchoolLeaderSchemeRevisionNotificationRecommended(input: { schoolId: number; notificationId: number; userId: number; recommended: boolean }) {
+async function clearExpiredSchoolLeaderSchemeRecommendations(schoolId: number) {
+  const now = new Date();
+  await (await database()).update(teacherSchemeRevisionNotifications).set({ recommendedAt: null, recommendedBy: null, recommendationExpiresAt: null }).where(and(eq(teacherSchemeRevisionNotifications.schoolId, schoolId), sql`${teacherSchemeRevisionNotifications.recommendationExpiresAt} IS NOT NULL AND ${teacherSchemeRevisionNotifications.recommendationExpiresAt} <= ${now}`));
+}
+
+export async function setSchoolLeaderSchemeRevisionNotificationRecommended(input: { schoolId: number; notificationId: number; userId: number; recommended: boolean; recommendationExpiresAt?: Date }) {
   const db = await database();
   const notification = (await db.select().from(teacherSchemeRevisionNotifications).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId))).limit(1))[0];
   if (!notification) throw new Error("Revised weekly-plan notification not found.");
-  await db.update(teacherSchemeRevisionNotifications).set({ recommendedAt: input.recommended ? new Date() : null, recommendedBy: input.recommended ? input.userId : null }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId)));
-  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.userId, eventType: input.recommended ? "weekly_plan_revision_alert_recommended" : "weekly_plan_revision_alert_recommendation_cleared", targetType: "teacher_scheme_revision_notification", targetId: input.notificationId, metadata: { recommended: input.recommended } });
-  return { success: true, recommended: input.recommended };
+  if (input.recommended && input.recommendationExpiresAt && input.recommendationExpiresAt.getTime() <= Date.now()) throw new Error("Recommendation expiry must be in the future.");
+  const expiresAt = input.recommended ? input.recommendationExpiresAt ?? null : null;
+  await db.update(teacherSchemeRevisionNotifications).set({ recommendedAt: input.recommended ? new Date() : null, recommendedBy: input.recommended ? input.userId : null, recommendationExpiresAt: expiresAt }).where(and(eq(teacherSchemeRevisionNotifications.id, input.notificationId), eq(teacherSchemeRevisionNotifications.schoolId, input.schoolId)));
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.userId, eventType: input.recommended ? "weekly_plan_revision_alert_recommended" : "weekly_plan_revision_alert_recommendation_cleared", targetType: "teacher_scheme_revision_notification", targetId: input.notificationId, metadata: { recommended: input.recommended, expiresAt: expiresAt?.toISOString() ?? null } });
+  return { success: true, recommended: input.recommended, recommendationExpiresAt: expiresAt };
 }
 
 export async function listTeacherSchemeReviews(schoolId: number, userId: number) {

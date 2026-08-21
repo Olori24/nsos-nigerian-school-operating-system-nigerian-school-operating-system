@@ -429,7 +429,7 @@ export const nsosRouter = router({
       .mutation(({ ctx, input }) => db.setTeacherSchemeRevisionNotificationPinned({ ...input, userId: ctx.user.id })),
     schemeRevisionNotificationsForManagement: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listSchoolLeaderSchemeRevisionNotifications(input.schoolId)),
     setSchemeRevisionNotificationRecommended: onboardingAdminProcedure
-      .input(schoolInput.extend({ notificationId: z.number().int().positive(), recommended: z.boolean() }))
+      .input(schoolInput.extend({ notificationId: z.number().int().positive(), recommended: z.boolean(), recommendationExpiresAt: z.coerce.date().optional().refine(value => !value || value.getTime() > Date.now(), "Recommendation expiry must be in the future.") }))
       .mutation(({ ctx, input }) => db.setSchoolLeaderSchemeRevisionNotificationRecommended({ ...input, userId: ctx.user.id })),
     addSchemeRowInlineComment: aiTutorTeacherProcedure
       .input(schoolInput.extend({ rowId: z.number().int().positive(), anchor: z.enum(["topic", "objectives", "resources"]), body: z.string().trim().min(1).max(1200) }))

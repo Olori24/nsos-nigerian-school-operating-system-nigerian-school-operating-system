@@ -58,9 +58,11 @@ describe("NSOS weekly-plan teacher approval routes", () => {
     vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("owner") as any);
     vi.mocked(db.listSchoolLeaderSchemeRevisionNotifications).mockResolvedValue([{ id: 33, recipientName: "Teacher Example", recommendedAt: null }] as any);
     vi.mocked(db.setSchoolLeaderSchemeRevisionNotificationRecommended).mockResolvedValue({ success: true, recommended: true });
+    const expiresAt = new Date(Date.now() + 3_600_000);
     await expect(caller().nsos.academics.schemeRevisionNotificationsForManagement({ schoolId: 17 })).resolves.toHaveLength(1);
-    await expect(caller().nsos.academics.setSchemeRevisionNotificationRecommended({ schoolId: 17, notificationId: 33, recommended: true })).resolves.toMatchObject({ recommended: true });
-    expect(db.setSchoolLeaderSchemeRevisionNotificationRecommended).toHaveBeenCalledWith({ schoolId: 17, notificationId: 33, recommended: true, userId: 91 });
+    await expect(caller().nsos.academics.setSchemeRevisionNotificationRecommended({ schoolId: 17, notificationId: 33, recommended: true, recommendationExpiresAt: expiresAt })).resolves.toMatchObject({ recommended: true });
+    expect(db.setSchoolLeaderSchemeRevisionNotificationRecommended).toHaveBeenCalledWith({ schoolId: 17, notificationId: 33, recommended: true, recommendationExpiresAt: expiresAt, userId: 91 });
+    await expect(caller().nsos.academics.setSchemeRevisionNotificationRecommended({ schoolId: 17, notificationId: 33, recommended: true, recommendationExpiresAt: new Date(Date.now() - 1_000) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     vi.mocked(db.getSchoolMembership).mockResolvedValue(membership("teacher") as any);
     await expect(caller().nsos.academics.setSchemeRevisionNotificationRecommended({ schoolId: 17, notificationId: 33, recommended: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });

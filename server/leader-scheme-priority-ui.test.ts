@@ -14,7 +14,13 @@ describe("school leader revision priority controls", () => {
   });
 
   it("explains that recommendations do not replace a teacher’s personal pin", () => {
-    expect(controls).toContain("This is separate from the teacher’s own pin");
-    expect(controls).toContain("It remains your decision whether to pin it personally.");
+    expect(controls).toContain("does not publish, approve, or replace a teacher’s personal pin");
+  });
+
+  it("offers an optional local-time expiry and explains the automatic clearing behavior", () => {
+    expect(controls).toContain("Optional priority expiry");
+    expect(controls).toContain('type="datetime-local"');
+    expect(controls).toContain("a future expiry clears it automatically");
+    expect(controls).toContain("Auto-clears");
   });
 });
