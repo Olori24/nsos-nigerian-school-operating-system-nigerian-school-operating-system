@@ -160,3 +160,4 @@
 - [x] Remove the visible “Made by Manus” attribution from the NSOS user interface while preserving NSOS branding.
 - [x] Audit and repair incomplete or blocked NSOS workflows, beginning with the mobile scheme-of-work import path where class, subject, and term choices are unavailable without visible prerequisite recovery.
 - [x] Transform the NSOS Copilot into a supervised setup agent that assesses tenant readiness, proposes an end-to-end setup plan, and executes only authorised configuration actions with audit history and explicit approvals.
+- [ ] Execute and document a controlled end-to-end Copilot setup-agent validation, including owner/admin approval, academic record persistence, audit history, and role-boundary checks; then push the validated release to the connected private GitHub repository.
