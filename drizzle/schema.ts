@@ -367,6 +367,86 @@ export const programMilestoneProgress = mysqlTable(
   table => ({ schoolEnrollmentMilestone: uniqueIndex("program_milestone_progress_school_enrollment_milestone_unique").on(table.schoolId, table.enrollmentId, table.milestoneId), schoolEnrollment: index("program_milestone_progress_school_enrollment_idx").on(table.schoolId, table.enrollmentId), schoolMilestone: index("program_milestone_progress_school_milestone_idx").on(table.schoolId, table.milestoneId) }),
 );
 
+export const learningEvidenceSources = mysqlTable(
+  "learningEvidenceSources",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    organisation: varchar("organisation", { length: 180 }).notNull(),
+    sourceUrl: varchar("sourceUrl", { length: 2048 }).notNull(),
+    category: mysqlEnum("category", ["institution_approved", "professional_body", "learning_resource"]).notNull().default("institution_approved"),
+    allowedUse: varchar("allowedUse", { length: 500 }).notNull(),
+    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    createdBy: int("createdBy").notNull(),
+    approvedBy: int("approvedBy").notNull(),
+    approvedAt: timestamp("approvedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolTitle: uniqueIndex("learning_evidence_source_school_title_unique").on(table.schoolId, table.title), schoolStatus: index("learning_evidence_source_school_status_idx").on(table.schoolId, table.status) }),
+);
+
+export const learningExperienceProfiles = mysqlTable(
+  "learningExperienceProfiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    sourceReferences: json("sourceReferences").notNull(),
+    learningPace: mysqlEnum("learningPace", ["guided", "flexible", "intensive"]).notNull().default("guided"),
+    supportStyle: mysqlEnum("supportStyle", ["balanced", "step_by_step", "worked_examples", "concise_review"]).notNull().default("balanced"),
+    practiceMode: mysqlEnum("practiceMode", ["reflection", "guided_practice", "project_based"]).notNull().default("guided_practice"),
+    accessibilityNote: varchar("accessibilityNote", { length: 500 }),
+    tutorScope: varchar("tutorScope", { length: 700 }),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgram: uniqueIndex("learning_experience_profile_school_program_unique").on(table.schoolId, table.programId), schoolStatus: index("learning_experience_profile_school_status_idx").on(table.schoolId, table.status) }),
+);
+
+export const programCertificationPolicies = mysqlTable(
+  "programCertificationPolicies",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    issuerName: varchar("issuerName", { length: 180 }).notNull(),
+    credentialTitle: varchar("credentialTitle", { length: 180 }).notNull(),
+    completionCriteria: varchar("completionCriteria", { length: 1200 }).notNull(),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    activatedBy: int("activatedBy"),
+    activatedAt: timestamp("activatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgram: uniqueIndex("program_certification_policy_school_program_unique").on(table.schoolId, table.programId), schoolStatus: index("program_certification_policy_school_status_idx").on(table.schoolId, table.status) }),
+);
+
+export const programCertificates = mysqlTable(
+  "programCertificates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    policyId: int("policyId").notNull(),
+    enrollmentId: int("enrollmentId").notNull(),
+    certificateReference: varchar("certificateReference", { length: 80 }).notNull(),
+    evidenceSummary: varchar("evidenceSummary", { length: 1200 }).notNull(),
+    status: mysqlEnum("status", ["issued", "revoked"]).notNull().default("issued"),
+    issuedBy: int("issuedBy").notNull(),
+    issuedAt: timestamp("issuedAt").defaultNow().notNull(),
+    revokedBy: int("revokedBy"),
+    revokedAt: timestamp("revokedAt"),
+    revocationNote: varchar("revocationNote", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ certificateReference: uniqueIndex("program_certificate_reference_unique").on(table.certificateReference), schoolEnrollment: uniqueIndex("program_certificate_school_enrollment_unique").on(table.schoolId, table.enrollmentId), schoolPolicy: index("program_certificate_school_policy_idx").on(table.schoolId, table.policyId) }),
+);
+
 export const subscriptionPlans = mysqlTable(
   "subscriptionPlans",
   {

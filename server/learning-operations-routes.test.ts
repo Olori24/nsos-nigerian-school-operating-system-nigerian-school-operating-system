@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), getLearningOperatingType: vi.fn(), applyCourseStudioDraft: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCurriculumModule: vi.fn(), activateProgramCurriculumModule: vi.fn(), createProgramCurriculumMilestone: vi.fn(), activateProgramCurriculumMilestone: vi.fn(), recordProgramMilestoneProgress: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), getLearningOperatingType: vi.fn(), listLearningEvidenceSources: vi.fn(), createLearningEvidenceSource: vi.fn(), applyCourseStudioDraft: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCurriculumModule: vi.fn(), activateProgramCurriculumModule: vi.fn(), createProgramCurriculumMilestone: vi.fn(), activateProgramCurriculumMilestone: vi.fn(), recordProgramMilestoneProgress: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), createProgramCertificationPolicy: vi.fn(), activateProgramCertificationPolicy: vi.fn(), issueProgramCertificate: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 const courseStudio = vi.hoisted(() => ({ buildCourseStudioDraft: vi.fn() }));
 vi.mock("./db", () => db);
 vi.mock("./courseStudio", () => courseStudio);
@@ -17,9 +17,10 @@ describe("NSOS learning operations routes", () => {
     vi.clearAllMocks();
     db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 116, role: "owner", status: "active" });
     db.consumeSharedRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 600 });
-    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], modules: [], milestones: [], milestoneProgress: [], staff: [], learners: [] });
+    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], modules: [], milestones: [], milestoneProgress: [], staff: [], learners: [], evidenceSources: [], experienceProfiles: [], certificationPolicies: [], certificates: [] });
     db.getLearningOperatingType.mockResolvedValue("vocational_institute");
-    courseStudio.buildCourseStudioDraft.mockResolvedValue({ courseTitle: "Digital Design Foundation", courseSummary: "An internal supervised course outline for controlled learning operations.", deliveryMode: "blended", durationLabel: "Six weeks", tutorBrief: "Configure a supervised tutor only after a human defines scope and escalation.", modules: [{ title: "Design basics", description: "Introduce approved concepts through supervised instruction.", learningType: "topic", milestones: [{ title: "Review key terms", description: "A human instructor reviews understanding using local criteria." }] }, { title: "Guided practice", description: "Use practice activities with instructor feedback.", learningType: "practice", milestones: [{ title: "Review practice", description: "A human instructor agrees the learner’s next step." }] }], materials: [{ title: "Facilitator guide", materialType: "facilitator_guide", modulePosition: 1, content: "Set the approved learning goal and direct learners to a supervising instructor for support." }, { title: "Practice prompt", materialType: "practice_activity", modulePosition: 2, content: "Use a short non-graded practice activity and request instructor feedback before any progress review." }], setupRecommendation: "Review the programme and activate it only through the protected workflow.", limitations: ["No public course or payment action is created."], source: "ai", requiresConfirmation: true });
+    db.listLearningEvidenceSources.mockResolvedValue([]);
+    courseStudio.buildCourseStudioDraft.mockResolvedValue({ courseTitle: "Digital Design Foundation", courseSummary: "An internal supervised course outline for controlled learning operations.", deliveryMode: "blended", durationLabel: "Six weeks", tutorBrief: "Configure a supervised tutor only after a human defines scope and escalation.", evidenceReferences: [], learningExperience: { learningPace: "guided", supportStyle: "balanced", practiceMode: "guided_practice", accessibilityNote: "" }, modules: [{ title: "Design basics", description: "Introduce approved concepts through supervised instruction.", learningType: "topic", milestones: [{ title: "Review key terms", description: "A human instructor reviews understanding using local criteria." }] }, { title: "Guided practice", description: "Use practice activities with instructor feedback.", learningType: "practice", milestones: [{ title: "Review practice", description: "A human instructor agrees the learner’s next step." }] }], materials: [{ title: "Facilitator guide", materialType: "facilitator_guide", modulePosition: 1, content: "Set the approved learning goal and direct learners to a supervising instructor for support." }, { title: "Practice prompt", materialType: "practice_activity", modulePosition: 2, content: "Use a short non-graded practice activity and request instructor feedback before any progress review." }], setupRecommendation: "Review the programme and activate it only through the protected workflow.", limitations: ["No public course or payment action is created."], source: "ai", requiresConfirmation: true });
     db.applyCourseStudioDraft.mockResolvedValue({ programId: 512, moduleCount: 2, milestoneCount: 2, materialCount: 2, status: "draft" });
     db.updateLearningOperatingType.mockResolvedValue({ success: true, operatingType: "vocational_institute" });
     db.createLearningProgram.mockResolvedValue({ programId: 501, status: "draft" });
@@ -33,6 +34,10 @@ describe("NSOS learning operations routes", () => {
     db.assignProgramInstructor.mockResolvedValue({ assignmentId: 701, status: "active" });
     db.enrolLearnerInProgram.mockResolvedValue({ enrollmentId: 801, status: "active" });
     db.confirmProgramCompletion.mockResolvedValue({ success: true, status: "completed" });
+    db.createLearningEvidenceSource.mockResolvedValue({ evidenceSourceId: 611, status: "active" });
+    db.createProgramCertificationPolicy.mockResolvedValue({ certificationPolicyId: 711, status: "draft" });
+    db.activateProgramCertificationPolicy.mockResolvedValue({ success: true, status: "active" });
+    db.issueProgramCertificate.mockResolvedValue({ certificateId: 811, certificateReference: "NSOS-PRIVATE-6F4A", status: "issued", publicVerificationEnabled: false });
     db.recordProgramAttendance.mockResolvedValue({ success: true, enrollmentId: 801, attendanceDate: "2026-08-22", status: "present" });
     db.createProgramFeeStructure.mockResolvedValue({ feeStructureId: 901, status: "draft" });
     db.activateProgramFeeStructure.mockResolvedValue({ success: true, status: "active" });
@@ -56,9 +61,33 @@ describe("NSOS learning operations routes", () => {
   it("applies a reviewed Course Studio draft only with explicit confirmation and records no public, identity, message, finance, completion, or credential side effect", async () => {
     const caller = appRouter.createCaller(context()).nsos.learningOperations;
     const prepared = await caller.courseStudio({ schoolId: 34, brief: "Create a supervised digital design foundation course.", audience: "Adult beginner learners" });
-    await expect(caller.applyCourseStudioDraft({ schoolId: 34, draft: { courseTitle: prepared.courseTitle, courseSummary: prepared.courseSummary, deliveryMode: prepared.deliveryMode, durationLabel: prepared.durationLabel, modules: prepared.modules, materials: prepared.materials }, confirmed: true })).resolves.toMatchObject({ programId: 512, status: "draft" });
+    await expect(caller.applyCourseStudioDraft({ schoolId: 34, draft: { courseTitle: prepared.courseTitle, courseSummary: prepared.courseSummary, deliveryMode: prepared.deliveryMode, durationLabel: prepared.durationLabel, evidenceReferences: prepared.evidenceReferences, learningExperience: prepared.learningExperience, modules: prepared.modules, materials: prepared.materials }, confirmed: true })).resolves.toMatchObject({ programId: 512, status: "draft" });
     expect(db.applyCourseStudioDraft).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, createdBy: 116, draft: expect.objectContaining({ courseTitle: "Digital Design Foundation" }) }));
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "course_studio_draft_applied", targetId: 512, metadata: expect.objectContaining({ confirmationRequired: true, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, automaticCompletion: false, credentialIssued: false }) }));
+  });
+
+  it("resolves only recognised curated references for a Course Studio request and keeps the prompt out of the audit evidence", async () => {
+    const privateBrief = "Private research-led outline for a digital learning programme";
+    await appRouter.createCaller(context()).nsos.learningOperations.courseStudio({ schoolId: 34, brief: privateBrief, audience: "Adult learners", curatedSourceIds: ["nerdc_basic_education"], learningExperience: { learningPace: "flexible", supportStyle: "worked_examples", practiceMode: "project_based", accessibilityNote: "Mobile-friendly activities" } });
+    expect(courseStudio.buildCourseStudioDraft).toHaveBeenCalledWith(expect.objectContaining({ evidenceReferences: [expect.objectContaining({ id: "curated:nerdc_basic_education", category: "official_curriculum" })], learningExperience: expect.objectContaining({ learningPace: "flexible", practiceMode: "project_based" }) }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "course_studio_draft_prepared", metadata: expect.objectContaining({ curatedSourceCount: 1, institutionSourceCount: 0, promptStored: false }) }));
+    expect(JSON.stringify(db.recordSecurityAuditEvent.mock.calls)).not.toContain(privateBrief);
+  });
+
+  it("creates only confirmed institution planning-source metadata and separates private certification policy, activation, and issuance", async () => {
+    const caller = appRouter.createCaller(context()).nsos.learningOperations;
+    await caller.createEvidenceSource({ schoolId: 34, title: "Internal scheme reference", organisation: "NSOS partner institute", sourceUrl: "https://example.org/scheme", category: "institution_approved", allowedUse: "Use only as an editable internal reference for sequencing lessons and review checkpoints.", confirmed: true });
+    await caller.createCertificationPolicy({ schoolId: 34, programId: 501, issuerName: "Example Learning Institute", credentialTitle: "Private programme completion record", completionCriteria: "The institution must human-confirm programme completion and review all active programme milestones before issuing a private record.", confirmed: true });
+    await caller.activateCertificationPolicy({ schoolId: 34, certificationPolicyId: 711, confirmed: true });
+    await caller.issuePrivateCertificate({ schoolId: 34, certificationPolicyId: 711, enrollmentId: 801, evidenceSummary: "A human reviewer confirmed completed enrolment and reviewed every active milestone as complete before the private record was requested.", confirmed: true });
+    expect(db.createLearningEvidenceSource).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, createdBy: 116, approvedBy: 116, category: "institution_approved" }));
+    expect(db.createProgramCertificationPolicy).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, programId: 501, createdBy: 116 }));
+    expect(db.activateProgramCertificationPolicy).toHaveBeenCalledWith({ schoolId: 34, certificationPolicyId: 711, activatedBy: 116 });
+    expect(db.issueProgramCertificate).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, certificationPolicyId: 711, enrollmentId: 801, issuedBy: 116 }));
+    const audit = JSON.stringify(db.recordSecurityAuditEvent.mock.calls);
+    expect(audit).toContain('"publicVerificationEnabled":false');
+    expect(audit).toContain('"accreditationClaimed":false');
+    expect(audit).toContain('"messageSent":false');
   });
 
   it("requires explicit confirmation before changing the tenant operating type", async () => {

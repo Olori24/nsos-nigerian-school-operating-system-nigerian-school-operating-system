@@ -49,7 +49,11 @@ import {
   paymentPromises,
   platformBillingRecords,
   learningPrograms,
+  learningEvidenceSources,
+  learningExperienceProfiles,
   programCourseMaterials,
+  programCertificates,
+  programCertificationPolicies,
   programCohorts,
   programCurriculumMilestones,
   programCurriculumModules,
@@ -1887,7 +1891,7 @@ export async function executeAutomationJob(input: { schoolId: number; userId: nu
   if (job.jobType === "online_school_launch") {
     const launch = job.input as OnlineSchoolLaunchInput;
     if (launch.validationMode !== "private_configuration_only" || !launch.draft) throw new Error("This private launch job is missing its server-generated course blueprint.");
-    const result = await applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: input.userId, draft: launch.draft });
+    const result = await applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: input.userId, draft: { ...launch.draft, evidenceReferences: [], learningExperience: { learningPace: "guided", supportStyle: "balanced", practiceMode: "guided_practice", accessibilityNote: "" } } });
     await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.userId, eventType: "automation_private_online_school_launch_completed", targetType: "learning_program", targetId: result.programId, metadata: { programStatus: result.status, moduleCount: result.moduleCount, milestoneCount: result.milestoneCount, materialCount: result.materialCount, configurationValidation: "passed", privateOnly: true, mockPeopleCreated: false, paymentAction: false, messageSent: false, publicAction: false, tutorAccountCreated: false, credentialIssued: false } });
     return { label: `Private online-school foundation completed: 1 draft programme, ${result.moduleCount} modules, ${result.milestoneCount} milestones, and ${result.materialCount} internal materials. Configuration-readiness check passed; no people, public content, messages, payments, or credentials were created.`, destination: "learning", references: [{ type: "learning_program_draft", id: result.programId }] } satisfies AutomationJobResult;
   }
@@ -3312,9 +3316,21 @@ export async function getLearningOperatingType(schoolId: number): Promise<Learni
   return school?.operatingType ?? "school";
 }
 
+export async function listLearningEvidenceSources(schoolId: number) {
+  return (await database()).select().from(learningEvidenceSources).where(eq(learningEvidenceSources.schoolId, schoolId)).orderBy(desc(learningEvidenceSources.createdAt));
+}
+
+export async function createLearningEvidenceSource(input: { schoolId: number; title: string; organisation: string; sourceUrl: string; category: "institution_approved" | "professional_body" | "learning_resource"; allowedUse: string; createdBy: number; approvedBy: number }) {
+  const db = await database();
+  const existing = (await db.select({ id: learningEvidenceSources.id }).from(learningEvidenceSources).where(and(eq(learningEvidenceSources.schoolId, input.schoolId), eq(learningEvidenceSources.title, input.title))).limit(1))[0];
+  if (existing) throw new Error("A source with this title already exists for this learning organisation.");
+  const created = await db.insert(learningEvidenceSources).values({ ...input, status: "active" });
+  return { evidenceSourceId: Number(created[0].insertId), status: "active" as const };
+}
+
 export async function getLearningOperationsWorkspace(schoolId: number) {
   const db = await database();
-  const [school, programs, cohorts, assignments, enrolments, attendance, fees, modules, milestones, materials, milestoneProgress, staff, learners] = await Promise.all([
+  const [school, programs, cohorts, assignments, enrolments, attendance, fees, modules, milestones, materials, milestoneProgress, staff, learners, evidenceSources, experienceProfiles, certificationPolicies, certificates] = await Promise.all([
     db.select({ operatingType: schools.operatingType }).from(schools).where(eq(schools.id, schoolId)).limit(1),
     db.select().from(learningPrograms).where(eq(learningPrograms.schoolId, schoolId)).orderBy(desc(learningPrograms.createdAt)),
     db.select().from(programCohorts).where(eq(programCohorts.schoolId, schoolId)).orderBy(desc(programCohorts.createdAt)),
@@ -3328,6 +3344,10 @@ export async function getLearningOperationsWorkspace(schoolId: number) {
     db.select().from(programMilestoneProgress).where(eq(programMilestoneProgress.schoolId, schoolId)).orderBy(desc(programMilestoneProgress.updatedAt)),
     db.select({ id: staffProfiles.id, firstName: staffProfiles.firstName, lastName: staffProfiles.lastName, jobTitle: staffProfiles.jobTitle, employmentStatus: staffProfiles.employmentStatus }).from(staffProfiles).where(eq(staffProfiles.schoolId, schoolId)).orderBy(staffProfiles.lastName),
     db.select({ id: studentProfiles.id, firstName: studentProfiles.firstName, lastName: studentProfiles.lastName, admissionNo: studentProfiles.admissionNo, status: studentProfiles.status }).from(studentProfiles).where(eq(studentProfiles.schoolId, schoolId)).orderBy(studentProfiles.lastName),
+    db.select().from(learningEvidenceSources).where(eq(learningEvidenceSources.schoolId, schoolId)).orderBy(desc(learningEvidenceSources.createdAt)),
+    db.select().from(learningExperienceProfiles).where(eq(learningExperienceProfiles.schoolId, schoolId)).orderBy(desc(learningExperienceProfiles.createdAt)),
+    db.select().from(programCertificationPolicies).where(eq(programCertificationPolicies.schoolId, schoolId)).orderBy(desc(programCertificationPolicies.createdAt)),
+    db.select().from(programCertificates).where(eq(programCertificates.schoolId, schoolId)).orderBy(desc(programCertificates.issuedAt)),
   ]);
   const programById = new Map(programs.map(item => [item.id, item]));
   const cohortById = new Map(cohorts.map(item => [item.id, item]));
@@ -3346,6 +3366,10 @@ export async function getLearningOperationsWorkspace(schoolId: number) {
     milestones: milestones.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", moduleTitle: moduleById.get(item.moduleId)?.title ?? "Unavailable module" })),
     materials: materials.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", moduleTitle: item.moduleId ? moduleById.get(item.moduleId)?.title ?? "Unavailable module" : null })),
     milestoneProgress: milestoneProgress.map(item => ({ ...item, learnerName: learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.studentId ?? -1) ? `${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.firstName} ${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.lastName}` : "Unavailable learner", programTitle: programById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.programId ?? -1)?.title ?? "Unavailable programme", milestoneTitle: milestones.find(milestone => milestone.id === item.milestoneId)?.title ?? "Unavailable milestone" })),
+    evidenceSources,
+    experienceProfiles: experienceProfiles.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme" })),
+    certificationPolicies: certificationPolicies.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme" })),
+    certificates: certificates.map(item => ({ ...item, programTitle: programById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.programId ?? -1)?.title ?? "Unavailable programme", learnerName: learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.studentId ?? -1) ? `${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.firstName} ${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.lastName}` : "Unavailable learner", credentialTitle: certificationPolicies.find(policy => policy.id === item.policyId)?.credentialTitle ?? "Unavailable credential", issuerName: certificationPolicies.find(policy => policy.id === item.policyId)?.issuerName ?? "Unavailable issuer" })),
     staff,
     learners,
   };
@@ -3364,6 +3388,8 @@ export type AcceptedCourseStudioDraft = {
   courseSummary: string;
   deliveryMode: "in_person" | "live_online" | "self_paced" | "blended";
   durationLabel: string;
+  evidenceReferences: Array<{ id: string; title: string; organisation: string; sourceUrl: string; category: string; allowedUse: string }>;
+  learningExperience: { learningPace: "guided" | "flexible" | "intensive"; supportStyle: "balanced" | "step_by_step" | "worked_examples" | "concise_review"; practiceMode: "reflection" | "guided_practice" | "project_based"; accessibilityNote: string };
   modules: Array<{ title: string; description: string; learningType: "topic" | "practical" | "project" | "practice" | "resource"; milestones: Array<{ title: string; description: string }> }>;
   materials: Array<{ title: string; materialType: "facilitator_guide" | "practice_activity" | "project_brief" | "discussion_prompt" | "reflection_prompt" | "resource_checklist"; modulePosition: number; content: string }>;
 };
@@ -3378,6 +3404,7 @@ export async function applyCourseStudioDraft(input: { schoolId: number; createdB
   return db.transaction(async tx => {
     const createdProgram = await tx.insert(learningPrograms).values({ schoolId: input.schoolId, title: input.draft.courseTitle, description: input.draft.courseSummary, deliveryMode: input.draft.deliveryMode, durationLabel: input.draft.durationLabel, createdBy: input.createdBy, status: "draft" });
     const programId = Number(createdProgram[0].insertId);
+    await tx.insert(learningExperienceProfiles).values({ schoolId: input.schoolId, programId, sourceReferences: input.draft.evidenceReferences, learningPace: input.draft.learningExperience.learningPace, supportStyle: input.draft.learningExperience.supportStyle, practiceMode: input.draft.learningExperience.practiceMode, accessibilityNote: input.draft.learningExperience.accessibilityNote || null, tutorScope: null, createdBy: input.createdBy, status: "draft" });
     const moduleIds: number[] = [];
     for (let moduleIndex = 0; moduleIndex < input.draft.modules.length; moduleIndex += 1) {
       const module = input.draft.modules[moduleIndex]!;
@@ -3451,6 +3478,45 @@ export async function confirmProgramCompletion(input: { schoolId: number; enroll
   if (!enrollment) throw new Error("Select an active programme enrolment from this learning organisation.");
   await db.update(programEnrollments).set({ status: "completed", completionConfirmedBy: input.confirmedBy, completionConfirmedAt: new Date(), completionNote: input.completionNote || null }).where(and(eq(programEnrollments.id, input.enrollmentId), eq(programEnrollments.schoolId, input.schoolId)));
   return { success: true, status: "completed" as const };
+}
+
+export async function createProgramCertificationPolicy(input: { schoolId: number; programId: number; issuerName: string; credentialTitle: string; completionCriteria: string; createdBy: number }) {
+  await requireProgramReference({ schoolId: input.schoolId, programId: input.programId });
+  const db = await database();
+  const existing = (await db.select({ id: programCertificationPolicies.id }).from(programCertificationPolicies).where(and(eq(programCertificationPolicies.schoolId, input.schoolId), eq(programCertificationPolicies.programId, input.programId))).limit(1))[0];
+  if (existing) throw new Error("A certification policy already exists for this programme. Review the existing policy instead of creating a duplicate.");
+  const created = await db.insert(programCertificationPolicies).values({ ...input, status: "draft" });
+  return { certificationPolicyId: Number(created[0].insertId), status: "draft" as const };
+}
+
+export async function activateProgramCertificationPolicy(input: { schoolId: number; certificationPolicyId: number; activatedBy: number }) {
+  const db = await database();
+  const policy = (await db.select().from(programCertificationPolicies).where(and(eq(programCertificationPolicies.id, input.certificationPolicyId), eq(programCertificationPolicies.schoolId, input.schoolId))).limit(1))[0];
+  if (!policy) throw new Error("Certification policy not found in this learning organisation.");
+  if (policy.status === "archived") throw new Error("An archived certification policy cannot be activated.");
+  await requireProgramReference({ schoolId: input.schoolId, programId: policy.programId });
+  await db.update(programCertificationPolicies).set({ status: "active", activatedBy: input.activatedBy, activatedAt: new Date() }).where(and(eq(programCertificationPolicies.id, input.certificationPolicyId), eq(programCertificationPolicies.schoolId, input.schoolId)));
+  return { success: true, status: "active" as const };
+}
+
+export async function issueProgramCertificate(input: { schoolId: number; certificationPolicyId: number; enrollmentId: number; evidenceSummary: string; issuedBy: number }) {
+  const db = await database();
+  const [policy, enrollment, existing] = await Promise.all([
+    db.select().from(programCertificationPolicies).where(and(eq(programCertificationPolicies.id, input.certificationPolicyId), eq(programCertificationPolicies.schoolId, input.schoolId), eq(programCertificationPolicies.status, "active"))).limit(1),
+    db.select().from(programEnrollments).where(and(eq(programEnrollments.id, input.enrollmentId), eq(programEnrollments.schoolId, input.schoolId), eq(programEnrollments.status, "completed"))).limit(1),
+    db.select({ id: programCertificates.id }).from(programCertificates).where(and(eq(programCertificates.schoolId, input.schoolId), eq(programCertificates.enrollmentId, input.enrollmentId))).limit(1),
+  ]);
+  if (!policy[0]) throw new Error("Select an active certification policy from this learning organisation.");
+  if (!enrollment[0] || enrollment[0].programId !== policy[0].programId) throw new Error("Select a human-confirmed completed enrolment for this policy’s programme.");
+  if (existing) throw new Error("A private certificate record already exists for this enrolment.");
+  const activeMilestones = await db.select({ id: programCurriculumMilestones.id }).from(programCurriculumMilestones).where(and(eq(programCurriculumMilestones.schoolId, input.schoolId), eq(programCurriculumMilestones.programId, policy[0].programId), eq(programCurriculumMilestones.status, "active")));
+  if (!activeMilestones.length) throw new Error("Activate and review the programme’s curriculum milestones before certificate issuance can be considered.");
+  const progress = await db.select({ milestoneId: programMilestoneProgress.milestoneId, status: programMilestoneProgress.status }).from(programMilestoneProgress).where(and(eq(programMilestoneProgress.schoolId, input.schoolId), eq(programMilestoneProgress.enrollmentId, input.enrollmentId)));
+  const reviewedMilestones = new Set(progress.filter(item => item.status === "reviewed_complete").map(item => item.milestoneId));
+  if (activeMilestones.some(milestone => !reviewedMilestones.has(milestone.id))) throw new Error("All active curriculum milestones must be human-reviewed complete before private certificate issuance can be considered.");
+  const certificateReference = `NSOS-${input.schoolId}-${policy[0].id}-${input.enrollmentId}-${randomBytes(4).toString("hex").toUpperCase()}`;
+  const created = await db.insert(programCertificates).values({ schoolId: input.schoolId, policyId: policy[0].id, enrollmentId: input.enrollmentId, certificateReference, evidenceSummary: input.evidenceSummary, status: "issued", issuedBy: input.issuedBy });
+  return { certificateId: Number(created[0].insertId), certificateReference, status: "issued" as const, publicVerificationEnabled: false };
 }
 
 export async function recordProgramAttendance(input: { schoolId: number; enrollmentId: number; attendanceDate: string; status: "present" | "late" | "absent" | "excused"; note?: string; recordedBy: number }) {

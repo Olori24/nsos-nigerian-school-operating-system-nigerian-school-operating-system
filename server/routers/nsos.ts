@@ -7,6 +7,7 @@ import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
 import { buildAutomationPlan, jobCanRun, validateAutomationInput } from "../automationDesk";
 import { buildCourseStudioDraft } from "../courseStudio";
+import { curatedLearningSources, getCuratedLearningSource } from "@shared/curatedLearningSources";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildEnterpriseConciergePlan } from "../enterpriseConcierge";
 import { buildSetupAgentAssessment } from "../setupAgent";
@@ -110,9 +111,23 @@ const courseStudioDraftInput = z.object({
   courseSummary: z.string().trim().min(50).max(1600),
   deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]),
   durationLabel: z.string().trim().min(2).max(120),
+  evidenceReferences: z.array(z.object({ id: z.string().trim().min(2).max(80), title: z.string().trim().min(2).max(180), organisation: z.string().trim().min(2).max(180), sourceUrl: z.string().url().max(2048), category: z.enum(["official_curriculum", "global_pedagogy", "institution_approved", "professional_body", "learning_resource"]), allowedUse: z.string().trim().min(10).max(500) })).max(5),
+  learningExperience: z.object({ learningPace: z.enum(["guided", "flexible", "intensive"]), supportStyle: z.enum(["balanced", "step_by_step", "worked_examples", "concise_review"]), practiceMode: z.enum(["reflection", "guided_practice", "project_based"]), accessibilityNote: z.string().trim().max(500) }),
   modules: z.array(z.object({ title: z.string().trim().min(2).max(180), description: z.string().trim().min(10).max(1200), learningType: z.enum(["topic", "practical", "project", "practice", "resource"]), milestones: z.array(z.object({ title: z.string().trim().min(2).max(180), description: z.string().trim().min(10).max(1000) })).min(1).max(4) })).min(2).max(6),
   materials: z.array(z.object({ title: z.string().trim().min(2).max(180), materialType: z.enum(["facilitator_guide", "practice_activity", "project_brief", "discussion_prompt", "reflection_prompt", "resource_checklist"]), modulePosition: z.number().int().positive().max(6), content: z.string().trim().min(30).max(4500) })).min(2).max(6),
 });
+const courseStudioExperienceInput = z.object({ learningPace: z.enum(["guided", "flexible", "intensive"]).default("guided"), supportStyle: z.enum(["balanced", "step_by_step", "worked_examples", "concise_review"]).default("balanced"), practiceMode: z.enum(["reflection", "guided_practice", "project_based"]).default("guided_practice"), accessibilityNote: z.string().trim().max(500).default("") });
+const curatedSourceIdInput = z.enum(curatedLearningSources.map(source => source.id) as ["nerdc_basic_education", "nerdc_senior_secondary", "unesco_ai_students"]);
+
+async function resolveLearningEvidenceReferences(input: { schoolId: number; curatedSourceIds?: string[]; evidenceSourceIds?: number[]; draftReferences?: Array<{ id: string }> }) {
+  const requestedCurated = new Set<string>(input.curatedSourceIds ?? input.draftReferences?.filter(reference => reference.id.startsWith("curated:")).map(reference => reference.id.replace("curated:", "")) ?? []);
+  const requestedTenant = new Set<number>(input.evidenceSourceIds ?? input.draftReferences?.filter(reference => reference.id.startsWith("tenant:")).map(reference => Number(reference.id.replace("tenant:", ""))).filter(Number.isInteger) ?? []);
+  const curated = Array.from(requestedCurated).map(id => getCuratedLearningSource(id)).filter((source): source is NonNullable<typeof source> => Boolean(source)).map(source => ({ id: `curated:${source.id}`, title: source.title, organisation: source.organisation, sourceUrl: source.sourceUrl, category: source.category, allowedUse: source.allowedUse }));
+  if (curated.length !== requestedCurated.size) throw new TRPCError({ code: "BAD_REQUEST", message: "One selected curated source is unavailable." });
+  const tenantSources = (await db.listLearningEvidenceSources(input.schoolId)).filter(source => source.status === "active" && requestedTenant.has(source.id));
+  if (tenantSources.length !== requestedTenant.size) throw new TRPCError({ code: "BAD_REQUEST", message: "Select only active institution-approved sources from this learning organisation." });
+  return [...curated, ...tenantSources.map(source => ({ id: `tenant:${source.id}`, title: source.title, organisation: source.organisation, sourceUrl: source.sourceUrl, category: source.category, allowedUse: source.allowedUse }))].slice(0, 5);
+}
 const studentMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), admissionNo: z.string().max(64), firstName: z.string().max(120), lastName: z.string().max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().max(10).optional(), gender: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), guardianFirstName: z.string().max(120).optional(), guardianLastName: z.string().max(120).optional(), guardianRelationship: z.string().max(80).optional(), guardianEmail: z.string().max(320).optional(), guardianPhone: z.string().max(48).optional() });
 const staffMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), employeeNo: z.string().max(48), firstName: z.string().max(120), lastName: z.string().max(120), jobTitle: z.string().max(120), employmentType: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), joinedOn: z.string().max(10).optional(), address: z.string().max(2000).optional() });
 const academicMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), kind: z.string().max(16), name: z.string().max(160), code: z.string().max(32).optional(), level: z.string().max(64).optional(), arm: z.string().max(32).optional(), capacity: z.union([z.string().max(8), z.number().int().positive()]).optional(), description: z.string().max(5000).optional() });
@@ -393,21 +408,32 @@ export const nsosRouter = router({
 
   learningOperations: router({
     workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getLearningOperationsWorkspace(input.schoolId)),
+    evidenceSources: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listLearningEvidenceSources(input.schoolId)),
+    createEvidenceSource: onboardingAdminProcedure
+      .input(schoolInput.extend({ title: z.string().trim().min(3).max(180), organisation: z.string().trim().min(2).max(180), sourceUrl: z.string().url().max(2048), category: z.enum(["institution_approved", "professional_body", "learning_resource"]), allowedUse: z.string().trim().min(20).max(500), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learning-evidence-source-create");
+        const result = await db.createLearningEvidenceSource({ ...input, createdBy: ctx.user.id, approvedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_evidence_source_created", targetType: "learning_evidence_source", targetId: result.evidenceSourceId, metadata: { category: input.category, confirmationRequired: true, sourceUrlStored: true, sourceContentCopied: false } });
+        return result;
+      }),
     courseStudio: onboardingAdminProcedure
-      .input(schoolInput.extend({ brief: z.string().trim().min(12).max(700), audience: z.string().trim().min(2).max(220), deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]).optional(), durationPreference: z.string().trim().max(120).optional() }))
+      .input(schoolInput.extend({ brief: z.string().trim().min(12).max(700), audience: z.string().trim().min(2).max(220), deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]).optional(), durationPreference: z.string().trim().max(120).optional(), curatedSourceIds: z.array(curatedSourceIdInput).max(3).default([]), evidenceSourceIds: z.array(z.number().int().positive()).max(2).default([]), learningExperience: courseStudioExperienceInput.default({ learningPace: "guided", supportStyle: "balanced", practiceMode: "guided_practice", accessibilityNote: "" }) }))
       .mutation(async ({ ctx, input }) => {
         await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "course-studio-prepare");
         const operatingType = await db.getLearningOperatingType(input.schoolId);
-        const draft = await buildCourseStudioDraft({ brief: input.brief, audience: input.audience, deliveryMode: input.deliveryMode, durationPreference: input.durationPreference, operatingType });
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_prepared", targetType: "learning_programme_draft", metadata: { operatingType, source: draft.source, moduleCount: draft.modules.length, materialCount: draft.materials.length, promptStored: false, persisted: false, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
+        const evidenceReferences = await resolveLearningEvidenceReferences({ schoolId: input.schoolId, curatedSourceIds: input.curatedSourceIds, evidenceSourceIds: input.evidenceSourceIds });
+        const draft = await buildCourseStudioDraft({ brief: input.brief, audience: input.audience, deliveryMode: input.deliveryMode, durationPreference: input.durationPreference, operatingType, evidenceReferences, learningExperience: input.learningExperience });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_prepared", targetType: "learning_programme_draft", metadata: { operatingType, source: draft.source, moduleCount: draft.modules.length, materialCount: draft.materials.length, curatedSourceCount: input.curatedSourceIds.length, institutionSourceCount: input.evidenceSourceIds.length, promptStored: false, persisted: false, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
         return draft;
       }),
     applyCourseStudioDraft: onboardingAdminProcedure
       .input(schoolInput.extend({ draft: courseStudioDraftInput, confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
         await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "course-studio-apply");
-        const result = await db.applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: ctx.user.id, draft: input.draft });
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_applied", targetType: "learning_program", targetId: result.programId, metadata: { moduleCount: result.moduleCount, milestoneCount: result.milestoneCount, materialCount: result.materialCount, confirmationRequired: true, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, automaticCompletion: false, credentialIssued: false } });
+        const evidenceReferences = await resolveLearningEvidenceReferences({ schoolId: input.schoolId, draftReferences: input.draft.evidenceReferences });
+        const result = await db.applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: ctx.user.id, draft: { ...input.draft, evidenceReferences } });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_applied", targetType: "learning_program", targetId: result.programId, metadata: { moduleCount: result.moduleCount, milestoneCount: result.milestoneCount, materialCount: result.materialCount, evidenceSourceCount: evidenceReferences.length, confirmationRequired: true, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, automaticCompletion: false, credentialIssued: false } });
         return result;
       }),
     setOperatingType: onboardingAdminProcedure
@@ -504,6 +530,30 @@ export const nsosRouter = router({
         await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "completion-confirm");
         const result = await db.confirmProgramCompletion({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, completionNote: input.completionNote, confirmedBy: ctx.user.id });
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_completion_confirmed", targetType: "program_enrollment", targetId: input.enrollmentId, metadata: { completionNoteProvided: Boolean(input.completionNote), confirmationRequired: true, credentialIssued: false } });
+        return result;
+      }),
+    createCertificationPolicy: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), issuerName: z.string().trim().min(2).max(180), credentialTitle: z.string().trim().min(3).max(180), completionCriteria: z.string().trim().min(30).max(1200), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "certification-policy-create");
+        const result = await db.createProgramCertificationPolicy({ schoolId: input.schoolId, programId: input.programId, issuerName: input.issuerName, credentialTitle: input.credentialTitle, completionCriteria: input.completionCriteria, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "program_certification_policy_created", targetType: "program_certification_policy", targetId: result.certificationPolicyId, metadata: { programId: input.programId, confirmationRequired: true, publicVerificationEnabled: false, accreditationClaimed: false, credentialIssued: false } });
+        return result;
+      }),
+    activateCertificationPolicy: onboardingAdminProcedure
+      .input(schoolInput.extend({ certificationPolicyId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "certification-policy-activate");
+        const result = await db.activateProgramCertificationPolicy({ schoolId: input.schoolId, certificationPolicyId: input.certificationPolicyId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "program_certification_policy_activated", targetType: "program_certification_policy", targetId: input.certificationPolicyId, metadata: { confirmationRequired: true, publicVerificationEnabled: false, accreditationClaimed: false } });
+        return result;
+      }),
+    issuePrivateCertificate: onboardingAdminProcedure
+      .input(schoolInput.extend({ certificationPolicyId: z.number().int().positive(), enrollmentId: z.number().int().positive(), evidenceSummary: z.string().trim().min(30).max(1200), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "certificate-issue");
+        const result = await db.issueProgramCertificate({ schoolId: input.schoolId, certificationPolicyId: input.certificationPolicyId, enrollmentId: input.enrollmentId, evidenceSummary: input.evidenceSummary, issuedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "program_certificate_issued", targetType: "program_certificate", targetId: result.certificateId, metadata: { certificationPolicyId: input.certificationPolicyId, enrollmentId: input.enrollmentId, evidenceSummaryProvided: true, confirmationRequired: true, publicVerificationEnabled: false, accreditationClaimed: false, messageSent: false, automaticCompletion: false } });
         return result;
       }),
     recordAttendance: onboardingAdminProcedure

@@ -5,7 +5,7 @@ vi.mock("./_core/llm", () => ({ invokeLLM: vi.fn() }));
 import { invokeLLM } from "./_core/llm";
 import { buildCourseStudioDraft } from "./courseStudio";
 
-const request = { brief: "Create a practical introductory digital design course for young adults.", audience: "Young adults beginning digital design", operatingType: "vocational_institute" as const, deliveryMode: "blended" as const, durationPreference: "Six weeks" };
+const request = { brief: "Create a practical introductory digital design course for young adults.", audience: "Young adults beginning digital design", operatingType: "vocational_institute" as const, deliveryMode: "blended" as const, durationPreference: "Six weeks", evidenceReferences: [{ id: "curated:nerdc_basic_education", title: "NERDC Basic Education Curriculum", organisation: "Nigerian Educational Research and Development Council", sourceUrl: "https://nerdc.gov.ng/basic-education-curriculum/", category: "official_curriculum" as const, allowedUse: "Use as an optional editable planning reference; review local requirements separately." }], learningExperience: { learningPace: "guided" as const, supportStyle: "worked_examples" as const, practiceMode: "guided_practice" as const, accessibilityNote: "Use mobile-friendly short steps." } };
 
 const validPlan = {
   courseTitle: "Digital design foundation",
@@ -36,6 +36,8 @@ describe("NSOS Course Studio", () => {
     expect(draft.materials).toHaveLength(2);
     expect(`${draft.courseTitle} ${draft.courseSummary}`).not.toMatch(/accredited|guaranteed/i);
     expect(draft.limitations.join(" ")).toMatch(/No learner|No learner/i);
+    expect(draft.evidenceReferences).toEqual(request.evidenceReferences);
+    expect(draft.learningExperience).toEqual(request.learningExperience);
   });
 
   it("falls back to a bounded, reviewable plan when model output is invalid", async () => {
@@ -45,5 +47,7 @@ describe("NSOS Course Studio", () => {
     expect(draft.requiresConfirmation).toBe(true);
     expect(draft.materials.length).toBeGreaterThanOrEqual(2);
     expect(draft.limitations.join(" ")).toMatch(/No programme, material, tutor, enrolment/i);
+    expect(draft.evidenceReferences).toEqual(request.evidenceReferences);
+    expect(draft.learningExperience).toEqual(request.learningExperience);
   });
 });

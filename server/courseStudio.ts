@@ -18,12 +18,30 @@ export type CourseStudioMaterial = {
   content: string;
 };
 
+export type CourseStudioEvidenceReference = {
+  id: string;
+  title: string;
+  organisation: string;
+  sourceUrl: string;
+  category: "official_curriculum" | "global_pedagogy" | "institution_approved" | "professional_body" | "learning_resource";
+  allowedUse: string;
+};
+
+export type CourseStudioLearningExperience = {
+  learningPace: "guided" | "flexible" | "intensive";
+  supportStyle: "balanced" | "step_by_step" | "worked_examples" | "concise_review";
+  practiceMode: "reflection" | "guided_practice" | "project_based";
+  accessibilityNote: string;
+};
+
 export type CourseStudioDraft = {
   courseTitle: string;
   courseSummary: string;
   deliveryMode: CourseStudioDeliveryMode;
   durationLabel: string;
   tutorBrief: string;
+  evidenceReferences: CourseStudioEvidenceReference[];
+  learningExperience: CourseStudioLearningExperience;
   modules: CourseStudioModule[];
   materials: CourseStudioMaterial[];
   setupRecommendation: string;
@@ -38,6 +56,8 @@ export type CourseStudioRequest = {
   operatingType: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider";
   deliveryMode?: CourseStudioDeliveryMode;
   durationPreference?: string;
+  evidenceReferences?: CourseStudioEvidenceReference[];
+  learningExperience?: CourseStudioLearningExperience;
 };
 
 const deliveryModes = new Set<CourseStudioDeliveryMode>(["in_person", "live_online", "self_paced", "blended"]);
@@ -57,6 +77,27 @@ function compactTopic(input: CourseStudioRequest) {
   return cleanLearningText(input.brief, 110) || "organisation-approved learning focus";
 }
 
+function safeExperience(input: CourseStudioRequest): CourseStudioLearningExperience {
+  const experience = input.learningExperience ?? { learningPace: "guided" as const, supportStyle: "balanced" as const, practiceMode: "guided_practice" as const, accessibilityNote: "" };
+  return {
+    learningPace: experience.learningPace,
+    supportStyle: experience.supportStyle,
+    practiceMode: experience.practiceMode,
+    accessibilityNote: cleanText(experience.accessibilityNote, 500),
+  };
+}
+
+function safeEvidence(input: CourseStudioRequest): CourseStudioEvidenceReference[] {
+  return (input.evidenceReferences ?? []).slice(0, 5).map(reference => ({
+    id: cleanText(reference.id, 80),
+    title: cleanText(reference.title, 180),
+    organisation: cleanText(reference.organisation, 180),
+    sourceUrl: cleanText(reference.sourceUrl, 2048),
+    category: reference.category,
+    allowedUse: cleanText(reference.allowedUse, 500),
+  })).filter(reference => reference.id && reference.title && reference.organisation && reference.sourceUrl && reference.allowedUse);
+}
+
 function fallbackDraft(input: CourseStudioRequest): CourseStudioDraft {
   const topic = compactTopic(input);
   const deliveryMode = input.deliveryMode ?? "blended";
@@ -71,6 +112,8 @@ function fallbackDraft(input: CourseStudioRequest): CourseStudioDraft {
     deliveryMode,
     durationLabel: cleanText(input.durationPreference, 120) || "Organisation to confirm duration",
     tutorBrief: "Prepare a supervised AI tutor only after an owner or administrator defines the approved subject scope, intended learner levels, and teacher escalation path in the existing tutor workspace.",
+    evidenceReferences: safeEvidence(input),
+    learningExperience: safeExperience(input),
     modules,
     materials: [
       { title: "Facilitator session guide", materialType: "facilitator_guide", modulePosition: 1, content: "Open with the approved learning goal, explain the support boundary, invite questions, and record only organisation-approved teaching notes. A human instructor remains responsible for delivery and safeguarding." },
@@ -121,7 +164,7 @@ function validateDraft(value: unknown, input: CourseStudioRequest, fallback: Cou
     return title.length >= 2 && materialTypes.has(materialType) && Number.isInteger(modulePosition) && modulePosition >= 1 && modulePosition <= modules.length && content.length >= 30 ? { title, materialType, modulePosition, content } : null;
   }).filter((item): item is CourseStudioMaterial => Boolean(item)).slice(0, 6) : [];
   if (materials.length < 2) return null;
-  return { courseTitle, courseSummary, deliveryMode, durationLabel, tutorBrief, modules, materials, setupRecommendation, limitations, source: "ai", requiresConfirmation: true };
+  return { courseTitle, courseSummary, deliveryMode, durationLabel, tutorBrief, evidenceReferences: safeEvidence(input), learningExperience: safeExperience(input), modules, materials, setupRecommendation, limitations, source: "ai", requiresConfirmation: true };
 }
 
 export async function buildCourseStudioDraft(input: CourseStudioRequest) {
@@ -131,8 +174,8 @@ export async function buildCourseStudioDraft(input: CourseStudioRequest) {
       model: "gpt-5-mini",
       maxTokens: 4200,
       messages: [
-        { role: "system", content: "You are NSOS Course Studio, a supervised planning assistant for Nigerian learning organisations. Produce an editable internal course blueprint for the owner’s supplied learning brief only. Support school enrichment, vocational, coaching, online training, and hybrid learning terminology according to the stated operating type. Give a practical but neutral course title, summary, one allowed delivery mode, duration label, 2–6 ordered learning modules, 1–4 non-graded internal milestones per module, 2–6 usable tutor/facilitator material drafts, an AI-tutor configuration brief, a protected setup recommendation, and limits. Never claim accreditation, official curriculum alignment, government approval, professional qualification, course completion, certification, learner achievement, examination success, job placement, income, safety, medical, legal, financial, or safeguarding advice. Never invent staff, instructors, learners, facilities, fees, timetables, contact details, or public claims. Never create, activate, publish, enrol, assess, grade, message, invite, charge, collect payment, issue a credential, or configure a tutor. Treat milestones as human-reviewed learning checkpoints only. Course materials must be plain text, internal, non-public, non-graded, and should name a supervising human where appropriate. Do not request or repeat personal, financial, credential, provider, password, or bank information. Return only the requested JSON." },
-        { role: "user", content: `Organisation operating type: ${input.operatingType}\nLearning brief: ${input.brief.trim().slice(0, 700)}\nIntended audience: ${input.audience.trim().slice(0, 220)}\nPreferred delivery mode: ${input.deliveryMode ?? "No preference"}\nPreferred duration: ${input.durationPreference?.trim().slice(0, 120) || "No preference"}` },
+        { role: "system", content: "You are NSOS Course Studio, a supervised planning assistant for Nigerian learning organisations. Produce an editable internal course blueprint for the owner’s supplied learning brief only. Support school enrichment, vocational, coaching, online training, and hybrid learning terminology according to the stated operating type. Give a practical but neutral course title, summary, one allowed delivery mode, duration label, 2–6 ordered learning modules, 1–4 non-graded internal milestones per module, 2–6 usable tutor/facilitator material drafts, an AI-tutor configuration brief, a protected setup recommendation, and limits. Selected evidence references are limited planning context, not proof of official alignment or authority to award a credential. Respect the supplied pace, support style, and practice mode, but do not make learner-level decisions. Never claim accreditation, official curriculum alignment, government approval, professional qualification, course completion, certification, learner achievement, examination success, job placement, income, safety, medical, legal, financial, or safeguarding advice. Never invent staff, instructors, learners, facilities, fees, timetables, contact details, citations, or public claims. Never create, activate, publish, enrol, assess, grade, message, invite, charge, collect payment, issue a credential, or configure a tutor. Treat milestones as human-reviewed learning checkpoints only. Course materials must be plain text, internal, non-public, non-graded, and should name a supervising human where appropriate. Do not request or repeat personal, financial, credential, provider, password, or bank information. Return only the requested JSON." },
+        { role: "user", content: `Organisation operating type: ${input.operatingType}\nLearning brief: ${input.brief.trim().slice(0, 700)}\nIntended audience: ${input.audience.trim().slice(0, 220)}\nPreferred delivery mode: ${input.deliveryMode ?? "No preference"}\nPreferred duration: ${input.durationPreference?.trim().slice(0, 120) || "No preference"}\nLearning experience: pace=${safeExperience(input).learningPace}; support=${safeExperience(input).supportStyle}; practice=${safeExperience(input).practiceMode}; accessibility note=${safeExperience(input).accessibilityNote || "None supplied"}\nSelected evidence references: ${safeEvidence(input).map(reference => `${reference.title} (${reference.organisation}) — ${reference.allowedUse}`).join(" | ") || "No source selected; state that local source review is still required."}` },
       ],
       response_format: { type: "json_schema", json_schema: { name: "nsos_course_studio_draft", strict: true, schema: { type: "object", properties: { courseTitle: { type: "string" }, courseSummary: { type: "string" }, deliveryMode: { type: "string", enum: ["in_person", "live_online", "self_paced", "blended"] }, durationLabel: { type: "string" }, tutorBrief: { type: "string" }, modules: { type: "array", minItems: 2, maxItems: 6, items: { type: "object", properties: { title: { type: "string" }, description: { type: "string" }, learningType: { type: "string", enum: ["topic", "practical", "project", "practice", "resource"] }, milestones: { type: "array", minItems: 1, maxItems: 4, items: { type: "object", properties: { title: { type: "string" }, description: { type: "string" } }, required: ["title", "description"], additionalProperties: false } } }, required: ["title", "description", "learningType", "milestones"], additionalProperties: false } }, materials: { type: "array", minItems: 2, maxItems: 6, items: { type: "object", properties: { title: { type: "string" }, materialType: { type: "string", enum: ["facilitator_guide", "practice_activity", "project_brief", "discussion_prompt", "reflection_prompt", "resource_checklist"] }, modulePosition: { type: "integer", minimum: 1, maximum: 6 }, content: { type: "string" } }, required: ["title", "materialType", "modulePosition", "content"], additionalProperties: false } }, setupRecommendation: { type: "string" }, limitations: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } } }, required: ["courseTitle", "courseSummary", "deliveryMode", "durationLabel", "tutorBrief", "modules", "materials", "setupRecommendation", "limitations"], additionalProperties: false } } },
     });

@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "..");
 const workspace = readFileSync(resolve(root, "client/src/components/LearningOperationsWorkspace.tsx"), "utf8");
 const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
+const courseStudio = readFileSync(resolve(root, "client/src/components/CourseStudio.tsx"), "utf8");
+const governance = readFileSync(resolve(root, "client/src/components/LearningDesignGovernance.tsx"), "utf8");
 
 describe("Learning operations workspace interface", () => {
   it("exposes programme operations only through the owner/admin navigation route", () => {
@@ -52,5 +54,27 @@ describe("Learning operations workspace interface", () => {
     expect(workspace).toContain("does not publish a course, collect payment, create a learner or staff account, send an invitation, issue a certificate");
     expect(workspace).toContain("No account or invitation was created.");
     expect(workspace).toContain("NSOS has not issued or verified a credential.");
+  });
+
+  it("presents curated references and editable pace, support, practice, accessibility, and tutor handoff controls in Course Studio", () => {
+    expect(courseStudio).toContain("Evidence and experience design");
+    expect(courseStudio).toContain("curatedLearningSources.map");
+    expect(courseStudio).toContain("They guide an editable outline; they do not prove curriculum approval or accreditation.");
+    expect(courseStudio).toContain("Accessibility or delivery note");
+    expect(courseStudio).toContain("Open supervised AI Tutor setup");
+    expect(courseStudio).toContain("evidenceReferences: draft.evidenceReferences");
+    expect(courseStudio).toContain("learningExperience: draft.learningExperience");
+  });
+
+  it("mounts controlled institution-source and private-certification controls without a public verification or automatic issue path", () => {
+    expect(workspace).toContain("<LearningDesignGovernance");
+    expect(governance).toContain("Add an institution-approved planning source");
+    expect(governance).toContain("NSOS-powered private certification");
+    expect(governance).toContain("No accreditation or public verification");
+    expect(governance).toContain("Create policy draft");
+    expect(governance).toContain("Activate private policy");
+    expect(governance).toContain("Issue private record");
+    expect(governance).toContain("Public verification disabled");
+    expect(governance).not.toContain("verifyPublicCertificate");
   });
 });
