@@ -35,4 +35,12 @@ describe("Automation Desk presentation", () => {
     expect(desk).toContain("test people, payments, messages, public content, a tutor account, or credentials");
     expect(desk).toContain("Value preparation: review this internal offer");
   });
+
+  it("keeps the 19-prompt taster gallery inside Automation Desk and routes every selection through the existing prompt field", () => {
+    expect(desk).toContain("<TasterLibrary");
+    expect(desk).toContain("onlineSchoolTasters");
+    expect(desk).toContain("19 launch-ready course tasters");
+    expect(desk).toContain("Use this full taster prompt");
+    expect(desk).toContain('document.getElementById("automation-goal")?.scrollIntoView');
+  });
 });
