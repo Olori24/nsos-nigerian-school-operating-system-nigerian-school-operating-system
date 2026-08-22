@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
 import { BiodataDocumentAutofill, type BiodataAutofillProposal } from "./components/BiodataDocumentAutofill";
 import { InstallNSOSPrompt } from "./components/InstallNSOSPrompt";
+import { NSOSUpdatePrompt } from "./components/NSOSUpdatePrompt";
 import { useEffect, useState } from "react";
 import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
@@ -53,6 +54,7 @@ export default function App() {
           <Router />
           <InternalBiodataAutofillLauncher />
           <InstallNSOSPrompt />
+          <NSOSUpdatePrompt />
           <div className="fixed bottom-5 right-5 z-[70]"><BiodataThemeToggle /></div>
         </TooltipProvider>
       </ThemeProvider>

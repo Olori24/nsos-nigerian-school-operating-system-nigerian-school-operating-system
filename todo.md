@@ -191,3 +191,6 @@
 - [x] Obtain explicit confirmation to cancel nsos.edu.ng, transfer the paid amount to DomainKing account credit, and register nsos.ng through the support-led billing path.
 - [x] Repair the NSOS logo and web-app icon asset delivery for reliable mobile browser and installed-app display.
 - [x] Prevent the mobile NSOS install prompt from overlapping the persistent theme toggle.
+- [x] Audit the current NSOS workspace for the highest-priority non-domain production gap and deliver the selected secure, tenant-scoped improvement.
+- [x] Add a user-controlled NSOS update prompt so installed web apps can refresh newly deployed icon and service-worker assets without removing and reinstalling the app.
+- [x] Keep the mobile NSOS account-security control on a single line without crowding the brand mark.
