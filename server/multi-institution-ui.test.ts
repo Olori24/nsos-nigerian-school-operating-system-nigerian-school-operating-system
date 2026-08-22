@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 const root = resolve(__dirname, "..");
 const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const switcher = readFileSync(resolve(root, "client/src/components/InstitutionSwitcher.tsx"), "utf8");
+const profile = readFileSync(resolve(root, "client/src/components/InstitutionProfileSummary.tsx"), "utf8");
 
 describe("Multi-institution workspace UI", () => {
   it("renders an accessible institution switcher that exposes only passed active memberships", () => {
@@ -25,5 +26,19 @@ describe("Multi-institution workspace UI", () => {
     expect(home).toContain("schoolsQuery.data?.some(item => item.id === institutionId)");
     expect(home).toContain('setActiveView("overview")');
     expect(home).toContain("<InstitutionSwitcher");
+  });
+
+  it("categorizes only active profile memberships by institution operating type and reuses the safe switch handoff", () => {
+    expect(profile).toContain("My institution profile");
+    expect(profile).toContain("Schools");
+    expect(profile).toContain("Vocational institutes");
+    expect(profile).toContain("Coaching centres");
+    expect(profile).toContain("Online training");
+    expect(profile).toContain("Hybrid learning");
+    expect(profile).toContain("trpc.nsos.schools.list.useQuery");
+    expect(profile).toContain("No active institutions");
+    expect(profile).toContain("onSwitch?.(item.id)");
+    expect(profile).toContain("It does not change your role, membership, or institution records.");
+    expect(home).toContain("<InstitutionProfileSummary");
   });
 });

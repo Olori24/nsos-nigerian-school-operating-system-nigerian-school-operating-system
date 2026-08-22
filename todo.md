@@ -237,3 +237,7 @@
 - [x] Add a responsive, accessible institution switcher that lists only the signed-in user’s active memberships and clearly displays the current institution and operating type.
 - [x] Ensure institution switching resets cached workspace state safely and never exposes learners, staff, finance, programmes, documents, or provider settings from another institution.
 - [x] Add regression coverage for multi-institution ownership, membership-denied switches, selected-workspace isolation, new-institution empty state, and switcher keyboard accessibility; validate and publish safely.
+- [x] Audit the account profile and active institution membership surfaces for a safe categorized institution summary.
+- [x] Add a responsive profile section that groups only the signed-in user’s active institution memberships by school, vocational, coaching, online-training, and hybrid operating type.
+- [x] Provide a role-safe handoff from each categorized profile membership to the existing institution switcher without changing memberships or exposing tenant data.
+- [x] Add profile categorization, active-membership scope, empty-state, and accessible handoff regressions; validate and publish safely.
