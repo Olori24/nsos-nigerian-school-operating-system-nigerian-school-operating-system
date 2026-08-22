@@ -10,7 +10,9 @@ DomainKing’s published policy states that registered domains are non-refundabl
 
 The support request should ask for a written confirmation that `nsos.edu.ng` will remain pending without the ineligible documents, together with a clear answer on whether DomainKing can offer any credit, cancellation exception, or account-level remedy. It must not ask for activation and must not attach or create inaccurate institutional documents.
 
-On 21 August 2026, DomainKing opened support ticket **#738576** (email reference **#556391**) for this correction request. The acknowledgement confirms that the request is queued for a substantive response; it does not itself grant a cancellation, credit, or domain substitution. No follow-up purchase or ineligible-document submission is authorized while that response is pending.
+On 21 August 2026, DomainKing opened support ticket **#738576** (email reference **#556391**) for this correction request. DomainKing subsequently confirmed in writing that it can cancel the pending `nsos.edu.ng` registration and move the amount paid into the account credit balance for another domain extension. Its separate billing response confirmed that `nsos.ng` is available for **₦17,500 per year** and that registration using the credit will be handled by the billing team.
+
+The account holder explicitly authorized the correction request on 22 August 2026, and the reply was sent successfully through the original support ticket. It asks DomainKing to cancel `nsos.edu.ng`, apply the paid amount to account credit, use the credit toward one year of `nsos.ng`, and confirm any remaining balance before the registration proceeds. No payment or registration completion is authorized until DomainKing provides that final billing confirmation.
 
 ## Recommended compliant domain
 
