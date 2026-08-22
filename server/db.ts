@@ -675,6 +675,19 @@ export async function listProviderConfigurations(schoolId: number) {
   });
 }
 
+export async function getEmailServiceReadiness(schoolId: number) {
+  const db = await database();
+  const recent = await db.select({ id: messageLogs.id, status: messageLogs.status, createdAt: messageLogs.createdAt, sentAt: messageLogs.sentAt }).from(messageLogs).where(and(eq(messageLogs.schoolId, schoolId), eq(messageLogs.channel, "email"))).orderBy(desc(messageLogs.createdAt)).limit(12);
+  const sender = ENV.authEmailFrom.trim();
+  const senderAddress = sender.match(/<([^>]+)>/)?.[1] ?? sender;
+  const senderDomain = senderAddress.includes("@") ? senderAddress.split("@").pop()?.toLowerCase() ?? null : null;
+  const failedCount = recent.filter(item => item.status === "failed").length;
+  const acceptedCount = recent.filter(item => item.status === "sent").length;
+  const managedSenderNeedsVerification = !senderDomain || senderDomain === "resend.dev";
+  const status = !sender ? "not_configured" : failedCount > 0 ? "action_required" : managedSenderNeedsVerification ? "awaiting_domain_verification" : "monitoring";
+  return { status, senderAddress: senderAddress || null, senderDomain, recentAttemptCount: recent.length, failedCount, acceptedCount, managedSenderNeedsVerification, lastAttemptAt: recent[0]?.createdAt ?? null, launchChecklist: ["Confirm the nsos.ng registration and DNS access.", "Add the provider-issued sender-domain DNS records.", "Verify the sender domain in the email provider.", "Update the NSOS sender address and send a controlled invitation test."] };
+}
+
 export async function saveProviderConfiguration(input: { schoolId: number; channel: ProviderChannel; provider: string; status: "draft" | "ready" | "disabled"; configuration: Record<string, unknown>; credentials?: ProviderCredentials; clearCredentials?: boolean; configuredBy: number }) {
   const db = await database();
   if (!providersByChannel[input.channel].includes(input.provider)) throw new Error("Select a provider that supports the chosen NSOS communication channel.");

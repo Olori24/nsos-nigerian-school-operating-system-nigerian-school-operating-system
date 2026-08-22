@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./db", () => ({
   getSchoolMembership: vi.fn(),
   listProviderConfigurations: vi.fn(),
+  getEmailServiceReadiness: vi.fn(),
   saveProviderConfiguration: vi.fn(),
   testProviderConnection: vi.fn(),
   getSmsDeliveryWebhookUrls: vi.fn(),
@@ -28,6 +29,12 @@ describe("NSOS provider configuration routes", () => {
     vi.mocked(db.listProviderConfigurations).mockResolvedValue([{ channel: "payment", provider: "paystack", hasCredentials: true, readiness: "Ready for payment adapter" }, { channel: "sms", provider: "termii", hasCredentials: true, readiness: "Ready for SMS adapter" }, { channel: "email", provider: "resend", hasCredentials: false, readiness: "Credentials required" }] as any);
     await expect(caller().nsos.providers.list({ schoolId: 1 })).resolves.toHaveLength(3);
     expect(db.listProviderConfigurations).toHaveBeenCalledWith(1);
+  });
+
+  it("returns tenant-scoped email readiness without returning any provider credential", async () => {
+    vi.mocked(db.getEmailServiceReadiness).mockResolvedValue({ status: "awaiting_domain_verification", senderAddress: "notifications@resend.dev", failedCount: 2, acceptedCount: 0, recentAttemptCount: 2, managedSenderNeedsVerification: true, launchChecklist: ["Verify a sender domain."] } as any);
+    await expect(caller().nsos.providers.emailReadiness({ schoolId: 1 })).resolves.toMatchObject({ status: "awaiting_domain_verification", failedCount: 2, managedSenderNeedsVerification: true });
+    expect(db.getEmailServiceReadiness).toHaveBeenCalledWith(1);
   });
 
   it("passes provider credentials only into the server-side save service", async () => {

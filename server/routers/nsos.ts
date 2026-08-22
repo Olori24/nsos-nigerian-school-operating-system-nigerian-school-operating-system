@@ -266,6 +266,7 @@ export const nsosRouter = router({
 
   providers: router({
     list: providerAdminProcedure.input(schoolInput).query(({ input }) => db.listProviderConfigurations(input.schoolId)),
+    emailReadiness: providerAdminProcedure.input(schoolInput).query(({ input }) => db.getEmailServiceReadiness(input.schoolId)),
     save: providerAdminProcedure.input(schoolInput.extend({ channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]), provider: z.enum(["paystack", "flutterwave", "stripe", "manual", "termii", "twilio", "resend", "sendgrid", "whatsapp_cloud", "in_app"]), status: z.enum(["draft", "ready", "disabled"]), configuration: z.record(z.string(), z.unknown()).default({}), credentials: z.object({ apiKey: z.string().max(500).optional(), secretKey: z.string().max(500).optional(), webhookSecret: z.string().max(500).optional() }).optional(), clearCredentials: z.boolean().optional() }))
       .mutation(({ ctx, input }) => db.saveProviderConfiguration({ ...input, configuredBy: ctx.user.id })),
     testConnection: providerAdminProcedure.input(schoolInput.extend({ channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]) })).mutation(({ input }) => db.testProviderConnection(input.schoolId, input.channel)),
