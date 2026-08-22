@@ -177,10 +177,10 @@
 - [x] Compare Nigeria-based and international registration processes and yearly renewal fees for nsos.ng, including DNS and verified-email readiness.
 - [x] Verify NiRA and DomainKing registrant contact and identification requirements for nsos.ng, then prepare a confirmation-gated purchase handoff.
 - [x] Independently verify NiRA accreditation, registrar identity, and payment-safety signals for any nsos.ng purchase path before sharing information or paying.
-- [ ] Verify the purchased nsos.edu.ng domain, connect it to the NSOS website, and configure a verified sender domain to repair invitation-email delivery.
-- [ ] Diagnose and safely recover from the DomainKing domain-management portal loading failure without retrying payment or exposing credentials.
-- [ ] Recover the DomainKing account through the user-controlled password-reset flow and verify the purchased nsos.edu.ng domain status.
-- [ ] Complete the replacement DomainKing password-reset flow only after explicit confirmation of the temporary password submission.
+- [x] Retire the original nsos.edu.ng connection plan after confirming the educational-domain restriction and DomainKing’s compliant cancellation-and-credit path; do not attach or verify the ineligible domain.
+- [x] Close the DomainKing portal-loading recovery work after the support-led credit-transfer path removed any need to retry payment or manage the ineligible domain in the portal.
+- [x] Recover the DomainKing account through the user-controlled password-reset flow and verify that nsos.edu.ng is pending rather than active.
+- [x] Complete the replacement DomainKing password-reset flow after explicit confirmation of the temporary password submission.
 - [ ] Correct the pending nsos.edu.ng registration without submitting ineligible educational documents, and secure a compliant unrestricted NSOS custom domain.
 - [x] Repair the runtime schema export fault for staff setup invitations and confirm a clean NSOS server startup path.
 - [x] Add a verified guardian portal onboarding checklist with tenant-scoped, read-only first-use guidance and regression coverage.
@@ -188,6 +188,6 @@
 - [x] Create an original NSOS logo and scalable app-icon system for the product interface and installable web app.
 - [x] Make NSOS installable as a web app with manifest metadata, application icons, and a safe offline shell.
 - [x] Add a user-facing install prompt that works where supported and remains unobtrusive elsewhere.
-- [ ] Obtain explicit confirmation to cancel nsos.edu.ng, transfer the paid amount to DomainKing account credit, and register nsos.ng through the support-led billing path.
+- [x] Obtain explicit confirmation to cancel nsos.edu.ng, transfer the paid amount to DomainKing account credit, and register nsos.ng through the support-led billing path.
 - [x] Repair the NSOS logo and web-app icon asset delivery for reliable mobile browser and installed-app display.
 - [x] Prevent the mobile NSOS install prompt from overlapping the persistent theme toggle.
