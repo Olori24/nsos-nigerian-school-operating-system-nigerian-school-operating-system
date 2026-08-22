@@ -47,6 +47,7 @@ import {
   paymentPromises,
   platformBillingRecords,
   learningPrograms,
+  programCourseMaterials,
   programCohorts,
   programCurriculumMilestones,
   programCurriculumModules,
@@ -3213,7 +3214,7 @@ export async function getLearningOperatingType(schoolId: number): Promise<Learni
 
 export async function getLearningOperationsWorkspace(schoolId: number) {
   const db = await database();
-  const [school, programs, cohorts, assignments, enrolments, attendance, fees, modules, milestones, milestoneProgress, staff, learners] = await Promise.all([
+  const [school, programs, cohorts, assignments, enrolments, attendance, fees, modules, milestones, materials, milestoneProgress, staff, learners] = await Promise.all([
     db.select({ operatingType: schools.operatingType }).from(schools).where(eq(schools.id, schoolId)).limit(1),
     db.select().from(learningPrograms).where(eq(learningPrograms.schoolId, schoolId)).orderBy(desc(learningPrograms.createdAt)),
     db.select().from(programCohorts).where(eq(programCohorts.schoolId, schoolId)).orderBy(desc(programCohorts.createdAt)),
@@ -3223,6 +3224,7 @@ export async function getLearningOperationsWorkspace(schoolId: number) {
     db.select().from(programFeeStructures).where(eq(programFeeStructures.schoolId, schoolId)).orderBy(desc(programFeeStructures.createdAt)),
     db.select().from(programCurriculumModules).where(eq(programCurriculumModules.schoolId, schoolId)).orderBy(programCurriculumModules.programId, programCurriculumModules.sortOrder),
     db.select().from(programCurriculumMilestones).where(eq(programCurriculumMilestones.schoolId, schoolId)).orderBy(programCurriculumMilestones.moduleId, programCurriculumMilestones.sortOrder),
+    db.select().from(programCourseMaterials).where(eq(programCourseMaterials.schoolId, schoolId)).orderBy(desc(programCourseMaterials.createdAt)),
     db.select().from(programMilestoneProgress).where(eq(programMilestoneProgress.schoolId, schoolId)).orderBy(desc(programMilestoneProgress.updatedAt)),
     db.select({ id: staffProfiles.id, firstName: staffProfiles.firstName, lastName: staffProfiles.lastName, jobTitle: staffProfiles.jobTitle, employmentStatus: staffProfiles.employmentStatus }).from(staffProfiles).where(eq(staffProfiles.schoolId, schoolId)).orderBy(staffProfiles.lastName),
     db.select({ id: studentProfiles.id, firstName: studentProfiles.firstName, lastName: studentProfiles.lastName, admissionNo: studentProfiles.admissionNo, status: studentProfiles.status }).from(studentProfiles).where(eq(studentProfiles.schoolId, schoolId)).orderBy(studentProfiles.lastName),
@@ -3242,6 +3244,7 @@ export async function getLearningOperationsWorkspace(schoolId: number) {
     fees: fees.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", cohortName: item.cohortId ? cohortById.get(item.cohortId)?.name ?? "Unavailable cohort" : null })),
     modules: modules.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", milestones: milestones.filter(milestone => milestone.moduleId === item.id).length, activeMilestones: milestones.filter(milestone => milestone.moduleId === item.id && milestone.status === "active").length })),
     milestones: milestones.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", moduleTitle: moduleById.get(item.moduleId)?.title ?? "Unavailable module" })),
+    materials: materials.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", moduleTitle: item.moduleId ? moduleById.get(item.moduleId)?.title ?? "Unavailable module" : null })),
     milestoneProgress: milestoneProgress.map(item => ({ ...item, learnerName: learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.studentId ?? -1) ? `${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.firstName} ${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.lastName}` : "Unavailable learner", programTitle: programById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.programId ?? -1)?.title ?? "Unavailable programme", milestoneTitle: milestones.find(milestone => milestone.id === item.milestoneId)?.title ?? "Unavailable milestone" })),
     staff,
     learners,
@@ -3254,6 +3257,41 @@ export async function createLearningProgram(input: { schoolId: number; title: st
   if (existing) throw new Error("A programme with this title already exists for this learning organisation.");
   const result = await db.insert(learningPrograms).values({ ...input, code: input.code || null, description: input.description || null, durationLabel: input.durationLabel || null });
   return { programId: Number(result[0].insertId), status: "draft" as const };
+}
+
+export type AcceptedCourseStudioDraft = {
+  courseTitle: string;
+  courseSummary: string;
+  deliveryMode: "in_person" | "live_online" | "self_paced" | "blended";
+  durationLabel: string;
+  modules: Array<{ title: string; description: string; learningType: "topic" | "practical" | "project" | "practice" | "resource"; milestones: Array<{ title: string; description: string }> }>;
+  materials: Array<{ title: string; materialType: "facilitator_guide" | "practice_activity" | "project_brief" | "discussion_prompt" | "reflection_prompt" | "resource_checklist"; modulePosition: number; content: string }>;
+};
+
+export async function applyCourseStudioDraft(input: { schoolId: number; createdBy: number; draft: AcceptedCourseStudioDraft }) {
+  const db = await database();
+  const existing = (await db.select({ id: learningPrograms.id }).from(learningPrograms).where(and(eq(learningPrograms.schoolId, input.schoolId), eq(learningPrograms.title, input.draft.courseTitle))).limit(1))[0];
+  if (existing) throw new Error("A programme with this title already exists for this learning organisation. Edit the draft title and try again.");
+  if (!input.draft.modules.length || input.draft.modules.length > 6 || !input.draft.materials.length || input.draft.materials.length > 6) throw new Error("Course Studio drafts must contain a small, reviewable module and material set.");
+  if (input.draft.modules.some(module => !module.milestones.length || module.milestones.length > 4)) throw new Error("Each Course Studio module needs one to four reviewable milestones.");
+  if (input.draft.materials.some(material => material.modulePosition < 1 || material.modulePosition > input.draft.modules.length)) throw new Error("Each Course Studio material must reference a module in this accepted draft.");
+  return db.transaction(async tx => {
+    const createdProgram = await tx.insert(learningPrograms).values({ schoolId: input.schoolId, title: input.draft.courseTitle, description: input.draft.courseSummary, deliveryMode: input.draft.deliveryMode, durationLabel: input.draft.durationLabel, createdBy: input.createdBy, status: "draft" });
+    const programId = Number(createdProgram[0].insertId);
+    const moduleIds: number[] = [];
+    for (let moduleIndex = 0; moduleIndex < input.draft.modules.length; moduleIndex += 1) {
+      const module = input.draft.modules[moduleIndex]!;
+      const createdModule = await tx.insert(programCurriculumModules).values({ schoolId: input.schoolId, programId, title: module.title, description: module.description, learningType: module.learningType, sortOrder: moduleIndex + 1, createdBy: input.createdBy, status: "draft" });
+      const moduleId = Number(createdModule[0].insertId);
+      moduleIds.push(moduleId);
+      for (let milestoneIndex = 0; milestoneIndex < module.milestones.length; milestoneIndex += 1) {
+        const milestone = module.milestones[milestoneIndex]!;
+        await tx.insert(programCurriculumMilestones).values({ schoolId: input.schoolId, programId, moduleId, title: milestone.title, description: milestone.description, sortOrder: milestoneIndex + 1, createdBy: input.createdBy, status: "draft" });
+      }
+    }
+    for (const material of input.draft.materials) await tx.insert(programCourseMaterials).values({ schoolId: input.schoolId, programId, moduleId: moduleIds[material.modulePosition - 1] ?? null, title: material.title, materialType: material.materialType, content: material.content, createdBy: input.createdBy, status: "draft" });
+    return { programId, moduleCount: moduleIds.length, milestoneCount: input.draft.modules.reduce((total, module) => total + module.milestones.length, 0), materialCount: input.draft.materials.length, status: "draft" as const };
+  });
 }
 
 export async function activateLearningProgram(input: { schoolId: number; programId: number; activatedBy: number }) {

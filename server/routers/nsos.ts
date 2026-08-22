@@ -5,6 +5,7 @@ import { sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffS
 import { buildAdmissionLetter } from "../admissionLetter";
 import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
+import { buildCourseStudioDraft } from "../courseStudio";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildEnterpriseConciergePlan } from "../enterpriseConcierge";
 import { buildSetupAgentAssessment } from "../setupAgent";
@@ -103,6 +104,14 @@ const aiTutorTeacherProcedure = protectedProcedure.input(schoolInput).use(async 
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
 const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
 const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
+const courseStudioDraftInput = z.object({
+  courseTitle: z.string().trim().min(3).max(180),
+  courseSummary: z.string().trim().min(50).max(1600),
+  deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]),
+  durationLabel: z.string().trim().min(2).max(120),
+  modules: z.array(z.object({ title: z.string().trim().min(2).max(180), description: z.string().trim().min(10).max(1200), learningType: z.enum(["topic", "practical", "project", "practice", "resource"]), milestones: z.array(z.object({ title: z.string().trim().min(2).max(180), description: z.string().trim().min(10).max(1000) })).min(1).max(4) })).min(2).max(6),
+  materials: z.array(z.object({ title: z.string().trim().min(2).max(180), materialType: z.enum(["facilitator_guide", "practice_activity", "project_brief", "discussion_prompt", "reflection_prompt", "resource_checklist"]), modulePosition: z.number().int().positive().max(6), content: z.string().trim().min(30).max(4500) })).min(2).max(6),
+});
 const studentMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), admissionNo: z.string().max(64), firstName: z.string().max(120), lastName: z.string().max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().max(10).optional(), gender: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), guardianFirstName: z.string().max(120).optional(), guardianLastName: z.string().max(120).optional(), guardianRelationship: z.string().max(80).optional(), guardianEmail: z.string().max(320).optional(), guardianPhone: z.string().max(48).optional() });
 const staffMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), employeeNo: z.string().max(48), firstName: z.string().max(120), lastName: z.string().max(120), jobTitle: z.string().max(120), employmentType: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), joinedOn: z.string().max(10).optional(), address: z.string().max(2000).optional() });
 const academicMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), kind: z.string().max(16), name: z.string().max(160), code: z.string().max(32).optional(), level: z.string().max(64).optional(), arm: z.string().max(32).optional(), capacity: z.union([z.string().max(8), z.number().int().positive()]).optional(), description: z.string().max(5000).optional() });
@@ -334,6 +343,23 @@ export const nsosRouter = router({
 
   learningOperations: router({
     workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getLearningOperationsWorkspace(input.schoolId)),
+    courseStudio: onboardingAdminProcedure
+      .input(schoolInput.extend({ brief: z.string().trim().min(12).max(700), audience: z.string().trim().min(2).max(220), deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]).optional(), durationPreference: z.string().trim().max(120).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "course-studio-prepare");
+        const operatingType = await db.getLearningOperatingType(input.schoolId);
+        const draft = await buildCourseStudioDraft({ brief: input.brief, audience: input.audience, deliveryMode: input.deliveryMode, durationPreference: input.durationPreference, operatingType });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_prepared", targetType: "learning_programme_draft", metadata: { operatingType, source: draft.source, moduleCount: draft.modules.length, materialCount: draft.materials.length, promptStored: false, persisted: false, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
+        return draft;
+      }),
+    applyCourseStudioDraft: onboardingAdminProcedure
+      .input(schoolInput.extend({ draft: courseStudioDraftInput, confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "course-studio-apply");
+        const result = await db.applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: ctx.user.id, draft: input.draft });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_applied", targetType: "learning_program", targetId: result.programId, metadata: { moduleCount: result.moduleCount, milestoneCount: result.milestoneCount, materialCount: result.materialCount, confirmationRequired: true, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, automaticCompletion: false, credentialIssued: false } });
+        return result;
+      }),
     setOperatingType: onboardingAdminProcedure
       .input(schoolInput.extend({ operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider"]), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
