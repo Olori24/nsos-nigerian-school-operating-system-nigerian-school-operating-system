@@ -152,18 +152,28 @@ export const nsosRouter = router({
 
   website: router({
     config: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolWebsite(input.schoolId)),
+    media: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.listSchoolWebsiteMedia(input.schoolId)),
+    uploadMedia: websiteAdminProcedure
+      .input(schoolInput.extend({ purpose: z.enum(["logo", "hero"]), label: z.string().trim().min(2).max(120), fileName: z.string().trim().min(1).max(180), mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]), base64: z.string().min(80).max(7_100_000) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "website-media", route: "upload", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Website image uploads are taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const media = await db.uploadSchoolWebsiteMedia({ ...input, uploadedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_website_media_uploaded", targetType: "school_website_media", targetId: media.id, metadata: { purpose: media.purpose, mimeType: media.mimeType, byteSize: media.byteSize } });
+        return media;
+      }),
     save: websiteAdminProcedure
-      .input(schoolInput.extend({ headline: z.string().max(255).optional(), introduction: z.string().max(5000).optional(), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), contactEmail: z.string().email().optional(), contactPhone: z.string().max(48).optional(), campusLocation: z.string().max(255).optional(), customDomain: customDomainInput, admissionsEnabled: z.boolean().optional(), published: z.boolean().optional() }))
+      .input(schoolInput.extend({ headline: z.string().max(255).optional(), introduction: z.string().max(5000).optional(), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), contactEmail: z.string().email().optional(), contactPhone: z.string().max(48).optional(), campusLocation: z.string().max(255).optional(), customDomain: customDomainInput, admissionsEnabled: z.boolean().optional(), logoMediaId: z.number().int().positive().nullable().optional(), heroMediaId: z.number().int().positive().nullable().optional(), published: z.boolean().optional() }))
       .mutation(async ({ ctx, input }) => {
         const result = await db.saveSchoolWebsite(input);
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_website_configuration_saved", targetType: "school_website", metadata: { admissionsEnabled: input.admissionsEnabled, published: input.published, customDomainConfigured: Boolean(input.customDomain) } });
         return result;
       }),
     applySetupAgentDraft: websiteAdminProcedure
-      .input(schoolInput.extend({ headline: z.string().trim().min(5).max(255), introduction: z.string().trim().min(20).max(5000), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), contactEmail: z.string().email().optional(), contactPhone: z.string().trim().min(5).max(48).optional(), campusLocation: z.string().trim().min(2).max(255).optional(), admissionsEnabled: z.boolean(), confirmed: z.literal(true) }))
+      .input(schoolInput.extend({ headline: z.string().trim().min(5).max(255), introduction: z.string().trim().min(20).max(5000), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), contactEmail: z.string().email().optional(), contactPhone: z.string().trim().min(5).max(48).optional(), campusLocation: z.string().trim().min(2).max(255).optional(), admissionsEnabled: z.boolean(), logoMediaId: z.number().int().positive().nullable().optional(), heroMediaId: z.number().int().positive().nullable().optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.saveSchoolWebsite({ schoolId: input.schoolId, headline: input.headline, introduction: input.introduction, primaryColor: input.primaryColor, contactEmail: input.contactEmail, contactPhone: input.contactPhone, campusLocation: input.campusLocation, admissionsEnabled: input.admissionsEnabled, published: false });
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "website_setup_agent_draft_applied", targetType: "school_website", metadata: { appliedAsDraft: true, admissionsEnabled: input.admissionsEnabled, contactEmailProvided: Boolean(input.contactEmail), contactPhoneProvided: Boolean(input.contactPhone), campusLocationProvided: Boolean(input.campusLocation) } });
+        const result = await db.saveSchoolWebsite({ schoolId: input.schoolId, headline: input.headline, introduction: input.introduction, primaryColor: input.primaryColor, contactEmail: input.contactEmail, contactPhone: input.contactPhone, campusLocation: input.campusLocation, admissionsEnabled: input.admissionsEnabled, logoMediaId: input.logoMediaId, heroMediaId: input.heroMediaId, published: false });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "website_setup_agent_draft_applied", targetType: "school_website", metadata: { appliedAsDraft: true, admissionsEnabled: input.admissionsEnabled, contactEmailProvided: Boolean(input.contactEmail), contactPhoneProvided: Boolean(input.contactPhone), campusLocationProvided: Boolean(input.campusLocation), logoMediaSelected: Boolean(input.logoMediaId), heroMediaSelected: Boolean(input.heroMediaId) } });
         return result;
       }),
     generateAgentDraft: websiteAdminProcedure

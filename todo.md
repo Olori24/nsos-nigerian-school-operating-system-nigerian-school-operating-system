@@ -212,3 +212,6 @@
 - [x] Add an owner/admin-only, review-first class and subject migration workflow that accepts school-approved academic lists without overwriting existing curriculum data.
 - [x] Validate academic migration rows and duplicate risks, require an existing school session, and require explicit final confirmation before creating classes or subjects.
 - [x] Add tenant-scoped academic migration idempotency, safe batch history, audit records, and regression coverage for authorization and duplicate protection.
+- [x] Add an owner/admin-only school website media library for approved logo and hero images, using private tenant-scoped storage with image signature, size, and duplicate checks.
+- [x] Allow the supervised website AI workflow to use only explicitly selected school-owned media in an editable unpublished draft, without generating images, publishing, or connecting a domain.
+- [x] Add regression coverage for media validation, tenant isolation, owner-admin controls, draft-only application, and safe public-website rendering of approved assets.

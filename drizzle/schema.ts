@@ -208,10 +208,34 @@ export const schoolWebsites = mysqlTable(
     domainVerificationToken: varchar("domainVerificationToken", { length: 96 }),
     domainStatus: mysqlEnum("domainStatus", ["not_configured", "pending", "active"]).notNull().default("not_configured"),
     admissionsEnabled: boolean("admissionsEnabled").notNull().default(true),
+    logoMediaId: int("logoMediaId"),
+    heroMediaId: int("heroMediaId"),
     published: boolean("published").notNull().default(false),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({ schoolUnique: uniqueIndex("schoolWebsite_school_unique").on(table.schoolId), domainUnique: uniqueIndex("schoolWebsite_domain_unique").on(table.customDomain) }),
+);
+
+export const schoolWebsiteMedia = mysqlTable(
+  "schoolWebsiteMedia",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    uploadedBy: int("uploadedBy").notNull(),
+    purpose: mysqlEnum("purpose", ["logo", "hero"]).notNull(),
+    label: varchar("label", { length: 120 }).notNull(),
+    storageKey: varchar("storageKey", { length: 1024 }).notNull(),
+    url: varchar("url", { length: 2048 }).notNull(),
+    fileName: varchar("fileName", { length: 180 }).notNull(),
+    mimeType: varchar("mimeType", { length: 120 }).notNull(),
+    byteSize: int("byteSize").notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    schoolCreated: index("website_media_school_created_idx").on(table.schoolId, table.createdAt),
+    schoolHash: uniqueIndex("website_media_school_hash_unique").on(table.schoolId, table.sha256),
+  }),
 );
 
 export const schoolDocumentTemplates = mysqlTable(

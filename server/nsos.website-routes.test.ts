@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./db", () => ({
   getSchoolMembership: vi.fn(),
   getSchoolWebsite: vi.fn(),
+  listSchoolWebsiteMedia: vi.fn(),
+  uploadSchoolWebsiteMedia: vi.fn(),
   saveSchoolWebsite: vi.fn(),
   verifySchoolWebsiteDomain: vi.fn(),
   getPublicSchoolWebsite: vi.fn(),
@@ -29,10 +31,19 @@ describe("NSOS tenant website routes", () => {
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, actorUserId: 5, eventType: "school_website_configuration_saved" }));
   });
 
+  it("allows an administrator to list and upload only approved school-owned website media", async () => {
+    vi.mocked(db.listSchoolWebsiteMedia).mockResolvedValue([{ id: 9, purpose: "logo", label: "School mark", url: "/manus-storage/school-mark.png" }] as any);
+    vi.mocked(db.uploadSchoolWebsiteMedia).mockResolvedValue({ id: 9, purpose: "logo", label: "School mark", mimeType: "image/png", byteSize: 1024 } as any);
+    await expect(adminCaller().nsos.website.media({ schoolId: 1 })).resolves.toHaveLength(1);
+    await expect(adminCaller().nsos.website.uploadMedia({ schoolId: 1, purpose: "logo", label: "School mark", fileName: "school-mark.png", mimeType: "image/png", base64: "a".repeat(100) })).resolves.toMatchObject({ id: 9, purpose: "logo" });
+    expect(db.uploadSchoolWebsiteMedia).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, uploadedBy: 5, purpose: "logo" }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "school_website_media_uploaded", targetType: "school_website_media", targetId: 9, metadata: expect.objectContaining({ purpose: "logo" }) }));
+  });
+
   it("applies a confirmed website-agent proposal only as an unpublished draft and records the approval trail", async () => {
     vi.mocked(db.saveSchoolWebsite).mockResolvedValue({ school: { id: 1, name: "Greener Future Academy" }, website: { published: false, headline: "Learning with confidence" } } as any);
-    await expect(adminCaller().nsos.website.applySetupAgentDraft({ schoolId: 1, headline: "Learning with confidence", introduction: "A reviewed introduction for the school community and prospective families.", primaryColor: "#0f5c4f", contactEmail: "admissions@example.ng", admissionsEnabled: true, confirmed: true })).resolves.toMatchObject({ website: { published: false } });
-    expect(db.saveSchoolWebsite).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, headline: "Learning with confidence", published: false, admissionsEnabled: true }));
+    await expect(adminCaller().nsos.website.applySetupAgentDraft({ schoolId: 1, headline: "Learning with confidence", introduction: "A reviewed introduction for the school community and prospective families.", primaryColor: "#0f5c4f", contactEmail: "admissions@example.ng", admissionsEnabled: true, logoMediaId: 9, heroMediaId: 10, confirmed: true })).resolves.toMatchObject({ website: { published: false } });
+    expect(db.saveSchoolWebsite).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, headline: "Learning with confidence", logoMediaId: 9, heroMediaId: 10, published: false, admissionsEnabled: true }));
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, actorUserId: 5, eventType: "website_setup_agent_draft_applied", metadata: expect.objectContaining({ appliedAsDraft: true }) }));
   });
 

@@ -60,6 +60,7 @@ import {
   schoolMemberships,
   schoolDocumentTemplates,
   schoolWebsites,
+  schoolWebsiteMedia,
   schools,
   scores,
   staffDuties,
@@ -1282,12 +1283,68 @@ export async function checkProviderSmsTestDelivery(input: { schoolId: number; me
   return { ok: false, deliveryState: "pending" as const, message: "SMS was submitted but delivery has not been confirmed yet. Try again shortly." };
 }
 
+type WebsiteMediaPurpose = "logo" | "hero";
+type WebsiteMediaUpload = { purpose: WebsiteMediaPurpose; label: string; fileName: string; mimeType: string; base64: string };
+const websiteImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function detectedWebsiteImageMimeType(bytes: Buffer) {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  return null;
+}
+
+function websiteMediaExtension(mimeType: string) { return mimeType === "image/jpeg" ? "jpg" : mimeType === "image/png" ? "png" : "webp"; }
+
+export async function listSchoolWebsiteMedia(schoolId: number) {
+  return (await (await database()).select({ id: schoolWebsiteMedia.id, purpose: schoolWebsiteMedia.purpose, label: schoolWebsiteMedia.label, url: schoolWebsiteMedia.url, fileName: schoolWebsiteMedia.fileName, mimeType: schoolWebsiteMedia.mimeType, byteSize: schoolWebsiteMedia.byteSize, createdAt: schoolWebsiteMedia.createdAt }).from(schoolWebsiteMedia).where(eq(schoolWebsiteMedia.schoolId, schoolId)).orderBy(desc(schoolWebsiteMedia.createdAt)).limit(24));
+}
+
+export async function uploadSchoolWebsiteMedia(input: { schoolId: number; uploadedBy: number } & WebsiteMediaUpload) {
+  const label = migrationText(input.label, 120);
+  const fileName = migrationText(input.fileName, 180);
+  if (!label) throw new Error("Give this approved website image a short label before uploading it.");
+  if (!fileName) throw new Error("The selected image must include a file name.");
+  if (!websiteImageMimeTypes.has(input.mimeType)) throw new Error("Use a PNG, JPG, or WEBP image for a school website asset.");
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(input.base64)) throw new Error("The selected image could not be read safely. Choose the original file and try again.");
+  const bytes = Buffer.from(input.base64.replace(/\s/g, ""), "base64");
+  if (bytes.length < 64 || bytes.length > 5 * 1024 * 1024) throw new Error("Website images must be between 64 bytes and 5 MB.");
+  const detectedMimeType = detectedWebsiteImageMimeType(bytes);
+  if (!detectedMimeType || detectedMimeType !== input.mimeType) throw new Error("The image file signature does not match its declared format. Choose the original PNG, JPG, or WEBP file.");
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const db = await database();
+  const duplicate = (await db.select({ id: schoolWebsiteMedia.id }).from(schoolWebsiteMedia).where(and(eq(schoolWebsiteMedia.schoolId, input.schoolId), eq(schoolWebsiteMedia.sha256, sha256))).limit(1))[0];
+  if (duplicate) throw new Error("This exact image has already been added to this school’s website media library.");
+  const { key, url } = await storagePut(`schools/${input.schoolId}/website-media/${input.purpose}/${sha256.slice(0, 20)}.${websiteMediaExtension(detectedMimeType)}`, bytes, detectedMimeType);
+  const created = await db.insert(schoolWebsiteMedia).values({ schoolId: input.schoolId, uploadedBy: input.uploadedBy, purpose: input.purpose, label, storageKey: key, url, fileName, mimeType: detectedMimeType, byteSize: bytes.length, sha256 });
+  return { id: Number(created[0].insertId), purpose: input.purpose, label, url, fileName, mimeType: detectedMimeType, byteSize: bytes.length };
+}
+
+async function selectedWebsiteMedia(schoolId: number, input: { logoMediaId?: number | null; heroMediaId?: number | null }) {
+  const requested = [{ id: input.logoMediaId, purpose: "logo" as const }, { id: input.heroMediaId, purpose: "hero" as const }].filter((item): item is { id: number; purpose: WebsiteMediaPurpose } => Boolean(item.id));
+  if (!requested.length) return { logoMediaId: input.logoMediaId ?? null, heroMediaId: input.heroMediaId ?? null };
+  const found = await (await database()).select({ id: schoolWebsiteMedia.id, purpose: schoolWebsiteMedia.purpose }).from(schoolWebsiteMedia).where(and(eq(schoolWebsiteMedia.schoolId, schoolId), inArray(schoolWebsiteMedia.id, requested.map(item => item.id))));
+  for (const requestedItem of requested) {
+    const media = found.find(item => item.id === requestedItem.id);
+    if (!media || media.purpose !== requestedItem.purpose) throw new Error(`Select a school-owned ${requestedItem.purpose} image from this website media library.`);
+  }
+  return { logoMediaId: input.logoMediaId ?? null, heroMediaId: input.heroMediaId ?? null };
+}
+
+async function publicSelectedWebsiteMedia(schoolId: number, website: { logoMediaId: number | null; heroMediaId: number | null }) {
+  const ids = [website.logoMediaId, website.heroMediaId].filter((value): value is number => Boolean(value));
+  if (!ids.length) return { logoUrl: null, heroUrl: null };
+  const rows = await (await database()).select({ id: schoolWebsiteMedia.id, purpose: schoolWebsiteMedia.purpose, url: schoolWebsiteMedia.url }).from(schoolWebsiteMedia).where(and(eq(schoolWebsiteMedia.schoolId, schoolId), inArray(schoolWebsiteMedia.id, ids)));
+  return { logoUrl: rows.find(row => row.id === website.logoMediaId && row.purpose === "logo")?.url ?? null, heroUrl: rows.find(row => row.id === website.heroMediaId && row.purpose === "hero")?.url ?? null };
+}
+
 export async function getSchoolWebsite(schoolId: number) {
   const db = await database();
   const school = (await db.select().from(schools).where(eq(schools.id, schoolId)).limit(1))[0];
   if (!school) throw new Error("School not found.");
   const website = (await db.select().from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1))[0];
-  return { school, website: website ?? { schoolId, headline: `${school.name}: learning for a brighter future.`, introduction: "", primaryColor: "#0f5c4f", contactEmail: school.email, contactPhone: school.phone, campusLocation: school.address ?? school.state, customDomain: null, domainStatus: "not_configured", admissionsEnabled: true, published: false } };
+  const effectiveWebsite = website ?? { schoolId, headline: `${school.name}: learning for a brighter future.`, introduction: "", primaryColor: "#0f5c4f", contactEmail: school.email, contactPhone: school.phone, campusLocation: school.address ?? school.state, customDomain: null, domainStatus: "not_configured", admissionsEnabled: true, logoMediaId: null, heroMediaId: null, published: false };
+  return { school, website: { ...effectiveWebsite, ...(await publicSelectedWebsiteMedia(schoolId, effectiveWebsite)) }, media: await listSchoolWebsiteMedia(schoolId) };
 }
 
 const admissionTemplateFieldIds = ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "stateOfOrigin", "localGovernmentOfOrigin", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"] as const;
@@ -1417,7 +1474,7 @@ export async function createDraftFeesFromTemplate(input: { schoolId: number; ter
   return { createdCount: newRows.length, status: "draft" as const };
 }
 
-export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; published?: boolean }) {
+export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; logoMediaId?: number | null; heroMediaId?: number | null; published?: boolean }) {
   const db = await database();
   const customDomain = normaliseDomain(input.customDomain);
   if (customDomain && !isValidCustomDomain(customDomain)) throw new Error("Enter a valid domain name without a protocol or path.");
@@ -1425,7 +1482,8 @@ export async function saveSchoolWebsite(input: { schoolId: number; headline?: st
   const domainChanged = existing?.customDomain !== customDomain;
   const domainVerificationToken = customDomain ? (!domainChanged && existing?.domainVerificationToken ? existing.domainVerificationToken : crypto.randomUUID().replace(/-/g, "")) : null;
   const domainStatus = customDomain ? (domainChanged ? "pending" as const : existing?.domainStatus ?? "pending" as const) : "not_configured" as const;
-  const values = { ...input, customDomain, domainVerificationToken, domainStatus };
+  const media = await selectedWebsiteMedia(input.schoolId, input);
+  const values = { ...input, ...media, customDomain, domainVerificationToken, domainStatus };
   await db.insert(schoolWebsites).values(values).onDuplicateKeyUpdate({ set: values });
   return getSchoolWebsite(input.schoolId);
 }
@@ -1443,8 +1501,8 @@ export async function verifySchoolWebsiteDomain(schoolId: number) {
   return getSchoolWebsite(schoolId);
 }
 
-function publicWebsiteResponse(row: { school: typeof schools.$inferSelect; website: typeof schoolWebsites.$inferSelect }) {
-  return { ...row, admissionsUrl: row.website.admissionsEnabled ? `/apply/${row.school.shortCode}` : null };
+async function publicWebsiteResponse(row: { school: typeof schools.$inferSelect; website: typeof schoolWebsites.$inferSelect }) {
+  return { ...row, website: { ...row.website, ...(await publicSelectedWebsiteMedia(row.school.id, row.website)) }, admissionsUrl: row.website.admissionsEnabled ? `/apply/${row.school.shortCode}` : null };
 }
 
 export async function getPublicSchoolWebsite(shortCode: string) {
