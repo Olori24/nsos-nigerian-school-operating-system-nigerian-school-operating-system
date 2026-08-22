@@ -1122,6 +1122,7 @@ export const providerConfigurations = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     category: mysqlEnum("category", ["payment", "notification"]).notNull(),
+    channel: mysqlEnum("channel", ["payment", "sms", "whatsapp", "email", "in_app"]).notNull().default("payment"),
     provider: varchar("provider", { length: 64 }).notNull(),
     status: mysqlEnum("status", ["draft", "ready", "disabled"]).notNull().default("draft"),
     configuration: json("configuration").notNull(),
@@ -1131,7 +1132,7 @@ export const providerConfigurations = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolCategory: uniqueIndex("providerConfiguration_school_category_unique").on(table.schoolId, table.category), schoolIndex: index("providerConfiguration_school_idx").on(table.schoolId) }),
+  table => ({ schoolChannel: uniqueIndex("providerConfiguration_school_channel_unique").on(table.schoolId, table.channel), schoolIndex: index("providerConfiguration_school_idx").on(table.schoolId) }),
 );
 
 export const schoolAdvertisingAccounts = mysqlTable(

@@ -148,6 +148,13 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_website_configuration_saved", targetType: "school_website", metadata: { admissionsEnabled: input.admissionsEnabled, published: input.published, customDomainConfigured: Boolean(input.customDomain) } });
         return result;
       }),
+    applySetupAgentDraft: websiteAdminProcedure
+      .input(schoolInput.extend({ headline: z.string().trim().min(5).max(255), introduction: z.string().trim().min(20).max(5000), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), contactEmail: z.string().email().optional(), contactPhone: z.string().trim().min(5).max(48).optional(), campusLocation: z.string().trim().min(2).max(255).optional(), admissionsEnabled: z.boolean(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.saveSchoolWebsite({ schoolId: input.schoolId, headline: input.headline, introduction: input.introduction, primaryColor: input.primaryColor, contactEmail: input.contactEmail, contactPhone: input.contactPhone, campusLocation: input.campusLocation, admissionsEnabled: input.admissionsEnabled, published: false });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "website_setup_agent_draft_applied", targetType: "school_website", metadata: { appliedAsDraft: true, admissionsEnabled: input.admissionsEnabled, contactEmailProvided: Boolean(input.contactEmail), contactPhoneProvided: Boolean(input.contactPhone), campusLocationProvided: Boolean(input.campusLocation) } });
+        return result;
+      }),
     verifyDomain: websiteAdminProcedure.input(schoolInput).mutation(async ({ ctx, input }) => {
       const result = await db.verifySchoolWebsiteDomain(input.schoolId);
       await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_domain_verified", targetType: "school_website", metadata: { verification: "active" } });
@@ -259,9 +266,9 @@ export const nsosRouter = router({
 
   providers: router({
     list: providerAdminProcedure.input(schoolInput).query(({ input }) => db.listProviderConfigurations(input.schoolId)),
-    save: providerAdminProcedure.input(schoolInput.extend({ category: z.enum(["payment", "notification"]), provider: z.enum(["paystack", "flutterwave", "stripe", "manual", "termii", "twilio", "resend", "sendgrid", "whatsapp_cloud", "in_app"]), status: z.enum(["draft", "ready", "disabled"]), configuration: z.record(z.string(), z.unknown()).default({}), credentials: z.object({ apiKey: z.string().max(500).optional(), secretKey: z.string().max(500).optional(), webhookSecret: z.string().max(500).optional() }).optional(), clearCredentials: z.boolean().optional() }))
+    save: providerAdminProcedure.input(schoolInput.extend({ channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]), provider: z.enum(["paystack", "flutterwave", "stripe", "manual", "termii", "twilio", "resend", "sendgrid", "whatsapp_cloud", "in_app"]), status: z.enum(["draft", "ready", "disabled"]), configuration: z.record(z.string(), z.unknown()).default({}), credentials: z.object({ apiKey: z.string().max(500).optional(), secretKey: z.string().max(500).optional(), webhookSecret: z.string().max(500).optional() }).optional(), clearCredentials: z.boolean().optional() }))
       .mutation(({ ctx, input }) => db.saveProviderConfiguration({ ...input, configuredBy: ctx.user.id })),
-    testConnection: providerAdminProcedure.input(schoolInput.extend({ category: z.enum(["payment", "notification"]) })).mutation(({ input }) => db.testProviderConnection(input.schoolId, input.category)),
+    testConnection: providerAdminProcedure.input(schoolInput.extend({ channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]) })).mutation(({ input }) => db.testProviderConnection(input.schoolId, input.channel)),
     webhookUrls: providerAdminProcedure.input(schoolInput).query(({ input }) => db.getSmsDeliveryWebhookUrls(input.schoolId)),
     sendTestSms: providerAdminProcedure.input(schoolInput.extend({ to: z.string().min(7).max(24), confirmed: z.literal(true) })).mutation(({ ctx, input }) => db.sendProviderSmsTest({ ...input, createdBy: ctx.user.id })),
     checkTestSmsDelivery: providerAdminProcedure.input(schoolInput.extend({ messageLogId: z.number().int().positive() })).mutation(({ input }) => db.checkProviderSmsTestDelivery(input)),

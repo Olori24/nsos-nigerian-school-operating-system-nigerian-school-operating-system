@@ -25,6 +25,13 @@ describe("NSOS tenant website routes", () => {
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, actorUserId: 5, eventType: "school_website_configuration_saved" }));
   });
 
+  it("applies a confirmed website-agent proposal only as an unpublished draft and records the approval trail", async () => {
+    vi.mocked(db.saveSchoolWebsite).mockResolvedValue({ school: { id: 1, name: "Greener Future Academy" }, website: { published: false, headline: "Learning with confidence" } } as any);
+    await expect(adminCaller().nsos.website.applySetupAgentDraft({ schoolId: 1, headline: "Learning with confidence", introduction: "A reviewed introduction for the school community and prospective families.", primaryColor: "#0f5c4f", contactEmail: "admissions@example.ng", admissionsEnabled: true, confirmed: true })).resolves.toMatchObject({ website: { published: false } });
+    expect(db.saveSchoolWebsite).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, headline: "Learning with confidence", published: false, admissionsEnabled: true }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, actorUserId: 5, eventType: "website_setup_agent_draft_applied", metadata: expect.objectContaining({ appliedAsDraft: true }) }));
+  });
+
   it("resolves only the public school-site configuration for an external visitor", async () => {
     vi.mocked(db.getPublicSchoolWebsite).mockResolvedValue({ school: { id: 1, name: "Greener Future Academy", shortCode: "GFA-001" }, website: { published: true }, admissionsUrl: "/apply/GFA-001" } as any);
     const anonymous = appRouter.createCaller({ user: null, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });

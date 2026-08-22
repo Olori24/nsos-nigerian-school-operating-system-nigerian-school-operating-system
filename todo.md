@@ -194,7 +194,7 @@
 - [x] Audit the current NSOS workspace for the highest-priority non-domain production gap and deliver the selected secure, tenant-scoped improvement.
 - [x] Add a user-controlled NSOS update prompt so installed web apps can refresh newly deployed icon and service-worker assets without removing and reinstalling the app.
 - [x] Keep the mobile NSOS account-security control on a single line without crowding the brand mark.
-- [ ] Deliver a school-admin communication readiness center for WhatsApp, SMS, and email with provider setup, verified delivery status, and actionable failed-delivery recovery.
+- [x] Deliver a school-admin communication readiness center for WhatsApp, SMS, and email with provider setup, verified delivery status, and actionable failed-delivery recovery.
 - [ ] Define and implement the NSOS email-service operating model, including sender-domain verification, tenant-safe defaults, and an explicit launch path once nsos.ng is active.
 - [x] Add secure passport-photograph and admission-fee receipt uploads to school admission forms, with storage-backed records, review visibility, validation, and no automatic payment approval.
-- [ ] Add a supervised school-website setup agent that produces owner-reviewable website configuration proposals and applies them only after explicit authorization.
+- [x] Add a supervised school-website setup agent that produces owner-reviewable website configuration proposals and applies them only after explicit authorization.

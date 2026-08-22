@@ -144,7 +144,7 @@ export function isActivePublishedDomain(website: { domainStatus: string; publish
   return website.domainStatus === "active" && website.published;
 }
 
-type ProviderCategory = "payment" | "notification";
+export type ProviderChannel = "payment" | "sms" | "whatsapp" | "email" | "in_app";
 type ProviderCredentials = { apiKey?: string; secretKey?: string; webhookSecret?: string };
 export type SmsDeliveryState = "pending" | "delivered" | "failed";
 export type AdvertisingCampaignStatus = "draft" | "pending_approval" | "approved" | "launching" | "active" | "paused" | "completed" | "failed" | "archived";
@@ -199,10 +199,21 @@ export function sealBankAccountNumber(value: string) {
   return `v1:${iv.toString("base64url")}:${cipher.getAuthTag().toString("base64url")}:${ciphertext.toString("base64url")}`;
 }
 
-export function providerReadiness(category: ProviderCategory, provider: string, hasCredentials: boolean, status: "draft" | "ready" | "disabled") {
+const providerChannelDefaults: Record<ProviderChannel, string> = { payment: "paystack", sms: "termii", whatsapp: "whatsapp_cloud", email: "resend", in_app: "in_app" };
+const providersByChannel: Record<ProviderChannel, readonly string[]> = { payment: ["paystack", "flutterwave", "stripe", "manual"], sms: ["termii", "twilio"], whatsapp: ["whatsapp_cloud", "twilio"], email: ["resend", "sendgrid"], in_app: ["in_app"] };
+
+function providerCategoryForChannel(channel: ProviderChannel): "payment" | "notification" {
+  return channel === "payment" ? "payment" : "notification";
+}
+
+export function providerReadiness(channel: ProviderChannel, provider: string, hasCredentials: boolean, status: "draft" | "ready" | "disabled") {
   if (status === "disabled") return "Disabled";
   if (!hasCredentials && provider !== "manual" && provider !== "in_app") return "Credentials required";
-  return category === "payment" ? "Ready for payment adapter" : "Ready for notification adapter";
+  if (channel === "payment") return "Ready for payment adapter";
+  if (channel === "email") return "Ready for email adapter";
+  if (channel === "whatsapp") return "Ready for WhatsApp adapter";
+  if (channel === "sms") return "Ready for SMS adapter";
+  return "Ready for in-app messages";
 }
 
 export function providerRequiresCredentials(provider: string) {
@@ -654,30 +665,31 @@ export async function recordPlatformBillingPayment(input: { billingRecordId: num
 export async function listProviderConfigurations(schoolId: number) {
   const db = await database();
   const rows = await db.select().from(providerConfigurations).where(eq(providerConfigurations.schoolId, schoolId));
-  return (["payment", "notification"] as const).map(category => {
-    const row = rows.find(item => item.category === category);
+  return (["payment", "sms", "whatsapp", "email", "in_app"] as const).map(channel => {
+    const row = rows.find(item => item.channel === channel);
     const hasCredentials = Boolean(row?.encryptedCredentials);
     const hasWebhookSecret = Boolean(row?.encryptedCredentials && openProviderCredentials(row.encryptedCredentials).webhookSecret);
     return row
-      ? { id: row.id, category, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, hasCredentials, hasWebhookSecret, readiness: providerReadiness(category, row.provider, hasCredentials, row.status), lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
-      : { id: null, category, provider: category === "payment" ? "paystack" : "termii", status: "draft" as const, configuration: {}, hasCredentials: false, hasWebhookSecret: false, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
+      ? { id: row.id, channel, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, hasCredentials, hasWebhookSecret, readiness: providerReadiness(channel, row.provider, hasCredentials, row.status), lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
+      : { id: null, channel, provider: providerChannelDefaults[channel], status: "draft" as const, configuration: {}, hasCredentials: false, hasWebhookSecret: false, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
   });
 }
 
-export async function saveProviderConfiguration(input: { schoolId: number; category: ProviderCategory; provider: string; status: "draft" | "ready" | "disabled"; configuration: Record<string, unknown>; credentials?: ProviderCredentials; clearCredentials?: boolean; configuredBy: number }) {
+export async function saveProviderConfiguration(input: { schoolId: number; channel: ProviderChannel; provider: string; status: "draft" | "ready" | "disabled"; configuration: Record<string, unknown>; credentials?: ProviderCredentials; clearCredentials?: boolean; configuredBy: number }) {
   const db = await database();
-  const existing = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.category, input.category))).limit(1))[0];
+  if (!providersByChannel[input.channel].includes(input.provider)) throw new Error("Select a provider that supports the chosen NSOS communication channel.");
+  const existing = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.channel, input.channel))).limit(1))[0];
   const encryptedCredentials = input.clearCredentials ? null : sealProviderCredentials(input.credentials ?? {}) ?? existing?.encryptedCredentials ?? null;
   if (input.status === "ready" && providerRequiresCredentials(input.provider) && !encryptedCredentials) throw new Error("Store provider credentials before marking this configuration ready.");
-  const values = { schoolId: input.schoolId, category: input.category, provider: input.provider, status: input.status, configuration: input.configuration, encryptedCredentials, configuredBy: input.configuredBy, lastValidatedAt: null };
+  const values = { schoolId: input.schoolId, category: providerCategoryForChannel(input.channel), channel: input.channel, provider: input.provider, status: input.status, configuration: input.configuration, encryptedCredentials, configuredBy: input.configuredBy, lastValidatedAt: null };
   await db.insert(providerConfigurations).values(values).onDuplicateKeyUpdate({ set: values });
-  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.configuredBy, eventType: input.clearCredentials ? "provider_credentials_cleared" : "provider_configuration_saved", targetType: "provider_configuration", targetId: `${input.category}:${input.provider}`, metadata: { category: input.category, provider: input.provider, status: input.status, credentialsState: input.clearCredentials ? "cleared" : encryptedCredentials ? "stored" : "not_provided" } });
+  await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.configuredBy, eventType: input.clearCredentials ? "provider_credentials_cleared" : "provider_configuration_saved", targetType: "provider_configuration", targetId: `${input.channel}:${input.provider}`, metadata: { channel: input.channel, provider: input.provider, status: input.status, credentialsState: input.clearCredentials ? "cleared" : encryptedCredentials ? "stored" : "not_provided" } });
   return listProviderConfigurations(input.schoolId);
 }
 
 export async function getSmsWebhookVerificationSecret(schoolId: number, provider: "termii" | "twilio") {
   const db = await database();
-  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, schoolId), eq(providerConfigurations.category, "notification"), eq(providerConfigurations.provider, provider), eq(providerConfigurations.status, "ready"))).limit(1))[0];
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, schoolId), eq(providerConfigurations.channel, "sms"), eq(providerConfigurations.provider, provider), eq(providerConfigurations.status, "ready"))).limit(1))[0];
   if (!configuration) return undefined;
   const credentials = openProviderCredentials(configuration.encryptedCredentials);
   return provider === "termii" ? credentials.webhookSecret : credentials.secretKey;
@@ -693,9 +705,9 @@ export async function updateProviderSmsDeliveryStatus(input: { schoolId: number;
   return { updated: true, status };
 }
 
-export async function testProviderConnection(schoolId: number, category: ProviderCategory) {
+export async function testProviderConnection(schoolId: number, channel: ProviderChannel) {
   const db = await database();
-  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, schoolId), eq(providerConfigurations.category, category))).limit(1))[0];
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, schoolId), eq(providerConfigurations.channel, channel))).limit(1))[0];
   if (!configuration) throw new Error("Configure this provider before testing its connection.");
   if (configuration.status === "disabled") throw new Error("Enable or save this provider as a draft before testing it.");
   const credentials = openProviderCredentials(configuration.encryptedCredentials);
@@ -1164,9 +1176,9 @@ export async function syncMetaAdvertisingCampaign(input: { schoolId: number; cam
 export async function sendProviderSmsTest(input: { schoolId: number; to: string; confirmed: boolean; createdBy: number }) {
   if (!input.confirmed) throw new Error("Confirm that you are authorized to send this test message.");
   const db = await database();
-  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.category, "notification"))).limit(1))[0];
-  if (!configuration) throw new Error("Configure a notification provider before sending a test message.");
-  if (configuration.status !== "ready") throw new Error("Save this notification provider as ready and test its connection before sending an SMS.");
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.channel, "sms"))).limit(1))[0];
+  if (!configuration) throw new Error("Configure an SMS provider before sending a test message.");
+  if (configuration.status !== "ready") throw new Error("Save this SMS provider as ready and test its connection before sending an SMS.");
   if (configuration.provider !== "termii" && configuration.provider !== "twilio") throw new Error("SMS test delivery is currently available for Termii and Twilio configurations.");
   const recipient = normaliseSmsRecipient(input.to);
   const maskedRecipient = maskSmsRecipient(recipient);
@@ -1219,8 +1231,8 @@ export async function checkProviderSmsTestDelivery(input: { schoolId: number; me
   if (!log.providerMessageId) throw new Error("This SMS test has no provider message identifier to verify.");
   if (log.status === "sent") return { ok: true, deliveryState: "delivered" as const, message: "Delivery was already confirmed by the provider." };
   if (log.status === "failed") return { ok: false, deliveryState: "failed" as const, message: "The provider previously reported this test message as failed." };
-  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.category, "notification"))).limit(1))[0];
-  if (!configuration || (configuration.provider !== "termii" && configuration.provider !== "twilio")) throw new Error("The configured notification provider cannot confirm SMS delivery for this test.");
+  const configuration = (await db.select().from(providerConfigurations).where(and(eq(providerConfigurations.schoolId, input.schoolId), eq(providerConfigurations.channel, "sms"))).limit(1))[0];
+  if (!configuration || (configuration.provider !== "termii" && configuration.provider !== "twilio")) throw new Error("The configured SMS provider cannot confirm delivery for this test.");
   const credentials = openProviderCredentials(configuration.encryptedCredentials);
   let response: Response;
   if (configuration.provider === "termii") {

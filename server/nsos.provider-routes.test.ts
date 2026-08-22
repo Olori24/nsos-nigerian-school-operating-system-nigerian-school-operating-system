@@ -25,15 +25,25 @@ describe("NSOS provider configuration routes", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 1, schoolId: 1, userId: 8, role: "admin", status: "active", createdAt: new Date(), updatedAt: new Date() }); });
 
   it("allows an administrator to read sanitized tenant provider configuration", async () => {
-    vi.mocked(db.listProviderConfigurations).mockResolvedValue([{ category: "payment", provider: "paystack", hasCredentials: true, readiness: "Ready for payment adapter" }] as any);
-    await expect(caller().nsos.providers.list({ schoolId: 1 })).resolves.toHaveLength(1);
+    vi.mocked(db.listProviderConfigurations).mockResolvedValue([{ channel: "payment", provider: "paystack", hasCredentials: true, readiness: "Ready for payment adapter" }, { channel: "sms", provider: "termii", hasCredentials: true, readiness: "Ready for SMS adapter" }, { channel: "email", provider: "resend", hasCredentials: false, readiness: "Credentials required" }] as any);
+    await expect(caller().nsos.providers.list({ schoolId: 1 })).resolves.toHaveLength(3);
     expect(db.listProviderConfigurations).toHaveBeenCalledWith(1);
   });
 
   it("passes provider credentials only into the server-side save service", async () => {
     vi.mocked(db.saveProviderConfiguration).mockResolvedValue([] as any);
-    await caller().nsos.providers.save({ schoolId: 1, category: "payment", provider: "paystack", status: "ready", configuration: { publicKey: "pk_test" }, credentials: { secretKey: "sk_test" } });
-    expect(db.saveProviderConfiguration).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, category: "payment", configuredBy: 8, credentials: { secretKey: "sk_test" } }));
+    await caller().nsos.providers.save({ schoolId: 1, channel: "payment", provider: "paystack", status: "ready", configuration: { publicKey: "pk_test" }, credentials: { secretKey: "sk_test" } });
+    expect(db.saveProviderConfiguration).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, channel: "payment", configuredBy: 8, credentials: { secretKey: "sk_test" } }));
+  });
+
+  it("allows independently scoped SMS, WhatsApp, and email configuration without replacing another channel", async () => {
+    vi.mocked(db.saveProviderConfiguration).mockResolvedValue([] as any);
+    await caller().nsos.providers.save({ schoolId: 1, channel: "sms", provider: "termii", status: "draft", configuration: { senderId: "GFA" } });
+    await caller().nsos.providers.save({ schoolId: 1, channel: "whatsapp", provider: "whatsapp_cloud", status: "draft", configuration: { senderId: "+2348000000000" } });
+    await caller().nsos.providers.save({ schoolId: 1, channel: "email", provider: "resend", status: "draft", configuration: { senderId: "notifications@nsos.ng" } });
+    expect(db.saveProviderConfiguration).toHaveBeenNthCalledWith(1, expect.objectContaining({ channel: "sms", provider: "termii", configuredBy: 8 }));
+    expect(db.saveProviderConfiguration).toHaveBeenNthCalledWith(2, expect.objectContaining({ channel: "whatsapp", provider: "whatsapp_cloud", configuredBy: 8 }));
+    expect(db.saveProviderConfiguration).toHaveBeenNthCalledWith(3, expect.objectContaining({ channel: "email", provider: "resend", configuredBy: 8 }));
   });
 
   it("rejects provider configuration changes from non-management roles", async () => {
@@ -44,7 +54,7 @@ describe("NSOS provider configuration routes", () => {
 
   it("allows an administrator to initiate a server-side provider connection test", async () => {
     vi.mocked(db.testProviderConnection).mockResolvedValue({ ok: true, message: "Connection verified. No payment or notification was sent.", testedAt: new Date() });
-    await expect(caller().nsos.providers.testConnection({ schoolId: 1, category: "payment" })).resolves.toMatchObject({ ok: true });
+    await expect(caller().nsos.providers.testConnection({ schoolId: 1, channel: "payment" })).resolves.toMatchObject({ ok: true });
     expect(db.testProviderConnection).toHaveBeenCalledWith(1, "payment");
   });
 
