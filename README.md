@@ -1,322 +1,199 @@
 # NSOS — Nigerian School Operating System
 
-> **The operating system for running a modern Nigerian school.**
->
-> NSOS brings admissions, students, academics, attendance, results, finance, staff operations, communication, and a school's public digital presence into one secure, multi-tenant platform.
+> **A Nigeria-first operating system for schools and learning businesses that need to move from fragmented administration to controlled, AI-assisted learning operations.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)](https://react.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![tRPC](https://img.shields.io/badge/tRPC-11-2596BE)](https://trpc.io/)
 [![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F)](https://orm.drizzle.team/)
-[![Vitest](https://img.shields.io/badge/Vitest-tested-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Vitest](https://img.shields.io/badge/Vitest-2.1-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
+
+**[Live managed preview](https://nsos-system-uhkdscaf.manus.space)** · **[Architecture](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md)** · **[Security](SECURITY.md)** · **[Product roadmap](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md)** · **[Learning Centre operating model](docs/learning-centre-of-excellence-operating-model.md)**
 
 ---
 
-## Why NSOS exists
+## Investment thesis
 
-Many schools operate through disconnected tools: spreadsheets for fees, paper registers for attendance, messaging apps for communication, separate portals for admissions, and manual processes for results and reporting.
+NSOS is built around a straightforward observation: education operators do not experience admissions, collections, learning delivery, parent trust, staffing, and public visibility as separate software categories. They experience them as one operating problem.
 
-NSOS is designed around a different model:
+The platform combines a multi-tenant operations core with a supervised learning and automation layer. An owner can run independent institutions from one account, including conventional schools, vocational institutes, coaching centres, online training providers, and hybrid operators. Every workspace remains isolated at the server boundary, while each organisation can choose the workflows it is ready to operate.
 
-**one school → one operational system → one source of truth.**
+| What an operator needs | NSOS response | Why it matters commercially |
+|---|---|---|
+| A controlled route from enquiry to active learner | Admissions, review, enrolment, student/guardian records, academics, attendance, results, and family portals | Replaces fragmented operational handoffs with a traceable lifecycle. |
+| Visibility into school cash and family confidence | Fee structures, invoices, payment evidence review, promises, statements, controlled finance drafts, and family-facing status | Creates a practical operating wedge around cash visibility and reliable parent information. |
+| A credible route into new learning offers | Programmes, cohorts, internal curriculum, milestones, materials, attendance, and human-reviewed learning progress | Lets education operators extend beyond a static school-management workflow into repeatable learning delivery. |
+| A simpler way to start | Automation Desk, Quick Start, Course Studio, and the 19-prompt Taster Library | Reduces setup friction without pretending that high-impact actions can be safely automated. |
+| Trust as an operational property | Tenant isolation, server-side role checks, confirmations, rate limits, audit evidence, protected provider settings, and safe file handling | Makes control and accountability part of the product architecture rather than an afterthought. |
 
-The goal is not simply to digitize paperwork. NSOS provides the operational layer that connects the people, workflows, data, permissions, and public-facing services required to run a school.
+## The product in one sentence
 
-## Why school owners buy and keep NSOS
+**NSOS gives education operators one controlled workspace to organise people, learning, payments, communications, and digital presence—then uses supervised AI to reduce setup time without removing human accountability.**
 
-Schools do not need another disconnected dashboard. They need control over the daily realities that affect income, parent confidence, staff performance, and the school’s ability to grow responsibly.
+---
 
-> **NSOS helps a school collect what it is owed, keep families informed, and show the owner the issues requiring attention before they become a larger problem.**
+## The problem NSOS is designed to solve
 
-| School-owner pressure | NSOS operational outcome | Why it becomes difficult to operate without NSOS |
-| --- | --- | --- |
-| **Fee leakage and late payment** | Fee structures, invoices, payment records, balances, receipts, finance reporting, and provider-ready payment controls. | The school gains a clearer view of what is due, paid, outstanding, or needing follow-up. |
-| **Parents chasing updates** | Parent/guardian access to linked learner attendance, published results, fees, announcements, and reliable message-delivery states. | Families receive consistent information from the school instead of relying on fragmented chats and manual follow-up. |
-| **Owner visibility** | Leadership KPIs, enrolment and finance reporting, attendance summaries, admissions queues, and audit-friendly operational states. | Proprietors can focus on exceptions and decisions rather than reconstructing school activity from paper and spreadsheets. |
-| **Lost admissions opportunities** | Public applications, document handling, review queues, decisions, and enrollment confirmation. | Each prospective family has a traceable journey from public enquiry to admission decision. |
-| **Staff accountability and academic quality** | Staff duties, leave, attendance, lesson planning, curriculum coverage, score entry, approval, and result publishing controls. | Leaders can connect academic and operational responsibilities to named workflows and statuses. |
-| **Trust, control, and responsible growth** | Tenant isolation, role-based permissions, security audit events, protected provider credentials, branded school websites, and controlled custom domains. | The school gains a more credible operating foundation as enrolment, staff, and parent expectations grow. |
+Many institutions still coordinate daily operations across paper registers, spreadsheets, payment conversations, chat groups, disconnected admission forms, and ad-hoc websites. That creates a familiar set of operational failures: unclear ownership, delayed follow-up, weak visibility, duplicated records, inconsistent family communication, and difficult expansion into new learning offers.
 
-### The commercial wedge: cash and parent trust
+NSOS does not position itself as another dashboard. It is designed as the operating layer that joins workflows, data, permissions, evidence, and human decisions across the institution lifecycle.
 
-The strongest initial promise is **NSOS Cash and Parent Trust**. This is more useful than selling “school management software” because it combines two outcomes that proprietors feel immediately: protecting school revenue and giving parents dependable information.
-
-The product sequence is deliberately focused: strengthen payment visibility and follow-up first; unify parent-facing attendance, fee, result, and announcement information next; then surface a short owner exception brief covering overdue fees, unusual absences, stalled admissions, and delivery failures. The result should be a system that becomes part of the owner’s daily operating routine—not software used only at the end of term.
-
-### Real admissions-workflow context
-
-The public [Greener Future Academy digital admission form](https://greener-future-academy-admission-2utcuraeo.vercel.app) is a useful real-world reference for the start of this journey. It lets a family select an applying class and submit pupil information, guardian details, medical history, application-fee payment evidence, and a declaration.
-
-NSOS is designed to extend that public-intake moment through a secured school workflow: **application → document review → decision → enrollment → student record → invoices and receipts → attendance, results, and parent communication**. The public form is an admissions-entry reference; NSOS provides the controlled operating system around the entire lifecycle.
-
-### Built for Nigeria first
-
-NSOS is configured for the Nigerian operating environment out of the box:
-
-- **NGN** as the default currency
-- **Africa/Lagos** as the default timezone
-- Nigerian states and the FCT in onboarding
-- Admissions and guardian workflows designed around school realities
-- Finance workflows for fees, invoices, payments, balances, and receipts
-- Provider configuration for Nigerian and international payment/notification services
-- School-owned public websites and custom domains
+```mermaid
+flowchart LR
+  A[Public enquiry or admission] --> B[Controlled review]
+  B --> C[Enrolment and learner record]
+  C --> D[Academics and learning delivery]
+  D --> E[Attendance, results, and family visibility]
+  C --> F[Fees, evidence, and finance review]
+  G[Owner or admin] --> H[Automation Desk and operational controls]
+  H --> B
+  H --> D
+  H --> F
+```
 
 ---
 
 ## Product surface
 
-NSOS is organized around the complete school lifecycle.
+### Core school operations
 
-| Domain | What NSOS handles |
-| --- | --- |
-| **Admissions** | Public applications, documents, review, decisions, and enrollment handoff |
-| **Students** | Student profiles, guardians, enrollments, academic history, promotion, graduation |
-| **Academics** | Sessions, terms, classes, subjects, timetables, lesson plans, curriculum milestones |
-| **Attendance** | Student and staff registers, absence tracking, summaries, alerts, exports |
-| **Results** | Assessments, scores, grade scales, calculations, approvals, publications, report cards |
-| **Finance** | Fee structures, invoices, invoice lines, payments, receipts, balances, reporting |
-| **Staff & HR** | Departments, staff profiles, duties, leave, payroll records, performance notes |
-| **Communication** | Announcements, targeted messages, delivery history, notification providers |
-| **School Website** | Public school pages, admissions configuration, publishing, branding, custom domains |
-| **Administration** | Tenant membership, roles, permissions, provider configuration, operational controls |
+| Domain | Delivered operational scope |
+|---|---|
+| **Admissions and onboarding** | Public admission intake, document handling, controlled review, decisions, enrolment handoff, admission letters, and guardian linkage. |
+| **Student and family operations** | Student profiles, guardian relationships, biodata, local draft recovery, parent/guardian portal, fee and payment-evidence visibility, statements, and status tracking. |
+| **Academics** | Sessions, terms, classes, subjects, Nigerian curriculum foundations, schemes of work, lesson planning, attendance, assessments, score workflows, approvals, and result publication controls. |
+| **Finance operations** | Fee structures, invoices, balances, payments, receipts, payment promises, evidence review, and controlled inactive fee-draft preparation. |
+| **People operations** | Staff records, roles, duties, leave, performance notes, invitation preparation, and migration workflows. |
+| **Communication and provider readiness** | Announcements, in-app communication, delivery-state modelling, provider configuration, test controls, and provider callback boundaries. |
+| **School presence** | Owner-reviewed website drafts, approved media, visual themes, live preview, controlled publication, and custom-domain readiness. |
+
+### Learning Centre of Excellence
+
+NSOS now supports school, vocational, coaching, online-training, and hybrid operators through a common learning-operations model. Owners and administrators can manage programmes, cohorts, instructor assignments, internal programme fees, attendance, curriculum modules, milestones, materials, and reviewed learner progress. Learners see only their own permitted programme state. The system does not automatically complete learners, issue certificates, publish courses, enrol people, or create commercial transactions. See the [Learning Centre operating model](docs/learning-centre-of-excellence-operating-model.md).
+
+### AI-assisted operating layer
+
+| Capability | What it does | What it intentionally does not do |
+|---|---|---|
+| **Enterprise Concierge** | Turns a bounded operational prompt into role-aware guidance and a protected handoff. | Perform a high-impact action from chat. |
+| **Automation Desk** | Creates typed jobs from plain language, asks for only missing approved data, records progress, and runs eligible internal steps after one explicit approval. | Send messages, publish content, activate fees, connect providers, create accounts, collect money, or issue credentials. |
+| **Course Studio** | Generates an editable internal programme, module, milestone, material, and tutor-scope draft. | Launch a public course or create learner outcomes without review. |
+| **Single-Prompt Online School Launcher** | Creates one private, draft-only online-learning foundation and configuration-readiness record from a full owner prompt. | Create mock people, testimonials, payments, public content, tutor accounts, credentials, or revenue. |
+| **19-Prompt Taster Library** | Provides one-tap course-launch prompts across digital, creative, business, trade, STEM, enterprise, and academic-support niches. | Make claims of demand, pricing, sales, accreditation, outcomes, or public availability. |
+
+The AI boundary is a product advantage: models produce strict structured plans and drafts; server-side code validates all inputs, owns the action catalog, and executes only allowlisted internal work. The system keeps human review where consequences become financial, public, identity-related, or irreversible. See the [supervised AI operating model](docs/supervised-ai-agents-operating-model-2026-08-22.md) and [single-prompt launcher contract](docs/single-prompt-online-school-launcher-contract.md).
 
 ---
 
-## Architecture
+## Why the automation model matters
 
-NSOS follows a deliberately explicit architecture: the client handles presentation and interaction; typed server procedures own business operations; authorization is evaluated on the server; persistent state is tenant-scoped; files live in object storage.
+NSOS is designed to make setup materially simpler without creating a black-box automation risk. The owner journey is deliberately short:
+
+> **Describe a goal → review the plan → approve one bounded run → inspect durable evidence.**
+
+The Automation Desk is not a generic chat assistant. It has a durable job lifecycle, server-enforced membership and role checks, rate limits, idempotency, safe audit events, explicit failure states, and honest recovery steps. The job runner is intentionally limited to safe, internal actions. This supports a strong user experience while preserving a credible trust model for institutional data. See the [Automation Desk operating model](docs/automation-desk-operating-model.md).
+
+---
+
+## Commercial design
+
+NSOS is currently a private software project. This repository does **not** represent customer count, revenue, retention, fundraising, valuation, accreditation, growth, or financial performance.
+
+The product is designed around several commercial surfaces that can be validated with real operators over time:
+
+| Potential commercial surface | Product basis today | Commercial validation still required |
+|---|---|---|
+| Institution subscription | Multi-tenant school and learning-operator workspaces, operational controls, and role-based portals | Packaging, price discovery, billing terms, support model, and willingness-to-pay evidence. |
+| Learning-centre expansion | Programmes, curriculum, internal materials, cohort operations, and controlled progress review | Buyer adoption, delivery economics, and programme-level retention. |
+| AI setup and course acceleration | Automation Desk, Course Studio, single-prompt private launcher, and 19-prompt tasters | Usage frequency, conversion into paid workflows, quality-review operations, and model-cost discipline. |
+| Branded digital presence | Review-first school websites, approved media, themes, custom-domain readiness, and advertising preparation | Public-launch adoption, domain/provider activation, and managed-service economics. |
+| Communication and payment ecosystem | Provider configuration surfaces and controlled finance/communication workflows | Verified sender domains, provider onboarding, compliant commercial agreements, and production delivery evidence. |
+
+This separation is intentional: the README shows the product architecture and commercial direction, not fabricated traction.
+
+---
+
+## Architecture and technical diligence
+
+NSOS uses a typed, full-stack web architecture with a server-authoritative trust model.
 
 ```mermaid
 flowchart TB
-    Visitor[Applicant / Public Visitor]
-    User[Authenticated School User]
-
-    subgraph Client[React 19 Client]
-        Public[Public Website + Admissions]
-        Workspace[Role-aware School Workspace]
-        Portal[Student / Parent Portals]
-    end
-
-    subgraph App[Node.js Application]
-        OAuth[OAuth + Session]
-        API[tRPC API]
-        Guard[Membership + Permission Guards]
-        Storage[Secure Storage Proxy]
-    end
-
-    subgraph Data[Persistent Services]
-        DB[(MySQL / TiDB)]
-        S3[(Object Storage)]
-    end
-
-    Visitor --> Public
-    User --> Workspace
-    User --> Portal
-    Public --> API
-    Workspace --> OAuth
-    Workspace --> API
-    Portal --> API
-    API --> Guard
-    Guard --> DB
-    Storage --> S3
+  U[School user, learner, guardian, or visitor] --> C[React 19 client]
+  C --> A[tRPC application boundary]
+  A --> G[Authentication, active membership, role and confirmation guards]
+  G --> D[(MySQL / TiDB tenant-scoped data)]
+  A --> S[S3-compatible object storage]
+  A --> P[Provider and AI service boundaries]
+  P --> A
 ```
 
-### Core technology
+| Layer | Technology and responsibility |
+|---|---|
+| **Client** | React 19, Vite, Tailwind CSS, Radix UI, and typed tRPC queries/mutations. |
+| **Application** | Node.js, Express 4, tRPC 11, Zod validation, and server-side domain procedures. |
+| **Persistence** | MySQL/TiDB-compatible schema managed through Drizzle ORM and reviewed additive migrations. |
+| **Identity and authorisation** | OAuth-backed sessions, active membership checks, role checks, confirmation gates, and route-level rate limits. |
+| **Storage** | S3-compatible object storage for file bytes; database records store scoped metadata and references. |
+| **Quality controls** | Vitest, TypeScript validation, production builds, focused security/tenant regressions, and documented operational checks. |
 
-- **Frontend:** React 19, Vite, Tailwind CSS, Radix UI, Framer Motion
-- **Application server:** Node.js, Express 4
-- **API:** tRPC 11 with typed client/server contracts
-- **Validation:** Zod
-- **Database:** MySQL / TiDB
-- **ORM & migrations:** Drizzle ORM + Drizzle Kit
-- **Authentication:** OAuth-backed session context
-- **Object storage:** S3-compatible storage
-- **Testing:** Vitest
-- **Build:** Vite + esbuild
-- **Package manager:** pnpm
+### Multi-tenant by design
 
----
+The tenant boundary is `schools.id`. Operational records are scoped by `schoolId`, and `schoolMemberships` defines who may access each institution. One authenticated owner can create and switch among independent institution workspaces, but a client-side selection never grants access: each protected server procedure rechecks membership and role.
 
-## Multi-tenant by design
+> **Tenant isolation is enforced on the server. It is not a frontend filtering convention.**
 
-A school is a first-class tenant in NSOS.
+### Security posture
 
-`schools.id` is the tenant boundary. Operational records carry the relevant `schoolId`, while `schoolMemberships` connects authenticated users to the schools they are allowed to operate.
+The security model prioritises controlled action over superficial convenience. Core controls include tenant-scoped persistence, active membership checks, server-side authorisation, confirmation gates for consequential changes, rate limits, privacy-safe security audit events, protected provider configuration, file-signature validation, signed callback boundaries where supported, and no-store handling for sensitive responses.
 
-The important architectural rule is:
-
-> **Tenant isolation is a server-side security property, not a frontend filtering trick.**
-
-Every private operation is expected to establish the user's active school membership and evaluate the required permission before accessing tenant-owned data.
-
-### Role model
-
-| Role | Primary responsibility |
-| --- | --- |
-| **Owner / Admin** | School-wide administration, memberships, reporting, website, domains, configuration |
-| **Staff** | Operational workflows and assigned school processes |
-| **Teacher** | Attendance, academic planning, assessments, and results |
-| **Finance** | Fees, invoices, payments, receipts, and finance reporting |
-| **Parent / Guardian** | Linked learner information, fees, attendance, published results, announcements |
-| **Student** | Own permitted academic records and school communications |
-
-Authorization is enforced by server procedures. UI visibility is not treated as an access-control boundary.
+Detailed security information is available in [SECURITY.md](SECURITY.md), [architecture and deployment documentation](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md), and [security/compliance review notes](docs/security-compliance-review-notes.md).
 
 ---
 
-## Operational architecture
+## Evidence and current release status
 
-NSOS currently models the school around major operational domains rather than isolated screens.
+The product is in **active engineering and controlled rollout preparation**. The repository contains real product code, reviewed migrations, regression coverage, and managed deployment checkpoints. It does not represent a claim that every external provider is live or that commercial readiness has been completed.
 
-```text
-Public visitor
-     │
-     ├── Admissions ──> Application ──> Review ──> Decision ──> Enrollment
-     │
-     └── School website ──> Published school information
+| Evidence category | Current repository record |
+|---|---|
+| Managed preview | [NSOS managed preview](https://nsos-system-uhkdscaf.manus.space) is available; normal authentication and workspace setup apply. |
+| Latest product additions | Automation Desk, Quick Start, Course Studio, Single-Prompt Online School Launcher, and the 19-Prompt Taster Library. |
+| Focused validation | The most recent Taster Library release passed 11 focused tests across 3 files, TypeScript validation, a production build, and managed-shell rendering. |
+| Broader regression record | The last full-suite record before the taster-only UI/library addition was 336 passing tests across 97 files, with one external sender-domain authorization failure. |
+| Known external dependency | Branded sender activation remains blocked until compliant `nsos.ng` registration and Resend sender verification are resolved. No payment, DNS, domain, or sender change is made without written terms and explicit approval. |
 
-School workspace
-     │
-     ├── Students ──> Classes ──> Attendance
-     │                  │
-     │                  └──> Assessments ──> Results ──> Approval ──> Publication
-     │
-     ├── Finance ──> Fees ──> Invoices ──> Payments ──> Balances / Receipts
-     │
-     ├── Staff ──> Duties / Leave / Payroll / Performance
-     │
-     └── Communication ──> Announcements / Notifications / Delivery logs
-```
-
-This domain model makes NSOS suitable for incremental expansion without turning every new feature into an independent subsystem.
+The visible external dependency is documented rather than hidden. See [communication reliability and email-service plan](docs/communication-reliability-and-email-service-plan-2026-08-22.md) and the [DomainKing decision record](docs/domainking-invoice-410679-status-2026-08-22.md).
 
 ---
 
-## Public school websites & custom domains
+## Diligence starting points
 
-Every school can operate a branded public presence from its NSOS workspace.
-
-The custom-domain flow is intentionally explicit:
-
-1. An owner/admin saves a valid domain.
-2. NSOS generates a verification token.
-3. The school publishes the required TXT record at `_nsos-verify.<domain>`.
-4. NSOS resolves the record and compares the value exactly.
-5. The domain becomes active only after successful verification.
-6. The managed hosting platform binds the verified domain for external traffic.
-7. Public serving requires the domain to be both **verified and published**.
-
-DNS ownership verification is therefore separated from platform domain binding. One proves control of the domain; the other routes traffic to the application.
+| Topic | Repository reference |
+|---|---|
+| Product architecture and deployment | [NSOS Architecture and Deployment](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md) |
+| Product differentiation and buyer logic | [Product Differentiation Roadmap](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md) |
+| Revenue foundations and commercial controls | [Revenue Foundation](docs/NSOS_REVENUE_FOUNDATION.md) |
+| Learning operating model | [Learning Centre of Excellence](docs/learning-centre-of-excellence-operating-model.md) |
+| AI and automation operating model | [Supervised AI Agents](docs/supervised-ai-agents-operating-model-2026-08-22.md) and [Automation Desk](docs/automation-desk-operating-model.md) |
+| Single-prompt and taster products | [Online School Launcher](docs/single-prompt-online-school-launcher-contract.md) and [Taster Library](docs/online-school-taster-library-operating-model.md) |
+| Security policy | [SECURITY.md](SECURITY.md) |
+| Repository entity record | [NSOS Entity Card](docs/nsos-entity-card.md) |
 
 ---
 
-## Provider integrations
+## Roadmap discipline
 
-NSOS is structured to support tenant-specific payment and notification providers without exposing provider credentials to the browser.
+The roadmap is deliberately driven by proof, safety, and operational utility rather than superficial feature count.
 
-Supported configuration surfaces include:
+| Horizon | Direction | Gate before broader rollout |
+|---|---|---|
+| **Now** | Validate multi-tenant operations, learning workflows, AI-assisted setup, migration controls, and the 19-prompt taster experience with real owner review. | Stable tenant boundaries, trusted workflows, and clear support feedback. |
+| **Next** | Deepen instructor delivery, guardian visibility policy, evidence uploads, selected background rules, and commercial packaging. | Explicit owner controls, privacy review, reliable delivery evidence, and clear operational recovery. |
+| **Later** | Add selected verified provider activation, public launch paths, and commercial expansion features where customer evidence supports them. | Written provider/domain terms, verified senders, live-service testing, and approved commercial policy. |
 
-- Paystack
-- Flutterwave
-- Stripe
-- Manual payment confirmation
-- Termii
-- Twilio
-- Resend
-- SendGrid
-- WhatsApp Cloud
-- In-app notifications
-
-Provider credentials are stored server-side in protected configuration. Dashboard reads expose readiness and non-secret metadata rather than raw credentials.
-
-### SMS delivery integrity
-
-For supported SMS providers, NSOS uses provider-specific signed callbacks and tenant-scoped message identifiers for delivery updates.
-
-The design principle is important:
-
-**`submitted` is not the same thing as `delivered`.**
-
-NSOS records provider submission separately from confirmed delivery and protects terminal delivery states against replayed or out-of-order callbacks.
-
----
-
-## Engineering principles — OAE standard
-
-NSOS follows the engineering discipline used across the OAE ecosystem: systems should be understandable, testable, observable, secure, and capable of being changed without guessing.
-
-### 1. One source of truth
-
-Business state belongs in explicit domain models and persistence layers. Do not create hidden parallel state in UI components or process memory.
-
-### 2. Server-side authority
-
-Authentication, tenant boundaries, permissions, and sensitive business rules belong on the server.
-
-### 3. Every feature must be testable
-
-A feature is not considered complete merely because the interface renders. Its validation, authorization, business rules, failure paths, and critical integrations should be testable.
-
-### 4. Security before convenience
-
-Secrets stay server-side. Tenant boundaries are explicit. Sensitive actions require appropriate roles. Public endpoints are deliberately narrow.
-
-### 5. Deterministic change
-
-Schema changes require reviewed migrations. Large or destructive database operations require deliberate review rather than accidental deployment.
-
-### 6. Observable operations
-
-External operations should produce meaningful states and audit information. A provider request that was accepted by an API must not automatically be represented as successfully delivered.
-
-### 7. No fabricated data
-
-A newly created school starts empty. NSOS must not invent students, guardians, staff, applications, fees, or contact details to make the interface look populated.
-
-### 8. Verify before declaring done
-
-The engineering loop is:
-
-```text
-Plan
-  ↓
-Implement
-  ↓
-Typecheck
-  ↓
-Test
-  ↓
-Build
-  ↓
-Verify critical flows
-  ↓
-Review security / tenant boundaries
-  ↓
-Release
-```
-
----
-
-## Repository structure
-
-```text
-.
-├── client/                 # React application and UI
-├── server/                 # Express, tRPC, domain and service logic
-│   ├── _core/              # Runtime, OAuth, context and platform services
-│   └── routers/            # Typed API procedures
-├── drizzle/                # Database schema and migrations
-├── docs/                   # Architecture, deployment and operational docs
-├── .github/workflows/      # CI automation
-├── components.json         # UI component configuration
-├── drizzle.config.ts       # Drizzle configuration
-├── package.json            # Scripts and dependencies
-├── LIVE_QA_GUIDE.md        # Live verification guide
-├── SECURITY.md             # Security policy
-└── README.md               # System overview and engineering entry point
-```
+This is direction, not a timetable or performance forecast.
 
 ---
 
@@ -326,29 +203,18 @@ Release
 
 - Node.js 22+
 - pnpm 10+
-- A MySQL/TiDB-compatible database for persistence
-- Required authentication/storage environment variables for the features being exercised
+- A MySQL/TiDB-compatible database
+- Appropriate identity, storage, and application environment variables for the features being exercised
 
-### Install
+### Install and run
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-```
-
-### Configure environment
-
-Create a local environment configuration appropriate to your deployment and provide the required database, identity, storage, and application secrets.
-
-**Never commit secrets or production credentials.**
-
-### Start development
-
-```bash
 pnpm dev
 ```
 
-### Validate the system
+### Validate before a release
 
 ```bash
 pnpm check
@@ -356,145 +222,37 @@ pnpm test
 pnpm build
 ```
 
-### Production start
-
-```bash
-pnpm start
-```
-
----
-
-## Engineering commands
-
 | Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Start the development server with Vite middleware |
-| `pnpm check` | TypeScript validation without emitting files |
-| `pnpm test` | Execute the Vitest suite |
-| `pnpm build` | Build the client and production server bundle |
-| `pnpm start` | Start the production server |
-| `pnpm format` | Format the repository with Prettier |
-| `pnpm db:push` | Generate and apply Drizzle migrations |
+|---|---|
+| `pnpm dev` | Start the development server. |
+| `pnpm check` | Run TypeScript validation without emitting files. |
+| `pnpm test` | Run the Vitest regression suite. |
+| `pnpm build` | Produce the production client and server bundle. |
+| `pnpm start` | Start the production server bundle. |
+| `pnpm db:push` | Generate and apply Drizzle migrations; review generated SQL before applying it. |
+| `pnpm format` | Apply Prettier formatting. |
 
-For schema changes, review generated SQL before applying it. Treat destructive changes as high-risk operations.
-
----
-
-## CI / release gate
-
-The repository CI workflow is designed around a simple engineering contract:
-
-```text
-Install locked dependencies
-        ↓
-Typecheck
-        ↓
-Test
-        ↓
-Production build
-```
-
-The workflow lives at `.github/workflows/ci.yml`.
-
-The intended release gate is **green typecheck + green tests + successful production build**. A passing build alone is not sufficient evidence that a change is safe.
+Never commit secrets, production credentials, or synthetic personal records. File bytes belong in object storage, not database columns. Any schema change must use a reviewed migration.
 
 ---
 
-## Security model
+## Contributing and repository standards
 
-Security-sensitive areas are treated as architecture, not documentation afterthoughts.
+Contributions should preserve the properties that make NSOS suitable for institutional operations:
 
-Current controls include:
-
-- Tenant-scoped persistence
-- Active membership checks
-- Server-side role and permission enforcement
-- Protected provider configuration
-- Sanitized provider reads
-- Signed provider callbacks where supported
-- Public endpoint restrictions
-- Browser/security headers
-- No-store behavior for sensitive API responses
-- Bounded request parsing
-- Same-origin mutation protection
-- Route-sensitive database request throttling
-
-See [`SECURITY.md`](SECURITY.md) for the project's security policy.
-
-If you discover a security issue, do not disclose exploitable details in a public issue. Follow the security reporting process defined in the repository policy.
+1. Keep tenant boundaries explicit and server-enforced.
+2. Keep role checks, confirmation gates, and consequential actions on the server.
+3. Use tRPC for client/server product interactions.
+4. Add meaningful regression coverage for new business behaviour and safety boundaries.
+5. Review generated database SQL before it is applied.
+6. Keep AI output structured, bounded, and subordinate to allowlisted server actions.
+7. Do not fabricate people, testimonials, learner outcomes, revenue, credentials, payment activity, or public claims.
+8. Run type checks, tests, and a production build before treating a change as release-ready.
 
 ---
 
-## Documentation
+## Repository status
 
-- [`docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md`](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md) — architecture, deployment, tenant isolation, domains, providers, and operational controls
-- [`docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md`](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md) — buyer value, product differentiation, and the cash-and-parent-trust growth sequence
-- [`LIVE_QA_GUIDE.md`](LIVE_QA_GUIDE.md) — live QA and verification workflow
-- [`SECURITY.md`](SECURITY.md) — security policy and reporting guidance
+**Private repository · Active engineering · Controlled rollout preparation**
 
-The README is the orientation layer. Detailed implementation decisions belong in the technical documentation.
-
----
-
-## Project status
-
-**Development status: active engineering / production hardening.**
-
-NSOS already has a substantial application foundation, including multi-tenant architecture, role-aware workflows, admissions, academics, attendance, results, finance, staff operations, communication, public websites, custom-domain verification, provider configuration, and automated validation infrastructure.
-
-The project remains under active engineering. Production readiness is treated as a verification problem rather than a marketing label: critical workflows, integrations, security boundaries, deployment behavior, and operational failure modes must continue to be validated as the system evolves.
-
----
-
-## Design philosophy
-
-NSOS is not intended to be another collection of dashboards.
-
-It is being built as **school infrastructure**.
-
-That means the system should answer operational questions reliably:
-
-- Who is allowed to see this data?
-- Which school owns this record?
-- What happened to this application?
-- Has this result actually been approved and published?
-- How much has this invoice been paid?
-- Was that notification submitted or actually delivered?
-- Who changed the configuration?
-- Can the operation be reproduced and tested?
-- What happens when the external provider fails?
-
-If the system cannot answer those questions, the feature is not finished.
-
----
-
-## Contributing
-
-Contributions should preserve the project's core engineering constraints:
-
-1. Keep tenant boundaries explicit.
-2. Keep authorization on the server.
-3. Validate inputs at system boundaries.
-4. Add tests for meaningful business behavior.
-5. Prefer small, reviewable changes.
-6. Review database migrations before applying them.
-7. Do not commit secrets or generated production data.
-8. Run `pnpm check`, `pnpm test`, and `pnpm build` before treating a change as release-ready.
-
-For larger architectural changes, document the decision and its operational consequences before implementation.
-
----
-
-## License
-
-NSOS is licensed under the [MIT License](LICENSE).
-
----
-
-<div align="center">
-
-**NSOS — Nigerian School Operating System**
-
-*One school. One operational system. One source of truth.*
-
-</div>
+NSOS is being built as durable education infrastructure: a platform that becomes more valuable as an institution centralises approved operational state, while still allowing people to understand, review, and control every consequential action.
