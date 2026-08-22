@@ -205,3 +205,4 @@
 - [x] Add an owner/admin-only, review-first student migration workflow that accepts school-approved spreadsheet rows without fabricating learner or guardian data.
 - [x] Validate migration rows before import, surface field-level errors and duplicate risks, and require an explicit final confirmation before any student records are created.
 - [x] Add tenant-scoped migration audit records, idempotency safeguards, import summaries, and regression coverage for authorization and school isolation.
+- [x] Add safe local CSV and tab-separated file selection to Secure Student Migration so owners can review approved spreadsheet extracts without manual copy-paste.

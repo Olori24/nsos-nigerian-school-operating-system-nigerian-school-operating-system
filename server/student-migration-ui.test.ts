@@ -18,5 +18,8 @@ describe("Student migration interface", () => {
     expect(panel).toContain("Validate migration rows");
     expect(panel).toContain("Confirm and import records");
     expect(panel).toContain("I confirm these are school-approved records.");
+    expect(panel).toContain("Choose local CSV or TSV");
+    expect(panel).toContain("It has not been uploaded or stored.");
+    expect(panel).toContain("Excel workbooks should first be saved as CSV.");
   });
 });

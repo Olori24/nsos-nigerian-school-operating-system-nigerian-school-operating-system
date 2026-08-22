@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, CheckCircle2, Copy, FileSpreadsheet, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, FileSpreadsheet, FileUp, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -99,6 +99,18 @@ export function StudentMigrationWorkspace({ schoolId, academic, onDone }: { scho
     try { await navigator.clipboard.writeText(template); toast.success("Required import headers copied."); }
     catch { toast.message("Copy the header line shown below."); }
   };
+  const readLocalFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    const supported = /\.(csv|tsv|txt)$/i.test(file.name) || ["text/csv", "text/tab-separated-values", "text/plain"].includes(file.type);
+    if (!supported) return toast.error("Choose a CSV, TSV, or plain-text spreadsheet export. Excel workbooks should first be saved as CSV.");
+    if (file.size > 2_000_000) return toast.error("Choose a file smaller than 2 MB. Import up to 100 reviewed rows at a time.");
+    const reader = new FileReader();
+    reader.onload = () => { setCsv(String(reader.result ?? "")); setReview(null); toast.success(`${file.name} is ready for local review. It has not been uploaded or stored.`); };
+    reader.onerror = () => toast.error("NSOS could not read that local spreadsheet file. Export it as CSV or TSV and try again.");
+    reader.readAsText(file);
+  };
 
   return <section className="overflow-hidden rounded-[1.2rem] border border-[#cbded0] bg-[linear-gradient(135deg,#f0faf3_0%,#fffdfa_60%,#f5faf7_100%)] shadow-[0_10px_28px_rgba(23,79,55,.05)]">
     <div className="flex flex-col gap-4 border-b border-[#dcebe0] p-5 sm:flex-row sm:items-start sm:justify-between">
@@ -120,7 +132,7 @@ export function StudentMigrationWorkspace({ schoolId, academic, onDone }: { scho
       </div>
 
       <div className="rounded-xl border border-[#d7e6da] bg-white p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold text-[#304c3d]">Paste CSV or spreadsheet rows</p><button type="button" onClick={copyTemplate} className="inline-flex items-center gap-1.5 rounded-lg border border-[#b7d2be] px-2.5 py-1.5 text-[10px] font-bold text-[#176145]"><Copy className="h-3 w-3" />Copy required headers</button></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold text-[#304c3d]">Paste CSV or spreadsheet rows</p><div className="flex flex-wrap gap-2"><label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#b7d2be] bg-[#f5fbf6] px-2.5 py-1.5 text-[10px] font-bold text-[#176145]"><FileUp className="h-3 w-3" />Choose local CSV or TSV<input type="file" className="sr-only" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" onChange={readLocalFile} /></label><button type="button" onClick={copyTemplate} className="inline-flex items-center gap-1.5 rounded-lg border border-[#b7d2be] px-2.5 py-1.5 text-[10px] font-bold text-[#176145]"><Copy className="h-3 w-3" />Copy required headers</button></div></div>
         <p className="mt-1 break-all font-mono text-[9px] leading-4 text-[#718078]">{template}</p>
         <textarea value={csv} onChange={event => { setCsv(event.target.value); setReview(null); }} placeholder={template} className="mt-3 min-h-36 w-full rounded-lg border border-[#dce5de] bg-[#fbfcfa] p-3 font-mono text-[11px] leading-5 text-[#34483e] outline-none focus:border-[#0f5c4f] focus:ring-2 focus:ring-[#0f5c4f]/10" />
       </div>
