@@ -65,6 +65,7 @@ import {
   staffProfiles,
   staffSetupInvitations,
   studentGuardians,
+  studentMigrationBatches,
   studentProfiles,
   subscriptionPlans,
   subjects,
@@ -1820,6 +1821,140 @@ export async function listStudents(schoolId: number, search?: string) {
   const db = await database();
   const criteria = search ? and(eq(studentProfiles.schoolId, schoolId), or(like(studentProfiles.firstName, `%${search}%`), like(studentProfiles.lastName, `%${search}%`), like(studentProfiles.admissionNo, `%${search}%`))) : eq(studentProfiles.schoolId, schoolId);
   return db.select().from(studentProfiles).where(criteria).orderBy(desc(studentProfiles.createdAt));
+}
+
+export type StudentMigrationRow = {
+  sourceRow: number;
+  admissionNo: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  email?: string;
+  phone?: string;
+  guardianFirstName?: string;
+  guardianLastName?: string;
+  guardianRelationship?: string;
+  guardianEmail?: string;
+  guardianPhone?: string;
+};
+
+type ReviewedStudentMigrationRow = StudentMigrationRow & { errors: string[] };
+const studentMigrationEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const studentMigrationDate = /^\d{4}-\d{2}-\d{2}$/;
+const studentMigrationGenders = new Set(["female", "male", "other", "prefer_not_to_say"]);
+
+function migrationText(value: unknown, maximum: number) {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maximum) : "";
+}
+
+export function normaliseStudentMigrationRows(rows: StudentMigrationRow[]) {
+  if (!Array.isArray(rows) || rows.length < 1) throw new Error("Add at least one student row before reviewing the migration.");
+  if (rows.length > 100) throw new Error("Import no more than 100 student rows at a time so each batch can be reviewed safely.");
+  const seenAdmissions = new Map<string, number>();
+  const reviewed: ReviewedStudentMigrationRow[] = rows.map((row, index) => {
+    const sourceRow = Number.isInteger(row.sourceRow) && row.sourceRow > 0 ? row.sourceRow : index + 2;
+    const admissionNo = migrationText(row.admissionNo, 64).toUpperCase();
+    const firstName = migrationText(row.firstName, 120);
+    const lastName = migrationText(row.lastName, 120);
+    const middleName = migrationText(row.middleName, 120) || undefined;
+    const dateOfBirth = migrationText(row.dateOfBirth, 10) || undefined;
+    const gender = migrationText(row.gender, 24) || undefined;
+    const email = migrationText(row.email, 320).toLowerCase() || undefined;
+    const phone = migrationText(row.phone, 48) || undefined;
+    const guardianFirstName = migrationText(row.guardianFirstName, 120) || undefined;
+    const guardianLastName = migrationText(row.guardianLastName, 120) || undefined;
+    const guardianRelationship = migrationText(row.guardianRelationship, 80) || undefined;
+    const guardianEmail = migrationText(row.guardianEmail, 320).toLowerCase() || undefined;
+    const guardianPhone = migrationText(row.guardianPhone, 48) || undefined;
+    const errors: string[] = [];
+    if (admissionNo.length < 2) errors.push("Admission number is required.");
+    if (!firstName) errors.push("Student first name is required.");
+    if (!lastName) errors.push("Student last name is required.");
+    if (dateOfBirth && (!studentMigrationDate.test(dateOfBirth) || Number.isNaN(new Date(`${dateOfBirth}T00:00:00.000Z`).getTime()))) errors.push("Date of birth must use YYYY-MM-DD.");
+    if (gender && !studentMigrationGenders.has(gender)) errors.push("Gender must be female, male, other, or prefer_not_to_say.");
+    if (email && !studentMigrationEmail.test(email)) errors.push("Student email is not valid.");
+    if (guardianEmail && !studentMigrationEmail.test(guardianEmail)) errors.push("Guardian email is not valid.");
+    const guardianValues = [guardianFirstName, guardianLastName, guardianRelationship, guardianEmail, guardianPhone].filter(Boolean);
+    if (guardianValues.length > 0 && (!guardianFirstName || !guardianLastName || !guardianRelationship)) errors.push("A guardian requires first name, last name, and relationship.");
+    const previous = admissionNo ? seenAdmissions.get(admissionNo) : undefined;
+    if (previous) errors.push(`Admission number duplicates row ${previous}.`);
+    else if (admissionNo) seenAdmissions.set(admissionNo, sourceRow);
+    return { sourceRow, admissionNo, firstName, lastName, middleName, dateOfBirth, gender: gender as StudentMigrationRow["gender"], email, phone, guardianFirstName, guardianLastName, guardianRelationship, guardianEmail, guardianPhone, errors };
+  });
+  return reviewed;
+}
+
+async function assertStudentMigrationTarget(schoolId: number, classId: number, sessionId: number) {
+  const db = await database();
+  const [classRow, sessionRow] = await Promise.all([
+    db.select({ id: classes.id }).from(classes).where(and(eq(classes.id, classId), eq(classes.schoolId, schoolId))).limit(1),
+    db.select({ id: academicSessions.id }).from(academicSessions).where(and(eq(academicSessions.id, sessionId), eq(academicSessions.schoolId, schoolId))).limit(1),
+  ]);
+  if (!classRow[0] || !sessionRow[0]) throw new Error("Choose a class and academic session that belong to this school.");
+}
+
+export async function previewStudentMigration(input: { schoolId: number; classId: number; sessionId: number; rows: StudentMigrationRow[] }) {
+  await assertStudentMigrationTarget(input.schoolId, input.classId, input.sessionId);
+  const rows = normaliseStudentMigrationRows(input.rows);
+  const admissionNos = rows.map(row => row.admissionNo).filter(Boolean);
+  const existing = admissionNos.length ? await (await database()).select({ admissionNo: studentProfiles.admissionNo }).from(studentProfiles).where(and(eq(studentProfiles.schoolId, input.schoolId), inArray(studentProfiles.admissionNo, admissionNos))) : [];
+  const existingAdmissions = new Set(existing.map(row => row.admissionNo.toUpperCase()));
+  for (const row of rows) if (existingAdmissions.has(row.admissionNo)) row.errors.push("This admission number already belongs to a student in this school.");
+  return { rowCount: rows.length, readyCount: rows.filter(row => !row.errors.length).length, errorCount: rows.filter(row => row.errors.length).length, rows: rows.map(row => ({ sourceRow: row.sourceRow, admissionNo: row.admissionNo, firstName: row.firstName, lastName: row.lastName, errors: row.errors })) };
+}
+
+export async function importStudentMigration(input: { schoolId: number; classId: number; sessionId: number; admittedOn: string; idempotencyKey: string; rows: StudentMigrationRow[]; importedBy: number }) {
+  if (!studentMigrationDate.test(input.admittedOn) || Number.isNaN(new Date(`${input.admittedOn}T00:00:00.000Z`).getTime())) throw new Error("Choose a valid admission date in YYYY-MM-DD format.");
+  const rows = normaliseStudentMigrationRows(input.rows);
+  await assertStudentMigrationTarget(input.schoolId, input.classId, input.sessionId);
+  const checksumPayload = { classId: input.classId, sessionId: input.sessionId, admittedOn: input.admittedOn, rows: rows.map(({ errors: _errors, ...row }) => row) };
+  const checksum = createHash("sha256").update(JSON.stringify(checksumPayload)).digest("hex");
+  const db = await database();
+  const prior = (await db.select().from(studentMigrationBatches).where(and(eq(studentMigrationBatches.schoolId, input.schoolId), eq(studentMigrationBatches.idempotencyKey, input.idempotencyKey))).limit(1))[0];
+  if (prior) {
+    if (prior.checksum !== checksum) throw new Error("This import key was already used with different rows. Review the batch and start a new import.");
+    if (prior.status === "completed") return { batchId: prior.id, status: "completed" as const, studentCount: prior.studentCount, guardianCount: prior.guardianCount, idempotent: true };
+    throw new Error("This migration batch is already being processed. Refresh the page before trying again.");
+  }
+  const duplicateAdmissions = rows.filter(row => row.errors.length);
+  if (duplicateAdmissions.length) throw new Error("Fix the row errors shown in the review before confirming this import.");
+  const existing = await db.select({ admissionNo: studentProfiles.admissionNo }).from(studentProfiles).where(and(eq(studentProfiles.schoolId, input.schoolId), inArray(studentProfiles.admissionNo, rows.map(row => row.admissionNo))));
+  if (existing.length) throw new Error(`This school already has student records for: ${existing.map(row => row.admissionNo).join(", ")}. Remove or correct those rows before importing.`);
+  return db.transaction(async tx => {
+    const createdBatch = await tx.insert(studentMigrationBatches).values({ schoolId: input.schoolId, createdBy: input.importedBy, idempotencyKey: input.idempotencyKey, checksum, classId: input.classId, sessionId: input.sessionId, rowCount: rows.length, status: "processing" });
+    const batchId = Number(createdBatch[0].insertId);
+    const guardiansByContact = new Map<string, number>();
+    let guardianCount = 0;
+    for (const row of rows) {
+      const persistedGender = row.gender && studentMigrationGenders.has(row.gender) ? row.gender as "female" | "male" | "other" | "prefer_not_to_say" : null;
+      const createdStudent = await tx.insert(studentProfiles).values({ schoolId: input.schoolId, admissionNo: row.admissionNo, firstName: row.firstName, lastName: row.lastName, middleName: row.middleName ?? null, dateOfBirth: asDate(row.dateOfBirth) ?? null, gender: persistedGender, email: row.email ?? null, phone: row.phone ?? null, status: "active", admittedOn: asDate(input.admittedOn)! });
+      const studentId = Number(createdStudent[0].insertId);
+      await tx.insert(enrollments).values({ schoolId: input.schoolId, studentId, classId: input.classId, sessionId: input.sessionId, enrolledOn: asDate(input.admittedOn)! });
+      if (row.guardianFirstName && row.guardianLastName && row.guardianRelationship) {
+        const contactKey = row.guardianEmail ? `email:${row.guardianEmail}` : row.guardianPhone ? `phone:${row.guardianPhone}` : `row:${row.sourceRow}`;
+        let guardianId = guardiansByContact.get(contactKey);
+        if (!guardianId) {
+          const existingGuardian = (row.guardianEmail || row.guardianPhone) ? (await tx.select({ id: guardians.id }).from(guardians).where(and(eq(guardians.schoolId, input.schoolId), or(row.guardianEmail ? eq(guardians.email, row.guardianEmail) : undefined, row.guardianPhone ? eq(guardians.phone, row.guardianPhone) : undefined))).limit(1))[0] : undefined;
+          if (existingGuardian) guardianId = existingGuardian.id;
+          else {
+            const createdGuardian = await tx.insert(guardians).values({ schoolId: input.schoolId, firstName: row.guardianFirstName, lastName: row.guardianLastName, relationship: row.guardianRelationship, email: row.guardianEmail ?? null, phone: row.guardianPhone ?? null, isPrimaryContact: true });
+            guardianId = Number(createdGuardian[0].insertId);
+            guardianCount += 1;
+          }
+          guardiansByContact.set(contactKey, guardianId);
+        }
+        await tx.insert(studentGuardians).values({ studentId, guardianId, isPrimary: true });
+      }
+    }
+    await tx.update(studentMigrationBatches).set({ status: "completed", studentCount: rows.length, guardianCount, completedAt: new Date() }).where(and(eq(studentMigrationBatches.id, batchId), eq(studentMigrationBatches.schoolId, input.schoolId)));
+    return { batchId, status: "completed" as const, studentCount: rows.length, guardianCount, idempotent: false };
+  });
+}
+
+export async function listStudentMigrationBatches(schoolId: number) {
+  return (await database()).select({ id: studentMigrationBatches.id, rowCount: studentMigrationBatches.rowCount, studentCount: studentMigrationBatches.studentCount, guardianCount: studentMigrationBatches.guardianCount, status: studentMigrationBatches.status, completedAt: studentMigrationBatches.completedAt, createdAt: studentMigrationBatches.createdAt }).from(studentMigrationBatches).where(eq(studentMigrationBatches.schoolId, schoolId)).orderBy(desc(studentMigrationBatches.createdAt)).limit(12);
 }
 
 export async function getStudentAcademicHistory(schoolId: number, studentId: number) {

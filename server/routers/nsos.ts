@@ -64,6 +64,12 @@ const onboardingAdminProcedure = protectedProcedure.input(schoolInput).use(async
   return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
 });
 
+const studentMigrationAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "students.write");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can migrate approved student records." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
 const advertisingAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
   const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
   if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can manage advertising accounts or approve campaign spend." });
@@ -91,6 +97,7 @@ const aiTutorTeacherProcedure = protectedProcedure.input(schoolInput).use(async 
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
 const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
 const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
+const studentMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), admissionNo: z.string().max(64), firstName: z.string().max(120), lastName: z.string().max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().max(10).optional(), gender: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), guardianFirstName: z.string().max(120).optional(), guardianLastName: z.string().max(120).optional(), guardianRelationship: z.string().max(80).optional(), guardianEmail: z.string().max(320).optional(), guardianPhone: z.string().max(48).optional() });
 
 export const nsosRouter = router({
   schools: router({
@@ -495,6 +502,18 @@ export const nsosRouter = router({
 
   students: router({
     list: managementProcedure("students.read").input(schoolInput.extend({ search: z.string().max(120).optional() })).query(({ input }) => db.listStudents(input.schoolId, input.search)),
+    migrationPreview: studentMigrationAdminProcedure.input(schoolInput.extend({ classId: z.number().int().positive(), sessionId: z.number().int().positive(), rows: z.array(studentMigrationRowInput).min(1).max(100) })).mutation(({ input }) => db.previewStudentMigration(input)),
+    migrationImport: studentMigrationAdminProcedure
+      .input(schoolInput.extend({ classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), idempotencyKey: z.string().uuid(), rows: z.array(studentMigrationRowInput).min(1).max(100), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "student-migration", route: "import", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Student migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const { confirmed: _confirmed, ...migration } = input;
+        const result = await db.importStudentMigration({ ...migration, importedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_migration_completed", targetType: "student_migration_batch", targetId: result.batchId, metadata: { studentCount: result.studentCount, guardianCount: result.guardianCount, idempotent: result.idempotent, confirmationRequired: true } });
+        return result;
+      }),
+    migrationHistory: studentMigrationAdminProcedure.input(schoolInput).query(({ input }) => db.listStudentMigrationBatches(input.schoolId)),
     history: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive() })).query(({ input }) => db.getStudentAcademicHistory(input.schoolId, input.studentId)),
     create: managementProcedure("students.write")
       .input(schoolInput.extend({ admissionNo: z.string().min(2).max(64), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))

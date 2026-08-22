@@ -202,3 +202,6 @@
 - [x] Add a supervised AI task executor that carries out only supported low-risk configuration actions after the school user reviews and explicitly approves each proposal.
 - [x] Upgrade the school website assistant into an AI website-building workflow that creates editable quality drafts without fabricating people, credentials, bank accounts, or public claims and without publishing or connecting a domain.
 - [x] Add regression coverage for AI-agent authorization, tenant isolation, proposal validation, explicit confirmations, and safe refusal of unsupported or high-risk actions.
+- [x] Add an owner/admin-only, review-first student migration workflow that accepts school-approved spreadsheet rows without fabricating learner or guardian data.
+- [x] Validate migration rows before import, surface field-level errors and duplicate risks, and require an explicit final confirmation before any student records are created.
+- [x] Add tenant-scoped migration audit records, idempotency safeguards, import summaries, and regression coverage for authorization and school isolation.
