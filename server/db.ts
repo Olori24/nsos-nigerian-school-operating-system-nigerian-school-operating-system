@@ -1275,6 +1275,8 @@ const defaultDocumentTemplate = {
   admissionFields: ["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "stateOfOrigin", "localGovernmentOfOrigin", "gender", "residentialAddress", "priorSchool", "currentClass", "medicalHistory", "guardianOccupation"] as AdmissionTemplateFieldId[],
   declarationText: "I confirm that the information provided is accurate to the best of my knowledge and I understand that the school will use it only for admissions and student-support purposes.",
   requireDeclaration: true,
+  requirePassportPhoto: false,
+  requireAdmissionFeeReceipt: false,
   termlyFeeTitle: "Termly fee guide",
   feeSchedule: [
     { category: "Kindergarten", tuitionFee: 15000 },
@@ -1325,7 +1327,7 @@ export function normalisePublicHeaderLogoUrl(value: string | undefined) {
   }
 }
 
-export function publicAdmissionTemplate(template: { admissionTitle: string; headerTagline: string | null; headerLogoUrl: string | null; headerAddressLine: string | null; headerContactLine: string | null; admissionFields: unknown; declarationText: string | null; requireDeclaration: boolean } | undefined) {
+export function publicAdmissionTemplate(template: { admissionTitle: string; headerTagline: string | null; headerLogoUrl: string | null; headerAddressLine: string | null; headerContactLine: string | null; admissionFields: unknown; declarationText: string | null; requireDeclaration: boolean; requirePassportPhoto?: boolean; requireAdmissionFeeReceipt?: boolean } | undefined) {
   return {
     admissionTitle: template?.admissionTitle ?? defaultDocumentTemplate.admissionTitle,
     headerTagline: template?.headerTagline ?? defaultDocumentTemplate.headerTagline,
@@ -1335,6 +1337,8 @@ export function publicAdmissionTemplate(template: { admissionTitle: string; head
     admissionFields: templateFields(template?.admissionFields),
     declarationText: template?.declarationText ?? defaultDocumentTemplate.declarationText,
     requireDeclaration: template?.requireDeclaration ?? defaultDocumentTemplate.requireDeclaration,
+    requirePassportPhoto: template?.requirePassportPhoto ?? defaultDocumentTemplate.requirePassportPhoto,
+    requireAdmissionFeeReceipt: template?.requireAdmissionFeeReceipt ?? defaultDocumentTemplate.requireAdmissionFeeReceipt,
   };
 }
 
@@ -1347,7 +1351,7 @@ export async function getSchoolDocumentTemplate(schoolId: number) {
   };
 }
 
-export async function saveSchoolDocumentTemplate(input: { schoolId: number; admissionTitle: string; headerTagline?: string; headerLogoUrl?: string; headerAddressLine?: string; headerContactLine?: string; admissionFields: string[]; declarationText?: string; requireDeclaration: boolean; termlyFeeTitle: string; feeSchedule: FeeScheduleEntry[]; updatedBy: number }) {
+export async function saveSchoolDocumentTemplate(input: { schoolId: number; admissionTitle: string; headerTagline?: string; headerLogoUrl?: string; headerAddressLine?: string; headerContactLine?: string; admissionFields: string[]; declarationText?: string; requireDeclaration: boolean; requirePassportPhoto: boolean; requireAdmissionFeeReceipt: boolean; termlyFeeTitle: string; feeSchedule: FeeScheduleEntry[]; updatedBy: number }) {
   const values = {
     schoolId: input.schoolId,
     admissionTitle: input.admissionTitle.trim(),
@@ -1358,6 +1362,8 @@ export async function saveSchoolDocumentTemplate(input: { schoolId: number; admi
     admissionFields: templateFields(input.admissionFields),
     declarationText: input.declarationText?.trim() || null,
     requireDeclaration: input.requireDeclaration,
+    requirePassportPhoto: input.requirePassportPhoto,
+    requireAdmissionFeeReceipt: input.requireAdmissionFeeReceipt,
     termlyFeeTitle: input.termlyFeeTitle.trim(),
     feeSchedule: templateFees(input.feeSchedule),
     updatedBy: input.updatedBy,
@@ -1686,22 +1692,69 @@ export async function reviewApplication(applicationId: number, status: "under_re
   return { success: true };
 }
 
-export async function listAdmissionDocuments(applicationId: number) {
-  return (await database()).select().from(admissionDocuments).where(eq(admissionDocuments.applicationId, applicationId)).orderBy(desc(admissionDocuments.uploadedAt));
+export async function listAdmissionDocuments(input: { schoolId: number; applicationId: number }) {
+  const db = await database();
+  return db.select({ document: admissionDocuments }).from(admissionDocuments).innerJoin(admissionsApplications, eq(admissionDocuments.applicationId, admissionsApplications.id)).where(and(eq(admissionDocuments.applicationId, input.applicationId), eq(admissionsApplications.schoolId, input.schoolId))).orderBy(desc(admissionDocuments.uploadedAt)).then(rows => rows.map(row => row.document));
 }
 
-export async function uploadAdmissionDocument(input: { schoolId: number; applicationId: number; label: string; fileName: string; mimeType: string; base64: string }) {
+type AdmissionDocumentType = "supporting_document" | "passport_photo" | "admission_fee_receipt";
+type PublicAdmissionUpload = { type: "passport_photo" | "admission_fee_receipt"; fileName: string; mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string };
+
+function decodeAdmissionUpload(input: { fileName: string; mimeType: string; base64: string }, documentType: AdmissionDocumentType) {
+  const encoded = input.base64.replace(/\s/g, "");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 === 1) throw new Error("The uploaded file data is invalid. Please choose the file again.");
+  const bytes = Buffer.from(encoded, "base64");
+  const imageOnly = documentType === "passport_photo";
+  const allowedMimeTypes = imageOnly ? ["image/jpeg", "image/png", "image/webp"] : ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+  if (!allowedMimeTypes.includes(input.mimeType)) throw new Error(imageOnly ? "Passport photographs must be JPEG, PNG, or WebP files." : "Fee receipts must be JPEG, PNG, WebP, or PDF files.");
+  const maximumBytes = imageOnly ? 3 * 1024 * 1024 : 4 * 1024 * 1024;
+  if (!bytes.length || bytes.length > maximumBytes) throw new Error(imageOnly ? "Passport photographs must be no larger than 3 MB." : "Fee receipts must be no larger than 4 MB.");
+  const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const isWebp = bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+  const isPdf = bytes.length >= 4 && bytes.subarray(0, 4).toString("ascii") === "%PDF";
+  const matchesMime = (input.mimeType === "image/jpeg" && isJpeg) || (input.mimeType === "image/png" && isPng) || (input.mimeType === "image/webp" && isWebp) || (input.mimeType === "application/pdf" && isPdf);
+  if (!matchesMime) throw new Error("The selected file does not match its declared file type. Please upload the original file.");
+  const safeName = input.fileName.trim().replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 180) || "admission-upload";
+  return { bytes, safeName };
+}
+
+async function storeAdmissionDocument(input: { schoolId: number; applicationId: number; label: string; documentType: AdmissionDocumentType; fileName: string; mimeType: string; base64: string }) {
   const db = await database();
   const application = (await db.select().from(admissionsApplications).where(and(eq(admissionsApplications.id, input.applicationId), eq(admissionsApplications.schoolId, input.schoolId))).limit(1))[0];
   if (!application) throw new Error("Admission application not found.");
-  const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const { key, url } = await storagePut(`schools/${input.schoolId}/admissions/${input.applicationId}/${safeName}`, Buffer.from(input.base64, "base64"), input.mimeType);
-  const result = await db.insert(admissionDocuments).values({ applicationId: input.applicationId, label: input.label, storageKey: key, url, mimeType: input.mimeType });
+  const { bytes, safeName } = decodeAdmissionUpload(input, input.documentType);
+  const objectName = `${input.documentType}-${randomBytes(10).toString("hex")}-${safeName}`;
+  const { key, url } = await storagePut(`schools/${input.schoolId}/admissions/${input.applicationId}/${objectName}`, bytes, input.mimeType);
+  const result = await db.insert(admissionDocuments).values({ applicationId: input.applicationId, label: input.label, storageKey: key, url, documentType: input.documentType, fileName: safeName, byteSize: bytes.length, mimeType: input.mimeType });
   return { documentId: Number(result[0].insertId), url };
 }
 
-export async function reviewAdmissionDocument(documentId: number, status: "verified" | "rejected", reviewNote: string | undefined, reviewerId: number) {
-  await (await database()).update(admissionDocuments).set({ status, reviewedBy: reviewerId, reviewedAt: new Date(), reviewNote: reviewNote ?? null }).where(eq(admissionDocuments.id, documentId));
+export async function uploadAdmissionDocument(input: { schoolId: number; applicationId: number; label: string; fileName: string; mimeType: string; base64: string }) {
+  return storeAdmissionDocument({ ...input, documentType: "supporting_document" });
+}
+
+export async function createPublicApplicationWithDocuments(input: Record<string, unknown> & { schoolId: number; documents: PublicAdmissionUpload[] }) {
+  const { documents, ...application } = input;
+  const created = await createApplication(application);
+  try {
+    for (const document of documents) {
+      await storeAdmissionDocument({ schoolId: input.schoolId, applicationId: created.applicationId, label: document.type === "passport_photo" ? "Passport photograph" : "Admission fee receipt", documentType: document.type, fileName: document.fileName, mimeType: document.mimeType, base64: document.base64 });
+    }
+    return created;
+  } catch (error) {
+    const db = await database();
+    await db.delete(admissionDocuments).where(eq(admissionDocuments.applicationId, created.applicationId));
+    await db.delete(admissionsApplications).where(and(eq(admissionsApplications.id, created.applicationId), eq(admissionsApplications.schoolId, input.schoolId)));
+    throw error;
+  }
+}
+
+export async function reviewAdmissionDocument(input: { schoolId: number; documentId: number; status: "verified" | "rejected"; reviewNote?: string; reviewerId: number }) {
+  const db = await database();
+  const scoped = (await db.select({ id: admissionDocuments.id }).from(admissionDocuments).innerJoin(admissionsApplications, eq(admissionDocuments.applicationId, admissionsApplications.id)).where(and(eq(admissionDocuments.id, input.documentId), eq(admissionsApplications.schoolId, input.schoolId))).limit(1))[0];
+  if (!scoped) throw new Error("Admission document not found in this school.");
+  await db.update(admissionDocuments).set({ status: input.status, reviewedBy: input.reviewerId, reviewedAt: new Date(), reviewNote: input.reviewNote ?? null }).where(eq(admissionDocuments.id, input.documentId));
   return { success: true };
 }
 

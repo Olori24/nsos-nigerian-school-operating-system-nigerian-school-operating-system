@@ -1,32 +1,81 @@
+import { AdmissionEvidenceUpload, type AdmissionEvidence } from "@/components/AdmissionEvidenceUpload";
+import { AiAppliedFieldCue, aiAppliedFieldClass, suggestedFieldKeys } from "@/components/AiAppliedFieldCue";
+import { AiAppliedFieldProvider, useAiAppliedField } from "@/components/AiAppliedFieldContext";
+import { BiodataDocumentAutofill, type BiodataAutofillProposal } from "@/components/BiodataDocumentAutofill";
+import { BiodataPreviewDialog } from "@/components/BiodataPreviewDialog";
+import { ClearFormConfirmation } from "@/components/ClearFormConfirmation";
+import { InlineFieldFeedback } from "@/components/InlineFieldFeedback";
+import { LocalDraftNotice } from "@/components/LocalDraftNotice";
+import { useSessionDraft } from "@/hooks/useSessionDraft";
+import { biodataPdfHeaderDefaults } from "@/lib/biodataPdf";
+import { isAdmissionBiodataReady } from "@/lib/biodataCompletion";
+import { validateCompletedValue, validateDate, validateEmail, validateName, validatePhone, validationControlClass, type InlineValidation } from "@/lib/inlineValidation";
+import { originLgaLoadPresentation } from "@/lib/originPresentation";
 import { trpc } from "@/lib/trpc";
+import { useFormCompletionTimestamp } from "@/hooks/useFormCompletionTimestamp";
 import { ArrowUpRight, CheckCircle2, Loader2, School } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { useRoute } from "wouter";
-import { originLgaLoadPresentation } from "@/lib/originPresentation";
-import { useSessionDraft } from "@/hooks/useSessionDraft";
-import { LocalDraftNotice } from "@/components/LocalDraftNotice";
-import { BiodataPreviewDialog } from "@/components/BiodataPreviewDialog";
-import { ClearFormConfirmation } from "@/components/ClearFormConfirmation";
-import { BiodataDocumentAutofill, type BiodataAutofillProposal } from "@/components/BiodataDocumentAutofill";
-import { AiAppliedFieldProvider, useAiAppliedField } from "@/components/AiAppliedFieldContext";
-import { AiAppliedFieldCue, aiAppliedFieldClass, suggestedFieldKeys } from "@/components/AiAppliedFieldCue";
-import { InlineFieldFeedback } from "@/components/InlineFieldFeedback";
-import { validateCompletedValue, validateDate, validateEmail, validateName, validatePhone, validationControlClass, type InlineValidation } from "@/lib/inlineValidation";
-import { isAdmissionBiodataReady } from "@/lib/biodataCompletion";
-import { biodataPdfHeaderDefaults } from "@/lib/biodataPdf";
-import { useFormCompletionTimestamp } from "@/hooks/useFormCompletionTimestamp";
 
 const inputClass = "h-11 w-full rounded-xl border border-[#dfe5df] bg-[#fbfcfa] px-3 text-sm text-[#15201c] outline-none transition focus:border-[#0f5c4f] focus:ring-2 focus:ring-[#0f5c4f]/10";
 
 const templateFieldMeta: Record<string, { label: string; type?: "date" | "textarea" | "select" | "originState" | "originLga" }> = {
-  middleName: { label: "Applicant middle name" }, dateOfBirth: { label: "Date of birth", type: "date" }, placeOfBirth: { label: "Place of birth" }, nationality: { label: "Nationality" }, homeTown: { label: "Home town" }, stateOfOrigin: { label: "State of origin", type: "originState" }, localGovernmentOfOrigin: { label: "Local Government Area of origin", type: "originLga" }, gender: { label: "Gender", type: "select" }, residentialAddress: { label: "Residential address", type: "textarea" }, postalAddress: { label: "Postal address" }, priorSchool: { label: "Previous school" }, currentClass: { label: "Current class" }, religion: { label: "Religion" }, medicalHistory: { label: "Relevant medical history", type: "textarea" }, familyDoctor: { label: "Family doctor or clinic" }, guardianOccupation: { label: "Parent or guardian occupation" }, guardianOfficeAddress: { label: "Parent or guardian office address", type: "textarea" },
+  middleName: { label: "Applicant middle name" },
+  dateOfBirth: { label: "Date of birth", type: "date" },
+  placeOfBirth: { label: "Place of birth" },
+  nationality: { label: "Nationality" },
+  homeTown: { label: "Home town" },
+  stateOfOrigin: { label: "State of origin", type: "originState" },
+  localGovernmentOfOrigin: { label: "Local Government Area of origin", type: "originLga" },
+  gender: { label: "Gender", type: "select" },
+  residentialAddress: { label: "Residential address", type: "textarea" },
+  postalAddress: { label: "Postal address" },
+  priorSchool: { label: "Previous school" },
+  currentClass: { label: "Current class" },
+  religion: { label: "Religion" },
+  medicalHistory: { label: "Relevant medical history", type: "textarea" },
+  familyDoctor: { label: "Family doctor or clinic" },
+  guardianOccupation: { label: "Parent or guardian occupation" },
+  guardianOfficeAddress: { label: "Parent or guardian office address", type: "textarea" },
 };
 
-const fallbackTemplate = { admissionTitle: "School admission form", headerTagline: "NSOS online admissions", headerLogoUrl: null as string | null, headerAddressLine: null as string | null, headerContactLine: null as string | null, admissionFields: ["dateOfBirth", "stateOfOrigin", "localGovernmentOfOrigin", "gender", "priorSchool"], declarationText: "I confirm that the information provided is accurate to the best of my knowledge.", requireDeclaration: true };
-const initialPublicAdmissionDraft = { form: { firstName: "", lastName: "", guardianName: "", guardianPhone: "", guardianEmail: "", notes: "" }, supplementalData: {} as Record<string, string>, declarationAccepted: false };
+const fallbackTemplate = {
+  admissionTitle: "School admission form",
+  headerTagline: "NSOS online admissions",
+  headerLogoUrl: null as string | null,
+  headerAddressLine: null as string | null,
+  headerContactLine: null as string | null,
+  admissionFields: ["dateOfBirth", "stateOfOrigin", "localGovernmentOfOrigin", "gender", "priorSchool"],
+  declarationText: "I confirm that the information provided is accurate to the best of my knowledge.",
+  requireDeclaration: true,
+  requirePassportPhoto: false,
+  requireAdmissionFeeReceipt: false,
+};
+
+const initialPublicAdmissionDraft = {
+  form: { firstName: "", lastName: "", guardianName: "", guardianPhone: "", guardianEmail: "", notes: "" },
+  supplementalData: {} as Record<string, string>,
+  declarationAccepted: false,
+};
 
 function PublicLetterhead({ schoolName, template }: { schoolName: string; template: { admissionTitle: string; headerTagline?: string | null; headerLogoUrl?: string | null; headerAddressLine?: string | null; headerContactLine?: string | null } }) {
-  return <header className="bg-[#102a24] px-6 py-7 text-white sm:px-9"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#dcefe1] text-[#123b31]">{template.headerLogoUrl ? <img src={template.headerLogoUrl} alt={`${schoolName} logo`} referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={event => { event.currentTarget.style.display = "none"; }} /> : <School className="h-5 w-5" />}</span><div className="min-w-0"><p className="text-sm font-bold">{schoolName}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.14em] text-white/55">{template.headerTagline || "NSOS online admissions"}</p>{template.headerAddressLine && <p className="mt-3 text-xs leading-5 text-white/70">{template.headerAddressLine}</p>}{template.headerContactLine && <p className="text-xs leading-5 text-white/70">{template.headerContactLine}</p>}</div></div><div className="mt-7 border-t border-white/15 pt-5"><h1 className="max-w-xl text-3xl font-semibold tracking-[-.045em]">{template.admissionTitle}</h1><p className="mt-2 text-sm leading-6 text-white/65">Complete the details below. Your information goes straight to the school’s secure admissions queue.</p></div></header>;
+  return <header className="bg-[#102a24] px-6 py-7 text-white sm:px-9">
+    <div className="flex items-start gap-3">
+      <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#dcefe1] text-[#123b31]">
+        {template.headerLogoUrl ? <img src={template.headerLogoUrl} alt={`${schoolName} logo`} referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={event => { event.currentTarget.style.display = "none"; }} /> : <School className="h-5 w-5" />}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-bold">{schoolName}</p>
+        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[.14em] text-white/55">{template.headerTagline || "NSOS online admissions"}</p>
+        {template.headerAddressLine && <p className="mt-3 text-xs leading-5 text-white/70">{template.headerAddressLine}</p>}
+        {template.headerContactLine && <p className="text-xs leading-5 text-white/70">{template.headerContactLine}</p>}
+      </div>
+    </div>
+    <div className="mt-7 border-t border-white/15 pt-5">
+      <h1 className="max-w-xl text-3xl font-semibold tracking-[-.045em]">{template.admissionTitle}</h1>
+      <p className="mt-2 text-sm leading-6 text-white/65">Complete the details below. Your information goes straight to the school’s secure admissions queue.</p>
+    </div>
+  </header>;
 }
 
 export default function PublicAdmissions() {
@@ -42,6 +91,7 @@ export default function PublicAdmissions() {
   const setSupplementalData = (next: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => publicDraft.setValue(current => ({ ...current, supplementalData: typeof next === "function" ? next(current.supplementalData) : next }));
   const setDeclarationAccepted = (next: boolean) => publicDraft.setValue(current => ({ ...current, declarationAccepted: next }));
   const [applicationNo, setApplicationNo] = useState<number | null>(null);
+  const [documents, setDocuments] = useState<AdmissionEvidence[]>([]);
   const [aiAppliedFields, setAiAppliedFields] = useState<Set<string>>(new Set());
   const origins = trpc.nsos.admissions.originOptions.useQuery({ state: supplementalData.stateOfOrigin || undefined });
   const lgaStatus = originLgaLoadPresentation({ stateOfOrigin: supplementalData.stateOfOrigin, isLoading: origins.isLoading, isError: origins.isError });
@@ -50,14 +100,26 @@ export default function PublicAdmissions() {
 
   if (school.isLoading) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1]"><Loader2 className="h-6 w-6 animate-spin text-[#0f5c4f]" /></main>;
   if (!school.data) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1] p-5"><section className="max-w-md rounded-3xl border border-[#e0e5df] bg-white p-8 text-center shadow-sm"><School className="mx-auto h-7 w-7 text-[#0f5c4f]" /><h1 className="mt-4 text-xl font-semibold text-[#20342c]">Admissions link unavailable</h1><p className="mt-2 text-sm leading-6 text-[#758079]">Please return to your school’s official NSOS admissions link or contact the school office.</p></section></main>;
-  if (applicationNo) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1] p-5"><section className="max-w-lg rounded-[1.5rem] border border-[#e0e5df] bg-white p-8 text-center shadow-[0_16px_40px_rgba(16,45,35,0.06)]"><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#e2f1e8] text-[#176145]"><CheckCircle2 className="h-6 w-6" /></span><p className="mt-5 text-xs font-semibold uppercase tracking-[.14em] text-[#0f5c4f]">Application received</p><h1 className="mt-2 text-2xl font-semibold tracking-[-.04em] text-[#20342c]">Thank you for applying to {school.data.name}.</h1><p className="mt-3 text-sm leading-6 text-[#758079]">Your application has entered the admissions review queue. The school will contact the guardian details provided with the next steps.</p><p className="mono mt-5 rounded-xl bg-[#f1f4f0] p-3 text-xs text-[#486057]">Reference: NSOS-APP-{applicationNo}</p></section></main>;
+  if (applicationNo) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1] p-5"><section className="max-w-lg rounded-[1.5rem] border border-[#e0e5df] bg-white p-8 text-center shadow-[0_16px_40px_rgba(16,45,35,0.06)]"><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#e2f1e8] text-[#176145]"><CheckCircle2 className="h-6 w-6" /></span><p className="mt-5 text-xs font-semibold uppercase tracking-[.14em] text-[#0f5c4f]">Application received</p><h1 className="mt-2 text-2xl font-semibold tracking-[-.04em] text-[#20342c]">Thank you for applying to {school.data.name}.</h1><p className="mt-3 text-sm leading-6 text-[#758079]">Your application and requested evidence have entered the admissions review queue. The school will contact the guardian details provided with the next steps.</p><p className="mono mt-5 rounded-xl bg-[#f1f4f0] p-3 text-xs text-[#486057]">Reference: NSOS-APP-{applicationNo}</p></section></main>;
 
   const template = completionTemplate;
   const configuredFields = template.admissionFields.filter(field => templateFieldMeta[field]);
   const autoFillKeys = (["firstName", "lastName", "guardianName", "guardianPhone", "guardianEmail", ...configuredFields.filter(field => ["dateOfBirth", "gender", "residentialAddress", "priorSchool", "stateOfOrigin", "localGovernmentOfOrigin"].includes(field))] as Array<keyof BiodataAutofillProposal>);
   const validation = { firstName: validateName(form.firstName), lastName: validateName(form.lastName), guardianName: validateName(form.guardianName), guardianPhone: validatePhone(form.guardianPhone), guardianEmail: validateEmail(form.guardianEmail) };
-  const previewFields = [{ label: "Applicant first name", value: form.firstName }, { label: "Applicant last name", value: form.lastName }, { label: "Parent or guardian name", value: form.guardianName }, { label: "Parent or guardian phone", value: form.guardianPhone }, { label: "Parent or guardian email", value: form.guardianEmail }, ...configuredFields.map(field => ({ label: templateFieldMeta[field].label, value: supplementalData[field] })), { label: "Admissions note", value: form.notes }, ...(declarationAccepted ? [{ label: "Guardian declaration", value: "Confirmed" }] : [])];
+  const previewFields = [
+    { label: "Applicant first name", value: form.firstName },
+    { label: "Applicant last name", value: form.lastName },
+    { label: "Parent or guardian name", value: form.guardianName },
+    { label: "Parent or guardian phone", value: form.guardianPhone },
+    { label: "Parent or guardian email", value: form.guardianEmail },
+    ...configuredFields.map(field => ({ label: templateFieldMeta[field].label, value: supplementalData[field] })),
+    ...documents.map(document => ({ label: document.type === "passport_photo" ? "Passport photograph" : "Admission-fee receipt", value: document.fileName })),
+    { label: "Admissions note", value: form.notes },
+    ...(declarationAccepted ? [{ label: "Guardian declaration", value: "Confirmed" }] : []),
+  ];
+
   const updateSupplement = (field: string, value: string) => setSupplementalData(current => ({ ...current, [field]: value }));
+  const updateDocument = (type: AdmissionEvidence["type"], next?: AdmissionEvidence) => setDocuments(current => next ? [...current.filter(item => item.type !== type), next] : current.filter(item => item.type !== type));
   const renderConfiguredField = (field: string) => {
     const meta = templateFieldMeta[field];
     const fieldValidation = meta.type === "date" ? validateDate(supplementalData[field] ?? "") : validateCompletedValue(supplementalData[field] ?? "");
@@ -70,10 +132,15 @@ export default function PublicAdmissions() {
 
   const submitApplication = (event: FormEvent) => {
     event.preventDefault();
-    submit.mutate({ shortCode, ...form, guardianEmail: form.guardianEmail || undefined, priorSchool: supplementalData.priorSchool || undefined, dateOfBirth: supplementalData.dateOfBirth || undefined, gender: supplementalData.gender as "female" | "male" | "other" | "prefer_not_to_say" | undefined, notes: form.notes || undefined, supplementalData, declarationAccepted }, { onSuccess: result => { publicDraft.clearDraft(); setApplicationNo(result.applicationId); } });
+    submit.mutate({ shortCode, ...form, guardianEmail: form.guardianEmail || undefined, priorSchool: supplementalData.priorSchool || undefined, dateOfBirth: supplementalData.dateOfBirth || undefined, gender: supplementalData.gender as "female" | "male" | "other" | "prefer_not_to_say" | undefined, notes: form.notes || undefined, supplementalData, declarationAccepted, documents }, {
+      onSuccess: result => { publicDraft.clearDraft(); setDocuments([]); setApplicationNo(result.applicationId); },
+    });
   };
 
-  return <main className="min-h-screen bg-[#f5f6f1] px-5 py-7 sm:p-10"><div className="mx-auto max-w-3xl overflow-hidden rounded-[1.6rem] border border-[#dfe5df] bg-white shadow-[0_20px_60px_rgba(19,53,42,0.08)]"><PublicLetterhead schoolName={school.data.name} template={template} /><AiAppliedFieldProvider appliedFields={aiAppliedFields}><form onSubmit={submitApplication} className="p-6 sm:p-9">{publicDraft.restored && <LocalDraftNotice onClear={publicDraft.clearDraft} />}<BiodataDocumentAutofill allowedKeys={autoFillKeys} onApply={values => { setAiAppliedFields(suggestedFieldKeys(values)); setForm({ ...form, ...(values.firstName ? { firstName: values.firstName } : {}), ...(values.lastName ? { lastName: values.lastName } : {}), ...(values.guardianName ? { guardianName: values.guardianName } : {}), ...(values.guardianPhone ? { guardianPhone: values.guardianPhone } : {}), ...(values.guardianEmail ? { guardianEmail: values.guardianEmail } : {}) }); setSupplementalData(current => ({ ...current, ...Object.fromEntries(["dateOfBirth", "gender", "residentialAddress", "priorSchool", "stateOfOrigin", "localGovernmentOfOrigin"].flatMap(key => values[key as keyof BiodataAutofillProposal] ? [[key, values[key as keyof BiodataAutofillProposal]!]] : [])) })); }} /><div className="mt-5 grid gap-5 sm:grid-cols-2"><Field label="Applicant first name" validation={validation.firstName}><input required aria-invalid={validation.firstName.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.firstName)} value={form.firstName} onChange={event => setForm({ ...form, firstName: event.target.value })} /></Field><Field label="Applicant last name" validation={validation.lastName}><input required aria-invalid={validation.lastName.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.lastName)} value={form.lastName} onChange={event => setForm({ ...form, lastName: event.target.value })} /></Field><Field label="Parent or guardian name" validation={validation.guardianName}><input required aria-invalid={validation.guardianName.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.guardianName)} value={form.guardianName} onChange={event => setForm({ ...form, guardianName: event.target.value })} /></Field><Field label="Parent or guardian phone" validation={validation.guardianPhone}><input required aria-invalid={validation.guardianPhone.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.guardianPhone)} value={form.guardianPhone} onChange={event => setForm({ ...form, guardianPhone: event.target.value })} /></Field><Field label="Parent or guardian email" validation={validation.guardianEmail}><input type="email" aria-invalid={validation.guardianEmail.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.guardianEmail)} value={form.guardianEmail} onChange={event => setForm({ ...form, guardianEmail: event.target.value })} /></Field>{configuredFields.map(renderConfiguredField)}</div><Field label="Anything the admissions team should know"><textarea className={`${inputClass} mt-1 h-24 py-3`} value={form.notes} onChange={event => setForm({ ...form, notes: event.target.value })} /></Field>{template.requireDeclaration && <label className="mt-5 flex gap-3 rounded-xl border border-[#e1e7df] bg-[#f7faf6] p-4 text-xs leading-5 text-[#526259]"><input required type="checkbox" checked={declarationAccepted} onChange={event => setDeclarationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#0f5c4f]" /><span>{template.declarationText}</span></label>}{submit.error && <p className="mt-4 text-sm text-[#a13e38]">{submit.error.message}</p>}<div className="mt-6 flex flex-wrap gap-3"><ClearFormConfirmation onConfirm={() => { publicDraft.clearDraft(); setAiAppliedFields(new Set()); }} /><BiodataPreviewDialog title={`${school.data.name} ${template.admissionTitle}`} subtitle="Pre-submission admissions biodata preview" fields={previewFields} defaultHeader={biodataPdfHeaderDefaults({ organizationName: school.data.name, tagline: template.headerTagline ?? undefined, logoUrl: template.headerLogoUrl ?? undefined })} completionTimestamp={completionTimestamp} /><button disabled={submit.isPending} className="inline-flex items-center gap-2 rounded-xl bg-[#0f5c4f] px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Submit application <ArrowUpRight className="h-4 w-4" /></button></div></form></AiAppliedFieldProvider></div></main>;
+  return <main className="min-h-screen bg-[#f5f6f1] px-5 py-7 sm:p-10"><div className="mx-auto max-w-3xl overflow-hidden rounded-[1.6rem] border border-[#dfe5df] bg-white shadow-[0_20px_60px_rgba(19,53,42,0.08)]"><PublicLetterhead schoolName={school.data.name} template={template} /><AiAppliedFieldProvider appliedFields={aiAppliedFields}><form onSubmit={submitApplication} className="p-6 sm:p-9">{publicDraft.restored && <LocalDraftNotice onClear={publicDraft.clearDraft} />}<BiodataDocumentAutofill allowedKeys={autoFillKeys} onApply={values => { setAiAppliedFields(suggestedFieldKeys(values)); setForm({ ...form, ...(values.firstName ? { firstName: values.firstName } : {}), ...(values.lastName ? { lastName: values.lastName } : {}), ...(values.guardianName ? { guardianName: values.guardianName } : {}), ...(values.guardianPhone ? { guardianPhone: values.guardianPhone } : {}), ...(values.guardianEmail ? { guardianEmail: values.guardianEmail } : {}) }); setSupplementalData(current => ({ ...current, ...Object.fromEntries(["dateOfBirth", "gender", "residentialAddress", "priorSchool", "stateOfOrigin", "localGovernmentOfOrigin"].flatMap(key => values[key as keyof BiodataAutofillProposal] ? [[key, values[key as keyof BiodataAutofillProposal]!]] : [])) })); }} /><div className="mt-5 grid gap-5 sm:grid-cols-2"><Field label="Applicant first name" validation={validation.firstName}><input required aria-invalid={validation.firstName.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.firstName)} value={form.firstName} onChange={event => setForm({ ...form, firstName: event.target.value })} /></Field><Field label="Applicant last name" validation={validation.lastName}><input required aria-invalid={validation.lastName.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.lastName)} value={form.lastName} onChange={event => setForm({ ...form, lastName: event.target.value })} /></Field><Field label="Parent or guardian name" validation={validation.guardianName}><input required aria-invalid={validation.guardianName.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.guardianName)} value={form.guardianName} onChange={event => setForm({ ...form, guardianName: event.target.value })} /></Field><Field label="Parent or guardian phone" validation={validation.guardianPhone}><input required aria-invalid={validation.guardianPhone.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.guardianPhone)} value={form.guardianPhone} onChange={event => setForm({ ...form, guardianPhone: event.target.value })} /></Field><Field label="Parent or guardian email" validation={validation.guardianEmail}><input type="email" aria-invalid={validation.guardianEmail.state === "invalid" || undefined} className={validationControlClass(inputClass, validation.guardianEmail)} value={form.guardianEmail} onChange={event => setForm({ ...form, guardianEmail: event.target.value })} /></Field>{configuredFields.map(renderConfiguredField)}</div><Field label="Anything the admissions team should know"><textarea className={`${inputClass} mt-1 h-24 py-3`} value={form.notes} onChange={event => setForm({ ...form, notes: event.target.value })} /></Field>{(template.requirePassportPhoto || template.requireAdmissionFeeReceipt) && <div className="mt-5 grid gap-3"><p className="text-xs font-semibold text-[#43534c]">Required admissions uploads</p>{template.requirePassportPhoto && <AdmissionEvidenceUpload type="passport_photo" required value={documents.find(document => document.type === "passport_photo")} onChange={next => updateDocument("passport_photo", next)} />}{template.requireAdmissionFeeReceipt && <AdmissionEvidenceUpload type="admission_fee_receipt" required value={documents.find(document => document.type === "admission_fee_receipt")} onChange={next => updateDocument("admission_fee_receipt", next)} />}</div>}{template.requireDeclaration && <label className="mt-5 flex gap-3 rounded-xl border border-[#e1e7df] bg-[#f7faf6] p-4 text-xs leading-5 text-[#526259]"><input required type="checkbox" checked={declarationAccepted} onChange={event => setDeclarationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#0f5c4f]" /><span>{template.declarationText}</span></label>}{submit.error && <p className="mt-4 text-sm text-[#a13e38]">{submit.error.message}</p>}<div className="mt-6 flex flex-wrap gap-3"><ClearFormConfirmation onConfirm={() => { publicDraft.clearDraft(); setAiAppliedFields(new Set()); setDocuments([]); }} /><BiodataPreviewDialog title={`${school.data.name} ${template.admissionTitle}`} subtitle="Pre-submission admissions biodata preview" fields={previewFields} defaultHeader={biodataPdfHeaderDefaults({ organizationName: school.data.name, tagline: template.headerTagline ?? undefined, logoUrl: template.headerLogoUrl ?? undefined })} completionTimestamp={completionTimestamp} /><button disabled={submit.isPending} className="inline-flex items-center gap-2 rounded-xl bg-[#0f5c4f] px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Submit application <ArrowUpRight className="h-4 w-4" /></button></div></form></AiAppliedFieldProvider></div></main>;
 }
 
-function Field({ label, children, validation }: { label: string; children: React.ReactNode; validation?: InlineValidation }) { const aiApplied = useAiAppliedField(label); return <label className={`grid gap-1.5 text-xs font-semibold text-[#43534c] ${aiAppliedFieldClass(aiApplied)}`}><span className="flex items-center justify-between gap-2">{label}<span className="flex items-center gap-2"><AiAppliedFieldCue applied={aiApplied} /><InlineFieldFeedback validation={validation} /></span></span>{children}</label>; }
+function Field({ label, children, validation }: { label: string; children: React.ReactNode; validation?: InlineValidation }) {
+  const aiApplied = useAiAppliedField(label);
+  return <label className={`grid gap-1.5 text-xs font-semibold text-[#43534c] ${aiAppliedFieldClass(aiApplied)}`}><span className="flex items-center justify-between gap-2">{label}<span className="flex items-center gap-2"><AiAppliedFieldCue applied={aiApplied} /><InlineFieldFeedback validation={validation} /></span></span>{children}</label>;
+}

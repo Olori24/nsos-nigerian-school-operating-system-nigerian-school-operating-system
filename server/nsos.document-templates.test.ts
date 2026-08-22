@@ -31,6 +31,8 @@ const input = {
   admissionFields: ["dateOfBirth", "medicalHistory"] as const,
   declarationText: "I confirm this information is correct.",
   requireDeclaration: true,
+  requirePassportPhoto: true,
+  requireAdmissionFeeReceipt: true,
   termlyFeeTitle: "Termly fee guide",
   feeSchedule: [{ category: "Primary 1–3", tuitionFee: 18000 }],
 };
@@ -45,7 +47,7 @@ describe("NSOS document templates", () => {
     templateDb.saveSchoolDocumentTemplate.mockResolvedValue({ ...input, id: 2, updatedBy: 71 });
     await expect(appRouter.createCaller(context()).nsos.documentTemplates.save(input)).resolves.toMatchObject({ schoolId: 12, admissionTitle: "School admission form" });
     expect(templateDb.saveSchoolDocumentTemplate).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 12, updatedBy: 71, headerLogoUrl: "https://cdn.example.ng/logo.png", headerAddressLine: "Sample campus address", headerContactLine: "0800 000 0000 · admissions@example.ng", feeSchedule: [{ category: "Primary 1–3", tuitionFee: 18000 }] }));
-    expect(templateDb.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 12, actorUserId: 71, eventType: "school_document_template_saved", metadata: expect.objectContaining({ brandedHeaderConfigured: true }) }));
+    expect(templateDb.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 12, actorUserId: 71, eventType: "school_document_template_saved", metadata: expect.objectContaining({ brandedHeaderConfigured: true, requiresPassportPhoto: true, requiresAdmissionFeeReceipt: true }) }));
   });
 
   it("rejects a non-HTTPS logo URL before it reaches tenant storage", async () => {

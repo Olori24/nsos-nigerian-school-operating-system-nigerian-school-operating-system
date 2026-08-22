@@ -160,10 +160,10 @@ export const nsosRouter = router({
   documentTemplates: router({
     get: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolDocumentTemplate(input.schoolId)),
     save: websiteAdminProcedure
-      .input(schoolInput.extend({ admissionTitle: z.string().trim().min(3).max(160), headerTagline: z.string().trim().max(255).optional(), headerLogoUrl: z.string().trim().url().max(2048).refine(value => new URL(value).protocol === "https:", "Use an HTTPS logo URL.").optional(), headerAddressLine: z.string().trim().max(500).optional(), headerContactLine: z.string().trim().max(500).optional(), admissionFields: z.array(admissionTemplateFieldInput).max(15), declarationText: z.string().trim().max(3000).optional(), requireDeclaration: z.boolean(), termlyFeeTitle: z.string().trim().min(3).max(160), feeSchedule: z.array(feeScheduleInput).min(1).max(24) }))
+      .input(schoolInput.extend({ admissionTitle: z.string().trim().min(3).max(160), headerTagline: z.string().trim().max(255).optional(), headerLogoUrl: z.string().trim().url().max(2048).refine(value => new URL(value).protocol === "https:", "Use an HTTPS logo URL.").optional(), headerAddressLine: z.string().trim().max(500).optional(), headerContactLine: z.string().trim().max(500).optional(), admissionFields: z.array(admissionTemplateFieldInput).max(15), declarationText: z.string().trim().max(3000).optional(), requireDeclaration: z.boolean(), requirePassportPhoto: z.boolean(), requireAdmissionFeeReceipt: z.boolean(), termlyFeeTitle: z.string().trim().min(3).max(160), feeSchedule: z.array(feeScheduleInput).min(1).max(24) }))
       .mutation(async ({ ctx, input }) => {
         const result = await db.saveSchoolDocumentTemplate({ ...input, updatedBy: ctx.user.id });
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_document_template_saved", targetType: "school_document_template", metadata: { admissionFieldCount: input.admissionFields.length, feeBandCount: input.feeSchedule.length, requiresDeclaration: input.requireDeclaration, brandedHeaderConfigured: Boolean(input.headerLogoUrl || input.headerAddressLine || input.headerContactLine) } });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_document_template_saved", targetType: "school_document_template", metadata: { admissionFieldCount: input.admissionFields.length, feeBandCount: input.feeSchedule.length, requiresDeclaration: input.requireDeclaration, requiresPassportPhoto: input.requirePassportPhoto, requiresAdmissionFeeReceipt: input.requireAdmissionFeeReceipt, brandedHeaderConfigured: Boolean(input.headerLogoUrl || input.headerAddressLine || input.headerContactLine) } });
         return result;
       }),
     adoptFeeSchedule: websiteAdminProcedure
@@ -397,12 +397,15 @@ export const nsosRouter = router({
       .input(z.object({ upload: z.object({ base64: z.string().min(4).max(5_700_000), fileName: z.string().min(1).max(180), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]) }) }))
       .mutation(({ input }) => db.extractBiodataFromDocument(input.upload)),
     publicSubmit: publicProcedure
-      .input(z.object({ shortCode: z.string().min(2).max(32), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional(), supplementalData: z.record(z.string().min(1).max(40), z.string().trim().max(1000)).optional(), declarationAccepted: z.boolean().optional() }))
+      .input(z.object({ shortCode: z.string().min(2).max(32), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional(), supplementalData: z.record(z.string().min(1).max(40), z.string().trim().max(1000)).optional(), declarationAccepted: z.boolean().optional(), documents: z.array(z.object({ type: z.enum(["passport_photo", "admission_fee_receipt"]), fileName: z.string().trim().min(1).max(180), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]), base64: z.string().min(4).max(5_600_000) })).max(2).optional() }).superRefine((value, ctx) => { const types = value.documents?.map(document => document.type) ?? []; if (new Set(types).size !== types.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["documents"], message: "Upload only one file for each admissions requirement." }); }))
       .mutation(async ({ input }) => {
         const school = await db.getSchoolByCode(input.shortCode);
         if (!school) throw new TRPCError({ code: "NOT_FOUND", message: "School admissions link was not found." });
         const template = school.admissionTemplate ?? { admissionFields: [], requireDeclaration: false };
         if (template.requireDeclaration && input.declarationAccepted !== true) throw new TRPCError({ code: "BAD_REQUEST", message: "Please confirm the admissions declaration before submitting." });
+        const documentTypes = new Set((input.documents ?? []).map(document => document.type));
+        if (template.requirePassportPhoto && !documentTypes.has("passport_photo")) throw new TRPCError({ code: "BAD_REQUEST", message: "A passport photograph is required by this school." });
+        if (template.requireAdmissionFeeReceipt && !documentTypes.has("admission_fee_receipt")) throw new TRPCError({ code: "BAD_REQUEST", message: "An admission fee receipt is required by this school." });
         const enabledFields = new Set(template.admissionFields);
         const supplementalData = Object.fromEntries(Object.entries(input.supplementalData ?? {}).filter(([key, value]) => enabledFields.has(key as (typeof template.admissionFields)[number]) && typeof value === "string" && value.trim().length > 0));
         const origin = validatedNigerianOrigin({ stateOfOrigin: enabledFields.has("stateOfOrigin") ? supplementalData.stateOfOrigin : undefined, localGovernmentOfOrigin: enabledFields.has("localGovernmentOfOrigin") ? supplementalData.localGovernmentOfOrigin : undefined });
@@ -410,11 +413,11 @@ export const nsosRouter = router({
         delete supplementalData.localGovernmentOfOrigin;
         if (origin.stateOfOrigin) supplementalData.stateOfOrigin = origin.stateOfOrigin;
         if (origin.localGovernmentOfOrigin) supplementalData.localGovernmentOfOrigin = origin.localGovernmentOfOrigin;
-        const { shortCode: _shortCode, supplementalData: _supplementalData, declarationAccepted, dateOfBirth: submittedDateOfBirth, gender: submittedGender, priorSchool: submittedPriorSchool, ...application } = input;
+        const { shortCode: _shortCode, supplementalData: _supplementalData, declarationAccepted, documents, dateOfBirth: submittedDateOfBirth, gender: submittedGender, priorSchool: submittedPriorSchool, ...application } = input;
         const dateOfBirth = enabledFields.has("dateOfBirth") ? supplementalData.dateOfBirth ?? submittedDateOfBirth : undefined;
         const gender = enabledFields.has("gender") ? supplementalData.gender ?? submittedGender : undefined;
         const priorSchool = enabledFields.has("priorSchool") ? supplementalData.priorSchool ?? submittedPriorSchool : undefined;
-        return db.createApplication({ ...application, schoolId: school.id, dateOfBirth, gender, priorSchool, supplementalData, declarationAccepted: declarationAccepted === true });
+        return db.createPublicApplicationWithDocuments({ ...application, schoolId: school.id, dateOfBirth, gender, priorSchool, supplementalData, declarationAccepted: declarationAccepted === true, documents: documents ?? [] });
       }),
     list: managementProcedure("students.read")
       .input(schoolInput.extend({ status: z.enum(["submitted", "under_review", "accepted", "declined", "enrolled"]).optional() }))
@@ -429,13 +432,13 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_reviewed", targetType: "admissions_application", targetId: input.applicationId, metadata: { decision: input.status } });
         return result;
       }),
-    documents: managementProcedure("students.read").input(schoolInput.extend({ applicationId: z.number().int().positive() })).query(({ input }) => db.listAdmissionDocuments(input.applicationId)),
+    documents: managementProcedure("students.read").input(schoolInput.extend({ applicationId: z.number().int().positive() })).query(({ input }) => db.listAdmissionDocuments(input)),
     uploadDocument: managementProcedure("students.read")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), label: z.string().min(2).max(160), fileName: z.string().min(1).max(180), mimeType: z.string().min(3).max(120), base64: z.string().min(1).max(7_000_000) }))
       .mutation(({ input }) => db.uploadAdmissionDocument(input)),
     reviewDocument: managementProcedure("students.read")
       .input(schoolInput.extend({ documentId: z.number().int().positive(), status: z.enum(["verified", "rejected"]), reviewNote: z.string().max(2000).optional() }))
-      .mutation(({ ctx, input }) => db.reviewAdmissionDocument(input.documentId, input.status, input.reviewNote, ctx.user.id)),
+      .mutation(({ ctx, input }) => db.reviewAdmissionDocument({ ...input, reviewerId: ctx.user.id })),
     enrol: managementProcedure("students.write")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), admissionNo: z.string().min(2).max(64), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
       .mutation(async ({ ctx, input }) => {
