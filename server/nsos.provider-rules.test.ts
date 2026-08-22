@@ -10,9 +10,9 @@ describe("NSOS provider configuration rules", () => {
     expect(providerRequiresCredentials("in_app")).toBe(false);
   });
 
-  it("does not describe an external provider as ready without credentials", () => {
+  it("does not describe an external provider as ready without credentials and keeps internal in-app delivery credential-free", () => {
     expect(providerReadiness("payment", "paystack", false, "ready")).toBe("Credentials required");
-    expect(providerReadiness("notification", "in_app", false, "ready")).toBe("Ready for notification adapter");
+    expect(providerReadiness("in_app", "in_app", false, "ready")).toBe("Ready for in-app messages");
     expect(providerReadiness("payment", "flutterwave", true, "disabled")).toBe("Disabled");
   });
 
