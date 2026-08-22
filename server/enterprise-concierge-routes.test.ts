@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getTenantOnboardingStatus: vi.fn(), saveCopilotRecentSearch: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getTenantOnboardingStatus: vi.fn(), getLearningOperatingType: vi.fn(), saveCopilotRecentSearch: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 const setupAgent = vi.hoisted(() => ({ buildSetupAgentAssessment: vi.fn() }));
 const concierge = vi.hoisted(() => ({ buildEnterpriseConciergePlan: vi.fn() }));
 vi.mock("./db", () => db);
@@ -21,6 +21,7 @@ describe("NSOS Enterprise Concierge route", () => {
     vi.clearAllMocks();
     db.getSchoolMembership.mockResolvedValue({ schoolId: 16, userId: 91, role: "parent", status: "active" });
     db.consumeSharedRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 600 });
+    db.getLearningOperatingType.mockResolvedValue("school");
     db.saveCopilotRecentSearch.mockResolvedValue(undefined);
     db.recordSecurityAuditEvent.mockResolvedValue(undefined);
     concierge.buildEnterpriseConciergePlan.mockResolvedValue(safePlan);
@@ -30,7 +31,7 @@ describe("NSOS Enterprise Concierge route", () => {
     const privateRequest = "Show a particular guardian's outstanding invoice";
     const result = await appRouter.createCaller(context()).nsos.enterpriseConcierge.plan({ schoolId: 16, request: privateRequest });
     expect(result).toEqual(safePlan);
-    expect(concierge.buildEnterpriseConciergePlan).toHaveBeenCalledWith({ request: privateRequest, role: "parent", assessment: undefined });
+    expect(concierge.buildEnterpriseConciergePlan).toHaveBeenCalledWith({ request: privateRequest, role: "parent", assessment: undefined, operatingType: "school" });
     expect(db.getTenantOnboardingStatus).not.toHaveBeenCalled();
     expect(db.saveCopilotRecentSearch).toHaveBeenCalledWith({ userId: 91, schoolId: 16, query: privateRequest, destinationId: "portal" });
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 16, actorUserId: 91, eventType: "enterprise_concierge_plan_generated", targetId: "portal", metadata: expect.not.objectContaining({ request: expect.anything() }) }));
@@ -39,13 +40,14 @@ describe("NSOS Enterprise Concierge route", () => {
 
   it("reads only the management readiness aggregate for a school owner and still returns a plan rather than executing a change", async () => {
     db.getSchoolMembership.mockResolvedValue({ schoolId: 16, userId: 91, role: "owner", status: "active" });
+    db.getLearningOperatingType.mockResolvedValue("online_training_provider");
     db.getTenantOnboardingStatus.mockResolvedValue({ schoolId: 16, readiness: "safe aggregate" });
     const assessment = { completionPercent: 45, actions: [] };
     setupAgent.buildSetupAgentAssessment.mockReturnValue(assessment);
     concierge.buildEnterpriseConciergePlan.mockResolvedValue({ ...safePlan, action: { kind: "prepare", id: "finance", label: "Prepare finance", destination: null, requiresConfirmation: true } });
     const result = await appRouter.createCaller(context()).nsos.enterpriseConcierge.plan({ schoolId: 16, request: "Prepare our approved term fees" });
     expect(db.getTenantOnboardingStatus).toHaveBeenCalledWith(16);
-    expect(concierge.buildEnterpriseConciergePlan).toHaveBeenCalledWith(expect.objectContaining({ role: "owner", assessment }));
+    expect(concierge.buildEnterpriseConciergePlan).toHaveBeenCalledWith(expect.objectContaining({ role: "owner", assessment, operatingType: "online_training_provider" }));
     expect(result.action.requiresConfirmation).toBe(true);
     expect(result.action.kind).toBe("prepare");
   });

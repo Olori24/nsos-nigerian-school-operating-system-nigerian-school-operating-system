@@ -21,6 +21,14 @@ describe("Enterprise Concierge planning service", () => {
     expect(plan).toMatchObject({ source: "ai", action: { kind: "guidance", id: "portal", destination: "portal", requiresConfirmation: false } });
   });
 
+  it("permits a Programmes handoff only for an owner/admin allowlist and grounds the model in the safe operating type", async () => {
+    vi.mocked(destinationsForRole).mockImplementation(role => role === "owner" ? [{ id: "learning", label: "Programmes", description: "Manage approved internal programmes.", keywords: ["programme", "cohort", "training"] }, { id: "overview", label: "Overview", description: "Review operations.", keywords: ["overview"] }] : [{ id: "portal", label: "Family portal", description: "View linked family information.", keywords: ["fee", "payment", "family"] }]);
+    vi.mocked(invokeLLM).mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ reply: "Open Programmes to review the training workflow.", actionKind: "guidance", actionId: "learning", nextSteps: ["Review the protected programme workspace."] }) } }] } as any);
+    const plan = await buildEnterpriseConciergePlan({ request: "How do I manage a vocational training cohort?", role: "owner", operatingType: "vocational_institute" });
+    expect(plan).toMatchObject({ source: "ai", action: { kind: "guidance", id: "learning", destination: "learning" } });
+    expect(JSON.stringify(vi.mocked(invokeLLM).mock.calls)).toContain("vocational_institute");
+  });
+
   it("rejects a role-inappropriate or unsupported model action and returns deterministic safe guidance", async () => {
     vi.mocked(invokeLLM).mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ reply: "I activated the fees.", actionKind: "prepare", actionId: "finance", nextSteps: ["Done."] }) } }] } as any);
     const plan = await buildEnterpriseConciergePlan({ request: "Where can I view family fees?", role: "parent" });

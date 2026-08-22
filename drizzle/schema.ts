@@ -119,6 +119,7 @@ export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   shortCode: varchar("shortCode", { length: 32 }).notNull().unique(),
+  operatingType: mysqlEnum("operatingType", ["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider"]).notNull().default("school"),
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 48 }),
   address: text("address"),
@@ -130,6 +131,117 @@ export const schools = mysqlTable("schools", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+export const learningPrograms = mysqlTable(
+  "learningPrograms",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    code: varchar("code", { length: 48 }),
+    description: text("description"),
+    deliveryMode: mysqlEnum("deliveryMode", ["in_person", "live_online", "self_paced", "blended"]).notNull().default("in_person"),
+    durationLabel: varchar("durationLabel", { length: 120 }),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    activatedBy: int("activatedBy"),
+    activatedAt: timestamp("activatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolTitle: uniqueIndex("learning_program_school_title_unique").on(table.schoolId, table.title), schoolStatus: index("learning_program_school_status_idx").on(table.schoolId, table.status) }),
+);
+
+export const programCohorts = mysqlTable(
+  "programCohorts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    startsOn: date("startsOn"),
+    endsOn: date("endsOn"),
+    deliveryReference: varchar("deliveryReference", { length: 255 }),
+    status: mysqlEnum("status", ["planning", "active", "closed", "cancelled"]).notNull().default("planning"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgramName: uniqueIndex("program_cohort_school_program_name_unique").on(table.schoolId, table.programId, table.name), schoolProgram: index("program_cohort_school_program_idx").on(table.schoolId, table.programId) }),
+);
+
+export const programInstructorAssignments = mysqlTable(
+  "programInstructorAssignments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    cohortId: int("cohortId"),
+    staffId: int("staffId").notNull(),
+    assignmentRole: mysqlEnum("assignmentRole", ["lead", "assistant"]).notNull().default("lead"),
+    status: mysqlEnum("status", ["active", "ended"]).notNull().default("active"),
+    assignedBy: int("assignedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgram: index("program_instructor_school_program_idx").on(table.schoolId, table.programId), schoolStaff: index("program_instructor_school_staff_idx").on(table.schoolId, table.staffId) }),
+);
+
+export const programEnrollments = mysqlTable(
+  "programEnrollments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    cohortId: int("cohortId"),
+    studentId: int("studentId").notNull(),
+    status: mysqlEnum("status", ["pending", "active", "completed", "withdrawn"]).notNull().default("pending"),
+    enrolledOn: date("enrolledOn").notNull(),
+    completionConfirmedBy: int("completionConfirmedBy"),
+    completionConfirmedAt: timestamp("completionConfirmedAt"),
+    completionNote: varchar("completionNote", { length: 500 }),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgram: index("program_enrolment_school_program_idx").on(table.schoolId, table.programId), schoolStudent: index("program_enrolment_school_student_idx").on(table.schoolId, table.studentId), schoolCohort: index("program_enrolment_school_cohort_idx").on(table.schoolId, table.cohortId) }),
+);
+
+export const programAttendanceRecords = mysqlTable(
+  "programAttendanceRecords",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    enrollmentId: int("enrollmentId").notNull(),
+    attendanceDate: date("attendanceDate").notNull(),
+    status: mysqlEnum("status", ["present", "late", "absent", "excused"]).notNull(),
+    note: varchar("note", { length: 500 }),
+    recordedBy: int("recordedBy").notNull(),
+    recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+  },
+  table => ({ enrolmentDate: uniqueIndex("program_attendance_enrolment_date_unique").on(table.enrollmentId, table.attendanceDate), schoolDate: index("program_attendance_school_date_idx").on(table.schoolId, table.attendanceDate) }),
+);
+
+export const programFeeStructures = mysqlTable(
+  "programFeeStructures",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    cohortId: int("cohortId"),
+    name: varchar("name", { length: 180 }).notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    mandatory: boolean("mandatory").notNull().default(true),
+    dueOn: date("dueOn"),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    activatedBy: int("activatedBy"),
+    activatedAt: timestamp("activatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgram: index("program_fee_school_program_idx").on(table.schoolId, table.programId), schoolCohort: index("program_fee_school_cohort_idx").on(table.schoolId, table.cohortId) }),
+);
 
 export const subscriptionPlans = mysqlTable(
   "subscriptionPlans",

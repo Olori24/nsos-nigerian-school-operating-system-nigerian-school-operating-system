@@ -226,3 +226,9 @@
 - [x] Replace static action dead ends in core management surfaces with clear live state, a useful recovery path, or an honest unavailable status rather than generic placeholder feedback.
 - [x] Add prompt-led Concierge interface history, suggested goals, action handoffs to existing protected workspaces, and enterprise-grade loading, error, and audit visibility.
 - [x] Add regression coverage for role scoping, tenant isolation, prompt validation, hallucination-resistant action allowlists, confirmation gates, static-control remediation, and accessible command interaction.
+- [x] Define and document the NSOS multi-provider model covering schools, vocational institutes, coaching centres, and online training providers with explicit tenant isolation and data boundaries.
+- [x] Add an owner-approved tenant operating type and programme terminology that preserves existing school sessions, terms, classes, students, and guardian workflows.
+- [x] Implement tenant-scoped programmes, cohorts, instructor assignment, learner enrolment, attendance, fee, and completion-status foundations without fabricating learner, instructor, credential, or certificate data.
+- [x] Build responsive owner/admin programme operations and learner-facing progress views with explicit empty, review, confirmation, and unavailable states.
+- [x] Extend the Enterprise Concierge and onboarding guidance so it provides only role-permitted workflows and terminology appropriate to the tenant operating type.
+- [x] Add authorization, tenant-isolation, legacy-school compatibility, and programme-lifecycle regression coverage; validate and publish the expansion safely.

@@ -11,8 +11,8 @@ import { toast } from "sonner";
 type EnterpriseConciergePlan = { reply: string; action: { kind: "guidance" | "prepare" | "confirmation_required" | "unavailable"; id: string; label: string; destination: string | null; requiresConfirmation: boolean }; nextSteps: string[]; guardrail: string; source: "ai" | "guided" };
 
 const promptsByRole: Record<string, string[]> = {
-  owner: ["Where can I review admissions?", "How do I update our school website?", "Show me finance reporting."],
-  admin: ["Where can I review admissions?", "How do I update our school website?", "Show me attendance."],
+  owner: ["Help me set up an approved training programme.", "Where can I review admissions?", "Show me finance reporting."],
+  admin: ["Where do I manage cohorts and instructors?", "Where can I review admissions?", "Show me attendance."],
   staff: ["Where can I review admissions?", "How do I manage student records?", "Show me staff duties."],
   teacher: ["Where do I record attendance?", "Where do I enter results?", "How do I find my classes?"],
   finance: ["Where do I review invoices?", "How do I find payments?", "Show me finance reporting."],

@@ -1,7 +1,7 @@
 import { invokeLLM } from "./_core/llm";
 import type { SchoolRole } from "./roles";
 
-export type CopilotDestinationId = "overview" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "portal" | "communications" | "reports" | "website" | "account";
+export type CopilotDestinationId = "overview" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "account";
 
 export type CopilotDestination = {
   id: CopilotDestinationId;
@@ -20,6 +20,7 @@ export const copilotDestinations: readonly CopilotDestination[] = [
   { id: "results", label: "Results", description: "Enter, approve, publish, and view assessment results.", roles: ["owner", "admin", "teacher"], keywords: ["result", "score", "assessment", "exam", "grade"] },
   { id: "finance", label: "Finance", description: "Work with fee structures, invoices, payments, and balances.", roles: ["owner", "admin", "finance"], keywords: ["fee", "finance", "invoice", "payment", "receipt", "balance"] },
   { id: "staff", label: "Staff & HR", description: "Manage staff profiles, duties, leave, payroll, and departments.", roles: ["owner", "admin", "staff"], keywords: ["staff", "teacher", "payroll", "leave", "department", "duty"] },
+  { id: "learning", label: "Programmes", description: "Manage approved internal programmes, cohorts, instructors, learner enrolment, and human-confirmed completion.", roles: ["owner", "admin"], keywords: ["programme", "program", "cohort", "course", "training", "vocational", "coaching", "bootcamp", "instructor", "facilitator", "completion"] },
   { id: "portal", label: "Family portal", description: "View linked family information, fees, results, and updates.", roles: ["parent", "student"], keywords: ["my child", "my ward", "my result", "my fee", "family", "portal"] },
   { id: "communications", label: "Communications", description: "Read school updates and manage permitted announcements.", roles: ["owner", "admin", "staff", "teacher", "finance", "parent", "student"], keywords: ["message", "announcement", "notice", "communication", "update"] },
   { id: "reports", label: "Reports", description: "Review leadership and finance reporting.", roles: ["owner", "admin", "finance"], keywords: ["report", "analytics", "export", "revenue"] },

@@ -35,6 +35,11 @@ async function accessSchool(userId: number, schoolId: number, permission: string
   return membership;
 }
 
+async function consumeLearningOperationsRate(schoolId: number, userId: number, route: string) {
+  const rate = await db.consumeSharedRateLimit({ namespace: "nsos-learning-operations", route, clientKey: `${schoolId}:${userId}`, limit: 18, windowMs: 10 * 60_000 });
+  if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Learning operations are taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+}
+
 const managementProcedure = (permission: string) =>
   protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
     const membership = await accessSchool(ctx.user.id, input.schoolId, permission);
@@ -106,7 +111,7 @@ export const nsosRouter = router({
   schools: router({
     list: protectedProcedure.query(({ ctx }) => db.listUserSchools(ctx.user.id)),
     create: protectedProcedure
-      .input(z.object({ name: z.string().min(3).max(255), shortCode: z.string().min(2).max(32), state: z.string().max(100).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional() }))
+      .input(z.object({ name: z.string().min(3).max(255), shortCode: z.string().min(2).max(32), operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider"]).default("school"), state: z.string().max(100).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional() }))
       .mutation(({ ctx, input }) => db.createSchool({ ...input, shortCode: input.shortCode.trim().toUpperCase(), createdBy: ctx.user.id })),
     context: protectedProcedure.input(schoolInput).query(async ({ ctx, input }) => {
       const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
@@ -256,7 +261,8 @@ export const nsosRouter = router({
         const rate = await db.consumeSharedRateLimit({ namespace: "nsos-enterprise-concierge", route: "plan", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 18, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Enterprise Concierge is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const assessment = isManagementRole(role) ? buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId)) : undefined;
-        const plan = await buildEnterpriseConciergePlan({ request: input.request, role, assessment });
+        const operatingType = await db.getLearningOperatingType(input.schoolId);
+        const plan = await buildEnterpriseConciergePlan({ request: input.request, role, assessment, operatingType });
         try {
           await db.saveCopilotRecentSearch({ userId: ctx.user.id, schoolId: input.schoolId, query: input.request, destinationId: plan.action.destination });
         } catch (error) {
@@ -323,6 +329,90 @@ export const nsosRouter = router({
         const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "finance-draft-activate", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         return db.activateCopilotSetupAgentFinanceDraft({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, approvedBy: ctx.user.id, approvalNote: input.approvalNote });
+      }),
+  }),
+
+  learningOperations: router({
+    workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getLearningOperationsWorkspace(input.schoolId)),
+    setOperatingType: onboardingAdminProcedure
+      .input(schoolInput.extend({ operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider"]), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "operating-type");
+        const result = await db.updateLearningOperatingType(input);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_operating_type_updated", targetType: "learning_organisation", metadata: { operatingType: input.operatingType, confirmationRequired: true } });
+        return result;
+      }),
+    createProgram: onboardingAdminProcedure
+      .input(schoolInput.extend({ title: z.string().trim().min(3).max(180), code: z.string().trim().max(48).optional(), description: z.string().trim().max(4000).optional(), deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]), durationLabel: z.string().trim().max(120).optional(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "program-create");
+        const result = await db.createLearningProgram({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_draft_created", targetType: "learning_program", targetId: result.programId, metadata: { deliveryMode: input.deliveryMode, codeProvided: Boolean(input.code), descriptionProvided: Boolean(input.description), confirmationRequired: true } });
+        return result;
+      }),
+    activateProgram: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "program-activate");
+        const result = await db.activateLearningProgram({ schoolId: input.schoolId, programId: input.programId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_activated", targetType: "learning_program", targetId: input.programId, metadata: { confirmationRequired: true, publicPublication: false, paymentCollection: false } });
+        return result;
+      }),
+    createCohort: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), name: z.string().trim().min(2).max(160), startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), deliveryReference: z.string().trim().max(255).optional(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "cohort-create");
+        const result = await db.createProgramCohort({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_cohort_created", targetType: "program_cohort", targetId: result.cohortId, metadata: { programId: input.programId, datesProvided: Boolean(input.startsOn || input.endsOn), deliveryReferenceProvided: Boolean(input.deliveryReference), confirmationRequired: true } });
+        return result;
+      }),
+    assignInstructor: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), cohortId: z.number().int().positive().optional(), staffId: z.number().int().positive(), assignmentRole: z.enum(["lead", "assistant"]), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "instructor-assign");
+        const result = await db.assignProgramInstructor({ ...input, assignedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_instructor_assigned", targetType: "program_instructor_assignment", targetId: result.assignmentId, metadata: { programId: input.programId, cohortScoped: Boolean(input.cohortId), assignmentRole: input.assignmentRole, confirmationRequired: true, accountCreated: false } });
+        return result;
+      }),
+    enrolLearner: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), cohortId: z.number().int().positive().optional(), studentId: z.number().int().positive(), enrolledOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learner-enrol");
+        const result = await db.enrolLearnerInProgram({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_learner_enrolled", targetType: "program_enrollment", targetId: result.enrollmentId, metadata: { programId: input.programId, cohortScoped: Boolean(input.cohortId), confirmationRequired: true, accountCreated: false, invitationSent: false } });
+        return result;
+      }),
+    confirmCompletion: onboardingAdminProcedure
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), completionNote: z.string().trim().max(500).optional(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "completion-confirm");
+        const result = await db.confirmProgramCompletion({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, completionNote: input.completionNote, confirmedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_completion_confirmed", targetType: "program_enrollment", targetId: input.enrollmentId, metadata: { completionNoteProvided: Boolean(input.completionNote), confirmationRequired: true, credentialIssued: false } });
+        return result;
+      }),
+    recordAttendance: onboardingAdminProcedure
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), attendanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["present", "late", "absent", "excused"]), note: z.string().trim().max(500).optional(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "attendance-record");
+        const result = await db.recordProgramAttendance({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, attendanceDate: input.attendanceDate, status: input.status, note: input.note, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_attendance_recorded", targetType: "program_enrollment", targetId: input.enrollmentId, metadata: { attendanceDate: input.attendanceDate, status: input.status, noteProvided: Boolean(input.note), confirmationRequired: true } });
+        return result;
+      }),
+    createFeeStructure: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), cohortId: z.number().int().positive().optional(), name: z.string().trim().min(2).max(180), amount: z.number().positive().max(100_000_000), mandatory: z.boolean(), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "fee-structure-create");
+        const result = await db.createProgramFeeStructure({ schoolId: input.schoolId, programId: input.programId, cohortId: input.cohortId, name: input.name, amount: input.amount.toFixed(2), mandatory: input.mandatory, dueOn: input.dueOn, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_fee_structure_draft_created", targetType: "program_fee_structure", targetId: result.feeStructureId, metadata: { programId: input.programId, cohortScoped: Boolean(input.cohortId), mandatory: input.mandatory, dueDateProvided: Boolean(input.dueOn), confirmationRequired: true, invoiceCreated: false, paymentCollection: false } });
+        return result;
+      }),
+    activateFeeStructure: onboardingAdminProcedure
+      .input(schoolInput.extend({ feeStructureId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "fee-structure-activate");
+        const result = await db.activateProgramFeeStructure({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_fee_structure_activated", targetType: "program_fee_structure", targetId: input.feeStructureId, metadata: { confirmationRequired: true, invoiceCreated: false, paymentCollection: false } });
+        return result;
       }),
   }),
 

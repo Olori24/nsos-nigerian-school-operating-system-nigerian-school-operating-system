@@ -46,6 +46,12 @@ import {
   paymentEvidence,
   paymentPromises,
   platformBillingRecords,
+  learningPrograms,
+  programCohorts,
+  programAttendanceRecords,
+  programEnrollments,
+  programFeeStructures,
+  programInstructorAssignments,
   providerConfigurations,
   rateLimitBuckets,
   resultPublications,
@@ -3156,12 +3162,165 @@ export async function getGuardianPortal(schoolId: number, userId: number) {
 export async function getStudentPortal(schoolId: number, userId: number) {
   const db = await database();
   const student = (await db.select().from(studentProfiles).where(and(eq(studentProfiles.schoolId, schoolId), eq(studentProfiles.userId, userId))).limit(1))[0];
-  if (!student) return { student: null, attendance: [], invoices: [], reportCards: [], announcements: [] };
-  const [attendance, invoiceRows, reportCards, portalAnnouncements] = await Promise.all([
+  if (!student) return { student: null, attendance: [], invoices: [], reportCards: [], announcements: [], programProgress: [] };
+  const [attendance, invoiceRows, reportCards, portalAnnouncements, programRows] = await Promise.all([
     db.select().from(attendanceRecords).where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.studentId, student.id))).orderBy(desc(attendanceRecords.attendanceDate)),
     db.select().from(invoices).where(and(eq(invoices.schoolId, schoolId), eq(invoices.studentId, student.id))).orderBy(desc(invoices.createdAt)),
     getPublishedReportCards(schoolId, [student.id]),
     listFamilyPortalAnnouncements(schoolId, "students"),
+    db.select().from(programEnrollments).where(and(eq(programEnrollments.schoolId, schoolId), eq(programEnrollments.studentId, student.id))).orderBy(desc(programEnrollments.createdAt)),
   ]);
-  return { student, attendance, invoices: invoiceRows, reportCards, announcements: portalAnnouncements };
+  const programIds = Array.from(new Set(programRows.map(item => item.programId)));
+  const enrollmentIds = programRows.map(item => item.id);
+  const [programs, cohorts, programAttendance] = await Promise.all([
+    programIds.length ? db.select().from(learningPrograms).where(and(eq(learningPrograms.schoolId, schoolId), inArray(learningPrograms.id, programIds))) : Promise.resolve([]),
+    programRows.some(item => item.cohortId) ? db.select().from(programCohorts).where(and(eq(programCohorts.schoolId, schoolId), inArray(programCohorts.id, programRows.flatMap(item => item.cohortId ? [item.cohortId] : [])))) : Promise.resolve([]),
+    enrollmentIds.length ? db.select().from(programAttendanceRecords).where(and(eq(programAttendanceRecords.schoolId, schoolId), inArray(programAttendanceRecords.enrollmentId, enrollmentIds))).orderBy(desc(programAttendanceRecords.attendanceDate)) : Promise.resolve([]),
+  ]);
+  const programById = new Map(programs.map(item => [item.id, item]));
+  const cohortById = new Map(cohorts.map(item => [item.id, item]));
+  const programProgress = programRows.map(enrollment => {
+    const attendanceEntries = programAttendance.filter(item => item.enrollmentId === enrollment.id);
+    const attended = attendanceEntries.filter(item => item.status === "present" || item.status === "late").length;
+    return { id: enrollment.id, status: enrollment.status, enrolledOn: enrollment.enrolledOn, completedAt: enrollment.completionConfirmedAt, programTitle: programById.get(enrollment.programId)?.title ?? "Programme unavailable", deliveryMode: programById.get(enrollment.programId)?.deliveryMode ?? null, cohortName: enrollment.cohortId ? cohortById.get(enrollment.cohortId)?.name ?? null : null, attendance: { total: attendanceEntries.length, attended, lastRecordedOn: attendanceEntries[0]?.attendanceDate ?? null } };
+  });
+  return { student, attendance, invoices: invoiceRows, reportCards, announcements: portalAnnouncements, programProgress };
+}
+
+export type LearningOperatingType = "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider";
+
+export async function updateLearningOperatingType(input: { schoolId: number; operatingType: LearningOperatingType }) {
+  const db = await database();
+  const school = (await db.select({ id: schools.id }).from(schools).where(eq(schools.id, input.schoolId)).limit(1))[0];
+  if (!school) throw new Error("Learning organisation not found.");
+  await db.update(schools).set({ operatingType: input.operatingType }).where(eq(schools.id, input.schoolId));
+  return { success: true, operatingType: input.operatingType };
+}
+
+export async function getLearningOperatingType(schoolId: number): Promise<LearningOperatingType> {
+  const school = (await (await database()).select({ operatingType: schools.operatingType }).from(schools).where(eq(schools.id, schoolId)).limit(1))[0];
+  return school?.operatingType ?? "school";
+}
+
+export async function getLearningOperationsWorkspace(schoolId: number) {
+  const db = await database();
+  const [school, programs, cohorts, assignments, enrolments, attendance, fees, staff, learners] = await Promise.all([
+    db.select({ operatingType: schools.operatingType }).from(schools).where(eq(schools.id, schoolId)).limit(1),
+    db.select().from(learningPrograms).where(eq(learningPrograms.schoolId, schoolId)).orderBy(desc(learningPrograms.createdAt)),
+    db.select().from(programCohorts).where(eq(programCohorts.schoolId, schoolId)).orderBy(desc(programCohorts.createdAt)),
+    db.select().from(programInstructorAssignments).where(eq(programInstructorAssignments.schoolId, schoolId)).orderBy(desc(programInstructorAssignments.createdAt)),
+    db.select().from(programEnrollments).where(eq(programEnrollments.schoolId, schoolId)).orderBy(desc(programEnrollments.createdAt)),
+    db.select().from(programAttendanceRecords).where(eq(programAttendanceRecords.schoolId, schoolId)).orderBy(desc(programAttendanceRecords.attendanceDate)),
+    db.select().from(programFeeStructures).where(eq(programFeeStructures.schoolId, schoolId)).orderBy(desc(programFeeStructures.createdAt)),
+    db.select({ id: staffProfiles.id, firstName: staffProfiles.firstName, lastName: staffProfiles.lastName, jobTitle: staffProfiles.jobTitle, employmentStatus: staffProfiles.employmentStatus }).from(staffProfiles).where(eq(staffProfiles.schoolId, schoolId)).orderBy(staffProfiles.lastName),
+    db.select({ id: studentProfiles.id, firstName: studentProfiles.firstName, lastName: studentProfiles.lastName, admissionNo: studentProfiles.admissionNo, status: studentProfiles.status }).from(studentProfiles).where(eq(studentProfiles.schoolId, schoolId)).orderBy(studentProfiles.lastName),
+  ]);
+  const programById = new Map(programs.map(item => [item.id, item]));
+  const cohortById = new Map(cohorts.map(item => [item.id, item]));
+  const staffById = new Map(staff.map(item => [item.id, item]));
+  const learnerById = new Map(learners.map(item => [item.id, item]));
+  return {
+    operatingType: school[0]?.operatingType ?? "school",
+    programs: programs.map(item => ({ ...item, cohorts: cohorts.filter(cohort => cohort.programId === item.id).length, activeEnrolments: enrolments.filter(enrolment => enrolment.programId === item.id && enrolment.status === "active").length, activeInstructors: assignments.filter(assignment => assignment.programId === item.id && assignment.status === "active").length, activeFeeStructures: fees.filter(fee => fee.programId === item.id && fee.status === "active").length })),
+    cohorts: cohorts.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", activeEnrolments: enrolments.filter(enrolment => enrolment.cohortId === item.id && enrolment.status === "active").length })),
+    assignments: assignments.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", cohortName: item.cohortId ? cohortById.get(item.cohortId)?.name ?? "Unavailable cohort" : null, staffName: staffById.get(item.staffId) ? `${staffById.get(item.staffId)!.firstName} ${staffById.get(item.staffId)!.lastName}` : "Unavailable instructor" })),
+    enrolments: enrolments.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", cohortName: item.cohortId ? cohortById.get(item.cohortId)?.name ?? "Unavailable cohort" : null, learnerName: learnerById.get(item.studentId) ? `${learnerById.get(item.studentId)!.firstName} ${learnerById.get(item.studentId)!.lastName}` : "Unavailable learner" })),
+    attendance: attendance.map(item => ({ ...item, learnerName: learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.studentId ?? -1) ? `${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.firstName} ${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.lastName}` : "Unavailable learner", programTitle: programById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.programId ?? -1)?.title ?? "Unavailable programme" })),
+    fees: fees.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", cohortName: item.cohortId ? cohortById.get(item.cohortId)?.name ?? "Unavailable cohort" : null })),
+    staff,
+    learners,
+  };
+}
+
+export async function createLearningProgram(input: { schoolId: number; title: string; code?: string; description?: string; deliveryMode: "in_person" | "live_online" | "self_paced" | "blended"; durationLabel?: string; createdBy: number }) {
+  const db = await database();
+  const existing = (await db.select({ id: learningPrograms.id }).from(learningPrograms).where(and(eq(learningPrograms.schoolId, input.schoolId), eq(learningPrograms.title, input.title))).limit(1))[0];
+  if (existing) throw new Error("A programme with this title already exists for this learning organisation.");
+  const result = await db.insert(learningPrograms).values({ ...input, code: input.code || null, description: input.description || null, durationLabel: input.durationLabel || null });
+  return { programId: Number(result[0].insertId), status: "draft" as const };
+}
+
+export async function activateLearningProgram(input: { schoolId: number; programId: number; activatedBy: number }) {
+  const db = await database();
+  const program = (await db.select().from(learningPrograms).where(and(eq(learningPrograms.id, input.programId), eq(learningPrograms.schoolId, input.schoolId))).limit(1))[0];
+  if (!program) throw new Error("Programme not found in this learning organisation.");
+  if (program.status === "archived") throw new Error("An archived programme cannot be activated.");
+  await db.update(learningPrograms).set({ status: "active", activatedBy: input.activatedBy, activatedAt: new Date() }).where(and(eq(learningPrograms.id, input.programId), eq(learningPrograms.schoolId, input.schoolId)));
+  return { success: true, status: "active" as const };
+}
+
+async function requireProgramReference(input: { schoolId: number; programId: number; cohortId?: number; staffId?: number; studentId?: number }) {
+  const db = await database();
+  const [program, cohort, staff, learner] = await Promise.all([
+    db.select().from(learningPrograms).where(and(eq(learningPrograms.id, input.programId), eq(learningPrograms.schoolId, input.schoolId), eq(learningPrograms.status, "active"))).limit(1),
+    input.cohortId ? db.select().from(programCohorts).where(and(eq(programCohorts.id, input.cohortId), eq(programCohorts.schoolId, input.schoolId), eq(programCohorts.programId, input.programId))).limit(1) : Promise.resolve([]),
+    input.staffId ? db.select().from(staffProfiles).where(and(eq(staffProfiles.id, input.staffId), eq(staffProfiles.schoolId, input.schoolId), eq(staffProfiles.employmentStatus, "active"))).limit(1) : Promise.resolve([]),
+    input.studentId ? db.select().from(studentProfiles).where(and(eq(studentProfiles.id, input.studentId), eq(studentProfiles.schoolId, input.schoolId), eq(studentProfiles.status, "active"))).limit(1) : Promise.resolve([]),
+  ]);
+  if (!program[0]) throw new Error("Select an active programme from this learning organisation.");
+  if (input.cohortId && !cohort[0]) throw new Error("Select a cohort that belongs to the selected programme.");
+  if (input.staffId && !staff[0]) throw new Error("Select an active staff profile from this learning organisation.");
+  if (input.studentId && !learner[0]) throw new Error("Select an active learner record from this learning organisation.");
+}
+
+export async function createProgramCohort(input: { schoolId: number; programId: number; name: string; startsOn?: string; endsOn?: string; deliveryReference?: string; createdBy: number }) {
+  if (input.startsOn && input.endsOn && input.endsOn < input.startsOn) throw new Error("Cohort end date cannot be before the start date.");
+  await requireProgramReference(input);
+  const db = await database();
+  const existing = (await db.select({ id: programCohorts.id }).from(programCohorts).where(and(eq(programCohorts.schoolId, input.schoolId), eq(programCohorts.programId, input.programId), eq(programCohorts.name, input.name))).limit(1))[0];
+  if (existing) throw new Error("A cohort with this name already exists for the selected programme.");
+  const result = await db.insert(programCohorts).values({ ...input, startsOn: input.startsOn ? new Date(`${input.startsOn}T00:00:00.000Z`) : null, endsOn: input.endsOn ? new Date(`${input.endsOn}T00:00:00.000Z`) : null, deliveryReference: input.deliveryReference || null });
+  return { cohortId: Number(result[0].insertId), status: "planning" as const };
+}
+
+export async function assignProgramInstructor(input: { schoolId: number; programId: number; cohortId?: number; staffId: number; assignmentRole: "lead" | "assistant"; assignedBy: number }) {
+  await requireProgramReference(input);
+  const db = await database();
+  const existing = (await db.select({ id: programInstructorAssignments.id }).from(programInstructorAssignments).where(and(eq(programInstructorAssignments.schoolId, input.schoolId), eq(programInstructorAssignments.programId, input.programId), eq(programInstructorAssignments.staffId, input.staffId), eq(programInstructorAssignments.status, "active"))).limit(1))[0];
+  if (existing) throw new Error("This instructor already has an active assignment for the selected programme.");
+  const result = await db.insert(programInstructorAssignments).values({ ...input, cohortId: input.cohortId ?? null });
+  return { assignmentId: Number(result[0].insertId), status: "active" as const };
+}
+
+export async function enrolLearnerInProgram(input: { schoolId: number; programId: number; cohortId?: number; studentId: number; enrolledOn: string; createdBy: number }) {
+  await requireProgramReference(input);
+  const db = await database();
+  const existing = (await db.select({ id: programEnrollments.id }).from(programEnrollments).where(and(eq(programEnrollments.schoolId, input.schoolId), eq(programEnrollments.programId, input.programId), eq(programEnrollments.studentId, input.studentId), eq(programEnrollments.status, "active"))).limit(1))[0];
+  if (existing) throw new Error("This learner is already active in the selected programme.");
+  const result = await db.insert(programEnrollments).values({ ...input, cohortId: input.cohortId ?? null, enrolledOn: new Date(`${input.enrolledOn}T00:00:00.000Z`), status: "active" });
+  return { enrollmentId: Number(result[0].insertId), status: "active" as const };
+}
+
+export async function confirmProgramCompletion(input: { schoolId: number; enrollmentId: number; completionNote?: string; confirmedBy: number }) {
+  const db = await database();
+  const enrollment = (await db.select().from(programEnrollments).where(and(eq(programEnrollments.id, input.enrollmentId), eq(programEnrollments.schoolId, input.schoolId), eq(programEnrollments.status, "active"))).limit(1))[0];
+  if (!enrollment) throw new Error("Select an active programme enrolment from this learning organisation.");
+  await db.update(programEnrollments).set({ status: "completed", completionConfirmedBy: input.confirmedBy, completionConfirmedAt: new Date(), completionNote: input.completionNote || null }).where(and(eq(programEnrollments.id, input.enrollmentId), eq(programEnrollments.schoolId, input.schoolId)));
+  return { success: true, status: "completed" as const };
+}
+
+export async function recordProgramAttendance(input: { schoolId: number; enrollmentId: number; attendanceDate: string; status: "present" | "late" | "absent" | "excused"; note?: string; recordedBy: number }) {
+  const db = await database();
+  const enrollment = (await db.select().from(programEnrollments).where(and(eq(programEnrollments.id, input.enrollmentId), eq(programEnrollments.schoolId, input.schoolId), eq(programEnrollments.status, "active"))).limit(1))[0];
+  if (!enrollment) throw new Error("Select an active programme enrolment from this learning organisation.");
+  const attendanceDate = new Date(`${input.attendanceDate}T00:00:00.000Z`);
+  await db.insert(programAttendanceRecords).values({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, attendanceDate, status: input.status, note: input.note || null, recordedBy: input.recordedBy }).onDuplicateKeyUpdate({ set: { status: input.status, note: input.note || null, recordedBy: input.recordedBy, recordedAt: new Date() } });
+  return { success: true, enrollmentId: input.enrollmentId, attendanceDate: input.attendanceDate, status: input.status };
+}
+
+export async function createProgramFeeStructure(input: { schoolId: number; programId: number; cohortId?: number; name: string; amount: string; mandatory: boolean; dueOn?: string; createdBy: number }) {
+  if (!Number.isFinite(Number(input.amount)) || Number(input.amount) <= 0) throw new Error("Enter a programme fee amount greater than zero.");
+  await requireProgramReference(input);
+  const db = await database();
+  const result = await db.insert(programFeeStructures).values({ ...input, cohortId: input.cohortId ?? null, dueOn: input.dueOn ? new Date(`${input.dueOn}T00:00:00.000Z`) : null });
+  return { feeStructureId: Number(result[0].insertId), status: "draft" as const };
+}
+
+export async function activateProgramFeeStructure(input: { schoolId: number; feeStructureId: number; activatedBy: number }) {
+  const db = await database();
+  const fee = (await db.select().from(programFeeStructures).where(and(eq(programFeeStructures.id, input.feeStructureId), eq(programFeeStructures.schoolId, input.schoolId))).limit(1))[0];
+  if (!fee) throw new Error("Programme fee structure not found in this learning organisation.");
+  if (fee.status === "archived") throw new Error("An archived programme fee structure cannot be activated.");
+  await db.update(programFeeStructures).set({ status: "active", activatedBy: input.activatedBy, activatedAt: new Date() }).where(and(eq(programFeeStructures.id, input.feeStructureId), eq(programFeeStructures.schoolId, input.schoolId)));
+  return { success: true, status: "active" as const };
 }
