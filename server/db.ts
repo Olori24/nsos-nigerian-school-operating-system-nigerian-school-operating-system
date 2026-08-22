@@ -4,6 +4,7 @@ import { createPool, type Pool } from "mysql2";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import {
+  academicMigrationBatches,
   academicSessions,
   academicTerms,
   advertisingCampaigns,
@@ -2916,6 +2917,83 @@ export async function importStaffMigration(input: { schoolId: number; idempotenc
 
 export async function listStaffMigrationBatches(schoolId: number) {
   return (await database()).select({ id: staffMigrationBatches.id, rowCount: staffMigrationBatches.rowCount, staffCount: staffMigrationBatches.staffCount, status: staffMigrationBatches.status, completedAt: staffMigrationBatches.completedAt, createdAt: staffMigrationBatches.createdAt }).from(staffMigrationBatches).where(eq(staffMigrationBatches.schoolId, schoolId)).orderBy(desc(staffMigrationBatches.createdAt)).limit(12);
+}
+
+export type AcademicMigrationRow = { sourceRow: number; kind: string; name: string; code?: string; level?: string; arm?: string; capacity?: string | number; description?: string };
+type ReviewedAcademicMigrationRow = AcademicMigrationRow & { kind: "class" | "subject"; errors: string[] };
+
+export function normaliseAcademicMigrationRows(rows: AcademicMigrationRow[]) {
+  if (!Array.isArray(rows) || rows.length < 1) throw new Error("Add at least one class or subject row before reviewing the migration.");
+  if (rows.length > 100) throw new Error("Import no more than 100 academic rows at a time so each batch can be reviewed safely.");
+  const seenClassNames = new Map<string, number>();
+  const seenSubjectCodes = new Map<string, number>();
+  return rows.map((row, index) => {
+    const sourceRow = Number.isInteger(row.sourceRow) && row.sourceRow > 0 ? row.sourceRow : index + 2;
+    const kindValue = migrationText(row.kind, 16).toLowerCase();
+    const kind = kindValue === "class" || kindValue === "subject" ? kindValue : "class";
+    const name = migrationText(row.name, kind === "class" ? 120 : 160);
+    const code = migrationText(row.code, 32).toUpperCase() || undefined;
+    const level = migrationText(row.level, 64) || undefined;
+    const arm = migrationText(row.arm, 32) || undefined;
+    const capacityText = migrationText(row.capacity, 8);
+    const capacity = capacityText ? Number(capacityText) : undefined;
+    const description = migrationText(row.description, 5000) || undefined;
+    const errors: string[] = [];
+    if (!["class", "subject"].includes(kindValue)) errors.push("Kind must be class or subject.");
+    if (!name) errors.push(`${kind === "class" ? "Class" : "Subject"} name is required.`);
+    if (kind === "subject" && !code) errors.push("Subject code is required.");
+    if (capacityText && (!Number.isInteger(capacity) || !capacity || capacity > 5000)) errors.push("Class capacity must be a whole number between 1 and 5000.");
+    if (kind === "class" && name) { const previous = seenClassNames.get(name.toLowerCase()); if (previous) errors.push(`Class name duplicates row ${previous}.`); else seenClassNames.set(name.toLowerCase(), sourceRow); }
+    if (kind === "subject" && code) { const previous = seenSubjectCodes.get(code); if (previous) errors.push(`Subject code duplicates row ${previous}.`); else seenSubjectCodes.set(code, sourceRow); }
+    return { sourceRow, kind, name, code, level, arm, capacity: Number.isInteger(capacity) ? capacity : undefined, description, errors } satisfies ReviewedAcademicMigrationRow;
+  });
+}
+
+async function assertAcademicMigrationSession(schoolId: number, sessionId: number) {
+  const session = (await (await database()).select({ id: academicSessions.id }).from(academicSessions).where(and(eq(academicSessions.id, sessionId), eq(academicSessions.schoolId, schoolId))).limit(1))[0];
+  if (!session) throw new Error("Choose an academic session that belongs to this school before importing classes or subjects.");
+}
+
+export async function previewAcademicMigration(input: { schoolId: number; sessionId: number; rows: AcademicMigrationRow[] }) {
+  await assertAcademicMigrationSession(input.schoolId, input.sessionId);
+  const rows = normaliseAcademicMigrationRows(input.rows);
+  const classNames = rows.filter(row => row.kind === "class").map(row => row.name).filter(Boolean);
+  const subjectCodes = rows.filter(row => row.kind === "subject").map(row => row.code).filter((value): value is string => Boolean(value));
+  const db = await database();
+  const [existingClasses, existingSubjects] = await Promise.all([
+    classNames.length ? db.select({ name: classes.name }).from(classes).where(and(eq(classes.schoolId, input.schoolId), inArray(classes.name, classNames))) : [],
+    subjectCodes.length ? db.select({ code: subjects.code }).from(subjects).where(and(eq(subjects.schoolId, input.schoolId), inArray(subjects.code, subjectCodes))) : [],
+  ]);
+  const existingClassNames = new Set(existingClasses.map(row => row.name.toLowerCase()));
+  const existingSubjectCodes = new Set(existingSubjects.map(row => row.code.toUpperCase()));
+  for (const row of rows) { if (row.kind === "class" && existingClassNames.has(row.name.toLowerCase())) row.errors.push("This class name already exists in this school."); if (row.kind === "subject" && row.code && existingSubjectCodes.has(row.code)) row.errors.push("This subject code already exists in this school."); }
+  return { rowCount: rows.length, classCount: rows.filter(row => row.kind === "class").length, subjectCount: rows.filter(row => row.kind === "subject").length, readyCount: rows.filter(row => !row.errors.length).length, errorCount: rows.filter(row => row.errors.length).length, rows: rows.map(row => ({ sourceRow: row.sourceRow, kind: row.kind, name: row.name, code: row.code, errors: row.errors })) };
+}
+
+export async function importAcademicMigration(input: { schoolId: number; sessionId: number; idempotencyKey: string; rows: AcademicMigrationRow[]; importedBy: number }) {
+  await assertAcademicMigrationSession(input.schoolId, input.sessionId);
+  const rows = normaliseAcademicMigrationRows(input.rows);
+  if (rows.some(row => row.errors.length)) throw new Error("Fix the row errors shown in the review before confirming this import.");
+  const checksum = createHash("sha256").update(JSON.stringify({ sessionId: input.sessionId, rows: rows.map(({ errors: _errors, ...row }) => row) })).digest("hex");
+  const db = await database();
+  const prior = (await db.select().from(academicMigrationBatches).where(and(eq(academicMigrationBatches.schoolId, input.schoolId), eq(academicMigrationBatches.idempotencyKey, input.idempotencyKey))).limit(1))[0];
+  if (prior) { if (prior.checksum !== checksum) throw new Error("This import key was already used with different rows. Review the batch and start a new import."); if (prior.status === "completed") return { batchId: prior.id, status: "completed" as const, classCount: prior.classCount, subjectCount: prior.subjectCount, idempotent: true }; throw new Error("This academic migration batch is already being processed. Refresh the page before trying again."); }
+  const review = await previewAcademicMigration({ schoolId: input.schoolId, sessionId: input.sessionId, rows });
+  if (review.errorCount) throw new Error("The reviewed rows now conflict with existing academic data. Refresh the review and correct the identified rows.");
+  const classRows = rows.filter(row => row.kind === "class");
+  const subjectRows = rows.filter(row => row.kind === "subject");
+  return db.transaction(async tx => {
+    const createdBatch = await tx.insert(academicMigrationBatches).values({ schoolId: input.schoolId, createdBy: input.importedBy, idempotencyKey: input.idempotencyKey, checksum, sessionId: input.sessionId, rowCount: rows.length, status: "processing" });
+    const batchId = Number(createdBatch[0].insertId);
+    for (const row of classRows) await tx.insert(classes).values({ schoolId: input.schoolId, sessionId: input.sessionId, name: row.name, level: row.level ?? null, arm: row.arm ?? null, capacity: row.capacity ?? null, status: "active" });
+    for (const row of subjectRows) await tx.insert(subjects).values({ schoolId: input.schoolId, code: row.code!, name: row.name, description: row.description ?? null, status: "active" });
+    await tx.update(academicMigrationBatches).set({ status: "completed", classCount: classRows.length, subjectCount: subjectRows.length, completedAt: new Date() }).where(and(eq(academicMigrationBatches.id, batchId), eq(academicMigrationBatches.schoolId, input.schoolId)));
+    return { batchId, status: "completed" as const, classCount: classRows.length, subjectCount: subjectRows.length, idempotent: false };
+  });
+}
+
+export async function listAcademicMigrationBatches(schoolId: number) {
+  return (await database()).select({ id: academicMigrationBatches.id, rowCount: academicMigrationBatches.rowCount, classCount: academicMigrationBatches.classCount, subjectCount: academicMigrationBatches.subjectCount, status: academicMigrationBatches.status, completedAt: academicMigrationBatches.completedAt, createdAt: academicMigrationBatches.createdAt }).from(academicMigrationBatches).where(eq(academicMigrationBatches.schoolId, schoolId)).orderBy(desc(academicMigrationBatches.createdAt)).limit(12);
 }
 export const createDepartment = async (input: { schoolId: number; name: string; code?: string }) => (await database()).insert(departments).values(input);
 export async function assignStaffDepartment(schoolId: number, staffId: number, departmentId: number | undefined) { await (await database()).update(staffProfiles).set({ departmentId: departmentId ?? null }).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.id, staffId))); return { success: true }; }

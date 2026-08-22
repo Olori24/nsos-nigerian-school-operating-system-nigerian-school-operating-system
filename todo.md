@@ -209,3 +209,6 @@
 - [x] Add an owner/admin-only, review-first staff migration workflow for school-approved employee records without creating login accounts or sending invitations automatically.
 - [x] Validate staff migration rows, employee-number and contact duplicates, role and employment-type values, then require final confirmation before staff profiles are created.
 - [x] Add tenant-scoped staff migration idempotency, safe operational batch history, audit records, and regression coverage for authorization and duplicate protection.
+- [x] Add an owner/admin-only, review-first class and subject migration workflow that accepts school-approved academic lists without overwriting existing curriculum data.
+- [x] Validate academic migration rows and duplicate risks, require an existing school session, and require explicit final confirmation before creating classes or subjects.
+- [x] Add tenant-scoped academic migration idempotency, safe batch history, audit records, and regression coverage for authorization and duplicate protection.

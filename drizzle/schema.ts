@@ -462,6 +462,28 @@ export const staffMigrationBatches = mysqlTable(
   }),
 );
 
+export const academicMigrationBatches = mysqlTable(
+  "academicMigrationBatches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    createdBy: int("createdBy").notNull(),
+    idempotencyKey: varchar("idempotencyKey", { length: 96 }).notNull(),
+    checksum: varchar("checksum", { length: 64 }).notNull(),
+    sessionId: int("sessionId").notNull(),
+    rowCount: int("rowCount").notNull(),
+    classCount: int("classCount").notNull().default(0),
+    subjectCount: int("subjectCount").notNull().default(0),
+    status: mysqlEnum("status", ["processing", "completed", "failed"]).notNull().default("processing"),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    schoolCreated: index("academic_migration_school_created_idx").on(table.schoolId, table.createdAt),
+    schoolKey: uniqueIndex("academic_migration_school_key_unique").on(table.schoolId, table.idempotencyKey),
+  }),
+);
+
 export const studentGuardians = mysqlTable(
   "studentGuardians",
   {

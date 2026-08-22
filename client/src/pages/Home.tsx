@@ -27,6 +27,7 @@ import { NsosCopilot } from "@/components/NsosCopilot";
 import { OwnerSetupManagementDashboard } from "@/components/OwnerSetupManagementDashboard";
 import { StudentMigrationWorkspace } from "@/components/StudentMigrationWorkspace";
 import { StaffMigrationWorkspace } from "@/components/StaffMigrationWorkspace";
+import { AcademicMigrationWorkspace } from "@/components/AcademicMigrationWorkspace";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -487,7 +488,7 @@ function Workspace({ view, schoolId, schoolName, role, summary, applications, st
   if (view === "setup-management") return role === "owner" ? <OwnerSetupManagementDashboard schoolId={schoolId} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "admissions") return <><Admissions schoolId={schoolId} schoolName={schoolName} applications={applications} academics={academics} canManageTemplates={role === "owner" || role === "admin"} onRefresh={onRefresh} /><AdmissionDocumentReview schoolId={schoolId} applications={applications.data ?? []} onDone={onRefresh} /><EnrollmentStation schoolId={schoolId} applications={applications.data ?? []} academic={academics.data} onDone={onRefresh} /></>;
   if (view === "students") return <><StudentsWithPromotion schoolId={schoolId} schoolName={schoolName} students={students} academics={academics} canMigrate={role === "owner" || role === "admin"} onRefresh={onRefresh} /><StudentLifecycleControls schoolId={schoolId} students={students.data ?? []} onDone={onRefresh} />{(role === "owner" || role === "admin") && <GuardianProfilePanel schoolId={schoolId} students={students.data ?? []} onDone={onRefresh} />}<AcademicHistoryStation schoolId={schoolId} students={students.data ?? []} /></>;
-  if (view === "academics") return <><Academics schoolId={schoolId} data={academics} staff={staff} role={role} onRefresh={onRefresh} /><CurriculumStation schoolId={schoolId} academic={academics.data} onDone={onRefresh} /></>;
+  if (view === "academics") return <>{(role === "owner" || role === "admin") && <AcademicMigrationWorkspace schoolId={schoolId} academic={academics.data} onDone={onRefresh} />}<Academics schoolId={schoolId} data={academics} staff={staff} role={role} onRefresh={onRefresh} /><CurriculumStation schoolId={schoolId} academic={academics.data} onDone={onRefresh} /></>;
   if (view === "attendance") return <><Attendance schoolId={schoolId} records={attendance} alerts={absenceAlerts} students={students} staff={staff} academics={academics} onRefresh={onRefresh} /><AttendanceExport records={attendance.data ?? []} /></>;
   if (view === "results") return <><ResultsWithControls schoolId={schoolId} data={results} students={students} academics={academics} onRefresh={onRefresh} /><ResultApprovalControl schoolId={schoolId} academic={academics.data} onDone={onRefresh} /><ReportCardPrint schoolId={schoolId} students={students.data ?? []} terms={academics.data?.terms ?? []} /></>;
   if (view === "finance") return <><Finance schoolId={schoolId} data={finance} students={students} academics={academics} canManageTemplates={role === "owner" || role === "admin"} onRefresh={onRefresh} /><FinanceReceiptStation finance={finance.data} /></>;

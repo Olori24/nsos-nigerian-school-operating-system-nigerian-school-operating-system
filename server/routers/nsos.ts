@@ -99,6 +99,7 @@ const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeO
 const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
 const studentMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), admissionNo: z.string().max(64), firstName: z.string().max(120), lastName: z.string().max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().max(10).optional(), gender: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), guardianFirstName: z.string().max(120).optional(), guardianLastName: z.string().max(120).optional(), guardianRelationship: z.string().max(80).optional(), guardianEmail: z.string().max(320).optional(), guardianPhone: z.string().max(48).optional() });
 const staffMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), employeeNo: z.string().max(48), firstName: z.string().max(120), lastName: z.string().max(120), jobTitle: z.string().max(120), employmentType: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), joinedOn: z.string().max(10).optional(), address: z.string().max(2000).optional() });
+const academicMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), kind: z.string().max(16), name: z.string().max(160), code: z.string().max(32).optional(), level: z.string().max(64).optional(), arm: z.string().max(32).optional(), capacity: z.union([z.string().max(8), z.number().int().positive()]).optional(), description: z.string().max(5000).optional() });
 
 export const nsosRouter = router({
   schools: router({
@@ -558,6 +559,18 @@ export const nsosRouter = router({
 
   academics: router({
     list: managementProcedure("academics.read").input(schoolInput).query(({ input }) => db.listAcademicData(input.schoolId)),
+    migrationPreview: onboardingAdminProcedure.input(schoolInput.extend({ sessionId: z.number().int().positive(), rows: z.array(academicMigrationRowInput).min(1).max(100) })).mutation(({ input }) => db.previewAcademicMigration(input)),
+    migrationImport: onboardingAdminProcedure
+      .input(schoolInput.extend({ sessionId: z.number().int().positive(), idempotencyKey: z.string().uuid(), rows: z.array(academicMigrationRowInput).min(1).max(100), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "academic-migration", route: "import", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Academic migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const { confirmed: _confirmed, ...migration } = input;
+        const result = await db.importAcademicMigration({ ...migration, importedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "academic_migration_completed", targetType: "academic_migration_batch", targetId: result.batchId, metadata: { classCount: result.classCount, subjectCount: result.subjectCount, idempotent: result.idempotent, confirmationRequired: true } });
+        return result;
+      }),
+    migrationHistory: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listAcademicMigrationBatches(input.schoolId)),
     curriculumTemplates: managementProcedure("academics.read").input(schoolInput).query(() => db.getCurriculumTemplateCatalog()),
     applyNigerianCurriculumTemplate: onboardingAdminProcedure
       .input(schoolInput.extend({ templateId: z.enum(["basic_primary", "basic_junior_secondary", "senior_secondary_review"]), classIds: z.array(z.number().int().positive()).min(1).max(50), includeOptional: z.boolean().default(false) }))
