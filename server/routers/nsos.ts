@@ -3,6 +3,8 @@ import { z } from "zod";
 import * as db from "../db";
 import { sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffSetupInvitationEmail } from "../auth";
 import { buildAdmissionLetter } from "../admissionLetter";
+import { buildAiSetupPlan } from "../aiOnboardingAgent";
+import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
@@ -155,6 +157,16 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "website_setup_agent_draft_applied", targetType: "school_website", metadata: { appliedAsDraft: true, admissionsEnabled: input.admissionsEnabled, contactEmailProvided: Boolean(input.contactEmail), contactPhoneProvided: Boolean(input.contactPhone), campusLocationProvided: Boolean(input.campusLocation) } });
         return result;
       }),
+    generateAgentDraft: websiteAdminProcedure
+      .input(schoolInput.extend({ brief: z.string().trim().min(10).max(700) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-ai-agent", route: "website-draft", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 10, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Try another website draft in about ${rate.retryAfterSeconds} seconds.` });
+        const { school, website } = await db.getSchoolWebsite(input.schoolId);
+        const draft = await generateAiWebsiteDraft({ schoolName: school.name, state: school.state, existingHeadline: website.headline, existingIntroduction: website.introduction, brief: input.brief });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "website_ai_draft_generated", targetType: "school_website", metadata: { generatedAsDraft: true, source: draft.source, requiresConfirmation: true } });
+        return draft;
+      }),
     verifyDomain: websiteAdminProcedure.input(schoolInput).mutation(async ({ ctx, input }) => {
       const result = await db.verifySchoolWebsiteDomain(input.schoolId);
       await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_domain_verified", targetType: "school_website", metadata: { verification: "active" } });
@@ -217,6 +229,16 @@ export const nsosRouter = router({
 
   setupAgent: router({
     assess: onboardingAdminProcedure.input(schoolInput).query(async ({ input }) => buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId))),
+    plan: onboardingAdminProcedure
+      .input(schoolInput.extend({ request: z.string().trim().min(2).max(600) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-ai-agent", route: "onboarding-plan", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 16, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The AI onboarding agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const assessment = buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId));
+        const plan = await buildAiSetupPlan({ request: input.request, assessment });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_onboarding_plan_generated", targetType: "setup_agent", targetId: plan.recommendedActionId, metadata: { source: plan.source, recommendedActionId: plan.recommendedActionId, requiresConfirmation: true } });
+        return plan;
+      }),
     history: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentHistory(input.schoolId)),
     staffInvitations: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentStaffInvitations(input.schoolId)),
     financeDrafts: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentFinanceDrafts(input.schoolId)),

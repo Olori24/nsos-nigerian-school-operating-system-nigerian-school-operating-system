@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "..");
 const copilot = readFileSync(resolve(root, "client/src/components/NsosCopilot.tsx"), "utf8");
 const agent = readFileSync(resolve(root, "client/src/components/CopilotSetupAgent.tsx"), "utf8");
+const planner = readFileSync(resolve(root, "client/src/components/AiSetupPlanner.tsx"), "utf8");
+const websiteAgent = readFileSync(resolve(root, "client/src/components/WebsiteSetupAgent.tsx"), "utf8");
 
 describe("NSOS Copilot setup agent interface", () => {
   it("keeps the setup agent inside the Copilot experience and restricts it to owner/admin roles", () => {
@@ -34,5 +36,21 @@ describe("NSOS Copilot setup agent interface", () => {
     expect(agent).toContain("Activate approved fee");
     expect(agent).toContain("Approval note");
     expect(agent).toContain("approvalNote: activationNote.trim() || undefined");
+  });
+
+  it("adds an AI onboarding planner that opens existing approval-gated workflows instead of executing setup itself", () => {
+    expect(agent).toContain("AiSetupPlanner");
+    expect(planner).toContain("NSOS AI onboarding agent");
+    expect(planner).toContain("Confirmation stays with you");
+    expect(planner).toContain("Open the approved workflow");
+    expect(planner).toContain("It never acts by itself.");
+  });
+
+  it("makes the website agent generate editable AI drafts while preserving the draft-only save confirmation", () => {
+    expect(websiteAgent).toContain("AI website-building agent");
+    expect(websiteAgent).toContain("Build editable draft");
+    expect(websiteAgent).toContain("Nothing has been published or saved yet.");
+    expect(websiteAgent).toContain("Confirm and save draft");
+    expect(websiteAgent).toContain("No publication, message sending, domain change, or data invention occurs here.");
   });
 });

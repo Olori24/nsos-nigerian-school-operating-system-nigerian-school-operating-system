@@ -2,13 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
-  return { ...actual, getSchoolMembership: vi.fn(), getTenantOnboardingStatus: vi.fn(), consumeSharedRateLimit: vi.fn(), runCopilotSetupAgentAcademicFoundation: vi.fn(), listCopilotSetupAgentHistory: vi.fn(), prepareCopilotSetupAgentStaffInvitation: vi.fn(), listCopilotSetupAgentStaffInvitations: vi.fn(), claimCopilotSetupAgentStaffInvitationForDelivery: vi.fn(), releaseCopilotSetupAgentStaffInvitationDelivery: vi.fn(), markCopilotSetupAgentStaffInvitationSent: vi.fn(), prepareCopilotSetupAgentFinanceDraft: vi.fn(), listCopilotSetupAgentFinanceDrafts: vi.fn(), activateCopilotSetupAgentFinanceDraft: vi.fn() };
+  return { ...actual, getSchoolMembership: vi.fn(), getTenantOnboardingStatus: vi.fn(), consumeSharedRateLimit: vi.fn(), recordSecurityAuditEvent: vi.fn(), runCopilotSetupAgentAcademicFoundation: vi.fn(), listCopilotSetupAgentHistory: vi.fn(), prepareCopilotSetupAgentStaffInvitation: vi.fn(), listCopilotSetupAgentStaffInvitations: vi.fn(), claimCopilotSetupAgentStaffInvitationForDelivery: vi.fn(), releaseCopilotSetupAgentStaffInvitationDelivery: vi.fn(), markCopilotSetupAgentStaffInvitationSent: vi.fn(), prepareCopilotSetupAgentFinanceDraft: vi.fn(), listCopilotSetupAgentFinanceDrafts: vi.fn(), activateCopilotSetupAgentFinanceDraft: vi.fn() };
 });
 
 vi.mock("./auth", () => ({ sendGuardianPortalInvitationEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn() }));
+vi.mock("./aiOnboardingAgent", () => ({ buildAiSetupPlan: vi.fn() }));
 
 import * as db from "./db";
 import { sendStaffSetupInvitationEmail } from "./auth";
+import { buildAiSetupPlan } from "./aiOnboardingAgent";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -20,13 +22,23 @@ const financeInput = { schoolId: 7, name: "First-term tuition", amount: 125000, 
 function caller() { return appRouter.createCaller({ user, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] }); }
 
 describe("NSOS supervised setup agent routes", () => {
-  beforeEach(() => { vi.clearAllMocks(); vi.mocked(db.getSchoolMembership).mockResolvedValue(membership as any); vi.mocked(db.consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 0 } as any); });
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(db.getSchoolMembership).mockResolvedValue(membership as any); vi.mocked(db.consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 0 } as any); vi.mocked(db.recordSecurityAuditEvent).mockResolvedValue(undefined as any); });
 
   it("assesses setup only for an active owner or administrator", async () => {
     vi.mocked(db.getTenantOnboardingStatus).mockResolvedValue({ completionPercent: 0, completedSteps: 0, totalSteps: 6, steps: [{ id: "school-profile", label: "School profile", description: "", completed: true }, { id: "academic-foundation", label: "Academic foundation", description: "", completed: false, destination: "academics", actionLabel: "Set up academics" }, { id: "team", label: "First team member", description: "", completed: false, destination: "staff", actionLabel: "Add staff" }, { id: "learners", label: "First learner", description: "", completed: false, destination: "students", actionLabel: "Add learner" }, { id: "fees", label: "Finance & bank account", description: "", completed: false, destination: "finance", actionLabel: "Set up finance" }, { id: "public-presence", label: "School website", description: "", completed: false, destination: "website", actionLabel: "Prepare website" }] } as any);
     await expect(caller().nsos.setupAgent.assess({ schoolId: 7 })).resolves.toMatchObject({ completionPercent: 0 });
     vi.mocked(db.getSchoolMembership).mockResolvedValue({ ...membership, role: "teacher" } as any);
     await expect(caller().nsos.setupAgent.assess({ schoolId: 7 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("generates an AI plan only for an owner or administrator and never executes a setup action", async () => {
+    vi.mocked(db.getTenantOnboardingStatus).mockResolvedValue({ completionPercent: 0, completedSteps: 0, totalSteps: 6, steps: [{ id: "school-profile", label: "School profile", description: "", completed: true }, { id: "academic-foundation", label: "Academic foundation", description: "", completed: false, destination: "academics", actionLabel: "Set up academics" }, { id: "team", label: "First team member", description: "", completed: false, destination: "staff", actionLabel: "Add staff" }, { id: "learners", label: "First learner", description: "", completed: false, destination: "students", actionLabel: "Add learner" }, { id: "fees", label: "Finance & bank account", description: "", completed: false, destination: "finance", actionLabel: "Set up finance" }, { id: "public-presence", label: "School website", description: "", completed: false, destination: "website", actionLabel: "Prepare website" }] } as any);
+    vi.mocked(buildAiSetupPlan).mockResolvedValue({ reply: "Start with the academic calendar.", recommendedActionId: "academic_foundation", nextQuestions: ["What are the approved dates?"], source: "ai", requiresConfirmation: true });
+    await expect(caller().nsos.setupAgent.plan({ schoolId: 7, request: "Help us set up the term" })).resolves.toMatchObject({ recommendedActionId: "academic_foundation", requiresConfirmation: true });
+    expect(db.runCopilotSetupAgentAcademicFoundation).not.toHaveBeenCalled();
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "ai_onboarding_plan_generated", metadata: expect.objectContaining({ requiresConfirmation: true }) }));
+    vi.mocked(db.getSchoolMembership).mockResolvedValue({ ...membership, role: "teacher" } as any);
+    await expect(caller().nsos.setupAgent.plan({ schoolId: 7, request: "Help us set up the term" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("requires an explicit confirmation and routes approved real academic details to the audited setup service", async () => {

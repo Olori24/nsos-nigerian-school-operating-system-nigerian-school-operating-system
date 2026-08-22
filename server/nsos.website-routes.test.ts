@@ -2,21 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", () => ({
   getSchoolMembership: vi.fn(),
+  getSchoolWebsite: vi.fn(),
   saveSchoolWebsite: vi.fn(),
   verifySchoolWebsiteDomain: vi.fn(),
   getPublicSchoolWebsite: vi.fn(),
   getPublicSchoolWebsiteByDomain: vi.fn(),
+  consumeSharedRateLimit: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
 }));
+vi.mock("./aiWebsiteAgent", () => ({ generateAiWebsiteDraft: vi.fn() }));
 
 import * as db from "./db";
+import { generateAiWebsiteDraft } from "./aiWebsiteAgent";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 const adminCaller = () => appRouter.createCaller({ user: { id: 5, openId: "admin-5", name: "School Admin", email: "admin@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 
 describe("NSOS tenant website routes", () => {
-  beforeEach(() => { vi.clearAllMocks(); vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 1, schoolId: 1, userId: 5, role: "admin", status: "active", createdAt: new Date(), updatedAt: new Date() }); });
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 1, schoolId: 1, userId: 5, role: "admin", status: "active", createdAt: new Date(), updatedAt: new Date() }); vi.mocked(db.consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 0 } as any); });
 
   it("allows an administrator to save tenant website settings", async () => {
     vi.mocked(db.saveSchoolWebsite).mockResolvedValue({ school: { id: 1, name: "Greener Future Academy" }, website: { published: true } } as any);
@@ -30,6 +34,17 @@ describe("NSOS tenant website routes", () => {
     await expect(adminCaller().nsos.website.applySetupAgentDraft({ schoolId: 1, headline: "Learning with confidence", introduction: "A reviewed introduction for the school community and prospective families.", primaryColor: "#0f5c4f", contactEmail: "admissions@example.ng", admissionsEnabled: true, confirmed: true })).resolves.toMatchObject({ website: { published: false } });
     expect(db.saveSchoolWebsite).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, headline: "Learning with confidence", published: false, admissionsEnabled: true }));
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 1, actorUserId: 5, eventType: "website_setup_agent_draft_applied", metadata: expect.objectContaining({ appliedAsDraft: true }) }));
+  });
+
+  it("generates an owner-reviewable AI website draft without saving, publishing, or connecting a domain", async () => {
+    vi.mocked(db.getSchoolWebsite).mockResolvedValue({ school: { id: 1, name: "Greener Future Academy", state: "Ogun" }, website: { headline: "", introduction: "", published: false } } as any);
+    vi.mocked(generateAiWebsiteDraft).mockResolvedValue({ headline: "Learning with purpose", introduction: "Review the school’s approved admissions and contact information.", reviewNote: "Confirm every statement.", source: "ai", requiresConfirmation: true });
+    await expect(adminCaller().nsos.website.generateAgentDraft({ schoolId: 1, brief: "Write a welcoming website introduction for families." })).resolves.toMatchObject({ source: "ai", requiresConfirmation: true });
+    expect(db.saveSchoolWebsite).not.toHaveBeenCalled();
+    expect(db.verifySchoolWebsiteDomain).not.toHaveBeenCalled();
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "website_ai_draft_generated", metadata: expect.objectContaining({ generatedAsDraft: true, requiresConfirmation: true }) }));
+    vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 2, schoolId: 1, userId: 5, role: "teacher", status: "active", createdAt: new Date(), updatedAt: new Date() });
+    await expect(adminCaller().nsos.website.generateAgentDraft({ schoolId: 1, brief: "Write a welcoming website introduction for families." })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("resolves only the public school-site configuration for an external visitor", async () => {

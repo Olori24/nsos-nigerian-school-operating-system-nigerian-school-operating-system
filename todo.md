@@ -198,3 +198,7 @@
 - [ ] Define and implement the NSOS email-service operating model, including sender-domain verification, tenant-safe defaults, and an explicit launch path once nsos.ng is active.
 - [x] Add secure passport-photograph and admission-fee receipt uploads to school admission forms, with storage-backed records, review visibility, validation, and no automatic payment approval.
 - [x] Add a supervised school-website setup agent that produces owner-reviewable website configuration proposals and applies them only after explicit authorization.
+- [x] Replace the static NSOS setup assistant with a tenant-aware AI onboarding agent that explains readiness, asks only for missing school-approved information, and proposes a sequenced setup plan.
+- [x] Add a supervised AI task executor that carries out only supported low-risk configuration actions after the school user reviews and explicitly approves each proposal.
+- [x] Upgrade the school website assistant into an AI website-building workflow that creates editable quality drafts without fabricating people, credentials, bank accounts, or public claims and without publishing or connecting a domain.
+- [x] Add regression coverage for AI-agent authorization, tenant isolation, proposal validation, explicit confirmations, and safe refusal of unsupported or high-risk actions.
