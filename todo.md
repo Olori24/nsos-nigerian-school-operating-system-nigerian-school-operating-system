@@ -221,3 +221,8 @@
 - [x] Add an owner/admin Operations Command Center that aggregates real tenant readiness across academic setup, staffing, finance, communications, public website, and safe migration history.
 - [x] Provide direct next-action routes and supervised-agent entry points without exposing staff, learner, guardian, provider credential, or cross-tenant data.
 - [x] Add regression coverage for command-center authorization, tenant isolation, readiness accuracy, and safe action routing.
+- [x] Add a role-aware Enterprise Concierge that accepts natural-language operational goals and returns a grounded, tenant-safe plan with only supported next actions.
+- [x] Make every Concierge action explicitly classified as guidance, ready-to-review preparation, or confirmation-required execution, with no direct high-impact mutation or provider action.
+- [x] Replace static action dead ends in core management surfaces with clear live state, a useful recovery path, or an honest unavailable status rather than generic placeholder feedback.
+- [x] Add prompt-led Concierge interface history, suggested goals, action handoffs to existing protected workspaces, and enterprise-grade loading, error, and audit visibility.
+- [x] Add regression coverage for role scoping, tenant isolation, prompt validation, hallucination-resistant action allowlists, confirmation gates, static-control remediation, and accessible command interaction.

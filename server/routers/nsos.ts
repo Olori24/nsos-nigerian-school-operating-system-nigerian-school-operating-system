@@ -6,6 +6,7 @@ import { buildAdmissionLetter } from "../admissionLetter";
 import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
+import { buildEnterpriseConciergePlan } from "../enterpriseConcierge";
 import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
 import { listNigerianLgas, listNigerianOriginStates, normaliseNigerianOrigin } from "../nigerianOrigin";
@@ -243,6 +244,26 @@ export const nsosRouter = router({
         const result = await db.clearCopilotRecentSearches({ userId: ctx.user.id, schoolId: input.schoolId });
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "copilot_recent_searches_cleared", targetType: "copilot_recent_searches", metadata: { deletedCount: result.deletedCount } });
         return result;
+      }),
+  }),
+
+  enterpriseConcierge: router({
+    plan: protectedProcedure
+      .input(schoolInput.extend({ request: z.string().trim().min(2).max(600) }))
+      .mutation(async ({ ctx, input }) => {
+        const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+        const role = membership.role as SchoolRole;
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-enterprise-concierge", route: "plan", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 18, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Enterprise Concierge is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const assessment = isManagementRole(role) ? buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId)) : undefined;
+        const plan = await buildEnterpriseConciergePlan({ request: input.request, role, assessment });
+        try {
+          await db.saveCopilotRecentSearch({ userId: ctx.user.id, schoolId: input.schoolId, query: input.request, destinationId: plan.action.destination });
+        } catch (error) {
+          console.warn("[EnterpriseConcierge] Recent-search persistence failed", error);
+        }
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "enterprise_concierge_plan_generated", targetType: "enterprise_concierge", targetId: plan.action.id, metadata: { source: plan.source, role, actionKind: plan.action.kind, actionId: plan.action.id, requiresConfirmation: plan.action.requiresConfirmation } });
+        return plan;
       }),
   }),
 

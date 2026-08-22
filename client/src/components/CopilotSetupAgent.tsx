@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { AiSetupPlanner } from "@/components/AiSetupPlanner";
 import { AlertTriangle, Banknote, Bot, CheckCircle2, Clock3, ExternalLink, GraduationCap, Loader2, PlayCircle, Send, ShieldCheck, Sparkles, UserRoundPlus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type SetupAgentAction = {
@@ -28,7 +28,7 @@ function formatAgentEvent(eventType: string) {
   return "Academic setup applied";
 }
 
-export function CopilotSetupAgent({ schoolId, role, onNavigate }: { schoolId: number; role: string; onNavigate: (view: string) => void }) {
+export function CopilotSetupAgent({ schoolId, role, onNavigate, requestedAction }: { schoolId: number; role: string; onNavigate: (view: string) => void; requestedAction?: "academic_foundation" | "team" | "finance" | null }) {
   const canManageSetup = role === "owner" || role === "admin";
   const [expanded, setExpanded] = useState(false);
   const [showReview, setShowReview] = useState(false);
@@ -56,6 +56,14 @@ export function CopilotSetupAgent({ schoolId, role, onNavigate }: { schoolId: nu
   const staffReady = Boolean(staffForm.firstName && staffForm.lastName && staffForm.email && staffForm.employeeNo && staffForm.jobTitle);
   const financeAmount = Number(financeForm.amount);
   const financeReady = Boolean(financeForm.name && Number.isFinite(financeAmount) && financeAmount > 0);
+
+  useEffect(() => {
+    if (!requestedAction || !canManageSetup) return;
+    setExpanded(true);
+    setAgentFocus(requestedAction);
+    const timer = window.setTimeout(() => document.getElementById(`setup-agent-${requestedAction}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    return () => window.clearTimeout(timer);
+  }, [canManageSetup, requestedAction]);
 
   const refreshSetupData = () => void Promise.all([assessment.refetch(), history.refetch(), staffInvitations.refetch(), financeDrafts.refetch(), utils.nsos.onboarding.status.invalidate({ schoolId }), utils.nsos.academics.list.invalidate({ schoolId }), utils.nsos.finance.list.invalidate({ schoolId })]);
   const apply = trpc.nsos.setupAgent.applyAcademicFoundation.useMutation({

@@ -7,6 +7,7 @@ const copilot = readFileSync(resolve(root, "client/src/components/NsosCopilot.ts
 const agent = readFileSync(resolve(root, "client/src/components/CopilotSetupAgent.tsx"), "utf8");
 const planner = readFileSync(resolve(root, "client/src/components/AiSetupPlanner.tsx"), "utf8");
 const websiteAgent = readFileSync(resolve(root, "client/src/components/WebsiteSetupAgent.tsx"), "utf8");
+const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 
 describe("NSOS Copilot setup agent interface", () => {
   it("keeps the setup agent inside the Copilot experience and restricts it to owner/admin roles", () => {
@@ -51,6 +52,18 @@ describe("NSOS Copilot setup agent interface", () => {
     expect(websiteAgent).toContain("Build editable draft");
     expect(websiteAgent).toContain("Nothing has been published or saved yet.");
     expect(websiteAgent).toContain("Confirm and save draft");
-    expect(websiteAgent).toContain("No publication, message sending, domain change, or data invention occurs here.");
+    expect(websiteAgent).toContain("No publication, message sending, domain change, image generation, or data invention occurs here.");
+  });
+
+  it("presents the Enterprise Concierge as a prompt-led, review-first handoff and remediates priority static workspace controls", () => {
+    expect(copilot).toContain("NSOS Enterprise Concierge");
+    expect(copilot).toContain("Describe an operational goal.");
+    expect(copilot).toContain("Review preparation");
+    expect(copilot).toContain("protected forms, review screens, and final confirmations remain mandatory");
+    expect(home).toContain('selectView("communications")');
+    expect(home).not.toContain("All operational alerts appear here as you record attendance, results, payments, and approvals.");
+    expect(home).not.toContain("School configuration is managed through your NSOS owner workspace.");
+    expect(home).toContain("student-guardian-review");
+    expect(home).toContain("redirectLegacyProfileControl");
   });
 });
