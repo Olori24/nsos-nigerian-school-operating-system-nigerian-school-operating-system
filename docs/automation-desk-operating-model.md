@@ -26,7 +26,8 @@ The NSOS Automation Desk turns a school owner or administrator’s plain-languag
 | Goal category | One-tap job can do | Remains a separate final approval |
 |---|---|---|
 | Academic foundation | Create the reviewed planning session, term, provided classes, and selected curriculum template. | Any later assessment, result approval, or publication. |
-| Course and learning materials | Save the reviewed programme, modules, milestones, and internal material drafts. | Programme/module/milestone activation, learner enrolment, tutor creation, completion review, or credentials. |
+| Private online-school launch | From one full prompt, save one server-generated draft programme, modules, human-reviewed milestones, and internal materials, then return configuration-readiness evidence. | Programme/module/milestone activation, learner enrolment, tutor account creation, pricing, fee/payment configuration, publication, messaging, completion review, or credentials. |
+| Course and learning materials | Direct the owner to the existing editable Course Studio for a dedicated course blueprint review. | Saving any course draft, programme/module/milestone activation, learner enrolment, tutor creation, completion review, or credentials. |
 | School website | Prepare an editable private website configuration proposal when required facts are supplied. | Applying a website draft, public publication, domain connection, or DNS verification. |
 | Staff setup | Prepare a private invitation draft from school-approved identity and role details. | Sending an email invitation or creating a linked account/profile. |
 | Finance setup | Prepare an inactive fee-structure draft from school-approved fee details. | Activating fees, issuing invoices, collecting payment, refunds, bank changes, or payment-provider action. |
@@ -46,3 +47,11 @@ The runner executes a bounded server-side action catalog, never free-form model 
 The Automation Desk release added and applied additive migration `0052_gray_ego.sql`. Focused route, UI, Concierge handoff, and retained setup-agent validation passed **20 tests across 5 files**, covering owner/admin scope, membership denial, prompt-free audit metadata, idempotent job creation, typed input validation, explicit approval, execution claiming, action allowlisting, unsupported-job refusal, no automatic retry after failure, activity visibility, and mobile-facing copy.
 
 TypeScript and the production build passed. The managed NSOS shell rendered successfully at the desktop viewport. The full suite completed with **332 passing tests across 96 passing files**; the only failure remains the unrelated external sender authorization check because `resend.dev` is not verified in the connected Resend account. No sender, payment, DNS, domain, message-delivery, provider, publication, account, or credential action was taken during this release.
+
+## Private Online School Launcher extension — 22 August 2026
+
+The selected private Online School Launcher added and applied additive migration `0053_damp_nightcrawler.sql`, extending the Automation Desk job enum with `online_school_launch`. The server derives the institution operating type, asks the existing structured Course Studio service for a bounded internal blueprint, and persists only the existing transaction-backed programme, module, milestone, and material drafts after one owner/admin confirmation.
+
+The configuration-readiness result is deliberately not fabricated test data. It verifies only the current tenant’s new draft programme structure and reports the created counts. It cannot create or activate learners, guardians, staff, reviews, testimonials, admissions, attendance, invoices, payments, receipts, messages, tutor accounts, credentials, public website content, domains, provider configuration, or public claims.
+
+Focused private-launch, route, UI, and Course Studio regressions passed **9 tests across 3 files**. TypeScript and the production build passed. The full suite completed with **336 passing tests across 97 passing files**; the only failure remains the unchanged external Resend sender-domain authorization hold for `resend.dev`.

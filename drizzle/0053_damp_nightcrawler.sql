@@ -1,0 +1,1 @@
+ALTER TABLE `automationJobs` MODIFY COLUMN `jobType` enum('academic_foundation','online_school_launch','course_draft','website_draft','staff_invitation_draft','finance_draft','manual_review') NOT NULL;

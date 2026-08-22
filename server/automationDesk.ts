@@ -1,16 +1,18 @@
 import { invokeLLM } from "./_core/llm";
+import { buildCourseStudioDraft, type CourseStudioDraft } from "./courseStudio";
 import type { SetupAgentAction } from "./setupAgent";
 
-export type AutomationJobType = "academic_foundation" | "course_draft" | "website_draft" | "staff_invitation_draft" | "finance_draft" | "manual_review";
-export type AutomationPlan = { jobType: AutomationJobType; title: string; summary: string; steps: string[]; missingFields: string[]; limitations: string[]; source: "ai" | "guided" };
+export type AutomationJobType = "academic_foundation" | "online_school_launch" | "course_draft" | "website_draft" | "staff_invitation_draft" | "finance_draft" | "manual_review";
+export type AutomationPlan = { jobType: AutomationJobType; title: string; summary: string; steps: string[]; missingFields: string[]; limitations: string[]; source: "ai" | "guided"; launchDraft?: CourseStudioDraft };
 export type AcademicAutomationInput = { sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean };
 export type StaffAutomationInput = { firstName: string; lastName: string; email: string; employeeNo: string; jobTitle: string; role: "admin" | "staff" | "teacher" | "finance"; employmentType: "full_time" | "part_time" | "contract" | "temporary" };
 export type FinanceAutomationInput = { name: string; amount: number; termId?: number; classId?: number; mandatory: boolean; dueOn?: string };
-export type ValidAutomationInput = AcademicAutomationInput | StaffAutomationInput | FinanceAutomationInput;
+export type OnlineSchoolLaunchInput = { draft: Pick<CourseStudioDraft, "courseTitle" | "courseSummary" | "deliveryMode" | "durationLabel" | "modules" | "materials">; validationMode: "private_configuration_only" };
+export type ValidAutomationInput = AcademicAutomationInput | StaffAutomationInput | FinanceAutomationInput | OnlineSchoolLaunchInput;
 
 type ReadinessAssessment = { completionPercent: number; actions: SetupAgentAction[] };
-const allowedTypes: AutomationJobType[] = ["academic_foundation", "course_draft", "website_draft", "staff_invitation_draft", "finance_draft", "manual_review"];
-const executableTypes = new Set<AutomationJobType>(["academic_foundation", "staff_invitation_draft", "finance_draft"]);
+const allowedTypes: AutomationJobType[] = ["academic_foundation", "online_school_launch", "course_draft", "website_draft", "staff_invitation_draft", "finance_draft", "manual_review"];
+const executableTypes = new Set<AutomationJobType>(["academic_foundation", "online_school_launch", "staff_invitation_draft", "finance_draft"]);
 const isDate = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 const text = (value: unknown, maximum: number) => typeof value === "string" ? value.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, maximum) : "";
 
@@ -18,6 +20,7 @@ function fallbackPlan(request: string, assessment: ReadinessAssessment): Automat
   const normalized = request.toLocaleLowerCase("en-NG");
   const incomplete = assessment.actions.filter(action => action.state !== "complete");
   const choose = (jobType: AutomationJobType, title: string, summary: string, steps: string[], missingFields: string[], limitations: string[]): AutomationPlan => ({ jobType, title, summary, steps, missingFields, limitations, source: "guided" });
+  if (/(online\s+(school|training)|launch.*(online|school)|set\s*up.*online|full\s+(online|digital)\s+(school|academy))/i.test(normalized)) return choose("online_school_launch", "Create a private online-school foundation", "Prepare one editable internal learning programme with draft curriculum, facilitator materials, an AI-tutor brief, and a configuration-readiness result from this prompt.", ["Review the private learning offer blueprint.", "Approve one internal draft-only run.", "Review the resulting programme and readiness record."], [], ["This creates draft-only internal learning records and configuration evidence in the current institution; it is not a public launch or a separate test school.", "No learner, guardian, staff, review, testimonial, fee, invoice, payment, message, website publication, domain, provider, tutor account, credential, or public content is created."]);
   if (/(course|programme|program|curriculum|material|training|coaching|vocational)/.test(normalized)) return choose("course_draft", "Prepare a reviewed course blueprint", "Create an editable internal programme, curriculum, and material blueprint in Course Studio.", ["Confirm the learning offer and intended learners.", "Review the generated modules and materials.", "Save inactive internal drafts."], ["Learning offer", "Intended learners"], ["Course content requires a full editable review in Course Studio before any internal draft is saved.", "No public course, learner enrolment, tutor, fee, message, or credential is created."]);
   if (/(website|site|domain|public|admission form)/.test(normalized)) return choose("website_draft", "Prepare a private website proposal", "Create an editable school website proposal with approved information only.", ["Provide school-approved public information.", "Review the private website draft.", "Use the separate publication control if the school approves."], ["Public purpose", "Approved contact and admissions information"], ["Website application, publication, domain connection, and DNS verification remain separate approvals."]);
   if (/(staff|teacher|team|employee|invite)/.test(normalized)) return choose("staff_invitation_draft", "Prepare a staff invitation draft", "Prepare one private invitation draft from school-approved staff details. It will not send an email.", ["Enter authorised staff identity and role details.", "Review the private invitation draft.", "Use the separate send confirmation if delivery is approved."], ["Staff member’s approved identity and role details"], ["The agent never sends an invitation, creates an account, or creates a staff profile from this job."]);
@@ -40,7 +43,7 @@ function validatePlan(value: unknown, fallback: AutomationPlan): AutomationPlan 
   return { jobType, title, summary, steps, missingFields, limitations, source: "ai" };
 }
 
-export async function buildAutomationPlan(input: { request: string; assessment: ReadinessAssessment }) {
+export async function buildAutomationPlan(input: { request: string; assessment: ReadinessAssessment; operatingType: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" }) {
   const fallback = fallbackPlan(input.request, input.assessment);
   const actionContext = input.assessment.actions.map(action => ({ id: action.id, state: action.state, executable: action.executable })).slice(0, 5);
   try {
@@ -48,15 +51,19 @@ export async function buildAutomationPlan(input: { request: string; assessment: 
       model: "gpt-5-mini",
       maxTokens: 600,
       messages: [
-        { role: "system", content: "You are NSOS Automation Desk planner. Classify a Nigerian school owner’s request into exactly one supplied internal job type. Return a concise plan only. You must not claim execution, infer school facts, request secrets, request payment data, request learner or guardian data, or produce public claims. Never recommend sending invitations, activating fees, publishing a website, connecting a domain, changing providers, creating accounts, enrolling learners, grading, completing a learner, or issuing a credential. Staff jobs may prepare a private draft only. Finance jobs may prepare an inactive draft only. Course and website jobs require their dedicated editable review workspaces. Return only the requested JSON." },
+        { role: "system", content: "You are NSOS Automation Desk planner. Classify a Nigerian school owner’s request into exactly one supplied internal job type. Return a concise plan only. You must not claim execution, infer school facts, request secrets, request payment data, request learner or guardian data, or produce public claims. Never recommend sending invitations, activating fees, publishing a website, connecting a domain, changing providers, creating accounts, enrolling learners, grading, completing a learner, or issuing a credential. Use online_school_launch only for an explicit full online-school or online-training launch request. That job creates a private draft-only learning foundation and configuration-readiness record in the existing institution; it never creates people, mock records, payments, messages, public content, a tutor account, or credentials. Staff jobs may prepare a private draft only. Finance jobs may prepare an inactive draft only. Course and website jobs require their dedicated editable review workspaces. Return only the requested JSON." },
         { role: "user", content: `Owner goal: ${input.request.trim().slice(0, 600)}\n\nTenant readiness: ${JSON.stringify({ completionPercent: input.assessment.completionPercent, actions: actionContext })}` },
       ],
       response_format: { type: "json_schema", json_schema: { name: "nsos_automation_plan", strict: true, schema: { type: "object", properties: { jobType: { type: "string", enum: allowedTypes }, title: { type: "string" }, summary: { type: "string" }, steps: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } }, missingFields: { type: "array", maxItems: 4, items: { type: "string" } }, limitations: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } } }, required: ["jobType", "title", "summary", "steps", "missingFields", "limitations"], additionalProperties: false } } },
     });
     const content = response.choices[0]?.message.content;
-    return validatePlan(typeof content === "string" ? JSON.parse(content) : null, fallback);
+    const plan = validatePlan(typeof content === "string" ? JSON.parse(content) : null, fallback);
+    if (plan.jobType !== "online_school_launch") return plan;
+    const launchDraft = await buildCourseStudioDraft({ brief: input.request, audience: "Organisation to confirm intended learners", operatingType: input.operatingType, deliveryMode: "self_paced", durationPreference: "Owner to review" });
+    return { ...plan, launchDraft };
   } catch {
-    return fallback;
+    if (fallback.jobType !== "online_school_launch") return fallback;
+    return { ...fallback, launchDraft: await buildCourseStudioDraft({ brief: input.request, audience: "Organisation to confirm intended learners", operatingType: input.operatingType, deliveryMode: "self_paced", durationPreference: "Owner to review" }) };
   }
 }
 

@@ -96,7 +96,7 @@ import { ENV } from "./_core/env";
 import { invokeLLM } from "./_core/llm";
 import { generateSupervisedTutorResponse } from "./aiTutor";
 import { generateReviewableAdCopy } from "./advertisingCopy";
-import type { AcademicAutomationInput, AutomationJobType, AutomationPlan, FinanceAutomationInput, StaffAutomationInput, ValidAutomationInput } from "./automationDesk";
+import type { AcademicAutomationInput, AutomationJobType, AutomationPlan, FinanceAutomationInput, OnlineSchoolLaunchInput, StaffAutomationInput, ValidAutomationInput } from "./automationDesk";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
 import { deriveTenantOnboardingStatus } from "./tenantOnboarding";
@@ -1817,12 +1817,12 @@ async function addAutomationJobEvent(input: { schoolId: number; jobId: number; a
   await (await database()).insert(automationJobEvents).values(input);
 }
 
-export async function createAutomationJob(input: { schoolId: number; createdBy: number; jobType: AutomationJobType; requestSummary: string; plan: AutomationPlan; idempotencyKey: string }) {
+export async function createAutomationJob(input: { schoolId: number; createdBy: number; jobType: AutomationJobType; requestSummary: string; plan: AutomationPlan; input?: ValidAutomationInput; idempotencyKey: string }) {
   const db = await database();
   const existing = (await db.select().from(automationJobs).where(and(eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.createdBy), eq(automationJobs.idempotencyKey, input.idempotencyKey))).limit(1))[0];
   if (existing) return existing;
-  const status = input.plan.missingFields.length ? "needs_input" as const : "ready_for_review" as const;
-  const created = await db.insert(automationJobs).values({ schoolId: input.schoolId, createdBy: input.createdBy, jobType: input.jobType, status, requestSummary: input.requestSummary.slice(0, 280), plan: input.plan, idempotencyKey: input.idempotencyKey });
+  const status = input.input || !input.plan.missingFields.length ? "ready_for_review" as const : "needs_input" as const;
+  const created = await db.insert(automationJobs).values({ schoolId: input.schoolId, createdBy: input.createdBy, jobType: input.jobType, status, requestSummary: input.requestSummary.slice(0, 280), plan: input.plan, input: input.input ?? null, idempotencyKey: input.idempotencyKey });
   const jobId = Number(created[0].insertId);
   await addAutomationJobEvent({ schoolId: input.schoolId, jobId, actorUserId: input.createdBy, eventType: "created", label: status === "needs_input" ? "Automation job is waiting for approved school details." : "Automation job is ready for review." });
   return (await db.select().from(automationJobs).where(eq(automationJobs.id, jobId)).limit(1))[0]!;
@@ -1883,6 +1883,13 @@ export async function executeAutomationJob(input: { schoolId: number; userId: nu
   if (job.jobType === "academic_foundation") {
     const result = await runCopilotSetupAgentAcademicFoundation({ schoolId: input.schoolId, executedBy: input.userId, ...(job.input as AcademicAutomationInput) });
     return { label: `Academic foundation completed: ${result.classesCreated} class${result.classesCreated === 1 ? "" : "es"} created and curriculum linked.`, destination: "academics", references: [{ type: "academic_session", id: result.sessionId }, { type: "academic_term", id: result.termId }, ...result.classIds.map(id => ({ type: "class", id }))] } satisfies AutomationJobResult;
+  }
+  if (job.jobType === "online_school_launch") {
+    const launch = job.input as OnlineSchoolLaunchInput;
+    if (launch.validationMode !== "private_configuration_only" || !launch.draft) throw new Error("This private launch job is missing its server-generated course blueprint.");
+    const result = await applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: input.userId, draft: launch.draft });
+    await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.userId, eventType: "automation_private_online_school_launch_completed", targetType: "learning_program", targetId: result.programId, metadata: { programStatus: result.status, moduleCount: result.moduleCount, milestoneCount: result.milestoneCount, materialCount: result.materialCount, configurationValidation: "passed", privateOnly: true, mockPeopleCreated: false, paymentAction: false, messageSent: false, publicAction: false, tutorAccountCreated: false, credentialIssued: false } });
+    return { label: `Private online-school foundation completed: 1 draft programme, ${result.moduleCount} modules, ${result.milestoneCount} milestones, and ${result.materialCount} internal materials. Configuration-readiness check passed; no people, public content, messages, payments, or credentials were created.`, destination: "learning", references: [{ type: "learning_program_draft", id: result.programId }] } satisfies AutomationJobResult;
   }
   if (job.jobType === "staff_invitation_draft") {
     const result = await prepareCopilotSetupAgentStaffInvitation({ schoolId: input.schoolId, preparedBy: input.userId, ...(job.input as StaffAutomationInput) });

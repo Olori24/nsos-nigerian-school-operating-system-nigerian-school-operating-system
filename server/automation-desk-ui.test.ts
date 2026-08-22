@@ -23,4 +23,16 @@ describe("Automation Desk presentation", () => {
     expect(desk).toContain("Open Course Studio");
     expect(desk).toContain("Open Website Studio");
   });
+
+  it("offers a direct single-prompt online-school launcher with a private blueprint and configuration-only test boundary", () => {
+    expect(desk).toContain("Launch an online school from one prompt");
+    expect(desk).toContain("Use the single-prompt launcher");
+    expect(desk).toContain("Private online-school foundation");
+    expect(desk).toContain("Private launch ready for one approval");
+    expect(desk).toContain("Approve private launch");
+    expect(desk).toContain("Private launch configuration ready");
+    expect(desk).toContain("It never creates mock people or launches publicly.");
+    expect(desk).toContain("test people, payments, messages, public content, a tutor account, or credentials");
+    expect(desk).toContain("Value preparation: review this internal offer");
+  });
 });

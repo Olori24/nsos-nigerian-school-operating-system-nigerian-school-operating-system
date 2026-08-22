@@ -292,9 +292,11 @@ export const nsosRouter = router({
         const rate = await db.consumeSharedRateLimit({ namespace: "nsos-automation-desk", route: "job-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Automation Desk is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const assessment = buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId));
-        const plan = await buildAutomationPlan({ request: input.request, assessment });
-        const job = await db.createAutomationJob({ schoolId: input.schoolId, createdBy: ctx.user.id, jobType: plan.jobType, requestSummary: plan.title, plan, idempotencyKey: input.idempotencyKey });
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_prepared", targetType: "automation_job", targetId: job.id, metadata: { jobType: plan.jobType, source: plan.source, status: job.status, promptStored: false, requiresConfirmation: true, executable: jobCanRun(plan.jobType), publicAction: false, accountCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
+        const operatingType = await db.getLearningOperatingType(input.schoolId);
+        const plan = await buildAutomationPlan({ request: input.request, assessment, operatingType });
+        const launchInput = plan.jobType === "online_school_launch" && plan.launchDraft ? { draft: { courseTitle: plan.launchDraft.courseTitle, courseSummary: plan.launchDraft.courseSummary, deliveryMode: plan.launchDraft.deliveryMode, durationLabel: plan.launchDraft.durationLabel, modules: plan.launchDraft.modules, materials: plan.launchDraft.materials }, validationMode: "private_configuration_only" as const } : undefined;
+        const job = await db.createAutomationJob({ schoolId: input.schoolId, createdBy: ctx.user.id, jobType: plan.jobType, requestSummary: plan.title, plan, input: launchInput, idempotencyKey: input.idempotencyKey });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_prepared", targetType: "automation_job", targetId: job.id, metadata: { jobType: plan.jobType, source: plan.source, status: job.status, promptStored: false, requiresConfirmation: true, executable: jobCanRun(plan.jobType), privateLaunch: plan.jobType === "online_school_launch", configurationValidationOnly: plan.jobType === "online_school_launch", publicAction: false, accountCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
         return job;
       }),
     saveInput: onboardingAdminProcedure

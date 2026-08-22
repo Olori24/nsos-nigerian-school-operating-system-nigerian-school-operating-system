@@ -121,7 +121,7 @@ export const automationJobs = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     createdBy: int("createdBy").notNull(),
-    jobType: mysqlEnum("jobType", ["academic_foundation", "course_draft", "website_draft", "staff_invitation_draft", "finance_draft", "manual_review"]).notNull(),
+    jobType: mysqlEnum("jobType", ["academic_foundation", "online_school_launch", "course_draft", "website_draft", "staff_invitation_draft", "finance_draft", "manual_review"]).notNull(),
     status: mysqlEnum("status", ["needs_input", "ready_for_review", "approved", "running", "completed", "blocked", "failed", "cancelled"]).notNull().default("needs_input"),
     requestSummary: varchar("requestSummary", { length: 280 }).notNull(),
     plan: json("plan").$type<{ title: string; summary: string; steps: string[]; missingFields: string[]; limitations: string[]; source: "ai" | "guided" }>().notNull(),
