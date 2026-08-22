@@ -30,6 +30,7 @@ import { StaffMigrationWorkspace } from "@/components/StaffMigrationWorkspace";
 import { AcademicMigrationWorkspace } from "@/components/AcademicMigrationWorkspace";
 import { LearningOperationsWorkspace } from "@/components/LearningOperationsWorkspace";
 import { LearnerProgramProgress } from "@/components/LearnerProgramProgress";
+import { InstitutionSwitcher } from "@/components/InstitutionSwitcher";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -412,8 +413,12 @@ export default function Home() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!schoolId && schoolsQuery.data?.[0]?.id) setSchoolId(schoolsQuery.data[0].id);
-  }, [schoolId, schoolsQuery.data]);
+    if (!schoolsQuery.data?.length) { if (schoolId) setSchoolId(null); return; }
+    const storedId = typeof window === "undefined" ? null : Number(window.localStorage.getItem(`nsos.active-institution.${user?.id}`));
+    const permittedId = schoolsQuery.data.some(item => item.id === schoolId) ? schoolId : null;
+    const restoredId = schoolsQuery.data.some(item => item.id === storedId) ? storedId : null;
+    if (!permittedId) setSchoolId(restoredId ?? schoolsQuery.data[0].id);
+  }, [schoolId, schoolsQuery.data, user?.id]);
 
   const contextQuery = trpc.nsos.schools.context.useQuery({ schoolId: schoolId ?? 0 }, { enabled: !!schoolId });
   const role = contextQuery.data?.role as Role | undefined;
@@ -464,6 +469,19 @@ export default function Home() {
     ]);
   };
 
+  const switchInstitution = (institutionId: number) => {
+    if (!schoolsQuery.data?.some(item => item.id === institutionId)) { toast.error("That institution is not available to this signed-in account."); return; }
+    if (typeof window !== "undefined") window.localStorage.setItem(`nsos.active-institution.${user?.id ?? "anonymous"}`, String(institutionId));
+    setSchoolId(institutionId);
+    setActiveView("overview");
+    setMobileNav(false);
+  };
+  const activateCreatedInstitution = async (institutionId: number) => {
+    const refreshed = await schoolsQuery.refetch();
+    if (!refreshed.data?.some(item => item.id === institutionId)) { toast.error("The new institution is not available to this account yet. Refresh and try again."); return; }
+    switchInstitution(institutionId);
+  };
+
   const accessibleViews = useMemo(() => new Set(navGroups.flatMap(group => group.items.filter(item => !role || item.roles.includes(role)).map(item => item.id))), [role]);
   useEffect(() => { if (role && !accessibleViews.has(activeView)) setActiveView(role === "parent" || role === "student" ? "portal" : "overview"); }, [activeView, accessibleViews, role]);
 
@@ -482,7 +500,7 @@ export default function Home() {
       <div className="flex min-h-screen">
         <Sidebar activeView={activeView} role={role!} schoolName={school.name} schoolCode={school.shortCode} userName={user.name} onSelect={selectView} onSignOut={logout} open={mobileNav} onClose={() => setMobileNav(false)} />
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-[#e0e5df] bg-[#f5f6f1]/90 px-5 backdrop-blur-xl sm:px-8 lg:px-10"><div className="flex min-w-0 items-center gap-3"><button className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5df] bg-white text-[#365047] lg:hidden" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu className="h-4 w-4" /></button><div className="hidden min-w-0 sm:block"><p className="mono truncate text-[10px] uppercase tracking-[0.14em] text-[#7a847e]">{school.shortCode} / {contextQuery.data.terms.find(term => term.isCurrent)?.name ?? "No current term"}</p><p className="truncate text-sm font-semibold text-[#20342c]">{school.name}</p></div></div><div className="flex items-center gap-2 sm:gap-3"><NsosCopilot schoolId={schoolId} role={role!} onNavigate={view => selectView(view as View)} />{platformAdmin && <button onClick={() => setPlatformRevenueOpen(true)} className="hidden items-center gap-2 rounded-lg border border-[#b9d5c0] bg-[#eff8f0] px-3 py-2 text-xs font-semibold text-[#176145] sm:inline-flex"><Banknote className="h-3.5 w-3.5" />Platform revenue</button>}<button onClick={() => selectView("communications")} className="relative grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5df] bg-white text-[#486057] transition hover:border-[#b8c8be]" aria-label="Open school communications and notices" title="Open school communications and notices"><Bell className="h-4 w-4" /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#c89135]" /></button><div className="hidden h-6 w-px bg-[#dfe5df] sm:block" /><div className="hidden text-right sm:block"><p className="text-xs font-semibold text-[#34483f]">{user.name ?? "School user"}</p><p className="mt-0.5 text-[10px] capitalize text-[#7a847e]">{role}</p></div><div className="grid h-9 w-9 place-items-center rounded-full bg-[#dceee3] text-xs font-bold text-[#0f5c4f]">{initials(user.name)}</div></div></header>
+          <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-[#e0e5df] bg-[#f5f6f1]/90 px-5 backdrop-blur-xl sm:px-8 lg:px-10"><div className="flex min-w-0 items-center gap-3"><button className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5df] bg-white text-[#365047] lg:hidden" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu className="h-4 w-4" /></button><InstitutionSwitcher institutions={schoolsQuery.data} activeInstitutionId={schoolId} onSwitch={switchInstitution} onCreated={activateCreatedInstitution} /><div className="hidden min-w-0 sm:block"><p className="mono truncate text-[10px] uppercase tracking-[0.14em] text-[#7a847e]">{school.shortCode} / {contextQuery.data.terms.find(term => term.isCurrent)?.name ?? "No current term"}</p><p className="truncate text-sm font-semibold text-[#20342c]">{school.name}</p></div></div><div className="flex items-center gap-2 sm:gap-3"><NsosCopilot schoolId={schoolId} role={role!} onNavigate={view => selectView(view as View)} />{platformAdmin && <button onClick={() => setPlatformRevenueOpen(true)} className="hidden items-center gap-2 rounded-lg border border-[#b9d5c0] bg-[#eff8f0] px-3 py-2 text-xs font-semibold text-[#176145] sm:inline-flex"><Banknote className="h-3.5 w-3.5" />Platform revenue</button>}<button onClick={() => selectView("communications")} className="relative grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5df] bg-white text-[#486057] transition hover:border-[#b8c8be]" aria-label="Open school communications and notices" title="Open school communications and notices"><Bell className="h-4 w-4" /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#c89135]" /></button><div className="hidden h-6 w-px bg-[#dfe5df] sm:block" /><div className="hidden text-right sm:block"><p className="text-xs font-semibold text-[#34483f]">{user.name ?? "School user"}</p><p className="mt-0.5 text-[10px] capitalize text-[#7a847e]">{role}</p></div><div className="grid h-9 w-9 place-items-center rounded-full bg-[#dceee3] text-xs font-bold text-[#0f5c4f]">{initials(user.name)}</div></div></header>
           <main className="app-grid min-h-[calc(100vh-70px)] px-5 py-7 sm:px-8 sm:py-9 lg:px-10"><div className="mx-auto max-w-[1440px] soft-enter"><Workspace view={activeView} schoolId={schoolId} schoolName={school.name} role={role!} summary={summaryQuery} applications={applicationsQuery} students={studentsQuery} academics={academicsQuery} attendance={attendanceQuery} absenceAlerts={absenceAlertsQuery} results={resultsQuery} finance={financeQuery} staff={staffQuery} staffOperations={staffOperationsQuery} announcements={announcementsQuery} guardianPortal={guardianPortalQuery} studentPortal={studentPortalQuery} onRefresh={refresh} onNavigate={selectView} /></div></main>
           {platformAdmin && <PlatformRevenueConsole open={platformRevenueOpen} onClose={() => setPlatformRevenueOpen(false)} />}
         </div>

@@ -564,7 +564,7 @@ export async function listUserSecurityActivity(userId: number, limit = 20) {
 export async function listUserSchools(userId: number) {
   const db = await database();
   return db
-    .select({ id: schools.id, name: schools.name, shortCode: schools.shortCode, state: schools.state, role: schoolMemberships.role })
+    .select({ id: schools.id, name: schools.name, shortCode: schools.shortCode, state: schools.state, operatingType: schools.operatingType, role: schoolMemberships.role })
     .from(schoolMemberships)
     .innerJoin(schools, eq(schoolMemberships.schoolId, schools.id))
     .where(and(eq(schoolMemberships.userId, userId), eq(schoolMemberships.status, "active")));
@@ -578,12 +578,13 @@ export async function getSchoolByCode(shortCode: string) {
   return { ...school, admissionTemplate: publicAdmissionTemplate(template) };
 }
 
-export async function createSchool(input: { name: string; shortCode: string; state?: string; email?: string; phone?: string; createdBy: number }) {
+export async function createSchool(input: { name: string; shortCode: string; operatingType?: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider"; state?: string; email?: string; phone?: string; createdBy: number }) {
   const db = await database();
   const created = await db.insert(schools).values({ ...input, shortCode: input.shortCode.trim().toUpperCase(), currency: "NGN", timezone: "Africa/Lagos" });
   const schoolId = Number(created[0].insertId);
   await db.insert(schoolMemberships).values({ schoolId, userId: input.createdBy, role: "owner", status: "active" });
   await db.insert(schoolSubscriptions).values({ schoolId, status: "trial", billingCycle: "manual", assignedBy: input.createdBy, note: "Commercial plan not yet assigned." });
+  await recordSecurityAuditEvent({ schoolId, actorUserId: input.createdBy, eventType: "institution_workspace_created", targetType: "learning_organisation", targetId: schoolId, metadata: { operatingType: input.operatingType ?? "school", ownerMembershipCreated: true, peopleCreated: false, financialRecordsCreated: false } });
   return { schoolId };
 }
 

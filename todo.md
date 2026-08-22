@@ -232,3 +232,8 @@
 - [x] Build responsive owner/admin programme operations and learner-facing progress views with explicit empty, review, confirmation, and unavailable states.
 - [x] Extend the Enterprise Concierge and onboarding guidance so it provides only role-permitted workflows and terminology appropriate to the tenant operating type.
 - [x] Add authorization, tenant-isolation, legacy-school compatibility, and programme-lifecycle regression coverage; validate and publish the expansion safely.
+- [x] Audit the current owner-to-institution membership and active-workspace selection flow to identify all single-institution assumptions.
+- [x] Enable an authenticated owner to create additional empty institution workspaces with an explicitly selected operating type, while preserving the original institution and all tenant boundaries.
+- [x] Add a responsive, accessible institution switcher that lists only the signed-in user’s active memberships and clearly displays the current institution and operating type.
+- [x] Ensure institution switching resets cached workspace state safely and never exposes learners, staff, finance, programmes, documents, or provider settings from another institution.
+- [x] Add regression coverage for multi-institution ownership, membership-denied switches, selected-workspace isolation, new-institution empty state, and switcher keyboard accessibility; validate and publish safely.
