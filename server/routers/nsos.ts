@@ -439,6 +439,10 @@ export const nsosRouter = router({
     status: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getTenantOnboardingStatus(input.schoolId)),
   }),
 
+  operations: router({
+    commandCenter: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getOperationsCommandCenter(input.schoolId)),
+  }),
+
   admissions: router({
     originOptions: publicProcedure.input(z.object({ state: z.string().max(120).optional() })).query(({ input }) => ({ states: listNigerianOriginStates(), lgas: input.state ? listNigerianLgas(input.state) : [] })),
     publicSchool: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getSchoolByCode(input.shortCode)),

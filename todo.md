@@ -218,3 +218,6 @@
 - [x] Add owner/admin-selectable website visual themes that the supervised AI website workflow can include only in an editable unpublished draft.
 - [x] Add tenant-scoped visual-theme persistence and responsive public-site rendering without altering content, publishing state, or custom-domain controls.
 - [x] Add regression coverage for visual-theme authorization, tenant isolation, draft-only application, fallback styling, and public rendering.
+- [x] Add an owner/admin Operations Command Center that aggregates real tenant readiness across academic setup, staffing, finance, communications, public website, and safe migration history.
+- [x] Provide direct next-action routes and supervised-agent entry points without exposing staff, learner, guardian, provider credential, or cross-tenant data.
+- [x] Add regression coverage for command-center authorization, tenant isolation, readiness accuracy, and safe action routing.

@@ -1601,6 +1601,37 @@ export async function getTenantOnboardingStatus(schoolId: number) {
   });
 }
 
+export async function getOperationsCommandCenter(schoolId: number) {
+  const [onboarding, email, providers, studentBatches, staffBatches, academicBatches] = await Promise.all([
+    getTenantOnboardingStatus(schoolId),
+    getEmailServiceReadiness(schoolId),
+    listProviderConfigurations(schoolId),
+    listStudentMigrationBatches(schoolId),
+    listStaffMigrationBatches(schoolId),
+    listAcademicMigrationBatches(schoolId),
+  ]);
+  const completedBatches = (batches: Array<{ status: string; createdAt: Date; completedAt: Date | null }>) => ({
+    completed: batches.filter(batch => batch.status === "completed").length,
+    latestCompletedAt: batches.find(batch => batch.status === "completed")?.completedAt ?? null,
+    latestCreatedAt: batches[0]?.createdAt ?? null,
+  });
+  const channelStatus = providers.map(provider => ({ channel: provider.channel, provider: provider.provider, status: provider.status, readiness: provider.readiness, configured: provider.status === "ready" }));
+  return {
+    onboarding,
+    nextAction: onboarding.nextStep ? { label: onboarding.nextStep.actionLabel ?? onboarding.nextStep.label, destination: onboarding.nextStep.destination ?? null, description: onboarding.nextStep.description } : null,
+    communications: {
+      channels: channelStatus,
+      readyChannels: channelStatus.filter(channel => channel.configured).length,
+      email: { status: email.status, managedSenderNeedsVerification: email.managedSenderNeedsVerification, failedCount: email.failedCount, acceptedCount: email.acceptedCount, launchChecklist: email.launchChecklist },
+    },
+    migrations: {
+      students: completedBatches(studentBatches),
+      staff: completedBatches(staffBatches),
+      academics: completedBatches(academicBatches),
+    },
+  };
+}
+
 export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: number; executedBy: number; sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean }) {
   const db = await database();
   const sessionName = input.sessionName.trim();
