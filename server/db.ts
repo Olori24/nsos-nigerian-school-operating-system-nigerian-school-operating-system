@@ -1343,7 +1343,7 @@ export async function getSchoolWebsite(schoolId: number) {
   const school = (await db.select().from(schools).where(eq(schools.id, schoolId)).limit(1))[0];
   if (!school) throw new Error("School not found.");
   const website = (await db.select().from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1))[0];
-  const effectiveWebsite = website ?? { schoolId, headline: `${school.name}: learning for a brighter future.`, introduction: "", primaryColor: "#0f5c4f", contactEmail: school.email, contactPhone: school.phone, campusLocation: school.address ?? school.state, customDomain: null, domainStatus: "not_configured", admissionsEnabled: true, logoMediaId: null, heroMediaId: null, published: false };
+  const effectiveWebsite = website ?? { schoolId, headline: `${school.name}: learning for a brighter future.`, introduction: "", primaryColor: "#0f5c4f", contactEmail: school.email, contactPhone: school.phone, campusLocation: school.address ?? school.state, customDomain: null, domainStatus: "not_configured", admissionsEnabled: true, logoMediaId: null, heroMediaId: null, visualTheme: "modern" as const, published: false };
   return { school, website: { ...effectiveWebsite, ...(await publicSelectedWebsiteMedia(schoolId, effectiveWebsite)) }, media: await listSchoolWebsiteMedia(schoolId) };
 }
 
@@ -1474,7 +1474,7 @@ export async function createDraftFeesFromTemplate(input: { schoolId: number; ter
   return { createdCount: newRows.length, status: "draft" as const };
 }
 
-export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; logoMediaId?: number | null; heroMediaId?: number | null; published?: boolean }) {
+export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; logoMediaId?: number | null; heroMediaId?: number | null; visualTheme?: "modern" | "academic" | "community"; published?: boolean }) {
   const db = await database();
   const customDomain = normaliseDomain(input.customDomain);
   if (customDomain && !isValidCustomDomain(customDomain)) throw new Error("Enter a valid domain name without a protocol or path.");

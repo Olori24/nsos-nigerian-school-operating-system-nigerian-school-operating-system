@@ -215,3 +215,6 @@
 - [x] Add an owner/admin-only school website media library for approved logo and hero images, using private tenant-scoped storage with image signature, size, and duplicate checks.
 - [x] Allow the supervised website AI workflow to use only explicitly selected school-owned media in an editable unpublished draft, without generating images, publishing, or connecting a domain.
 - [x] Add regression coverage for media validation, tenant isolation, owner-admin controls, draft-only application, and safe public-website rendering of approved assets.
+- [x] Add owner/admin-selectable website visual themes that the supervised AI website workflow can include only in an editable unpublished draft.
+- [x] Add tenant-scoped visual-theme persistence and responsive public-site rendering without altering content, publishing state, or custom-domain controls.
+- [x] Add regression coverage for visual-theme authorization, tenant isolation, draft-only application, fallback styling, and public rendering.

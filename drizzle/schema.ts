@@ -210,6 +210,7 @@ export const schoolWebsites = mysqlTable(
     admissionsEnabled: boolean("admissionsEnabled").notNull().default(true),
     logoMediaId: int("logoMediaId"),
     heroMediaId: int("heroMediaId"),
+    visualTheme: mysqlEnum("visualTheme", ["modern", "academic", "community"]).notNull().default("modern"),
     published: boolean("published").notNull().default(false),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

@@ -13,6 +13,10 @@ describe("website media library interface", () => {
     expect(agent).toContain("checks the file signature");
     expect(agent).toContain("never generates images or public claims");
     expect(agent).toContain("logoMediaId, heroMediaId");
+    expect(agent).toContain("Website visual style");
+    expect(agent).toContain("Academic heritage");
+    expect(agent).toContain("Community warmth");
+    expect(agent).toContain("visualTheme");
   });
 
   it("renders selected assets with safe fallback branding in draft and public website layouts", () => {
@@ -20,5 +24,9 @@ describe("website media library interface", () => {
     expect(publicWebsite).toContain("website.heroUrl && <img");
     expect(publicWebsite).toContain("School-provided website hero");
     expect(publicWebsite).toContain("<GraduationCap");
+    expect(publicWebsite).toContain("const visualTheme = website.visualTheme ?? \"modern\"");
+    expect(publicWebsite).toContain("data-visual-theme={visualTheme}");
+    expect(publicWebsite).toContain("Education with purpose");
+    expect(publicWebsite).toContain("Together, we grow");
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `schoolWebsites` ADD `visualTheme` enum('modern','academic','community') DEFAULT 'modern' NOT NULL;
