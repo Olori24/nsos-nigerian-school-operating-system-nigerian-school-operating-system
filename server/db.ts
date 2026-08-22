@@ -7,6 +7,8 @@ import {
   academicMigrationBatches,
   academicSessions,
   academicTerms,
+  automationJobEvents,
+  automationJobs,
   advertisingCampaigns,
   aiTutorEscalations,
   aiTutorFeedback,
@@ -94,6 +96,7 @@ import { ENV } from "./_core/env";
 import { invokeLLM } from "./_core/llm";
 import { generateSupervisedTutorResponse } from "./aiTutor";
 import { generateReviewableAdCopy } from "./advertisingCopy";
+import type { AcademicAutomationInput, AutomationJobType, AutomationPlan, FinanceAutomationInput, StaffAutomationInput, ValidAutomationInput } from "./automationDesk";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
 import { deriveTenantOnboardingStatus } from "./tenantOnboarding";
@@ -1800,6 +1803,96 @@ export async function activateCopilotSetupAgentFinanceDraft(input: { schoolId: n
   const approvalNote = input.approvalNote?.trim();
   await recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: input.approvedBy, eventType: "copilot_setup_agent_finance_draft_activated", targetType: "fee_structure", targetId: input.feeStructureId, metadata: { mandatory: draft.mandatory, activatedFromDraft: true, explicitApproval: true, ...(approvalNote ? { approvalNote } : {}) } });
   return { feeStructureId: input.feeStructureId, status: "active" as const };
+}
+
+type AutomationJobResult = { label: string; destination: string; references: Array<{ type: string; id: number }> };
+
+async function automationJobForActor(input: { schoolId: number; userId: number; jobId: number }) {
+  const row = (await (await database()).select().from(automationJobs).where(and(eq(automationJobs.id, input.jobId), eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.userId))).limit(1))[0];
+  if (!row) throw new Error("This automation job is unavailable in your active institution.");
+  return row;
+}
+
+async function addAutomationJobEvent(input: { schoolId: number; jobId: number; actorUserId?: number; eventType: "created" | "input_saved" | "approved" | "started" | "completed" | "blocked" | "failed" | "cancelled"; label: string; details?: { destination?: string; referenceCount?: number; retryable?: boolean } }) {
+  await (await database()).insert(automationJobEvents).values(input);
+}
+
+export async function createAutomationJob(input: { schoolId: number; createdBy: number; jobType: AutomationJobType; requestSummary: string; plan: AutomationPlan; idempotencyKey: string }) {
+  const db = await database();
+  const existing = (await db.select().from(automationJobs).where(and(eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.createdBy), eq(automationJobs.idempotencyKey, input.idempotencyKey))).limit(1))[0];
+  if (existing) return existing;
+  const status = input.plan.missingFields.length ? "needs_input" as const : "ready_for_review" as const;
+  const created = await db.insert(automationJobs).values({ schoolId: input.schoolId, createdBy: input.createdBy, jobType: input.jobType, status, requestSummary: input.requestSummary.slice(0, 280), plan: input.plan, idempotencyKey: input.idempotencyKey });
+  const jobId = Number(created[0].insertId);
+  await addAutomationJobEvent({ schoolId: input.schoolId, jobId, actorUserId: input.createdBy, eventType: "created", label: status === "needs_input" ? "Automation job is waiting for approved school details." : "Automation job is ready for review." });
+  return (await db.select().from(automationJobs).where(eq(automationJobs.id, jobId)).limit(1))[0]!;
+}
+
+export async function listAutomationJobs(input: { schoolId: number; userId: number }) {
+  return (await (await database()).select().from(automationJobs).where(and(eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.userId))).orderBy(desc(automationJobs.updatedAt)).limit(20));
+}
+
+export async function getAutomationJobDetail(input: { schoolId: number; userId: number; jobId: number }) {
+  const job = await automationJobForActor(input);
+  const events = await (await database()).select().from(automationJobEvents).where(and(eq(automationJobEvents.schoolId, input.schoolId), eq(automationJobEvents.jobId, input.jobId))).orderBy(automationJobEvents.occurredAt).limit(30);
+  return { job, events };
+}
+
+export async function saveAutomationJobInput(input: { schoolId: number; userId: number; jobId: number; value: ValidAutomationInput }) {
+  const job = await automationJobForActor(input);
+  if (!(["needs_input", "ready_for_review", "failed"] as string[]).includes(job.status)) throw new Error("This automation job is already being processed or has finished.");
+  await (await database()).update(automationJobs).set({ input: input.value, status: "ready_for_review", failureCode: null }).where(eq(automationJobs.id, input.jobId));
+  await addAutomationJobEvent({ schoolId: input.schoolId, jobId: input.jobId, actorUserId: input.userId, eventType: "input_saved", label: "School-approved details are ready for review." });
+  return automationJobForActor(input);
+}
+
+export async function approveAutomationJob(input: { schoolId: number; userId: number; jobId: number }) {
+  const job = await automationJobForActor(input);
+  if (job.status === "completed") return job;
+  if (job.status !== "ready_for_review" || !job.input) throw new Error("Add and review the required school-approved details before approving this job.");
+  const updated = await (await database()).update(automationJobs).set({ status: "approved", approvedBy: input.userId, approvedAt: new Date() }).where(and(eq(automationJobs.id, input.jobId), eq(automationJobs.status, "ready_for_review")));
+  const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This job changed while it was being reviewed. Refresh it before continuing.");
+  await addAutomationJobEvent({ schoolId: input.schoolId, jobId: input.jobId, actorUserId: input.userId, eventType: "approved", label: "Automation job was approved for one controlled run." });
+  return automationJobForActor(input);
+}
+
+export async function claimAutomationJobExecution(input: { schoolId: number; userId: number; jobId: number }) {
+  const updated = await (await database()).update(automationJobs).set({ status: "running", startedAt: new Date() }).where(and(eq(automationJobs.id, input.jobId), eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.userId), eq(automationJobs.status, "approved")));
+  const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This job is not available to run. Refresh to see its current state.");
+  await addAutomationJobEvent({ schoolId: input.schoolId, jobId: input.jobId, actorUserId: input.userId, eventType: "started", label: "NSOS is completing the approved internal setup work." });
+  return automationJobForActor(input);
+}
+
+export async function completeAutomationJob(input: { schoolId: number; userId: number; jobId: number; result: AutomationJobResult }) {
+  await (await database()).update(automationJobs).set({ status: "completed", completedAt: new Date(), result: input.result, failureCode: null }).where(and(eq(automationJobs.id, input.jobId), eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.userId), eq(automationJobs.status, "running")));
+  await addAutomationJobEvent({ schoolId: input.schoolId, jobId: input.jobId, actorUserId: input.userId, eventType: "completed", label: input.result.label, details: { destination: input.result.destination, referenceCount: input.result.references.length } });
+  return automationJobForActor(input);
+}
+
+export async function failAutomationJob(input: { schoolId: number; userId: number; jobId: number; failureCode: string }) {
+  await (await database()).update(automationJobs).set({ status: "failed", failureCode: input.failureCode.slice(0, 96) }).where(and(eq(automationJobs.id, input.jobId), eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.userId), eq(automationJobs.status, "running")));
+  await addAutomationJobEvent({ schoolId: input.schoolId, jobId: input.jobId, actorUserId: input.userId, eventType: "failed", label: "Automation stopped before NSOS could confirm a complete outcome. Review the target workspace before retrying.", details: { retryable: false } });
+  return automationJobForActor(input);
+}
+
+export async function executeAutomationJob(input: { schoolId: number; userId: number; jobId: number }) {
+  const job = await automationJobForActor(input);
+  if (job.status !== "running" || !job.input) throw new Error("This job has not been approved for execution.");
+  if (job.jobType === "academic_foundation") {
+    const result = await runCopilotSetupAgentAcademicFoundation({ schoolId: input.schoolId, executedBy: input.userId, ...(job.input as AcademicAutomationInput) });
+    return { label: `Academic foundation completed: ${result.classesCreated} class${result.classesCreated === 1 ? "" : "es"} created and curriculum linked.`, destination: "academics", references: [{ type: "academic_session", id: result.sessionId }, { type: "academic_term", id: result.termId }, ...result.classIds.map(id => ({ type: "class", id }))] } satisfies AutomationJobResult;
+  }
+  if (job.jobType === "staff_invitation_draft") {
+    const result = await prepareCopilotSetupAgentStaffInvitation({ schoolId: input.schoolId, preparedBy: input.userId, ...(job.input as StaffAutomationInput) });
+    return { label: "Private staff invitation draft prepared. Delivery still needs its separate confirmation.", destination: "staff", references: [{ type: "staff_invitation_draft", id: result.invitationId }] } satisfies AutomationJobResult;
+  }
+  if (job.jobType === "finance_draft") {
+    const result = await prepareCopilotSetupAgentFinanceDraft({ schoolId: input.schoolId, preparedBy: input.userId, ...(job.input as FinanceAutomationInput) });
+    return { label: "Inactive fee structure draft prepared. Activation still needs separate final approval.", destination: "finance", references: [{ type: "fee_structure_draft", id: result.feeStructureId }] } satisfies AutomationJobResult;
+  }
+  throw new Error("This goal requires its dedicated review workspace and cannot run as a one-tap job.");
 }
 
 export async function listApplications(schoolId: number, status?: "submitted" | "under_review" | "accepted" | "declined" | "enrolled") {

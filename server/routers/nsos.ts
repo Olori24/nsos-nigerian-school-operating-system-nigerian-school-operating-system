@@ -5,6 +5,7 @@ import { sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffS
 import { buildAdmissionLetter } from "../admissionLetter";
 import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
+import { buildAutomationPlan, jobCanRun, validateAutomationInput } from "../automationDesk";
 import { buildCourseStudioDraft } from "../courseStudio";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildEnterpriseConciergePlan } from "../enterpriseConcierge";
@@ -279,6 +280,53 @@ export const nsosRouter = router({
         }
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "enterprise_concierge_plan_generated", targetType: "enterprise_concierge", targetId: plan.action.id, metadata: { source: plan.source, role, actionKind: plan.action.kind, actionId: plan.action.id, requiresConfirmation: plan.action.requiresConfirmation } });
         return plan;
+      }),
+  }),
+
+  automationDesk: router({
+    jobs: onboardingAdminProcedure.input(schoolInput).query(({ ctx, input }) => db.listAutomationJobs({ schoolId: input.schoolId, userId: ctx.user.id })),
+    detail: onboardingAdminProcedure.input(schoolInput.extend({ jobId: z.number().int().positive() })).query(({ ctx, input }) => db.getAutomationJobDetail({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId })),
+    create: onboardingAdminProcedure
+      .input(schoolInput.extend({ request: z.string().trim().min(2).max(600), idempotencyKey: z.string().trim().min(12).max(96) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-automation-desk", route: "job-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Automation Desk is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const assessment = buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId));
+        const plan = await buildAutomationPlan({ request: input.request, assessment });
+        const job = await db.createAutomationJob({ schoolId: input.schoolId, createdBy: ctx.user.id, jobType: plan.jobType, requestSummary: plan.title, plan, idempotencyKey: input.idempotencyKey });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_prepared", targetType: "automation_job", targetId: job.id, metadata: { jobType: plan.jobType, source: plan.source, status: job.status, promptStored: false, requiresConfirmation: true, executable: jobCanRun(plan.jobType), publicAction: false, accountCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
+        return job;
+      }),
+    saveInput: onboardingAdminProcedure
+      .input(schoolInput.extend({ jobId: z.number().int().positive(), input: z.record(z.string(), z.unknown()), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const detail = await db.getAutomationJobDetail({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+        if (!jobCanRun(detail.job.jobType)) throw new TRPCError({ code: "BAD_REQUEST", message: "This goal needs its dedicated editable workspace and cannot run as a one-tap automation job." });
+        const validated = validateAutomationInput(detail.job.jobType, input.input);
+        const job = await db.saveAutomationJobInput({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId, value: validated });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_input_reviewed", targetType: "automation_job", targetId: input.jobId, metadata: { jobType: job.jobType, inputStored: true, rawPromptStored: false, confirmationRequired: true } });
+        return job;
+      }),
+    approveAndRun: onboardingAdminProcedure
+      .input(schoolInput.extend({ jobId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-automation-desk", route: "job-run", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Automation Desk is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const existing = await db.getAutomationJobDetail({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+        if (!jobCanRun(existing.job.jobType)) throw new TRPCError({ code: "BAD_REQUEST", message: "This goal needs its dedicated editable workspace and cannot run as a one-tap automation job." });
+        if (existing.job.status === "completed") return existing.job;
+        await db.approveAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+        await db.claimAutomationJobExecution({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+        try {
+          const result = await db.executeAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+          const job = await db.completeAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId, result });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_completed", targetType: "automation_job", targetId: input.jobId, metadata: { jobType: job.jobType, destination: result.destination, referenceCount: result.references.length, confirmationRequired: true, publicAction: false, accountCreated: false, invitationSent: false, feeActivated: false, paymentAction: false, providerChanged: false, credentialIssued: false } });
+          return job;
+        } catch (error) {
+          await db.failAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId, failureCode: "execution_failed" });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_failed", targetType: "automation_job", targetId: input.jobId, metadata: { failureCode: "execution_failed", outcomeConfirmed: false, automaticRetry: false } });
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error ? `${error.message} Review the target workspace before attempting a new job.` : "The automation job stopped. Review the target workspace before attempting a new job." });
+        }
       }),
   }),
 

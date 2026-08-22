@@ -10,8 +10,10 @@ const websiteAgent = readFileSync(resolve(root, "client/src/components/WebsiteSe
 const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 
 describe("NSOS Copilot setup agent interface", () => {
-  it("keeps the setup agent inside the Copilot experience and restricts it to owner/admin roles", () => {
-    expect(copilot).toContain("CopilotSetupAgent");
+  it("hands owner/admin setup goals into the direct Automation Desk instead of trapping users in a fragmented preparation panel", () => {
+    expect(copilot).toContain('onNavigate("automation")');
+    expect(copilot).toContain("nsos-automation-desk-request");
+    expect(copilot).toContain("Your goal is ready in Automation Desk for a short reviewed job.");
     expect(agent).toContain('role === "owner" || role === "admin"');
     expect(agent).toContain("The setup agent is available to the school owner and administrators.");
   });
@@ -55,11 +57,11 @@ describe("NSOS Copilot setup agent interface", () => {
     expect(websiteAgent).toContain("No publication, message sending, domain change, image generation, or data invention occurs here.");
   });
 
-  it("presents the Enterprise Concierge as a prompt-led, review-first handoff and remediates priority static workspace controls", () => {
+  it("presents the Enterprise Concierge as a prompt-led handoff into a reviewable job and remediates priority static workspace controls", () => {
     expect(copilot).toContain("NSOS Enterprise Concierge");
     expect(copilot).toContain("Describe an operational goal.");
     expect(copilot).toContain("Review preparation");
-    expect(copilot).toContain("protected forms, review screens, and final confirmations remain mandatory");
+    expect(copilot).toContain("Setup goals can continue in Automation Desk as a visible reviewed job");
     expect(home).toContain('selectView("communications")');
     expect(home).not.toContain("All operational alerts appear here as you record attendance, results, payments, and approvals.");
     expect(home).not.toContain("School configuration is managed through your NSOS owner workspace.");

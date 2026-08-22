@@ -115,6 +115,51 @@ export const copilotRecentSearches = mysqlTable(
   }),
 );
 
+export const automationJobs = mysqlTable(
+  "automationJobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    createdBy: int("createdBy").notNull(),
+    jobType: mysqlEnum("jobType", ["academic_foundation", "course_draft", "website_draft", "staff_invitation_draft", "finance_draft", "manual_review"]).notNull(),
+    status: mysqlEnum("status", ["needs_input", "ready_for_review", "approved", "running", "completed", "blocked", "failed", "cancelled"]).notNull().default("needs_input"),
+    requestSummary: varchar("requestSummary", { length: 280 }).notNull(),
+    plan: json("plan").$type<{ title: string; summary: string; steps: string[]; missingFields: string[]; limitations: string[]; source: "ai" | "guided" }>().notNull(),
+    input: json("input").$type<Record<string, unknown>>(),
+    result: json("result").$type<{ label: string; destination: string; references: Array<{ type: string; id: number }> }>(),
+    idempotencyKey: varchar("idempotencyKey", { length: 96 }).notNull(),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    startedAt: timestamp("startedAt"),
+    completedAt: timestamp("completedAt"),
+    failureCode: varchar("failureCode", { length: 96 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolCreated: index("automation_job_school_created_idx").on(table.schoolId, table.createdAt),
+    schoolStatus: index("automation_job_school_status_idx").on(table.schoolId, table.status),
+    schoolActorKey: uniqueIndex("automation_job_school_actor_key_unique").on(table.schoolId, table.createdBy, table.idempotencyKey),
+  }),
+);
+
+export const automationJobEvents = mysqlTable(
+  "automationJobEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    jobId: int("jobId").notNull(),
+    actorUserId: int("actorUserId"),
+    eventType: mysqlEnum("eventType", ["created", "input_saved", "approved", "started", "completed", "blocked", "failed", "cancelled"]).notNull(),
+    label: varchar("label", { length: 240 }).notNull(),
+    details: json("details").$type<{ destination?: string; referenceCount?: number; retryable?: boolean }>(),
+    occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+  },
+  table => ({
+    schoolJobOccurred: index("automation_job_event_school_job_occurred_idx").on(table.schoolId, table.jobId, table.occurredAt),
+  }),
+);
+
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
