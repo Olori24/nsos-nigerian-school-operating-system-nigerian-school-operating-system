@@ -43,4 +43,17 @@ describe("Automation Desk presentation", () => {
     expect(desk).toContain("Use this full taster prompt");
     expect(desk).toContain('document.getElementById("automation-goal")?.scrollIntoView');
   });
+
+  it("shows truthful, accessible planning progress only while a full private setup prompt is being prepared", () => {
+    expect(desk).toContain("NSOS is preparing your private school blueprint");
+    expect(desk).toContain("Reading your learning brief");
+    expect(desk).toContain("Designing the private programme structure");
+    expect(desk).toContain("Checking private-launch safeguards");
+    expect(desk).toContain('role="progressbar"');
+    expect(desk).toContain('aria-live="polite"');
+    expect(desk).toContain("motion-reduce:animate-none");
+    expect(desk).toContain("This is preparation, not a completed or public launch.");
+    expect(desk).toContain("without creating a school, people, payments, messages, or public content");
+    expect(desk).toContain("Building your private launch plan…");
+  });
 });

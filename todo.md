@@ -274,3 +274,6 @@
 - [x] Audit the current README, repository metadata, validated product capabilities, security boundaries, and release evidence to identify an accurate investor-grade narrative without unsupported market, revenue, customer, outcome, or certification claims.
 - [x] Replace the README with a polished investor-grade project overview covering NSOS value proposition, buyer problem, operating model, product modules, AI/automation guardrails, multi-tenant architecture, security posture, launch evidence, roadmap, and concise repository setup guidance.
 - [x] Validate README links and factual consistency against the current code/docs, checkpoint the documentation update, push it to private GitHub main, verify the remote SHA, and report the repository refresh.
+- [x] Define truthful full-setup preparation stages that distinguish planning from completed setup, use accessible status language, and respect the user’s reduced-motion preference.
+- [x] Add a dynamic full-prompt loading animation and progress indicator to Automation Desk while the private online-school plan is being prepared, with safe cancellation/recovery messaging and no false live-launch claim.
+- [x] Add focused progress UI regressions, validate TypeScript and production build, visually verify the setup shell, checkpoint, and publish safely.
