@@ -206,3 +206,6 @@
 - [x] Validate migration rows before import, surface field-level errors and duplicate risks, and require an explicit final confirmation before any student records are created.
 - [x] Add tenant-scoped migration audit records, idempotency safeguards, import summaries, and regression coverage for authorization and school isolation.
 - [x] Add safe local CSV and tab-separated file selection to Secure Student Migration so owners can review approved spreadsheet extracts without manual copy-paste.
+- [x] Add an owner/admin-only, review-first staff migration workflow for school-approved employee records without creating login accounts or sending invitations automatically.
+- [x] Validate staff migration rows, employee-number and contact duplicates, role and employment-type values, then require final confirmation before staff profiles are created.
+- [x] Add tenant-scoped staff migration idempotency, safe operational batch history, audit records, and regression coverage for authorization and duplicate protection.

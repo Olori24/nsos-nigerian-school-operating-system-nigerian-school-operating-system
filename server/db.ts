@@ -62,6 +62,7 @@ import {
   schools,
   scores,
   staffDuties,
+  staffMigrationBatches,
   staffProfiles,
   staffSetupInvitations,
   studentGuardians,
@@ -2811,6 +2812,111 @@ export async function scanFamilyPaymentEvidence(input: { schoolId: number; userI
 
 export async function listStaff(schoolId: number) { return (await database()).select().from(staffProfiles).where(eq(staffProfiles.schoolId, schoolId)).orderBy(staffProfiles.lastName); }
 export const createStaff = async (input: Record<string, unknown>) => (await database()).insert(staffProfiles).values(input as typeof staffProfiles.$inferInsert);
+
+export type StaffMigrationRow = {
+  sourceRow: number;
+  employeeNo: string;
+  firstName: string;
+  lastName: string;
+  jobTitle: string;
+  employmentType?: string;
+  email?: string;
+  phone?: string;
+  joinedOn?: string;
+  address?: string;
+};
+
+type ReviewedStaffMigrationRow = StaffMigrationRow & { errors: string[] };
+const staffMigrationEmploymentTypes = new Set(["full_time", "part_time", "contract", "temporary"]);
+
+export function normaliseStaffMigrationRows(rows: StaffMigrationRow[]) {
+  if (!Array.isArray(rows) || rows.length < 1) throw new Error("Add at least one staff row before reviewing the migration.");
+  if (rows.length > 100) throw new Error("Import no more than 100 staff rows at a time so each batch can be reviewed safely.");
+  const seenEmployees = new Map<string, number>();
+  const seenEmails = new Map<string, number>();
+  const seenPhones = new Map<string, number>();
+  return rows.map((row, index) => {
+    const sourceRow = Number.isInteger(row.sourceRow) && row.sourceRow > 0 ? row.sourceRow : index + 2;
+    const employeeNo = migrationText(row.employeeNo, 48).toUpperCase();
+    const firstName = migrationText(row.firstName, 120);
+    const lastName = migrationText(row.lastName, 120);
+    const jobTitle = migrationText(row.jobTitle, 120);
+    const employmentType = migrationText(row.employmentType, 24).toLowerCase() || "full_time";
+    const email = migrationText(row.email, 320).toLowerCase() || undefined;
+    const phone = migrationText(row.phone, 48) || undefined;
+    const joinedOn = migrationText(row.joinedOn, 10) || undefined;
+    const address = migrationText(row.address, 2000) || undefined;
+    const errors: string[] = [];
+    if (employeeNo.length < 2) errors.push("Employee number is required.");
+    if (!firstName) errors.push("Staff first name is required.");
+    if (!lastName) errors.push("Staff last name is required.");
+    if (!jobTitle) errors.push("Job title is required.");
+    if (!staffMigrationEmploymentTypes.has(employmentType)) errors.push("Employment type must be full_time, part_time, contract, or temporary.");
+    if (email && !studentMigrationEmail.test(email)) errors.push("Staff email is not valid.");
+    if (joinedOn && (!studentMigrationDate.test(joinedOn) || Number.isNaN(new Date(`${joinedOn}T00:00:00.000Z`).getTime()))) errors.push("Joined-on date must use YYYY-MM-DD.");
+    const existingEmployeeRow = employeeNo ? seenEmployees.get(employeeNo) : undefined;
+    if (existingEmployeeRow) errors.push(`Employee number duplicates row ${existingEmployeeRow}.`);
+    else if (employeeNo) seenEmployees.set(employeeNo, sourceRow);
+    const existingEmailRow = email ? seenEmails.get(email) : undefined;
+    if (existingEmailRow) errors.push(`Staff email duplicates row ${existingEmailRow}.`);
+    else if (email) seenEmails.set(email, sourceRow);
+    const existingPhoneRow = phone ? seenPhones.get(phone) : undefined;
+    if (existingPhoneRow) errors.push(`Staff phone duplicates row ${existingPhoneRow}.`);
+    else if (phone) seenPhones.set(phone, sourceRow);
+    return { sourceRow, employeeNo, firstName, lastName, jobTitle, employmentType, email, phone, joinedOn, address, errors } satisfies ReviewedStaffMigrationRow;
+  });
+}
+
+export async function previewStaffMigration(input: { schoolId: number; rows: StaffMigrationRow[] }) {
+  const rows = normaliseStaffMigrationRows(input.rows);
+  const employeeNos = rows.map(row => row.employeeNo).filter(Boolean);
+  const emails = rows.map(row => row.email).filter((value): value is string => Boolean(value));
+  const phones = rows.map(row => row.phone).filter((value): value is string => Boolean(value));
+  const db = await database();
+  const [existingEmployeeNos, existingEmails, existingPhones] = await Promise.all([
+    employeeNos.length ? db.select({ employeeNo: staffProfiles.employeeNo }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), inArray(staffProfiles.employeeNo, employeeNos))) : [],
+    emails.length ? db.select({ email: staffProfiles.email }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), inArray(staffProfiles.email, emails))) : [],
+    phones.length ? db.select({ phone: staffProfiles.phone }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), inArray(staffProfiles.phone, phones))) : [],
+  ]);
+  const existingEmployeeSet = new Set(existingEmployeeNos.map(row => row.employeeNo.toUpperCase()));
+  const existingEmailSet = new Set(existingEmails.map(row => row.email?.toLowerCase()).filter(Boolean));
+  const existingPhoneSet = new Set(existingPhones.map(row => row.phone).filter(Boolean));
+  for (const row of rows) {
+    if (existingEmployeeSet.has(row.employeeNo)) row.errors.push("This employee number already belongs to a staff record in this school.");
+    if (row.email && existingEmailSet.has(row.email)) row.errors.push("This staff email already belongs to a staff record in this school.");
+    if (row.phone && existingPhoneSet.has(row.phone)) row.errors.push("This staff phone already belongs to a staff record in this school.");
+  }
+  return { rowCount: rows.length, readyCount: rows.filter(row => !row.errors.length).length, errorCount: rows.filter(row => row.errors.length).length, rows: rows.map(row => ({ sourceRow: row.sourceRow, employeeNo: row.employeeNo, firstName: row.firstName, lastName: row.lastName, jobTitle: row.jobTitle, errors: row.errors })) };
+}
+
+export async function importStaffMigration(input: { schoolId: number; idempotencyKey: string; rows: StaffMigrationRow[]; importedBy: number }) {
+  const rows = normaliseStaffMigrationRows(input.rows);
+  if (rows.some(row => row.errors.length)) throw new Error("Fix the row errors shown in the review before confirming this import.");
+  const checksum = createHash("sha256").update(JSON.stringify({ rows: rows.map(({ errors: _errors, ...row }) => row) })).digest("hex");
+  const db = await database();
+  const prior = (await db.select().from(staffMigrationBatches).where(and(eq(staffMigrationBatches.schoolId, input.schoolId), eq(staffMigrationBatches.idempotencyKey, input.idempotencyKey))).limit(1))[0];
+  if (prior) {
+    if (prior.checksum !== checksum) throw new Error("This import key was already used with different rows. Review the batch and start a new import.");
+    if (prior.status === "completed") return { batchId: prior.id, status: "completed" as const, staffCount: prior.staffCount, idempotent: true };
+    throw new Error("This staff migration batch is already being processed. Refresh the page before trying again.");
+  }
+  const review = await previewStaffMigration({ schoolId: input.schoolId, rows });
+  if (review.errorCount) throw new Error("The reviewed rows now conflict with existing staff data. Refresh the review and correct the identified rows.");
+  return db.transaction(async tx => {
+    const createdBatch = await tx.insert(staffMigrationBatches).values({ schoolId: input.schoolId, createdBy: input.importedBy, idempotencyKey: input.idempotencyKey, checksum, rowCount: rows.length, status: "processing" });
+    const batchId = Number(createdBatch[0].insertId);
+    for (const row of rows) {
+      const employmentType = staffMigrationEmploymentTypes.has(row.employmentType ?? "") ? row.employmentType as "full_time" | "part_time" | "contract" | "temporary" : "full_time";
+      await tx.insert(staffProfiles).values({ schoolId: input.schoolId, employeeNo: row.employeeNo, firstName: row.firstName, lastName: row.lastName, email: row.email ?? null, phone: row.phone ?? null, jobTitle: row.jobTitle, employmentType, employmentStatus: "active", joinedOn: asDate(row.joinedOn) ?? null, address: row.address ?? null });
+    }
+    await tx.update(staffMigrationBatches).set({ status: "completed", staffCount: rows.length, completedAt: new Date() }).where(and(eq(staffMigrationBatches.id, batchId), eq(staffMigrationBatches.schoolId, input.schoolId)));
+    return { batchId, status: "completed" as const, staffCount: rows.length, idempotent: false };
+  });
+}
+
+export async function listStaffMigrationBatches(schoolId: number) {
+  return (await database()).select({ id: staffMigrationBatches.id, rowCount: staffMigrationBatches.rowCount, staffCount: staffMigrationBatches.staffCount, status: staffMigrationBatches.status, completedAt: staffMigrationBatches.completedAt, createdAt: staffMigrationBatches.createdAt }).from(staffMigrationBatches).where(eq(staffMigrationBatches.schoolId, schoolId)).orderBy(desc(staffMigrationBatches.createdAt)).limit(12);
+}
 export const createDepartment = async (input: { schoolId: number; name: string; code?: string }) => (await database()).insert(departments).values(input);
 export async function assignStaffDepartment(schoolId: number, staffId: number, departmentId: number | undefined) { await (await database()).update(staffProfiles).set({ departmentId: departmentId ?? null }).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.id, staffId))); return { success: true }; }
 export const createStaffDuty = async (input: { schoolId: number; staffId: number; title: string; description?: string; startsOn?: string }) => (await database()).insert(staffDuties).values({ ...input, startsOn: asDate(input.startsOn) });

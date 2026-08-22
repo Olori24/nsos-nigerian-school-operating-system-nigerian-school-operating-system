@@ -26,6 +26,7 @@ import { AdmissionTemplateCard, FeeScheduleTemplateCard } from "@/components/Doc
 import { NsosCopilot } from "@/components/NsosCopilot";
 import { OwnerSetupManagementDashboard } from "@/components/OwnerSetupManagementDashboard";
 import { StudentMigrationWorkspace } from "@/components/StudentMigrationWorkspace";
+import { StaffMigrationWorkspace } from "@/components/StaffMigrationWorkspace";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -490,7 +491,7 @@ function Workspace({ view, schoolId, schoolName, role, summary, applications, st
   if (view === "attendance") return <><Attendance schoolId={schoolId} records={attendance} alerts={absenceAlerts} students={students} staff={staff} academics={academics} onRefresh={onRefresh} /><AttendanceExport records={attendance.data ?? []} /></>;
   if (view === "results") return <><ResultsWithControls schoolId={schoolId} data={results} students={students} academics={academics} onRefresh={onRefresh} /><ResultApprovalControl schoolId={schoolId} academic={academics.data} onDone={onRefresh} /><ReportCardPrint schoolId={schoolId} students={students.data ?? []} terms={academics.data?.terms ?? []} /></>;
   if (view === "finance") return <><Finance schoolId={schoolId} data={finance} students={students} academics={academics} canManageTemplates={role === "owner" || role === "admin"} onRefresh={onRefresh} /><FinanceReceiptStation finance={finance.data} /></>;
-  if (view === "staff") return <><Staff schoolId={schoolId} staff={staff} operations={staffOperations} onRefresh={onRefresh} /><DepartmentStation schoolId={schoolId} onDone={onRefresh} /><StaffAssignments schoolId={schoolId} staff={staff.data ?? []} onDone={onRefresh} /></>;
+  if (view === "staff") return <>{(role === "owner" || role === "admin") && <StaffMigrationWorkspace schoolId={schoolId} onDone={onRefresh} />}<Staff schoolId={schoolId} staff={staff} operations={staffOperations} onRefresh={onRefresh} /><DepartmentStation schoolId={schoolId} onDone={onRefresh} /><StaffAssignments schoolId={schoolId} staff={staff.data ?? []} onDone={onRefresh} /></>;
   if (view === "communications") return <><CommunicationsWithBulk schoolId={schoolId} announcements={announcements} onRefresh={onRefresh} /><MessageHistory schoolId={schoolId} /></>;
   if (view === "website") return <WebsiteStudio schoolId={schoolId} />;
   if (view === "advertising") return <AdvertisingWorkspace schoolId={schoolId} />;
