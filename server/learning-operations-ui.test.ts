@@ -34,7 +34,7 @@ describe("Learning operations workspace interface", () => {
   it("gives a linked learner only a read-only view of their own programme progress", () => {
     const progress = readFileSync(resolve(root, "client/src/components/LearnerProgramProgress.tsx"), "utf8");
     expect(progress).toContain("My programmes");
-    expect(progress).toContain("This view shows only your own enrolments and recorded participation.");
+    expect(progress).toContain("This view shows only your own enrolments and reviewed curriculum progress.");
     expect(progress).toContain("does not create a certificate or verify a credential");
     expect(home).toContain('role === "student" && <LearnerProgramProgress');
   });

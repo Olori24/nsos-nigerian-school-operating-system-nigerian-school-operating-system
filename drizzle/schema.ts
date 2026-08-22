@@ -243,6 +243,65 @@ export const programFeeStructures = mysqlTable(
   table => ({ schoolProgram: index("program_fee_school_program_idx").on(table.schoolId, table.programId), schoolCohort: index("program_fee_school_cohort_idx").on(table.schoolId, table.cohortId) }),
 );
 
+export const programCurriculumModules = mysqlTable(
+  "programCurriculumModules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    code: varchar("code", { length: 48 }),
+    description: text("description"),
+    learningType: mysqlEnum("learningType", ["topic", "practical", "project", "practice", "resource"]).notNull().default("topic"),
+    sortOrder: int("sortOrder").notNull().default(1),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    activatedBy: int("activatedBy"),
+    activatedAt: timestamp("activatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgramOrder: uniqueIndex("program_curriculum_module_school_program_order_unique").on(table.schoolId, table.programId, table.sortOrder), schoolProgram: index("program_curriculum_module_school_program_idx").on(table.schoolId, table.programId), schoolStatus: index("program_curriculum_module_school_status_idx").on(table.schoolId, table.status) }),
+);
+
+export const programCurriculumMilestones = mysqlTable(
+  "programCurriculumMilestones",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    moduleId: int("moduleId").notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    description: text("description"),
+    sortOrder: int("sortOrder").notNull().default(1),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    activatedBy: int("activatedBy"),
+    activatedAt: timestamp("activatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolModuleOrder: uniqueIndex("program_curriculum_milestone_school_module_order_unique").on(table.schoolId, table.moduleId, table.sortOrder), schoolProgram: index("program_curriculum_milestone_school_program_idx").on(table.schoolId, table.programId), schoolModule: index("program_curriculum_milestone_school_module_idx").on(table.schoolId, table.moduleId) }),
+);
+
+export const programMilestoneProgress = mysqlTable(
+  "programMilestoneProgress",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    enrollmentId: int("enrollmentId").notNull(),
+    milestoneId: int("milestoneId").notNull(),
+    status: mysqlEnum("status", ["not_started", "in_progress", "reviewed_complete"]).notNull().default("not_started"),
+    note: varchar("note", { length: 500 }),
+    updatedBy: int("updatedBy").notNull(),
+    reviewedBy: int("reviewedBy"),
+    reviewedAt: timestamp("reviewedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolEnrollmentMilestone: uniqueIndex("program_milestone_progress_school_enrollment_milestone_unique").on(table.schoolId, table.enrollmentId, table.milestoneId), schoolEnrollment: index("program_milestone_progress_school_enrollment_idx").on(table.schoolId, table.enrollmentId), schoolMilestone: index("program_milestone_progress_school_milestone_idx").on(table.schoolId, table.milestoneId) }),
+);
+
 export const subscriptionPlans = mysqlTable(
   "subscriptionPlans",
   {

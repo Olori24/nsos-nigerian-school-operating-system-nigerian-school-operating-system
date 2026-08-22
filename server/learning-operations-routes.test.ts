@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCurriculumModule: vi.fn(), activateProgramCurriculumModule: vi.fn(), createProgramCurriculumMilestone: vi.fn(), activateProgramCurriculumMilestone: vi.fn(), recordProgramMilestoneProgress: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 vi.mock("./db", () => db);
 
 import { appRouter } from "./routers";
@@ -15,10 +15,15 @@ describe("NSOS learning operations routes", () => {
     vi.clearAllMocks();
     db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 116, role: "owner", status: "active" });
     db.consumeSharedRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 600 });
-    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], staff: [], learners: [] });
+    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], modules: [], milestones: [], milestoneProgress: [], staff: [], learners: [] });
     db.updateLearningOperatingType.mockResolvedValue({ success: true, operatingType: "vocational_institute" });
     db.createLearningProgram.mockResolvedValue({ programId: 501, status: "draft" });
     db.activateLearningProgram.mockResolvedValue({ success: true, status: "active" });
+    db.createProgramCurriculumModule.mockResolvedValue({ moduleId: 551, status: "draft" });
+    db.activateProgramCurriculumModule.mockResolvedValue({ success: true, status: "active" });
+    db.createProgramCurriculumMilestone.mockResolvedValue({ milestoneId: 561, status: "draft" });
+    db.activateProgramCurriculumMilestone.mockResolvedValue({ success: true, status: "active" });
+    db.recordProgramMilestoneProgress.mockResolvedValue({ success: true, enrollmentId: 801, milestoneId: 561, status: "reviewed_complete" });
     db.createProgramCohort.mockResolvedValue({ cohortId: 601, status: "planning" });
     db.assignProgramInstructor.mockResolvedValue({ assignmentId: 701, status: "active" });
     db.enrolLearnerInProgram.mockResolvedValue({ enrollmentId: 801, status: "active" });
@@ -45,6 +50,26 @@ describe("NSOS learning operations routes", () => {
     expect(db.createLearningProgram).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, title: "Fashion Design", createdBy: 116, confirmed: true }));
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "learning_program_draft_created", targetId: 501, metadata: expect.not.objectContaining({ title: expect.anything(), description: expect.anything() }) }));
     expect(JSON.stringify(db.recordSecurityAuditEvent.mock.calls)).not.toContain(privateDescription);
+  });
+
+  it("creates and activates internal curriculum modules and milestones only with explicit review confirmations", async () => {
+    const caller = appRouter.createCaller(context()).nsos.learningOperations;
+    await caller.createCurriculumModule({ schoolId: 34, programId: 501, title: "Pattern drafting", learningType: "practical", sortOrder: 1, confirmed: true });
+    await caller.activateCurriculumModule({ schoolId: 34, moduleId: 551, confirmed: true });
+    await caller.createCurriculumMilestone({ schoolId: 34, programId: 501, moduleId: 551, title: "Measure and mark", sortOrder: 1, confirmed: true });
+    await caller.activateCurriculumMilestone({ schoolId: 34, milestoneId: 561, confirmed: true });
+    expect(db.createProgramCurriculumModule).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, programId: 501, createdBy: 116, learningType: "practical" }));
+    expect(db.createProgramCurriculumMilestone).toHaveBeenCalledWith(expect.objectContaining({ moduleId: 551, createdBy: 116 }));
+    const audit = JSON.stringify(db.recordSecurityAuditEvent.mock.calls);
+    expect(audit).toContain('"publicCoursePublished":false');
+    expect(audit).toContain('"learnerProgressCreated":false');
+    expect(audit).toContain('"credentialIssued":false');
+  });
+
+  it("records human-reviewed programme milestone progress without automatic completion or credential action", async () => {
+    await appRouter.createCaller(context()).nsos.learningOperations.recordMilestoneProgress({ schoolId: 34, enrollmentId: 801, milestoneId: 561, status: "reviewed_complete", note: "Checked in workshop", confirmed: true });
+    expect(db.recordProgramMilestoneProgress).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, enrollmentId: 801, milestoneId: 561, status: "reviewed_complete", updatedBy: 116 }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "learning_curriculum_milestone_progress_reviewed", metadata: expect.objectContaining({ automaticCompletion: false, credentialIssued: false, messageSent: false }) }));
   });
 
   it("uses confirmed routes for cohort, existing instructor, existing learner, and human completion without an account, invitation, payment, or credential action", async () => {

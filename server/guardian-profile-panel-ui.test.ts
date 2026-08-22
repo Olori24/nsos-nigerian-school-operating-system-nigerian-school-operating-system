@@ -18,6 +18,6 @@ describe("guardian profile panel interface", () => {
   });
 
   it("places the panel in the student workspace only for owner and administrator roles", () => {
-    expect(home).toContain('(role === "owner" || role === "admin") && <GuardianProfilePanel');
+    expect(home).toContain('{(role === "owner" || role === "admin") && <div id="student-guardian-review"><GuardianProfilePanel');
   });
 });

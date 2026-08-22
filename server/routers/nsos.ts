@@ -358,6 +358,46 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_activated", targetType: "learning_program", targetId: input.programId, metadata: { confirmationRequired: true, publicPublication: false, paymentCollection: false } });
         return result;
       }),
+    createCurriculumModule: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), title: z.string().trim().min(2).max(180), code: z.string().trim().max(48).optional(), description: z.string().trim().max(4000).optional(), learningType: z.enum(["topic", "practical", "project", "practice", "resource"]), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-module-create");
+        const result = await db.createProgramCurriculumModule({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_module_draft_created", targetType: "program_curriculum_module", targetId: result.moduleId, metadata: { programId: input.programId, learningType: input.learningType, order: input.sortOrder, descriptionProvided: Boolean(input.description), confirmationRequired: true, publicCoursePublished: false, accountCreated: false, messageSent: false, credentialIssued: false } });
+        return result;
+      }),
+    activateCurriculumModule: onboardingAdminProcedure
+      .input(schoolInput.extend({ moduleId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-module-activate");
+        const result = await db.activateProgramCurriculumModule({ schoolId: input.schoolId, moduleId: input.moduleId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_module_activated", targetType: "program_curriculum_module", targetId: input.moduleId, metadata: { confirmationRequired: true, publicCoursePublished: false, credentialIssued: false } });
+        return result;
+      }),
+    createCurriculumMilestone: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), moduleId: z.number().int().positive(), title: z.string().trim().min(2).max(180), description: z.string().trim().max(4000).optional(), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-milestone-create");
+        const result = await db.createProgramCurriculumMilestone({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_milestone_draft_created", targetType: "program_curriculum_milestone", targetId: result.milestoneId, metadata: { programId: input.programId, moduleId: input.moduleId, order: input.sortOrder, descriptionProvided: Boolean(input.description), confirmationRequired: true, learnerProgressCreated: false, credentialIssued: false } });
+        return result;
+      }),
+    activateCurriculumMilestone: onboardingAdminProcedure
+      .input(schoolInput.extend({ milestoneId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-milestone-activate");
+        const result = await db.activateProgramCurriculumMilestone({ schoolId: input.schoolId, milestoneId: input.milestoneId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_milestone_activated", targetType: "program_curriculum_milestone", targetId: input.milestoneId, metadata: { confirmationRequired: true, learnerProgressCreated: false, credentialIssued: false } });
+        return result;
+      }),
+    recordMilestoneProgress: onboardingAdminProcedure
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), milestoneId: z.number().int().positive(), status: z.enum(["not_started", "in_progress", "reviewed_complete"]), note: z.string().trim().max(500).optional(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "milestone-progress-record");
+        const result = await db.recordProgramMilestoneProgress({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, status: input.status, note: input.note, updatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_milestone_progress_reviewed", targetType: "program_milestone_progress", targetId: input.milestoneId, metadata: { enrollmentId: input.enrollmentId, status: input.status, noteProvided: Boolean(input.note), confirmationRequired: true, automaticCompletion: false, credentialIssued: false, messageSent: false } });
+        return result;
+      }),
     createCohort: onboardingAdminProcedure
       .input(schoolInput.extend({ programId: z.number().int().positive(), name: z.string().trim().min(2).max(160), startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), deliveryReference: z.string().trim().max(255).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {

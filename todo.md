@@ -241,3 +241,9 @@
 - [x] Add a responsive profile section that groups only the signed-in user’s active institution memberships by school, vocational, coaching, online-training, and hybrid operating type.
 - [x] Provide a role-safe handoff from each categorized profile membership to the existing institution switcher without changing memberships or exposing tenant data.
 - [x] Add profile categorization, active-membership scope, empty-state, and accessible handoff regressions; validate and publish safely.
+- [x] Define and document a cross-institution curriculum model that distinguishes school subjects, vocational practical pathways, coaching plans, and online learning modules while preserving every tenant boundary.
+- [x] Add tenant-scoped learning pathways, curriculum modules, ordered milestones, and instructor ownership for active programmes without creating public courses, accounts, invitations, credentials, or learner progress automatically.
+- [x] Build review-first owner/admin curriculum planning and instructor delivery tracking for all institution types, with explicit confirmation, audit evidence, and existing academic workflows left intact.
+- [x] Add learner-only curriculum pathway and milestone-progress views scoped strictly to the authenticated learner’s own programme enrolments.
+- [x] Prepare and execute a controlled capacity validation plan across safe service layers, using empty or explicitly authorized tenant contexts only and excluding real people, payments, messages, provider credentials, public claims, certificates, and destructive actions.
+- [x] Add authorization, tenant-isolation, curriculum lifecycle, learner visibility, and capacity-validation regressions; validate, document, and publish the Learning Centre of Excellence release.
