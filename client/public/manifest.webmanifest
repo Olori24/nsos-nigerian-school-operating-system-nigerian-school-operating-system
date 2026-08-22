@@ -10,7 +10,13 @@
   "theme_color": "#0b1715",
   "icons": [
     {
-      "src": "/manus-storage/nsos-app-icon_63fa3e89.png",
+      "src": "/icons/nsos-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/nsos-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

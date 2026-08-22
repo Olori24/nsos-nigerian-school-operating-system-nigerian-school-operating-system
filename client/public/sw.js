@@ -1,9 +1,10 @@
-const CACHE_NAME = "nsos-shell-v1";
+const CACHE_NAME = "nsos-shell-v2";
 const APP_SHELL = [
   "/",
   "/offline.html",
   "/manifest.webmanifest",
-  "/manus-storage/nsos-app-icon_63fa3e89.png",
+  "/icons/nsos-icon-192.png",
+  "/icons/nsos-icon-512.png",
 ];
 
 self.addEventListener("install", event => {

@@ -188,3 +188,6 @@
 - [x] Create an original NSOS logo and scalable app-icon system for the product interface and installable web app.
 - [x] Make NSOS installable as a web app with manifest metadata, application icons, and a safe offline shell.
 - [x] Add a user-facing install prompt that works where supported and remains unobtrusive elsewhere.
+- [ ] Obtain explicit confirmation to cancel nsos.edu.ng, transfer the paid amount to DomainKing account credit, and register nsos.ng through the support-led billing path.
+- [x] Repair the NSOS logo and web-app icon asset delivery for reliable mobile browser and installed-app display.
+- [x] Prevent the mobile NSOS install prompt from overlapping the persistent theme toggle.

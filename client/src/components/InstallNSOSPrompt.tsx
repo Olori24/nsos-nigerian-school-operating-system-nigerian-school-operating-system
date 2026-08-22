@@ -47,9 +47,9 @@ export function InstallNSOSPrompt() {
     setDismissed(true);
   };
 
-  return <aside aria-label="Install NSOS" className="fixed bottom-5 left-5 z-[60] w-[min(23rem,calc(100vw-2.5rem))] rounded-2xl border border-[#c9ddd0] bg-white p-3 shadow-[0_18px_46px_rgba(11,38,29,0.2)]">
+  return <aside aria-label="Install NSOS" className="fixed bottom-24 left-5 z-[60] w-[min(23rem,calc(100vw-2.5rem))] rounded-2xl border border-[#c9ddd0] bg-white p-3 shadow-[0_18px_46px_rgba(11,38,29,0.2)] sm:bottom-5">
     <div className="flex gap-3">
-      <img src="/manus-storage/nsos-app-icon_63fa3e89.png" alt="" className="h-10 w-10 shrink-0 rounded-xl" />
+      <img src="/icons/nsos-icon-192.png" alt="" className="h-10 w-10 shrink-0 rounded-xl" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-[#17382d]">Keep NSOS within reach</p>
         <p className="mt-0.5 text-xs leading-5 text-[#68786f]">Install the school workspace for a focused, app-like experience.</p>

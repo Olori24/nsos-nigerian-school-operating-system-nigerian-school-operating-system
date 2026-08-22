@@ -12,7 +12,9 @@ describe("NSOS installable web app", () => {
     expect(html).toContain('rel="manifest"');
     expect(manifest).toContain('"display": "standalone"');
     expect(manifest).toContain('"short_name": "NSOS"');
-    expect(manifest).toContain("nsos-app-icon_63fa3e89.png");
+    expect(manifest).toContain('"src": "/icons/nsos-icon-192.png"');
+    expect(manifest).toContain('"src": "/icons/nsos-icon-512.png"');
+    expect(html).toContain('sizes="180x180" href="/icons/nsos-icon-180.png"');
   });
 
   it("registers a service worker only in the production build", () => {
@@ -25,6 +27,7 @@ describe("NSOS installable web app", () => {
     expect(worker).toContain('"/offline.html"');
     expect(worker).toContain('url.pathname.startsWith("/api/")');
     expect(worker).toContain("request.mode === \"navigate\"");
+    expect(worker).toContain('"/icons/nsos-icon-512.png"');
   });
 
   it("shows an install control only after a browser-supported install event", () => {
@@ -32,5 +35,7 @@ describe("NSOS installable web app", () => {
     expect(prompt).toContain("event.preventDefault()");
     expect(prompt).toContain("deferredPrompt.prompt()");
     expect(prompt).toContain("nsos:pwa-install-dismissed");
+    expect(prompt).toContain("bottom-24");
+    expect(prompt).toContain("sm:bottom-5");
   });
 });

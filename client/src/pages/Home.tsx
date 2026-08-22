@@ -359,7 +359,7 @@ function LoginScreen() {
 
 function MiniStat({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) { return <div className={cn("rounded-xl border border-white/8 bg-black/10 p-4", wide && "col-span-1")}><p className="mono text-[10px] uppercase tracking-[0.12em] text-white/40">{label}</p><p className="mt-2 text-2xl font-semibold tracking-[-0.05em]">{value}</p></div>; }
 
-function Brand({ inverse = false }: { inverse?: boolean }) { return <div className="flex items-center gap-3"><img src="/manus-storage/nsos-app-icon_63fa3e89.png" alt="NSOS" className="h-9 w-9 rounded-xl shadow-[0_4px_10px_rgba(7,42,33,0.16)]" /><div><p className={cn("text-sm font-bold leading-none tracking-[-0.04em]", inverse && "text-white")}>NSOS</p><p className={cn("mt-1 text-[9px] font-semibold uppercase tracking-[0.15em]", inverse ? "text-white/48" : "text-[#7a847e]")}>Nigerian School OS</p></div></div>; }
+function Brand({ inverse = false }: { inverse?: boolean }) { return <div className="flex items-center gap-3"><img src="/icons/nsos-icon-192.png" alt="NSOS" className="h-9 w-9 rounded-xl shadow-[0_4px_10px_rgba(7,42,33,0.16)]" /><div><p className={cn("text-sm font-bold leading-none tracking-[-0.04em]", inverse && "text-white")}>NSOS</p><p className={cn("mt-1 text-[9px] font-semibold uppercase tracking-[0.15em]", inverse ? "text-white/48" : "text-[#7a847e]")}>Nigerian School OS</p></div></div>; }
 
 function SetupSchool({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState("");
