@@ -32,6 +32,7 @@ import { AutomationDesk } from "@/components/AutomationDesk";
 import { LearningOperationsWorkspace } from "@/components/LearningOperationsWorkspace";
 import { NonSchoolCurriculumStart } from "@/components/NonSchoolCurriculumStart";
 import { LearnerProgramProgress } from "@/components/LearnerProgramProgress";
+import { LearningEvidenceReview } from "@/components/LearningEvidenceReview";
 import { InstitutionSwitcher } from "@/components/InstitutionSwitcher";
 import { InstitutionProfileSummary } from "@/components/InstitutionProfileSummary";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
@@ -535,13 +536,13 @@ function Workspace({ view, schoolId, schoolName, operatingType, role, summary, a
   if (view === "results") return <><ResultsWithControls schoolId={schoolId} data={results} students={students} academics={academics} onRefresh={onRefresh} /><ResultApprovalControl schoolId={schoolId} academic={academics.data} onDone={onRefresh} /><ReportCardPrint schoolId={schoolId} students={students.data ?? []} terms={academics.data?.terms ?? []} /></>;
   if (view === "finance") return <><Finance schoolId={schoolId} data={finance} students={students} academics={academics} canManageTemplates={role === "owner" || role === "admin"} onRefresh={onRefresh} /><FinanceReceiptStation finance={finance.data} /></>;
   if (view === "staff") return <>{(role === "owner" || role === "admin") && <StaffMigrationWorkspace schoolId={schoolId} onDone={onRefresh} />}<Staff schoolId={schoolId} staff={staff} operations={staffOperations} onRefresh={onRefresh} /><DepartmentStation schoolId={schoolId} onDone={onRefresh} /><StaffAssignments schoolId={schoolId} staff={staff.data ?? []} onDone={onRefresh} /></>;
-  if (view === "learning") return role === "owner" || role === "admin" ? <LearningOperationsWorkspace schoolId={schoolId} onOpenTutors={() => onNavigate("ai-tutors")} /> : <RoleWelcome role={role} announcements={announcements} />;
+  if (view === "learning") return role === "owner" || role === "admin" ? <LearningOperationsWorkspace schoolId={schoolId} onOpenTutors={() => onNavigate("ai-tutors")} /> : role === "teacher" || role === "staff" ? <LearningEvidenceReview schoolId={schoolId} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "communications") return <><CommunicationsWithBulk schoolId={schoolId} announcements={announcements} onRefresh={onRefresh} /><MessageHistory schoolId={schoolId} /></>;
   if (view === "website") return <WebsiteStudio schoolId={schoolId} />;
   if (view === "advertising") return <AdvertisingWorkspace schoolId={schoolId} />;
   if (view === "ai-tutors") return role === "student" ? <StudentAiTutorHub schoolId={schoolId} /> : <AiTutorWorkspace schoolId={schoolId} />;
   if (view === "tutor-analytics") return <TeacherAiTutorAnalytics schoolId={schoolId} />;
-  if (view === "portal") return <><FamilyPortalWithDetails schoolId={schoolId} role={role} guardian={guardianPortal} student={studentPortal} onRefresh={onRefresh} />{role === "student" && <LearnerProgramProgress items={studentPortal.data?.programProgress ?? []} />}<PortalResults data={role === "parent" ? guardianPortal.data : studentPortal.data} /></>;
+  if (view === "portal") return <><FamilyPortalWithDetails schoolId={schoolId} role={role} guardian={guardianPortal} student={studentPortal} onRefresh={onRefresh} />{role === "student" && <LearnerProgramProgress schoolId={schoolId} items={studentPortal.data?.programProgress ?? []} onChanged={onRefresh} />}<PortalResults data={role === "parent" ? guardianPortal.data : studentPortal.data} /></>;
   return <Reports schoolId={schoolId} summary={summary} applications={applications} finance={finance} attendance={attendance} />;
 }
 

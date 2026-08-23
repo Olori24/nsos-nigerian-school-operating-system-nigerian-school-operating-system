@@ -5,6 +5,7 @@ import { CurriculumProgressReview } from "@/components/CurriculumProgressReview"
 import { CourseStudio } from "@/components/CourseStudio";
 import { LearningDesignGovernance } from "@/components/LearningDesignGovernance";
 import { CrossProviderCurriculumWorkspace } from "@/components/CrossProviderCurriculumWorkspace";
+import { LearningEvidenceReview } from "@/components/LearningEvidenceReview";
 import { BadgeCheck, BookOpenCheck, CheckCircle2, GraduationCap, Loader2, PlayCircle, ShieldCheck, UserRoundPlus, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -71,6 +72,7 @@ export function LearningOperationsWorkspace({ schoolId, onOpenTutors }: { school
       <OperationCard icon={CheckCircle2} title="Completion review" description="Record only a human-confirmed completion status. This action never creates, signs, publishes, or verifies a certificate."><div className="grid gap-3"><select value={completion.enrollmentId} onChange={event => { setCompletion({ ...completion, enrollmentId: event.target.value, confirmed: false }); }} className={inputClass}><option value="">Select active learner enrolment</option>{workspace.data.enrolments.filter((item: any) => item.status === "active").map((item: any) => <option key={item.id} value={item.id}>{item.learnerName} · {item.programTitle}{item.cohortName ? ` · ${item.cohortName}` : ""}</option>)}</select><textarea value={completion.note} onChange={event => setCompletion({ ...completion, note: event.target.value })} maxLength={500} className="min-h-20 rounded-lg border border-[#dfe5df] bg-[#fbfcfa] px-3 py-2 text-sm text-[#15201c] outline-none focus:border-[#0f5c4f]" placeholder="Optional internal completion note" /></div><ConfirmAction checked={completion.confirmed} onChange={value => setCompletion({ ...completion, confirmed: value })} text="I confirm the organisation has reviewed this learner’s completion status." /><button type="button" disabled={!completion.confirmed || !completion.enrollmentId || complete.isPending} onClick={() => complete.mutate({ schoolId, enrollmentId: Number(completion.enrollmentId), completionNote: completion.note.trim() || undefined, confirmed: true })} className="action-button">{complete.isPending ? "Saving…" : "Confirm completion"}</button></OperationCard></div>
     <LearningCurriculumPlanner schoolId={schoolId} data={workspace.data} onChanged={refresh} />
     <CurriculumProgressReview schoolId={schoolId} data={workspace.data} onChanged={refresh} />
+    <LearningEvidenceReview schoolId={schoolId} />
     <ProgramParticipationAndFees schoolId={schoolId} />
   </div>;
 }

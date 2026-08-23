@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), getLearningOperatingType: vi.fn(), listLearningEvidenceSources: vi.fn(), createLearningEvidenceSource: vi.fn(), applyCourseStudioDraft: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCurriculumPathway: vi.fn(), activateProgramCurriculumPathway: vi.fn(), createProgramCurriculumModule: vi.fn(), activateProgramCurriculumModule: vi.fn(), createProgramCurriculumMilestone: vi.fn(), activateProgramCurriculumMilestone: vi.fn(), recordProgramMilestoneProgress: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), createProgramCertificationPolicy: vi.fn(), activateProgramCertificationPolicy: vi.fn(), issueProgramCertificate: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), getLearningOperatingType: vi.fn(), listLearningEvidenceSources: vi.fn(), createLearningEvidenceSource: vi.fn(), applyCourseStudioDraft: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCurriculumPathway: vi.fn(), activateProgramCurriculumPathway: vi.fn(), createProgramCurriculumModule: vi.fn(), activateProgramCurriculumModule: vi.fn(), createProgramCurriculumMilestone: vi.fn(), activateProgramCurriculumMilestone: vi.fn(), recordProgramMilestoneProgress: vi.fn(), submitProgramMilestoneEvidence: vi.fn(), reviewProgramMilestoneEvidence: vi.fn(), listReviewableProgramMilestoneEvidence: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), createProgramCertificationPolicy: vi.fn(), activateProgramCertificationPolicy: vi.fn(), issueProgramCertificate: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 const courseStudio = vi.hoisted(() => ({ buildCourseStudioDraft: vi.fn() }));
 vi.mock("./db", () => db);
 vi.mock("./courseStudio", () => courseStudio);
@@ -17,7 +17,7 @@ describe("NSOS learning operations routes", () => {
     vi.clearAllMocks();
     db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 116, role: "owner", status: "active" });
     db.consumeSharedRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 600 });
-    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], pathways: [], modules: [], milestones: [], milestoneProgress: [], staff: [], learners: [], evidenceSources: [], experienceProfiles: [], certificationPolicies: [], certificates: [] });
+    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], pathways: [], modules: [], milestones: [], milestoneProgress: [], milestoneEvidence: [], staff: [], learners: [], evidenceSources: [], experienceProfiles: [], certificationPolicies: [], certificates: [] });
     db.getLearningOperatingType.mockResolvedValue("vocational_institute");
     db.listLearningEvidenceSources.mockResolvedValue([]);
     courseStudio.buildCourseStudioDraft.mockResolvedValue({ courseTitle: "Digital Design Foundation", courseSummary: "An internal supervised course outline for controlled learning operations.", deliveryMode: "blended", durationLabel: "Six weeks", tutorBrief: "Configure a supervised tutor only after a human defines scope and escalation.", evidenceReferences: [], learningExperience: { learningPace: "guided", supportStyle: "balanced", practiceMode: "guided_practice", accessibilityNote: "" }, modules: [{ title: "Design basics", description: "Introduce approved concepts through supervised instruction.", learningType: "topic", milestones: [{ title: "Review key terms", description: "A human instructor reviews understanding using local criteria." }] }, { title: "Guided practice", description: "Use practice activities with instructor feedback.", learningType: "practice", milestones: [{ title: "Review practice", description: "A human instructor agrees the learner’s next step." }] }], materials: [{ title: "Facilitator guide", materialType: "facilitator_guide", modulePosition: 1, content: "Set the approved learning goal and direct learners to a supervising instructor for support." }, { title: "Practice prompt", materialType: "practice_activity", modulePosition: 2, content: "Use a short non-graded practice activity and request instructor feedback before any progress review." }], setupRecommendation: "Review the programme and activate it only through the protected workflow.", limitations: ["No public course or payment action is created."], source: "ai", requiresConfirmation: true });
@@ -32,6 +32,9 @@ describe("NSOS learning operations routes", () => {
     db.createProgramCurriculumMilestone.mockResolvedValue({ milestoneId: 561, status: "draft" });
     db.activateProgramCurriculumMilestone.mockResolvedValue({ success: true, status: "active" });
     db.recordProgramMilestoneProgress.mockResolvedValue({ success: true, enrollmentId: 801, milestoneId: 561, status: "reviewed_complete" });
+    db.submitProgramMilestoneEvidence.mockResolvedValue({ success: true, enrollmentId: 801, milestoneId: 561, status: "submitted" });
+    db.reviewProgramMilestoneEvidence.mockResolvedValue({ success: true, evidenceSubmissionId: 991, enrollmentId: 801, milestoneId: 561, status: "reviewed_accepted" });
+    db.listReviewableProgramMilestoneEvidence.mockResolvedValue([]);
     db.createProgramCohort.mockResolvedValue({ cohortId: 601, status: "planning" });
     db.assignProgramInstructor.mockResolvedValue({ assignmentId: 701, status: "active" });
     db.enrolLearnerInProgram.mockResolvedValue({ enrollmentId: 801, status: "active" });
@@ -181,5 +184,38 @@ describe("NSOS learning operations routes", () => {
     db.consumeSharedRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 60 });
     await expect(appRouter.createCaller(context()).nsos.learningOperations.activateProgram({ schoolId: 34, programId: 501, confirmed: true })).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
     expect(db.activateLearningProgram).not.toHaveBeenCalled();
+  });
+
+  it("allows only a linked learner to submit concise evidence for their own active milestone and keeps raw evidence out of the audit", async () => {
+    const privateEvidence = "I photographed the completed garment pattern, checked the measurements, and noted two corrections for my next practical session.";
+    db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 116, role: "student", status: "active" });
+    await expect(appRouter.createCaller(context()).nsos.learningOperations.submitMyMilestoneEvidence({ schoolId: 34, enrollmentId: 801, milestoneId: 561, evidenceNote: privateEvidence, confirmed: true })).resolves.toMatchObject({ status: "submitted" });
+    expect(db.submitProgramMilestoneEvidence).toHaveBeenCalledWith({ schoolId: 34, enrollmentId: 801, milestoneId: 561, evidenceNote: privateEvidence, submittedBy: 116 });
+    expect(db.recordProgramMilestoneProgress).not.toHaveBeenCalled();
+    expect(db.confirmProgramCompletion).not.toHaveBeenCalled();
+    expect(db.issueProgramCertificate).not.toHaveBeenCalled();
+    expect(JSON.stringify(db.recordSecurityAuditEvent.mock.calls)).not.toContain(privateEvidence);
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "learning_milestone_evidence_submitted", metadata: expect.objectContaining({ rawEvidenceStoredInAudit: false, automaticCompletion: false, gradeRecorded: false, credentialIssued: false, messageSent: false, paymentAction: false }) }));
+  });
+
+  it("lets an assigned instructor load and review only their queue with a separate confirmation and no completion side effect", async () => {
+    db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 116, role: "teacher", status: "active" });
+    db.listReviewableProgramMilestoneEvidence.mockResolvedValue([{ id: 991, status: "submitted", learnerName: "Learner One", programTitle: "Workshop foundation", milestoneTitle: "Demonstrate basic technique", evidenceNote: "Private work note" }]);
+    await expect(appRouter.createCaller(context()).nsos.learningOperations.evidenceReviewQueue({ schoolId: 34 })).resolves.toHaveLength(1);
+    await expect(appRouter.createCaller(context()).nsos.learningOperations.reviewMilestoneEvidence({ schoolId: 34, evidenceSubmissionId: 991, status: "reviewed_accepted", reviewNote: "Checked against the internal practice brief and discussed the next supervised step.", confirmed: true })).resolves.toMatchObject({ status: "reviewed_accepted" });
+    expect(db.listReviewableProgramMilestoneEvidence).toHaveBeenCalledWith({ schoolId: 34, reviewerUserId: 116, reviewerIsManagement: false });
+    expect(db.reviewProgramMilestoneEvidence).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, evidenceSubmissionId: 991, status: "reviewed_accepted", reviewedBy: 116, reviewerIsManagement: false }));
+    expect(db.recordProgramMilestoneProgress).not.toHaveBeenCalled();
+    expect(db.confirmProgramCompletion).not.toHaveBeenCalled();
+    expect(db.issueProgramCertificate).not.toHaveBeenCalled();
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "learning_milestone_evidence_reviewed", metadata: expect.objectContaining({ rawReviewNoteStoredInAudit: false, automaticCompletion: false, milestoneProgressChanged: false, gradeRecorded: false, credentialIssued: false, messageSent: false, paymentAction: false }) }));
+  });
+
+  it("denies evidence submission to non-student portal roles and review access to parents before a database action", async () => {
+    db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 116, role: "parent", status: "active" });
+    await expect(appRouter.createCaller(context()).nsos.learningOperations.submitMyMilestoneEvidence({ schoolId: 34, enrollmentId: 801, milestoneId: 561, evidenceNote: "A sufficiently detailed but private evidence note for the required validation length.", confirmed: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(appRouter.createCaller(context()).nsos.learningOperations.evidenceReviewQueue({ schoolId: 34 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(db.submitProgramMilestoneEvidence).not.toHaveBeenCalled();
+    expect(db.listReviewableProgramMilestoneEvidence).not.toHaveBeenCalled();
   });
 });

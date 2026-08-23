@@ -58,6 +58,7 @@ import {
   programCurriculumMilestones,
   programCurriculumModules,
   programCurriculumPathways,
+  programMilestoneEvidenceSubmissions,
   programMilestoneProgress,
   programAttendanceRecords,
   programEnrollments,
@@ -3282,13 +3283,14 @@ export async function getStudentPortal(schoolId: number, userId: number) {
   ]);
   const programIds = Array.from(new Set(programRows.map(item => item.programId)));
   const enrollmentIds = programRows.map(item => item.id);
-  const [programs, cohorts, programAttendance, activePathways, activeModules, activeMilestones] = await Promise.all([
+  const [programs, cohorts, programAttendance, activePathways, activeModules, activeMilestones, milestoneEvidence] = await Promise.all([
     programIds.length ? db.select().from(learningPrograms).where(and(eq(learningPrograms.schoolId, schoolId), inArray(learningPrograms.id, programIds))) : Promise.resolve([]),
     programRows.some(item => item.cohortId) ? db.select().from(programCohorts).where(and(eq(programCohorts.schoolId, schoolId), inArray(programCohorts.id, programRows.flatMap(item => item.cohortId ? [item.cohortId] : [])))) : Promise.resolve([]),
     enrollmentIds.length ? db.select().from(programAttendanceRecords).where(and(eq(programAttendanceRecords.schoolId, schoolId), inArray(programAttendanceRecords.enrollmentId, enrollmentIds))).orderBy(desc(programAttendanceRecords.attendanceDate)) : Promise.resolve([]),
     programIds.length ? db.select().from(programCurriculumPathways).where(and(eq(programCurriculumPathways.schoolId, schoolId), inArray(programCurriculumPathways.programId, programIds), eq(programCurriculumPathways.status, "active"))).orderBy(programCurriculumPathways.sortOrder) : Promise.resolve([]),
     programIds.length ? db.select().from(programCurriculumModules).where(and(eq(programCurriculumModules.schoolId, schoolId), inArray(programCurriculumModules.programId, programIds), eq(programCurriculumModules.status, "active"))).orderBy(programCurriculumModules.sortOrder) : Promise.resolve([]),
     programIds.length ? db.select().from(programCurriculumMilestones).where(and(eq(programCurriculumMilestones.schoolId, schoolId), inArray(programCurriculumMilestones.programId, programIds), eq(programCurriculumMilestones.status, "active"))).orderBy(programCurriculumMilestones.sortOrder) : Promise.resolve([]),
+    enrollmentIds.length ? db.select().from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId), inArray(programMilestoneEvidenceSubmissions.enrollmentId, enrollmentIds))).orderBy(desc(programMilestoneEvidenceSubmissions.updatedAt)) : Promise.resolve([]),
   ]);
   const reviewedProgress = enrollmentIds.length ? await db.select().from(programMilestoneProgress).where(and(eq(programMilestoneProgress.schoolId, schoolId), inArray(programMilestoneProgress.enrollmentId, enrollmentIds))) : [];
   const pathwayById = new Map(activePathways.map(item => [item.id, item]));
@@ -3301,7 +3303,7 @@ export async function getStudentPortal(schoolId: number, userId: number) {
     const milestones = activeMilestones.filter(item => item.programId === enrollment.programId);
     const progress = reviewedProgress.filter(item => item.enrollmentId === enrollment.id);
     const reviewedComplete = progress.filter(item => item.status === "reviewed_complete").length;
-    return { id: enrollment.id, status: enrollment.status, enrolledOn: enrollment.enrolledOn, completedAt: enrollment.completionConfirmedAt, programTitle: programById.get(enrollment.programId)?.title ?? "Programme unavailable", deliveryMode: programById.get(enrollment.programId)?.deliveryMode ?? null, cohortName: enrollment.cohortId ? cohortById.get(enrollment.cohortId)?.name ?? null : null, attendance: { total: attendanceEntries.length, attended, lastRecordedOn: attendanceEntries[0]?.attendanceDate ?? null }, milestones: milestones.map(item => { const review = progress.find(entry => entry.milestoneId === item.id); const module = moduleById.get(item.moduleId); const pathway = module?.pathwayId ? pathwayById.get(module.pathwayId) : null; return { id: item.id, title: item.title, sortOrder: item.sortOrder, moduleTitle: module?.title ?? null, pathwayTitle: pathway?.title ?? null, pathwayType: pathway?.pathwayType ?? null, status: review?.status ?? "not_started", reviewedAt: review?.reviewedAt ?? null, note: review?.note ?? null }; }), milestoneSummary: { total: milestones.length, reviewedComplete, inProgress: progress.filter(item => item.status === "in_progress").length } };
+    return { id: enrollment.id, status: enrollment.status, enrolledOn: enrollment.enrolledOn, completedAt: enrollment.completionConfirmedAt, programTitle: programById.get(enrollment.programId)?.title ?? "Programme unavailable", deliveryMode: programById.get(enrollment.programId)?.deliveryMode ?? null, cohortName: enrollment.cohortId ? cohortById.get(enrollment.cohortId)?.name ?? null : null, attendance: { total: attendanceEntries.length, attended, lastRecordedOn: attendanceEntries[0]?.attendanceDate ?? null }, milestones: milestones.map(item => { const review = progress.find(entry => entry.milestoneId === item.id); const evidence = milestoneEvidence.find(entry => entry.enrollmentId === enrollment.id && entry.milestoneId === item.id); const module = moduleById.get(item.moduleId); const pathway = module?.pathwayId ? pathwayById.get(module.pathwayId) : null; return { id: item.id, title: item.title, sortOrder: item.sortOrder, moduleTitle: module?.title ?? null, pathwayTitle: pathway?.title ?? null, pathwayType: pathway?.pathwayType ?? null, status: review?.status ?? "not_started", reviewedAt: review?.reviewedAt ?? null, note: review?.note ?? null, evidence: evidence ? { id: evidence.id, status: evidence.status, evidenceNote: evidence.evidenceNote, reviewNote: evidence.reviewNote, submittedAt: evidence.submittedAt, reviewedAt: evidence.reviewedAt } : null }; }), milestoneSummary: { total: milestones.length, reviewedComplete, inProgress: progress.filter(item => item.status === "in_progress").length } };
   });
   return { student, attendance, invoices: invoiceRows, reportCards, announcements: portalAnnouncements, programProgress };
 }
@@ -3335,7 +3337,7 @@ export async function createLearningEvidenceSource(input: { schoolId: number; ti
 
 export async function getLearningOperationsWorkspace(schoolId: number) {
   const db = await database();
-  const [school, programs, cohorts, assignments, enrolments, attendance, fees, pathways, modules, milestones, materials, milestoneProgress, staff, learners, evidenceSources, experienceProfiles, certificationPolicies, certificates] = await Promise.all([
+  const [school, programs, cohorts, assignments, enrolments, attendance, fees, pathways, modules, milestones, materials, milestoneProgress, milestoneEvidence, staff, learners, evidenceSources, experienceProfiles, certificationPolicies, certificates] = await Promise.all([
     db.select({ operatingType: schools.operatingType }).from(schools).where(eq(schools.id, schoolId)).limit(1),
     db.select().from(learningPrograms).where(eq(learningPrograms.schoolId, schoolId)).orderBy(desc(learningPrograms.createdAt)),
     db.select().from(programCohorts).where(eq(programCohorts.schoolId, schoolId)).orderBy(desc(programCohorts.createdAt)),
@@ -3348,6 +3350,7 @@ export async function getLearningOperationsWorkspace(schoolId: number) {
     db.select().from(programCurriculumMilestones).where(eq(programCurriculumMilestones.schoolId, schoolId)).orderBy(programCurriculumMilestones.moduleId, programCurriculumMilestones.sortOrder),
     db.select().from(programCourseMaterials).where(eq(programCourseMaterials.schoolId, schoolId)).orderBy(desc(programCourseMaterials.createdAt)),
     db.select().from(programMilestoneProgress).where(eq(programMilestoneProgress.schoolId, schoolId)).orderBy(desc(programMilestoneProgress.updatedAt)),
+    db.select().from(programMilestoneEvidenceSubmissions).where(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId)).orderBy(desc(programMilestoneEvidenceSubmissions.updatedAt)),
     db.select({ id: staffProfiles.id, firstName: staffProfiles.firstName, lastName: staffProfiles.lastName, jobTitle: staffProfiles.jobTitle, employmentStatus: staffProfiles.employmentStatus }).from(staffProfiles).where(eq(staffProfiles.schoolId, schoolId)).orderBy(staffProfiles.lastName),
     db.select({ id: studentProfiles.id, firstName: studentProfiles.firstName, lastName: studentProfiles.lastName, admissionNo: studentProfiles.admissionNo, status: studentProfiles.status }).from(studentProfiles).where(eq(studentProfiles.schoolId, schoolId)).orderBy(studentProfiles.lastName),
     db.select().from(learningEvidenceSources).where(eq(learningEvidenceSources.schoolId, schoolId)).orderBy(desc(learningEvidenceSources.createdAt)),
@@ -3374,6 +3377,7 @@ export async function getLearningOperationsWorkspace(schoolId: number) {
     milestones: milestones.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", moduleTitle: moduleById.get(item.moduleId)?.title ?? "Unavailable module" })),
     materials: materials.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme", moduleTitle: item.moduleId ? moduleById.get(item.moduleId)?.title ?? "Unavailable module" : null })),
     milestoneProgress: milestoneProgress.map(item => ({ ...item, learnerName: learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.studentId ?? -1) ? `${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.firstName} ${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.lastName}` : "Unavailable learner", programTitle: programById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.programId ?? -1)?.title ?? "Unavailable programme", milestoneTitle: milestones.find(milestone => milestone.id === item.milestoneId)?.title ?? "Unavailable milestone" })),
+    milestoneEvidence: milestoneEvidence.map(item => ({ ...item, learnerName: learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.studentId ?? -1) ? `${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.firstName} ${learnerById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)!.studentId)!.lastName}` : "Unavailable learner", programId: enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.programId ?? null, programTitle: programById.get(enrolments.find(enrolment => enrolment.id === item.enrollmentId)?.programId ?? -1)?.title ?? "Unavailable programme", milestoneTitle: milestones.find(milestone => milestone.id === item.milestoneId)?.title ?? "Unavailable milestone" })),
     evidenceSources,
     experienceProfiles: experienceProfiles.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme" })),
     certificationPolicies: certificationPolicies.map(item => ({ ...item, programTitle: programById.get(item.programId)?.title ?? "Unavailable programme" })),
@@ -3635,4 +3639,67 @@ export async function recordProgramMilestoneProgress(input: { schoolId: number; 
   const reviewed = input.status === "reviewed_complete";
   await db.insert(programMilestoneProgress).values({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, status: input.status, note: input.note || null, updatedBy: input.updatedBy, reviewedBy: reviewed ? input.updatedBy : null, reviewedAt: reviewed ? new Date() : null }).onDuplicateKeyUpdate({ set: { status: input.status, note: input.note || null, updatedBy: input.updatedBy, reviewedBy: reviewed ? input.updatedBy : null, reviewedAt: reviewed ? new Date() : null, updatedAt: new Date() } });
   return { success: true, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, status: input.status };
+}
+
+export async function submitProgramMilestoneEvidence(input: { schoolId: number; enrollmentId: number; milestoneId: number; evidenceNote: string; submittedBy: number }) {
+  const db = await database();
+  const [student, enrollment, milestone, existing] = await Promise.all([
+    db.select({ id: studentProfiles.id }).from(studentProfiles).where(and(eq(studentProfiles.schoolId, input.schoolId), eq(studentProfiles.userId, input.submittedBy), eq(studentProfiles.status, "active"))).limit(1),
+    db.select().from(programEnrollments).where(and(eq(programEnrollments.id, input.enrollmentId), eq(programEnrollments.schoolId, input.schoolId), eq(programEnrollments.status, "active"))).limit(1),
+    db.select().from(programCurriculumMilestones).where(and(eq(programCurriculumMilestones.id, input.milestoneId), eq(programCurriculumMilestones.schoolId, input.schoolId), eq(programCurriculumMilestones.status, "active"))).limit(1),
+    db.select().from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, input.schoolId), eq(programMilestoneEvidenceSubmissions.enrollmentId, input.enrollmentId), eq(programMilestoneEvidenceSubmissions.milestoneId, input.milestoneId))).limit(1),
+  ]);
+  if (!student[0]) throw new Error("Only an active linked learner can submit milestone evidence.");
+  if (!enrollment[0] || enrollment[0].studentId !== student[0].id) throw new Error("You can submit evidence only for your own active programme enrolment.");
+  if (!milestone[0] || milestone[0].programId !== enrollment[0].programId) throw new Error("Select an active milestone from your own enrolled programme.");
+  if (existing[0]?.status === "reviewed_accepted") throw new Error("This evidence has already been accepted. A reviewer must reopen the milestone before another submission can be considered.");
+  await db.insert(programMilestoneEvidenceSubmissions).values({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, evidenceNote: input.evidenceNote, status: "submitted", submittedBy: input.submittedBy, submittedAt: new Date(), reviewNote: null, reviewedBy: null, reviewedAt: null }).onDuplicateKeyUpdate({ set: { evidenceNote: input.evidenceNote, status: "submitted", submittedBy: input.submittedBy, submittedAt: new Date(), reviewNote: null, reviewedBy: null, reviewedAt: null, updatedAt: new Date() } });
+  return { success: true, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, status: "submitted" as const };
+}
+
+export async function reviewProgramMilestoneEvidence(input: { schoolId: number; evidenceSubmissionId: number; status: "reviewed_accepted" | "reviewed_returned"; reviewNote: string; reviewedBy: number; reviewerIsManagement: boolean }) {
+  const db = await database();
+  const evidence = (await db.select().from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.id, input.evidenceSubmissionId), eq(programMilestoneEvidenceSubmissions.schoolId, input.schoolId))).limit(1))[0];
+  if (!evidence) throw new Error("Learning evidence was not found in this learning organisation.");
+  if (evidence.status !== "submitted") throw new Error("Only evidence awaiting review can be accepted or returned.");
+  const [enrollment, milestone] = await Promise.all([
+    db.select().from(programEnrollments).where(and(eq(programEnrollments.id, evidence.enrollmentId), eq(programEnrollments.schoolId, input.schoolId), eq(programEnrollments.status, "active"))).limit(1),
+    db.select().from(programCurriculumMilestones).where(and(eq(programCurriculumMilestones.id, evidence.milestoneId), eq(programCurriculumMilestones.schoolId, input.schoolId), eq(programCurriculumMilestones.status, "active"))).limit(1),
+  ]);
+  if (!enrollment[0] || !milestone[0] || enrollment[0].programId !== milestone[0].programId) throw new Error("This evidence no longer belongs to an active programme milestone.");
+  if (!input.reviewerIsManagement) {
+    const staff = (await db.select({ id: staffProfiles.id }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), eq(staffProfiles.userId, input.reviewedBy), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+    if (!staff) throw new Error("Only an active assigned instructor can review learner evidence.");
+    const assignment = (await db.select({ id: programInstructorAssignments.id }).from(programInstructorAssignments).where(and(eq(programInstructorAssignments.schoolId, input.schoolId), eq(programInstructorAssignments.programId, enrollment[0].programId), eq(programInstructorAssignments.staffId, staff.id), eq(programInstructorAssignments.status, "active"), or(isNull(programInstructorAssignments.cohortId), eq(programInstructorAssignments.cohortId, enrollment[0].cohortId ?? -1)))).limit(1))[0];
+    if (!assignment) throw new Error("Only an active instructor assigned to this learner’s programme can review this evidence.");
+  }
+  await db.update(programMilestoneEvidenceSubmissions).set({ status: input.status, reviewNote: input.reviewNote, reviewedBy: input.reviewedBy, reviewedAt: new Date(), updatedAt: new Date() }).where(and(eq(programMilestoneEvidenceSubmissions.id, input.evidenceSubmissionId), eq(programMilestoneEvidenceSubmissions.schoolId, input.schoolId)));
+  return { success: true, evidenceSubmissionId: input.evidenceSubmissionId, enrollmentId: evidence.enrollmentId, milestoneId: evidence.milestoneId, status: input.status };
+}
+
+export async function listReviewableProgramMilestoneEvidence(input: { schoolId: number; reviewerUserId: number; reviewerIsManagement: boolean }) {
+  const db = await database();
+  const [evidence, enrolments, milestones, programs, learners] = await Promise.all([
+    db.select().from(programMilestoneEvidenceSubmissions).where(eq(programMilestoneEvidenceSubmissions.schoolId, input.schoolId)).orderBy(desc(programMilestoneEvidenceSubmissions.updatedAt)),
+    db.select().from(programEnrollments).where(eq(programEnrollments.schoolId, input.schoolId)),
+    db.select().from(programCurriculumMilestones).where(eq(programCurriculumMilestones.schoolId, input.schoolId)),
+    db.select().from(learningPrograms).where(eq(learningPrograms.schoolId, input.schoolId)),
+    db.select({ id: studentProfiles.id, firstName: studentProfiles.firstName, lastName: studentProfiles.lastName }).from(studentProfiles).where(eq(studentProfiles.schoolId, input.schoolId)),
+  ]);
+  let allowedEnrollmentIds: Set<number> | null = null;
+  if (!input.reviewerIsManagement) {
+    const staff = (await db.select({ id: staffProfiles.id }).from(staffProfiles).where(and(eq(staffProfiles.schoolId, input.schoolId), eq(staffProfiles.userId, input.reviewerUserId), eq(staffProfiles.employmentStatus, "active"))).limit(1))[0];
+    if (!staff) return [];
+    const assignments = await db.select().from(programInstructorAssignments).where(and(eq(programInstructorAssignments.schoolId, input.schoolId), eq(programInstructorAssignments.staffId, staff.id), eq(programInstructorAssignments.status, "active")));
+    allowedEnrollmentIds = new Set(enrolments.filter(enrollment => assignments.some(assignment => assignment.programId === enrollment.programId && (assignment.cohortId === null || assignment.cohortId === enrollment.cohortId))).map(enrollment => enrollment.id));
+  }
+  const enrollmentById = new Map(enrolments.map(item => [item.id, item]));
+  const milestoneById = new Map(milestones.map(item => [item.id, item]));
+  const programById = new Map(programs.map(item => [item.id, item]));
+  const learnerById = new Map(learners.map(item => [item.id, item]));
+  return evidence.filter(item => allowedEnrollmentIds === null || allowedEnrollmentIds.has(item.enrollmentId)).map(item => {
+    const enrollment = enrollmentById.get(item.enrollmentId);
+    const learner = enrollment ? learnerById.get(enrollment.studentId) : null;
+    return { ...item, learnerName: learner ? `${learner.firstName} ${learner.lastName}` : "Unavailable learner", programTitle: enrollment ? programById.get(enrollment.programId)?.title ?? "Unavailable programme" : "Unavailable programme", milestoneTitle: milestoneById.get(item.milestoneId)?.title ?? "Unavailable milestone" };
+  });
 }

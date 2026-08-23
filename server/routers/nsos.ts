@@ -103,6 +103,18 @@ const aiTutorTeacherProcedure = protectedProcedure.input(schoolInput).use(async 
   return next({ ctx: { ...ctx, schoolRole: "teacher" as const } });
 });
 
+const learningEvidenceStudentProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "portal.read");
+  if (membership.role !== "student") throw new TRPCError({ code: "FORBIDDEN", message: "Learning evidence can be submitted only through a linked learner account." });
+  return next({ ctx: { ...ctx, schoolRole: "student" as const } });
+});
+
+const learningEvidenceReviewerProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "academics.read");
+  if (!isManagementRole(membership.role as SchoolRole) && membership.role !== "teacher" && membership.role !== "staff") throw new TRPCError({ code: "FORBIDDEN", message: "Only an assigned instructor or learning administrator can review learner evidence." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
 const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
 const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
 const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
@@ -408,6 +420,23 @@ export const nsosRouter = router({
 
   learningOperations: router({
     workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getLearningOperationsWorkspace(input.schoolId)),
+    evidenceReviewQueue: learningEvidenceReviewerProcedure.input(schoolInput).query(({ ctx, input }) => db.listReviewableProgramMilestoneEvidence({ schoolId: input.schoolId, reviewerUserId: ctx.user.id, reviewerIsManagement: isManagementRole(ctx.schoolRole) })),
+    submitMyMilestoneEvidence: learningEvidenceStudentProcedure
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), milestoneId: z.number().int().positive(), evidenceNote: z.string().trim().min(20).max(1500), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learning-evidence-submit");
+        const result = await db.submitProgramMilestoneEvidence({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, evidenceNote: input.evidenceNote, submittedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_milestone_evidence_submitted", targetType: "program_milestone_evidence", targetId: input.milestoneId, metadata: { enrollmentId: input.enrollmentId, confirmationRequired: true, evidenceLength: input.evidenceNote.length, rawEvidenceStoredInAudit: false, automaticCompletion: false, gradeRecorded: false, credentialIssued: false, messageSent: false, paymentAction: false } });
+        return result;
+      }),
+    reviewMilestoneEvidence: learningEvidenceReviewerProcedure
+      .input(schoolInput.extend({ evidenceSubmissionId: z.number().int().positive(), status: z.enum(["reviewed_accepted", "reviewed_returned"]), reviewNote: z.string().trim().min(10).max(700), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learning-evidence-review");
+        const result = await db.reviewProgramMilestoneEvidence({ schoolId: input.schoolId, evidenceSubmissionId: input.evidenceSubmissionId, status: input.status, reviewNote: input.reviewNote, reviewedBy: ctx.user.id, reviewerIsManagement: isManagementRole(ctx.schoolRole) });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_milestone_evidence_reviewed", targetType: "program_milestone_evidence", targetId: input.evidenceSubmissionId, metadata: { status: input.status, reviewNoteProvided: true, confirmationRequired: true, rawReviewNoteStoredInAudit: false, automaticCompletion: false, milestoneProgressChanged: false, gradeRecorded: false, credentialIssued: false, messageSent: false, paymentAction: false } });
+        return result;
+      }),
     evidenceSources: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listLearningEvidenceSources(input.schoolId)),
     createEvidenceSource: onboardingAdminProcedure
       .input(schoolInput.extend({ title: z.string().trim().min(3).max(180), organisation: z.string().trim().min(2).max(180), sourceUrl: z.string().url().max(2048), category: z.enum(["institution_approved", "professional_body", "learning_resource"]), allowedUse: z.string().trim().min(20).max(500), confirmed: z.literal(true) }))

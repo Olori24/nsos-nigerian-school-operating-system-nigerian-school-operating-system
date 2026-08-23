@@ -9,6 +9,7 @@ const courseStudio = readFileSync(resolve(root, "client/src/components/CourseStu
 const governance = readFileSync(resolve(root, "client/src/components/LearningDesignGovernance.tsx"), "utf8");
 const crossProviderCurriculum = readFileSync(resolve(root, "client/src/components/CrossProviderCurriculumWorkspace.tsx"), "utf8");
 const nonSchoolCurriculumStart = readFileSync(resolve(root, "client/src/components/NonSchoolCurriculumStart.tsx"), "utf8");
+const evidenceReview = readFileSync(resolve(root, "client/src/components/LearningEvidenceReview.tsx"), "utf8");
 
 describe("Learning operations workspace interface", () => {
   it("exposes programme operations only through the owner/admin navigation route", () => {
@@ -35,15 +36,29 @@ describe("Learning operations workspace interface", () => {
     expect(participation).toContain("confirmed: true");
   });
 
-  it("gives a linked learner only a read-only view of their own programme progress", () => {
+  it("gives a linked learner only their own programme context and a confirmation-gated internal evidence submission path", () => {
     const progress = readFileSync(resolve(root, "client/src/components/LearnerProgramProgress.tsx"), "utf8");
     expect(progress).toContain("My programmes");
-    expect(progress).toContain("This view shows only your own enrolments and reviewed curriculum progress.");
+    expect(progress).toContain("This view shows only your own enrolments, internal evidence, and reviewed curriculum progress.");
     expect(progress).toContain("pathwayTitle");
     expect(progress).toContain("moduleTitle");
+    expect(progress).toContain("Submit evidence for review");
+    expect(progress).toContain("confirmed: true");
+    expect(progress).toContain("Evidence is private to your learning organisation.");
     expect(progress).toContain("does not create a certificate or verify a credential");
     expect(progress).toContain("not a grade, certificate, or verified credential");
     expect(home).toContain('role === "student" && <LearnerProgramProgress');
+  });
+
+  it("mounts a protected owner/admin or assigned-instructor evidence review queue without automatic progress or credential action", () => {
+    expect(workspace).toContain("<LearningEvidenceReview");
+    expect(home).toContain('role === "teacher" || role === "staff" ? <LearningEvidenceReview');
+    expect(evidenceReview).toContain("Learning evidence review");
+    expect(evidenceReview).toContain("Review to accept");
+    expect(evidenceReview).toContain("Return for follow-up");
+    expect(evidenceReview).toContain("confirmed: true");
+    expect(evidenceReview).toContain("Milestone completion was not changed.");
+    expect(evidenceReview).toContain("does not change milestone progress, completion, grades, certificates, payments, messages, or public records");
   });
 
   it("lets a new owner choose a real operating type during first setup without implying automatic records", () => {

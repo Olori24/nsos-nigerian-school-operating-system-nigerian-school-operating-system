@@ -390,6 +390,26 @@ export const programMilestoneProgress = mysqlTable(
   table => ({ schoolEnrollmentMilestone: uniqueIndex("program_milestone_progress_school_enrollment_milestone_unique").on(table.schoolId, table.enrollmentId, table.milestoneId), schoolEnrollment: index("program_milestone_progress_school_enrollment_idx").on(table.schoolId, table.enrollmentId), schoolMilestone: index("program_milestone_progress_school_milestone_idx").on(table.schoolId, table.milestoneId) }),
 );
 
+export const programMilestoneEvidenceSubmissions = mysqlTable(
+  "programMilestoneEvidenceSubmissions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    enrollmentId: int("enrollmentId").notNull(),
+    milestoneId: int("milestoneId").notNull(),
+    evidenceNote: varchar("evidenceNote", { length: 1500 }).notNull(),
+    status: mysqlEnum("status", ["submitted", "reviewed_accepted", "reviewed_returned"]).notNull().default("submitted"),
+    reviewNote: varchar("reviewNote", { length: 700 }),
+    submittedBy: int("submittedBy").notNull(),
+    submittedAt: timestamp("submittedAt").defaultNow().notNull(),
+    reviewedBy: int("reviewedBy"),
+    reviewedAt: timestamp("reviewedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolEnrollmentMilestone: uniqueIndex("program_milestone_evidence_school_enrollment_milestone_unique").on(table.schoolId, table.enrollmentId, table.milestoneId), schoolEnrollment: index("program_milestone_evidence_school_enrollment_idx").on(table.schoolId, table.enrollmentId), schoolMilestoneStatus: index("program_milestone_evidence_school_milestone_status_idx").on(table.schoolId, table.milestoneId, table.status) }),
+);
+
 export const learningEvidenceSources = mysqlTable(
   "learningEvidenceSources",
   {

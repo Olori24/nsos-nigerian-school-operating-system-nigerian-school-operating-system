@@ -181,7 +181,7 @@
 - [x] Close the DomainKing portal-loading recovery work after the support-led credit-transfer path removed any need to retry payment or manage the ineligible domain in the portal.
 - [x] Recover the DomainKing account through the user-controlled password-reset flow and verify that nsos.edu.ng is pending rather than active.
 - [x] Complete the replacement DomainKing password-reset flow after explicit confirmation of the temporary password submission.
-- [ ] Correct the pending nsos.edu.ng registration without submitting ineligible educational documents, and secure a compliant unrestricted NSOS custom domain.
+- [x] Correct the pending nsos.edu.ng registration without submitting ineligible educational documents, and secure a compliant unrestricted NSOS custom domain.
 - [x] Repair the runtime schema export fault for staff setup invitations and confirm a clean NSOS server startup path.
 - [x] Add a verified guardian portal onboarding checklist with tenant-scoped, read-only first-use guidance and regression coverage.
 - [x] Restrict guardian portal announcements to published, guardian-appropriate updates before surfacing onboarding guidance.
@@ -296,3 +296,10 @@
 - [x] Build responsive vocational-centre and corporate-academy curriculum starting workflows, pathway labels, readiness states, and learner-safe progress context without automatic enrolment, assessment, completion, certification, payment, messaging, or public claims.
 - [x] Add role, tenant-isolation, lifecycle, legacy-compatibility, and UI regressions; validate, document, checkpoint, publish, and push the expanded curriculum framework safely.
 - [x] Update the multi-institution profile regression for the intentional vocational-training-centre terminology and corporate-academy category, then rerun the full suite without bypassing the external sender-domain authorization check.
+- [x] Record and verify the user-evidenced zero-balance DomainKing invoice #DK1139403 for `nsos.top`, including whether the replacement registration is merely invoiced, pending, or active; do not place, pay, renew, or modify any order during verification.
+- [ ] Obtain explicit approval before any `nsos.top` registration finalization, DNS configuration, custom-domain activation, or Resend sender-domain change; keep the existing invitation-email 403 and sender authorization blockers separately visible until resolved.
+- [ ] Bind the active `nsos.top` domain to the published NSOS application and apply only the required DNS records after the account holder’s explicit approval; verify routing without changing the email sender, payments, renewals, or unrelated DomainKing settings.
+- [ ] Create and verify one user-authorized public TinyURL redirect to `https://nsos-system-uhkdscaf.manus.space` without changing `nsos.top`, DNS, hosting, or application settings.
+- [x] Define a tenant-scoped cross-provider learning-evidence model that lets a linked learner submit concise milestone evidence for review without automatic completion, grading, credentialing, public visibility, messages, payments, or cross-tenant access.
+- [x] Add protected learner submission and owner/admin/instructor review workflows for programme milestones, with explicit status, reason, audit, and evidence-access boundaries suitable for vocational practice and workplace-capability paths as well as existing learning operators.
+- [x] Build responsive learner and reviewer evidence interfaces, add role/tenant/lifecycle/UI regressions, validate, document, checkpoint, publish, and push the cross-provider evidence workflow safely.
