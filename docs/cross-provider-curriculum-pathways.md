@@ -28,3 +28,9 @@ Institutions should use an appropriate pathway label, keep local curriculum and 
 ## Interface verification
 
 The public first-setup shell was checked at desktop and 375-pixel mobile widths after this change. It remained readable without horizontal overflow. The pathway workspace is owner/admin-only and is therefore additionally covered by focused client-source and protected-route regression tests when an authenticated institution session is unavailable in the managed preview.
+
+## Institution-aware curriculum entry
+
+The school Academic workspace continues to provide NERDC templates, classes, subjects, terms, timetables, schemes of work, and lesson plans. NSOS now renders that workspace **only** when the active institution type is `school`. Vocational institutes, coaching centres, online training providers, and hybrid learning providers now open an institution-specific curriculum start page instead. It explains the appropriate pathway structure, shows real programme/pathway readiness to owners and administrators, and hands them into the protected Learning Centre to create programmes, pathways, modules, milestones, and materials.
+
+Non-school navigation labels the same destination **Curriculum** and its group **Learning operations**, preventing the former school-only funnel from being presented as their setup path. A focused UI regression covers all four non-school operating types, the school-only route guard, the pathway handoff, the removal of NERDC content from the non-school starter, and the mobile-safe boundary language.

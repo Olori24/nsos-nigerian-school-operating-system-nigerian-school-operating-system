@@ -8,6 +8,7 @@ const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const courseStudio = readFileSync(resolve(root, "client/src/components/CourseStudio.tsx"), "utf8");
 const governance = readFileSync(resolve(root, "client/src/components/LearningDesignGovernance.tsx"), "utf8");
 const crossProviderCurriculum = readFileSync(resolve(root, "client/src/components/CrossProviderCurriculumWorkspace.tsx"), "utf8");
+const nonSchoolCurriculumStart = readFileSync(resolve(root, "client/src/components/NonSchoolCurriculumStart.tsx"), "utf8");
 
 describe("Learning operations workspace interface", () => {
   it("exposes programme operations only through the owner/admin navigation route", () => {
@@ -94,5 +95,20 @@ describe("Learning operations workspace interface", () => {
     expect(crossProviderCurriculum).toContain("Create linked module draft");
     expect(crossProviderCurriculum).toContain("Existing school subjects, schemes of work, lessons, assessments, and results remain separate and unchanged.");
     expect(crossProviderCurriculum).toContain("issue a credential");
+  });
+
+  it("routes non-school institutions away from NERDC, class, subject, term, scheme-of-work, timetable, and lesson-plan setup into an institution-aware curriculum start", () => {
+    expect(home).toContain('operatingType === "school" ?');
+    expect(home).toContain("<NonSchoolCurriculumStart");
+    expect(nonSchoolCurriculumStart).toContain("vocational_institute");
+    expect(nonSchoolCurriculumStart).toContain("coaching_centre");
+    expect(nonSchoolCurriculumStart).toContain("online_training_provider");
+    expect(nonSchoolCurriculumStart).toContain("hybrid_learning_provider");
+    expect(nonSchoolCurriculumStart).toContain("Not school academics");
+    expect(nonSchoolCurriculumStart).toContain("Open programme curriculum");
+    expect(nonSchoolCurriculumStart).toContain("This institution will not be asked to create school classes, subjects, terms, a timetable, a scheme of work, or a lesson plan.");
+    expect(nonSchoolCurriculumStart).not.toContain("NERDC Basic Education");
+    expect(home).toContain('item.id === "academics" ? "Curriculum" : item.label');
+    expect(home).toContain('group.label === "School life" ? "Learning operations" : group.label');
   });
 });

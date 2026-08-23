@@ -190,17 +190,22 @@ describe("external authentication policy", () => {
 
   it("creates a session only once for a successfully consumed passwordless-email link", async () => {
     const consumeLink = vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "parent@example.ng", redirectOrigin: "https://nsos-system-uhkdscaf.manus.space" } as any);
-    vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ openId: "external:email:123", name: "Parent", email: "parent@example.ng" } as any);
-    vi.spyOn(database, "createUserSession").mockResolvedValue("test-session-id");
+    vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 123, openId: "external:email:123", name: "Parent", email: "parent@example.ng" } as any);
+    const acceptStaffInvitations = vi.spyOn(database, "acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
+    const acceptGuardianInvitations = vi.spyOn(database, "acceptGuardianPortalInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
+    const createSession = vi.spyOn(database, "createUserSession").mockResolvedValue("test-session-id");
     await withAuthRouteServer(async origin => {
       const first = await requestRoute(`${origin}/api/auth/email/verify?token=${"a".repeat(43)}`);
       expect(first.status).toBe(302);
       expect(first.headers.location).toBe("https://nsos-system-uhkdscaf.manus.space/");
       expect(headerText(first.headers["set-cookie"])).toContain("app_session_id=");
+      expect(acceptStaffInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });
+      expect(acceptGuardianInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });
       consumeLink.mockRejectedValueOnce(new Error("used"));
       const repeated = await requestRoute(`${origin}/api/auth/email/verify?token=${"a".repeat(43)}`);
       expect(repeated.status).toBe(400);
       expect(repeated.body).toContain("invalid, expired, or already used");
+      expect(createSession).toHaveBeenCalledTimes(1);
     });
   });
 });
