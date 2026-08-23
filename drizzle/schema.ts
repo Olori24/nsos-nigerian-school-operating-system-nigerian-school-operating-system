@@ -288,12 +288,35 @@ export const programFeeStructures = mysqlTable(
   table => ({ schoolProgram: index("program_fee_school_program_idx").on(table.schoolId, table.programId), schoolCohort: index("program_fee_school_cohort_idx").on(table.schoolId, table.cohortId) }),
 );
 
+export const programCurriculumPathways = mysqlTable(
+  "programCurriculumPathways",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    programId: int("programId").notNull(),
+    pathwayType: mysqlEnum("pathwayType", ["school_learning_sequence", "vocational_competency", "coaching_plan", "online_learning_path", "hybrid_learning_path", "custom_learning_path"]).notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    description: text("description"),
+    targetLevel: varchar("targetLevel", { length: 160 }),
+    deliveryGuidance: varchar("deliveryGuidance", { length: 500 }),
+    sortOrder: int("sortOrder").notNull().default(1),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    activatedBy: int("activatedBy"),
+    activatedAt: timestamp("activatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolProgramOrder: uniqueIndex("program_curriculum_pathway_school_program_order_unique").on(table.schoolId, table.programId, table.sortOrder), schoolProgram: index("program_curriculum_pathway_school_program_idx").on(table.schoolId, table.programId), schoolStatus: index("program_curriculum_pathway_school_status_idx").on(table.schoolId, table.status) }),
+);
+
 export const programCurriculumModules = mysqlTable(
   "programCurriculumModules",
   {
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     programId: int("programId").notNull(),
+    pathwayId: int("pathwayId"),
     title: varchar("title", { length: 180 }).notNull(),
     code: varchar("code", { length: 48 }),
     description: text("description"),
@@ -306,7 +329,7 @@ export const programCurriculumModules = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgramOrder: uniqueIndex("program_curriculum_module_school_program_order_unique").on(table.schoolId, table.programId, table.sortOrder), schoolProgram: index("program_curriculum_module_school_program_idx").on(table.schoolId, table.programId), schoolStatus: index("program_curriculum_module_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({ schoolProgramOrder: uniqueIndex("program_curriculum_module_school_program_order_unique").on(table.schoolId, table.programId, table.sortOrder), schoolProgram: index("program_curriculum_module_school_program_idx").on(table.schoolId, table.programId), schoolPathway: index("program_curriculum_module_school_pathway_idx").on(table.schoolId, table.pathwayId), schoolStatus: index("program_curriculum_module_school_status_idx").on(table.schoolId, table.status) }),
 );
 
 export const programCurriculumMilestones = mysqlTable(

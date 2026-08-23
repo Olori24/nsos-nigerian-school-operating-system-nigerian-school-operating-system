@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), getLearningOperatingType: vi.fn(), listLearningEvidenceSources: vi.fn(), createLearningEvidenceSource: vi.fn(), applyCourseStudioDraft: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCurriculumModule: vi.fn(), activateProgramCurriculumModule: vi.fn(), createProgramCurriculumMilestone: vi.fn(), activateProgramCurriculumMilestone: vi.fn(), recordProgramMilestoneProgress: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), createProgramCertificationPolicy: vi.fn(), activateProgramCertificationPolicy: vi.fn(), issueProgramCertificate: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperationsWorkspace: vi.fn(), getLearningOperatingType: vi.fn(), listLearningEvidenceSources: vi.fn(), createLearningEvidenceSource: vi.fn(), applyCourseStudioDraft: vi.fn(), updateLearningOperatingType: vi.fn(), createLearningProgram: vi.fn(), activateLearningProgram: vi.fn(), createProgramCurriculumPathway: vi.fn(), activateProgramCurriculumPathway: vi.fn(), createProgramCurriculumModule: vi.fn(), activateProgramCurriculumModule: vi.fn(), createProgramCurriculumMilestone: vi.fn(), activateProgramCurriculumMilestone: vi.fn(), recordProgramMilestoneProgress: vi.fn(), createProgramCohort: vi.fn(), assignProgramInstructor: vi.fn(), enrolLearnerInProgram: vi.fn(), confirmProgramCompletion: vi.fn(), createProgramCertificationPolicy: vi.fn(), activateProgramCertificationPolicy: vi.fn(), issueProgramCertificate: vi.fn(), recordProgramAttendance: vi.fn(), createProgramFeeStructure: vi.fn(), activateProgramFeeStructure: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 const courseStudio = vi.hoisted(() => ({ buildCourseStudioDraft: vi.fn() }));
 vi.mock("./db", () => db);
 vi.mock("./courseStudio", () => courseStudio);
@@ -17,7 +17,7 @@ describe("NSOS learning operations routes", () => {
     vi.clearAllMocks();
     db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 116, role: "owner", status: "active" });
     db.consumeSharedRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 600 });
-    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], modules: [], milestones: [], milestoneProgress: [], staff: [], learners: [], evidenceSources: [], experienceProfiles: [], certificationPolicies: [], certificates: [] });
+    db.getLearningOperationsWorkspace.mockResolvedValue({ operatingType: "vocational_institute", programs: [], cohorts: [], assignments: [], enrolments: [], attendance: [], fees: [], pathways: [], modules: [], milestones: [], milestoneProgress: [], staff: [], learners: [], evidenceSources: [], experienceProfiles: [], certificationPolicies: [], certificates: [] });
     db.getLearningOperatingType.mockResolvedValue("vocational_institute");
     db.listLearningEvidenceSources.mockResolvedValue([]);
     courseStudio.buildCourseStudioDraft.mockResolvedValue({ courseTitle: "Digital Design Foundation", courseSummary: "An internal supervised course outline for controlled learning operations.", deliveryMode: "blended", durationLabel: "Six weeks", tutorBrief: "Configure a supervised tutor only after a human defines scope and escalation.", evidenceReferences: [], learningExperience: { learningPace: "guided", supportStyle: "balanced", practiceMode: "guided_practice", accessibilityNote: "" }, modules: [{ title: "Design basics", description: "Introduce approved concepts through supervised instruction.", learningType: "topic", milestones: [{ title: "Review key terms", description: "A human instructor reviews understanding using local criteria." }] }, { title: "Guided practice", description: "Use practice activities with instructor feedback.", learningType: "practice", milestones: [{ title: "Review practice", description: "A human instructor agrees the learner’s next step." }] }], materials: [{ title: "Facilitator guide", materialType: "facilitator_guide", modulePosition: 1, content: "Set the approved learning goal and direct learners to a supervising instructor for support." }, { title: "Practice prompt", materialType: "practice_activity", modulePosition: 2, content: "Use a short non-graded practice activity and request instructor feedback before any progress review." }], setupRecommendation: "Review the programme and activate it only through the protected workflow.", limitations: ["No public course or payment action is created."], source: "ai", requiresConfirmation: true });
@@ -25,6 +25,8 @@ describe("NSOS learning operations routes", () => {
     db.updateLearningOperatingType.mockResolvedValue({ success: true, operatingType: "vocational_institute" });
     db.createLearningProgram.mockResolvedValue({ programId: 501, status: "draft" });
     db.activateLearningProgram.mockResolvedValue({ success: true, status: "active" });
+    db.createProgramCurriculumPathway.mockResolvedValue({ pathwayId: 541, status: "draft" });
+    db.activateProgramCurriculumPathway.mockResolvedValue({ success: true, status: "active" });
     db.createProgramCurriculumModule.mockResolvedValue({ moduleId: 551, status: "draft" });
     db.activateProgramCurriculumModule.mockResolvedValue({ success: true, status: "active" });
     db.createProgramCurriculumMilestone.mockResolvedValue({ milestoneId: 561, status: "draft" });
@@ -112,6 +114,20 @@ describe("NSOS learning operations routes", () => {
     await caller.activateCurriculumMilestone({ schoolId: 34, milestoneId: 561, confirmed: true });
     expect(db.createProgramCurriculumModule).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, programId: 501, createdBy: 116, learningType: "practical" }));
     expect(db.createProgramCurriculumMilestone).toHaveBeenCalledWith(expect.objectContaining({ moduleId: 551, createdBy: 116 }));
+    const audit = JSON.stringify(db.recordSecurityAuditEvent.mock.calls);
+    expect(audit).toContain('"publicCoursePublished":false');
+    expect(audit).toContain('"learnerProgressCreated":false');
+    expect(audit).toContain('"credentialIssued":false');
+  });
+
+  it("uses confirmed pathway lifecycle controls for school, vocational, coaching, online, hybrid, or custom learning structures before a module is linked", async () => {
+    const caller = appRouter.createCaller(context()).nsos.learningOperations;
+    await caller.createCurriculumPathway({ schoolId: 34, programId: 501, pathwayType: "vocational_competency", title: "Garment construction competency", targetLevel: "Foundation learners", deliveryGuidance: "Use supervised practical demonstrations.", sortOrder: 1, confirmed: true });
+    await caller.activateCurriculumPathway({ schoolId: 34, pathwayId: 541, confirmed: true });
+    await caller.createCurriculumModule({ schoolId: 34, programId: 501, pathwayId: 541, title: "Measure and cut", learningType: "practical", sortOrder: 1, confirmed: true });
+    expect(db.createProgramCurriculumPathway).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, programId: 501, pathwayType: "vocational_competency", createdBy: 116 }));
+    expect(db.activateProgramCurriculumPathway).toHaveBeenCalledWith({ schoolId: 34, pathwayId: 541, activatedBy: 116 });
+    expect(db.createProgramCurriculumModule).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, programId: 501, pathwayId: 541, createdBy: 116 }));
     const audit = JSON.stringify(db.recordSecurityAuditEvent.mock.calls);
     expect(audit).toContain('"publicCoursePublished":false');
     expect(audit).toContain('"learnerProgressCreated":false');

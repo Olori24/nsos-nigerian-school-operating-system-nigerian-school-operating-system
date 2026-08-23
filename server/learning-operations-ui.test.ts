@@ -7,6 +7,7 @@ const workspace = readFileSync(resolve(root, "client/src/components/LearningOper
 const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const courseStudio = readFileSync(resolve(root, "client/src/components/CourseStudio.tsx"), "utf8");
 const governance = readFileSync(resolve(root, "client/src/components/LearningDesignGovernance.tsx"), "utf8");
+const crossProviderCurriculum = readFileSync(resolve(root, "client/src/components/CrossProviderCurriculumWorkspace.tsx"), "utf8");
 
 describe("Learning operations workspace interface", () => {
   it("exposes programme operations only through the owner/admin navigation route", () => {
@@ -37,7 +38,10 @@ describe("Learning operations workspace interface", () => {
     const progress = readFileSync(resolve(root, "client/src/components/LearnerProgramProgress.tsx"), "utf8");
     expect(progress).toContain("My programmes");
     expect(progress).toContain("This view shows only your own enrolments and reviewed curriculum progress.");
+    expect(progress).toContain("pathwayTitle");
+    expect(progress).toContain("moduleTitle");
     expect(progress).toContain("does not create a certificate or verify a credential");
+    expect(progress).toContain("not a grade, certificate, or verified credential");
     expect(home).toContain('role === "student" && <LearnerProgramProgress');
   });
 
@@ -76,5 +80,19 @@ describe("Learning operations workspace interface", () => {
     expect(governance).toContain("Issue private record");
     expect(governance).toContain("Public verification disabled");
     expect(governance).not.toContain("verifyPublicCertificate");
+  });
+
+  it("gives every supported learning operator a responsive review-first curriculum pathway and linked-module workflow without changing school academic records", () => {
+    expect(workspace).toContain("<CrossProviderCurriculumWorkspace");
+    expect(crossProviderCurriculum).toContain("school_learning_sequence");
+    expect(crossProviderCurriculum).toContain("vocational_competency");
+    expect(crossProviderCurriculum).toContain("coaching_plan");
+    expect(crossProviderCurriculum).toContain("online_learning_path");
+    expect(crossProviderCurriculum).toContain("hybrid_learning_path");
+    expect(crossProviderCurriculum).toContain("custom_learning_path");
+    expect(crossProviderCurriculum).toContain("Create pathway draft");
+    expect(crossProviderCurriculum).toContain("Create linked module draft");
+    expect(crossProviderCurriculum).toContain("Existing school subjects, schemes of work, lessons, assessments, and results remain separate and unchanged.");
+    expect(crossProviderCurriculum).toContain("issue a credential");
   });
 });

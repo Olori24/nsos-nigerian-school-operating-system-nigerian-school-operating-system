@@ -460,12 +460,28 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_activated", targetType: "learning_program", targetId: input.programId, metadata: { confirmationRequired: true, publicPublication: false, paymentCollection: false } });
         return result;
       }),
+    createCurriculumPathway: onboardingAdminProcedure
+      .input(schoolInput.extend({ programId: z.number().int().positive(), pathwayType: z.enum(["school_learning_sequence", "vocational_competency", "coaching_plan", "online_learning_path", "hybrid_learning_path", "custom_learning_path"]), title: z.string().trim().min(2).max(180), description: z.string().trim().max(4000).optional(), targetLevel: z.string().trim().max(160).optional(), deliveryGuidance: z.string().trim().max(500).optional(), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-pathway-create");
+        const result = await db.createProgramCurriculumPathway({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_pathway_draft_created", targetType: "program_curriculum_pathway", targetId: result.pathwayId, metadata: { programId: input.programId, pathwayType: input.pathwayType, order: input.sortOrder, targetLevelProvided: Boolean(input.targetLevel), deliveryGuidanceProvided: Boolean(input.deliveryGuidance), confirmationRequired: true, publicCoursePublished: false, learnerProgressCreated: false, credentialIssued: false } });
+        return result;
+      }),
+    activateCurriculumPathway: onboardingAdminProcedure
+      .input(schoolInput.extend({ pathwayId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-pathway-activate");
+        const result = await db.activateProgramCurriculumPathway({ schoolId: input.schoolId, pathwayId: input.pathwayId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_pathway_activated", targetType: "program_curriculum_pathway", targetId: input.pathwayId, metadata: { confirmationRequired: true, publicCoursePublished: false, learnerProgressCreated: false, credentialIssued: false } });
+        return result;
+      }),
     createCurriculumModule: onboardingAdminProcedure
-      .input(schoolInput.extend({ programId: z.number().int().positive(), title: z.string().trim().min(2).max(180), code: z.string().trim().max(48).optional(), description: z.string().trim().max(4000).optional(), learningType: z.enum(["topic", "practical", "project", "practice", "resource"]), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
+      .input(schoolInput.extend({ programId: z.number().int().positive(), pathwayId: z.number().int().positive().optional(), title: z.string().trim().min(2).max(180), code: z.string().trim().max(48).optional(), description: z.string().trim().max(4000).optional(), learningType: z.enum(["topic", "practical", "project", "practice", "resource"]), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
         await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-module-create");
         const result = await db.createProgramCurriculumModule({ ...input, createdBy: ctx.user.id });
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_module_draft_created", targetType: "program_curriculum_module", targetId: result.moduleId, metadata: { programId: input.programId, learningType: input.learningType, order: input.sortOrder, descriptionProvided: Boolean(input.description), confirmationRequired: true, publicCoursePublished: false, accountCreated: false, messageSent: false, credentialIssued: false } });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_module_draft_created", targetType: "program_curriculum_module", targetId: result.moduleId, metadata: { programId: input.programId, pathwayLinked: Boolean(input.pathwayId), learningType: input.learningType, order: input.sortOrder, descriptionProvided: Boolean(input.description), confirmationRequired: true, publicCoursePublished: false, accountCreated: false, messageSent: false, credentialIssued: false } });
         return result;
       }),
     activateCurriculumModule: onboardingAdminProcedure

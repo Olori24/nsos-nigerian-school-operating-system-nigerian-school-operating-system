@@ -283,3 +283,7 @@
 - [x] Build a mobile-first learning-design workspace that exposes source evidence, customisation controls, tutor handoff, and certification-policy status without exposing raw learner data or leaving dead-end controls.
 - [x] Add research, role, tenant, certification-boundary, model-output, review-gate, and UI regressions; validate, document, checkpoint, and publish safely.
 - [x] Deliver the selected Option A curated-evidence mode first: use a visible library of approved authoritative and institution-supplied sources for cited, review-first course customisation, rather than performing unrestricted public web research during every launch.
+- [x] Audit the existing learning curriculum model across schools, vocational institutes, coaching centres, online training providers, and hybrid operators to identify school-only assumptions and missing curriculum workflows.
+- [x] Extend tenant-scoped curriculum design so every supported learning operator can create, review, activate, and organise learning pathways, modules, milestones, materials, and appropriate learning structures without weakening school academic workflows.
+- [x] Build responsive owner/admin curriculum workflows and learner-safe progress visibility appropriate to each operator type, with clear review, activation, and tutor-handoff boundaries.
+- [x] Add cross-provider curriculum role, tenant-isolation, lifecycle, compatibility, and UI regressions; validate, document, checkpoint, publish, and push the release safely.
