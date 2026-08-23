@@ -1,13 +1,14 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowRight, BookOpenCheck, Layers3, Route, ShieldCheck } from "lucide-react";
 
-type OperatingType = "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider";
+type OperatingType = "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" | "corporate_academy";
 
 const copy: Record<OperatingType, { label: string; title: string; description: string; pathway: string; module: string; milestone: string }> = {
-  vocational_institute: { label: "Vocational curriculum", title: "Build practical competency pathways.", description: "Organise workshop skills, supervised demonstrations, practice and project evidence without forcing school classes, subjects, terms, or lesson plans.", pathway: "Competency pathway", module: "Skill module", milestone: "Review checkpoint" },
+  vocational_institute: { label: "Vocational training curriculum", title: "Build practical competency pathways.", description: "Organise workshop skills, supervised demonstrations, practice and project evidence without forcing school classes, subjects, terms, or lesson plans.", pathway: "Competency pathway", module: "Skill module", milestone: "Demonstration review" },
   coaching_centre: { label: "Coaching curriculum", title: "Plan guided coaching journeys.", description: "Organise coaching themes, practice cycles, sessions and human-reviewed next steps without a school timetable or NERDC subject template.", pathway: "Coaching plan", module: "Coaching module", milestone: "Practice review" },
   online_training_provider: { label: "Online curriculum", title: "Shape flexible online learning paths.", description: "Organise self-paced, live-online or blended modules, materials and reviewed milestones without a class/subject/term requirement.", pathway: "Online learning path", module: "Learning module", milestone: "Learning checkpoint" },
   hybrid_learning_provider: { label: "Hybrid curriculum", title: "Coordinate learning across delivery modes.", description: "Organise on-site and online modules with delivery guidance and human-reviewed milestones without being restricted to a school academic calendar.", pathway: "Hybrid learning path", module: "Delivery module", milestone: "Learning checkpoint" },
+  corporate_academy: { label: "Corporate academy curriculum", title: "Build workplace capability pathways.", description: "Organise role-relevant capability themes, practice, simulations and manager-reviewed development checkpoints without forcing school subjects, terms, or lesson plans.", pathway: "Workplace capability path", module: "Capability module", milestone: "Manager review checkpoint" },
 };
 
 export function NonSchoolCurriculumStart({ schoolId, operatingType, role, onOpenLearning }: { schoolId: number; operatingType: OperatingType; role: "owner" | "admin" | "staff" | "teacher" | "finance" | "parent" | "student"; onOpenLearning: () => void }) {

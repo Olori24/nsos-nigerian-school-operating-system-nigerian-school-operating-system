@@ -93,9 +93,10 @@ describe("NSOS learning operations routes", () => {
   });
 
   it("requires explicit confirmation before changing the tenant operating type", async () => {
-    await expect(appRouter.createCaller(context()).nsos.learningOperations.setOperatingType({ schoolId: 34, operatingType: "vocational_institute", confirmed: true })).resolves.toEqual({ success: true, operatingType: "vocational_institute" });
-    expect(db.updateLearningOperatingType).toHaveBeenCalledWith({ schoolId: 34, operatingType: "vocational_institute", confirmed: true });
-    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "learning_operating_type_updated", metadata: { operatingType: "vocational_institute", confirmationRequired: true } }));
+    db.updateLearningOperatingType.mockResolvedValue({ success: true, operatingType: "corporate_academy" });
+    await expect(appRouter.createCaller(context()).nsos.learningOperations.setOperatingType({ schoolId: 34, operatingType: "corporate_academy", confirmed: true })).resolves.toEqual({ success: true, operatingType: "corporate_academy" });
+    expect(db.updateLearningOperatingType).toHaveBeenCalledWith({ schoolId: 34, operatingType: "corporate_academy", confirmed: true });
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "learning_operating_type_updated", metadata: { operatingType: "corporate_academy", confirmationRequired: true } }));
   });
 
   it("creates programme drafts with confirmation and records only safe operational audit metadata", async () => {
@@ -132,6 +133,13 @@ describe("NSOS learning operations routes", () => {
     expect(audit).toContain('"publicCoursePublished":false');
     expect(audit).toContain('"learnerProgressCreated":false');
     expect(audit).toContain('"credentialIssued":false');
+  });
+
+  it("creates a corporate workplace-capability pathway only as a confirmed internal draft and without learner, completion, public, payment, message, or credential side effects", async () => {
+    const caller = appRouter.createCaller(context()).nsos.learningOperations;
+    await caller.createCurriculumPathway({ schoolId: 34, programId: 501, pathwayType: "workplace_capability_path", title: "Manager coaching foundations", targetLevel: "New line managers", deliveryGuidance: "Use supervised practice and manager review.", sortOrder: 2, confirmed: true });
+    expect(db.createProgramCurriculumPathway).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, programId: 501, pathwayType: "workplace_capability_path", createdBy: 116 }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "learning_curriculum_pathway_draft_created", metadata: expect.objectContaining({ pathwayType: "workplace_capability_path", confirmationRequired: true, publicCoursePublished: false, learnerProgressCreated: false, credentialIssued: false }) }));
   });
 
   it("records human-reviewed programme milestone progress without automatic completion or credential action", async () => {

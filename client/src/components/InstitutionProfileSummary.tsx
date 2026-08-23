@@ -1,14 +1,15 @@
 import { trpc } from "@/lib/trpc";
 import { Building2, ChevronRight, GraduationCap, Loader2, MonitorPlay, Sparkles } from "lucide-react";
 
-type OperatingType = "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider";
+type OperatingType = "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" | "corporate_academy";
 type Institution = { id: number; name: string; shortCode: string; state: string | null; operatingType: OperatingType; role: string };
 const categories: Array<{ type: OperatingType; label: string; detail: string; icon: typeof Building2 }> = [
   { type: "school", label: "Schools", detail: "Academic and family operations", icon: Building2 },
-  { type: "vocational_institute", label: "Vocational institutes", detail: "Skills and practical programmes", icon: GraduationCap },
+  { type: "vocational_institute", label: "Vocational training centres", detail: "Skills, demonstrations, and practical programmes", icon: GraduationCap },
   { type: "coaching_centre", label: "Coaching centres", detail: "Tutoring and exam preparation", icon: Sparkles },
   { type: "online_training_provider", label: "Online training", detail: "Live, self-paced, or blended learning", icon: MonitorPlay },
   { type: "hybrid_learning_provider", label: "Hybrid learning", detail: "School and programme operations", icon: Building2 },
+  { type: "corporate_academy", label: "Corporate academies", detail: "Workplace capability and development programmes", icon: MonitorPlay },
 ];
 
 export function InstitutionProfileSummary({ activeInstitutionId, onSwitch }: { activeInstitutionId?: number; onSwitch?: (institutionId: number) => void }) {

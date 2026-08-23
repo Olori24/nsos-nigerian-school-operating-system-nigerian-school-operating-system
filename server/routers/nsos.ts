@@ -136,7 +136,7 @@ export const nsosRouter = router({
   schools: router({
     list: protectedProcedure.query(({ ctx }) => db.listUserSchools(ctx.user.id)),
     create: protectedProcedure
-      .input(z.object({ name: z.string().min(3).max(255), shortCode: z.string().min(2).max(32), operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider"]).default("school"), state: z.string().max(100).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional() }))
+      .input(z.object({ name: z.string().min(3).max(255), shortCode: z.string().min(2).max(32), operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider", "corporate_academy"]).default("school"), state: z.string().max(100).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional() }))
       .mutation(({ ctx, input }) => db.createSchool({ ...input, shortCode: input.shortCode.trim().toUpperCase(), createdBy: ctx.user.id })),
     context: protectedProcedure.input(schoolInput).query(async ({ ctx, input }) => {
       const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
@@ -437,7 +437,7 @@ export const nsosRouter = router({
         return result;
       }),
     setOperatingType: onboardingAdminProcedure
-      .input(schoolInput.extend({ operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider"]), confirmed: z.literal(true) }))
+      .input(schoolInput.extend({ operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider", "corporate_academy"]), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
         await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "operating-type");
         const result = await db.updateLearningOperatingType(input);
@@ -461,7 +461,7 @@ export const nsosRouter = router({
         return result;
       }),
     createCurriculumPathway: onboardingAdminProcedure
-      .input(schoolInput.extend({ programId: z.number().int().positive(), pathwayType: z.enum(["school_learning_sequence", "vocational_competency", "coaching_plan", "online_learning_path", "hybrid_learning_path", "custom_learning_path"]), title: z.string().trim().min(2).max(180), description: z.string().trim().max(4000).optional(), targetLevel: z.string().trim().max(160).optional(), deliveryGuidance: z.string().trim().max(500).optional(), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
+      .input(schoolInput.extend({ programId: z.number().int().positive(), pathwayType: z.enum(["school_learning_sequence", "vocational_competency", "coaching_plan", "online_learning_path", "hybrid_learning_path", "workplace_capability_path", "custom_learning_path"]), title: z.string().trim().min(2).max(180), description: z.string().trim().max(4000).optional(), targetLevel: z.string().trim().max(160).optional(), deliveryGuidance: z.string().trim().max(500).optional(), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
         await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-pathway-create");
         const result = await db.createProgramCurriculumPathway({ ...input, createdBy: ctx.user.id });

@@ -31,10 +31,11 @@ describe("Multi-institution workspace UI", () => {
   it("categorizes only active profile memberships by institution operating type and reuses the safe switch handoff", () => {
     expect(profile).toContain("My institution profile");
     expect(profile).toContain("Schools");
-    expect(profile).toContain("Vocational institutes");
+    expect(profile).toContain("Vocational training centres");
     expect(profile).toContain("Coaching centres");
     expect(profile).toContain("Online training");
     expect(profile).toContain("Hybrid learning");
+    expect(profile).toContain("Corporate academies");
     expect(profile).toContain("trpc.nsos.schools.list.useQuery");
     expect(profile).toContain("No active institutions");
     expect(profile).toContain("onSwitch?.(item.id)");

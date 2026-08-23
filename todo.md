@@ -291,3 +291,8 @@
 - [x] Provide clear institution-type-aware curriculum starting points, labels, empty states, and working handoffs for vocational competency, coaching plans, online learning paths, and hybrid delivery, while retaining the NERDC academic flow only for schools.
 - [x] Add responsive regression coverage proving that non-school operators cannot be funnelled into school-only curriculum controls; validate, checkpoint, publish, and push the correction safely.
 - [x] Diagnose and repair the passwordless-email one-time-link test timeout uncovered during curriculum-release validation, without weakening token-consumption, session-creation, or provider-timeout safeguards.
+- [x] Audit the existing vocational-institute and non-school curriculum model for training-centre and corporate-academy gaps in operating type, pathway language, learning structures, and learner progress.
+- [x] Add a dedicated corporate-academy operating type and type-aware curriculum structures for vocational training centres and workplace learning, while preserving existing school academics and tenant boundaries.
+- [x] Build responsive vocational-centre and corporate-academy curriculum starting workflows, pathway labels, readiness states, and learner-safe progress context without automatic enrolment, assessment, completion, certification, payment, messaging, or public claims.
+- [x] Add role, tenant-isolation, lifecycle, legacy-compatibility, and UI regressions; validate, document, checkpoint, publish, and push the expanded curriculum framework safely.
+- [x] Update the multi-institution profile regression for the intentional vocational-training-centre terminology and corporate-academy category, then rerun the full suite without bypassing the external sender-domain authorization check.

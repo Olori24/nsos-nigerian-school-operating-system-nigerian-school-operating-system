@@ -590,7 +590,7 @@ export async function getSchoolByCode(shortCode: string) {
   return { ...school, admissionTemplate: publicAdmissionTemplate(template) };
 }
 
-export async function createSchool(input: { name: string; shortCode: string; operatingType?: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider"; state?: string; email?: string; phone?: string; createdBy: number }) {
+export async function createSchool(input: { name: string; shortCode: string; operatingType?: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" | "corporate_academy"; state?: string; email?: string; phone?: string; createdBy: number }) {
   const db = await database();
   const created = await db.insert(schools).values({ ...input, shortCode: input.shortCode.trim().toUpperCase(), currency: "NGN", timezone: "Africa/Lagos" });
   const schoolId = Number(created[0].insertId);
@@ -3306,7 +3306,7 @@ export async function getStudentPortal(schoolId: number, userId: number) {
   return { student, attendance, invoices: invoiceRows, reportCards, announcements: portalAnnouncements, programProgress };
 }
 
-export type LearningOperatingType = "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider";
+export type LearningOperatingType = "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" | "corporate_academy";
 
 export async function updateLearningOperatingType(input: { schoolId: number; operatingType: LearningOperatingType }) {
   const db = await database();
@@ -3391,7 +3391,7 @@ export async function createLearningProgram(input: { schoolId: number; title: st
   return { programId: Number(result[0].insertId), status: "draft" as const };
 }
 
-export type ProgramCurriculumPathwayType = "school_learning_sequence" | "vocational_competency" | "coaching_plan" | "online_learning_path" | "hybrid_learning_path" | "custom_learning_path";
+export type ProgramCurriculumPathwayType = "school_learning_sequence" | "vocational_competency" | "coaching_plan" | "online_learning_path" | "hybrid_learning_path" | "workplace_capability_path" | "custom_learning_path";
 
 export async function createProgramCurriculumPathway(input: { schoolId: number; programId: number; pathwayType: ProgramCurriculumPathwayType; title: string; description?: string; targetLevel?: string; deliveryGuidance?: string; sortOrder: number; createdBy: number }) {
   await requireProgramReference({ schoolId: input.schoolId, programId: input.programId });

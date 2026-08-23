@@ -4,13 +4,14 @@ import { Building2, Check, ChevronDown, Loader2, Plus, ShieldCheck } from "lucid
 import { useState } from "react";
 import { toast } from "sonner";
 
-type Institution = { id: number; name: string; shortCode: string; state: string | null; operatingType: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider"; role: string };
+type Institution = { id: number; name: string; shortCode: string; state: string | null; operatingType: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" | "corporate_academy"; role: string };
 const operatingTypes: Array<{ value: Institution["operatingType"]; label: string }> = [
   { value: "school", label: "School" },
-  { value: "vocational_institute", label: "Vocational institute" },
+  { value: "vocational_institute", label: "Vocational training centre" },
   { value: "coaching_centre", label: "Coaching centre" },
   { value: "online_training_provider", label: "Online training provider" },
   { value: "hybrid_learning_provider", label: "Hybrid learning provider" },
+  { value: "corporate_academy", label: "Corporate academy" },
 ];
 
 function operatingLabel(value: Institution["operatingType"]) { return operatingTypes.find(item => item.value === value)?.label ?? "Institution"; }

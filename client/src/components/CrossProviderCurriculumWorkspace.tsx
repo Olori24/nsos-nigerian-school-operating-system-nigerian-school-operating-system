@@ -3,10 +3,10 @@ import { CheckCircle2, Layers3, Route, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type PathwayType = "school_learning_sequence" | "vocational_competency" | "coaching_plan" | "online_learning_path" | "hybrid_learning_path" | "custom_learning_path";
+type PathwayType = "school_learning_sequence" | "vocational_competency" | "coaching_plan" | "online_learning_path" | "hybrid_learning_path" | "workplace_capability_path" | "custom_learning_path";
 const inputClass = "h-10 w-full rounded-lg border border-[#dfe5df] bg-[#fbfcfa] px-3 text-sm text-[#15201c] outline-none transition focus:border-[#0f5c4f] focus:ring-2 focus:ring-[#0f5c4f]/10";
-const pathwayLabels: Record<PathwayType, string> = { school_learning_sequence: "School learning sequence", vocational_competency: "Vocational competency pathway", coaching_plan: "Coaching plan", online_learning_path: "Online learning path", hybrid_learning_path: "Hybrid learning path", custom_learning_path: "Custom learning path" };
-const recommendedPathway: Record<string, PathwayType> = { school: "school_learning_sequence", vocational_institute: "vocational_competency", coaching_centre: "coaching_plan", online_training_provider: "online_learning_path", hybrid_learning_provider: "hybrid_learning_path" };
+const pathwayLabels: Record<PathwayType, string> = { school_learning_sequence: "School learning sequence", vocational_competency: "Vocational training competency pathway", coaching_plan: "Coaching plan", online_learning_path: "Online learning path", hybrid_learning_path: "Hybrid learning path", workplace_capability_path: "Workplace capability path", custom_learning_path: "Custom learning path" };
+const recommendedPathway: Record<string, PathwayType> = { school: "school_learning_sequence", vocational_institute: "vocational_competency", coaching_centre: "coaching_plan", online_training_provider: "online_learning_path", hybrid_learning_provider: "hybrid_learning_path", corporate_academy: "workplace_capability_path" };
 
 export function CrossProviderCurriculumWorkspace({ schoolId, data, onChanged }: { schoolId: number; data: any; onChanged: () => Promise<void> }) {
   const operatingType = data.operatingType ?? "school";

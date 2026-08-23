@@ -1,0 +1,2 @@
+ALTER TABLE `programCurriculumPathways` MODIFY COLUMN `pathwayType` enum('school_learning_sequence','vocational_competency','coaching_plan','online_learning_path','hybrid_learning_path','workplace_capability_path','custom_learning_path') NOT NULL;--> statement-breakpoint
+ALTER TABLE `schools` MODIFY COLUMN `operatingType` enum('school','vocational_institute','coaching_centre','online_training_provider','hybrid_learning_provider','corporate_academy') NOT NULL DEFAULT 'school';

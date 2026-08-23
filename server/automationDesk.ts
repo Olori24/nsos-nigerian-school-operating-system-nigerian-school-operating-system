@@ -43,7 +43,7 @@ function validatePlan(value: unknown, fallback: AutomationPlan): AutomationPlan 
   return { jobType, title, summary, steps, missingFields, limitations, source: "ai" };
 }
 
-export async function buildAutomationPlan(input: { request: string; assessment: ReadinessAssessment; operatingType: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" }) {
+export async function buildAutomationPlan(input: { request: string; assessment: ReadinessAssessment; operatingType: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" | "corporate_academy" }) {
   const fallback = fallbackPlan(input.request, input.assessment);
   const actionContext = input.assessment.actions.map(action => ({ id: action.id, state: action.state, executable: action.executable })).slice(0, 5);
   try {

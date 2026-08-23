@@ -52,6 +52,9 @@ describe("Learning operations workspace interface", () => {
     expect(home).toContain('value="vocational_institute"');
     expect(home).toContain('value="coaching_centre"');
     expect(home).toContain('value="online_training_provider"');
+    expect(home).toContain('value="corporate_academy"');
+    expect(home).toContain("Vocational training centre");
+    expect(home).toContain("Corporate academy");
     expect(home).toContain("No staff, learners, fees, contacts, courses, or certificates are created automatically.");
   });
 
@@ -90,6 +93,7 @@ describe("Learning operations workspace interface", () => {
     expect(crossProviderCurriculum).toContain("coaching_plan");
     expect(crossProviderCurriculum).toContain("online_learning_path");
     expect(crossProviderCurriculum).toContain("hybrid_learning_path");
+    expect(crossProviderCurriculum).toContain("workplace_capability_path");
     expect(crossProviderCurriculum).toContain("custom_learning_path");
     expect(crossProviderCurriculum).toContain("Create pathway draft");
     expect(crossProviderCurriculum).toContain("Create linked module draft");
@@ -104,6 +108,9 @@ describe("Learning operations workspace interface", () => {
     expect(nonSchoolCurriculumStart).toContain("coaching_centre");
     expect(nonSchoolCurriculumStart).toContain("online_training_provider");
     expect(nonSchoolCurriculumStart).toContain("hybrid_learning_provider");
+    expect(nonSchoolCurriculumStart).toContain("corporate_academy");
+    expect(nonSchoolCurriculumStart).toContain("Workplace capability path");
+    expect(nonSchoolCurriculumStart).toContain("manager-reviewed development checkpoints");
     expect(nonSchoolCurriculumStart).toContain("Not school academics");
     expect(nonSchoolCurriculumStart).toContain("Open programme curriculum");
     expect(nonSchoolCurriculumStart).toContain("This institution will not be asked to create school classes, subjects, terms, a timetable, a scheme of work, or a lesson plan.");
