@@ -1,10 +1,12 @@
 import { performance } from "node:perf_hooks";
+import { boundedInteger, safeStagingHealthTarget } from "./loadTargetSafety.mjs";
 
-const baseUrl = process.env.NSOS_AUDIT_URL ?? "https://nsos-system-uhkdscaf.manus.space";
-const totalRequests = 50;
-const concurrency = 10;
+const totalRequests = boundedInteger(process.env.NSOS_LOAD_TEST_REQUESTS, 50, 200);
+const concurrency = boundedInteger(process.env.NSOS_LOAD_TEST_CONCURRENCY, 10, 25);
 const input = encodeURIComponent(JSON.stringify({ json: { timestamp: Date.now() } }));
-const target = `${baseUrl}/api/trpc/system.health?input=${input}`;
+const stagingTarget = safeStagingHealthTarget({ approved: process.env.NSOS_LOAD_TEST_APPROVED, baseUrl: process.env.NSOS_STAGING_AUDIT_URL });
+stagingTarget.searchParams.set("input", input);
+const target = stagingTarget.toString();
 
 const latencies = [];
 let success = 0;
@@ -17,7 +19,7 @@ async function one() {
   if (requestIndex >= totalRequests) return;
   const began = performance.now();
   try {
-    const response = await fetch(target, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
+    const response = await fetch(target, { headers: { accept: "application/json", "x-nsos-load-test": "synthetic-staging-read-only" }, signal: AbortSignal.timeout(10_000) });
     await response.arrayBuffer();
     if (response.ok) success += 1;
     else failures += 1;
@@ -35,8 +37,8 @@ const percentile = (fraction) => latencies[Math.min(latencies.length - 1, Math.c
 const elapsedMs = performance.now() - started;
 
 console.log(JSON.stringify({
-  label: "MEASURED: read-only public health-check workload",
-  target: new URL(target).pathname,
+  label: "MEASURED: approved isolated staging read-only health-check workload",
+  target: stagingTarget.pathname,
   totalRequests,
   concurrency,
   successfulRequests: success,

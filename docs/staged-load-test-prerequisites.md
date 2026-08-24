@@ -14,6 +14,10 @@
 | Provider simulation | Non-production or stubbed email, SMS, payment, storage, and AI responses with controlled failure cases. | Exercises degraded operation without sending or charging anyone. |
 | Abort authority | Named operator, documented stop conditions, and tested kill/rollback steps. | Limits blast radius if error rate, resource saturation, or data growth exceeds limits. |
 
+## Built-in staging safety probe
+
+`scripts/measure-health-load.mjs` is a small, read-only health-check probe for the first staging smoke stage. It now fails closed: it requires `NSOS_LOAD_TEST_APPROVED=true`, an explicit `NSOS_STAGING_AUDIT_URL`, HTTPS, and a hostname containing `staging`, `stage`, `test`, or `sandbox`. It refuses the live NSOS host, has no production default, limits runs to 200 requests and 25 concurrent requests, and sends no mutation traffic. It is **not** a 50K benchmark and must not run until the environment-evidence table is satisfied.
+
 ## Workload sequence
 
 The initial benchmark model represents 50,000 registered users, about 10,000 daily active users, 2,000 peak concurrent sessions, and up to 500 concurrent API requests. These are test inputs, **not confirmed NSOS capacity**.

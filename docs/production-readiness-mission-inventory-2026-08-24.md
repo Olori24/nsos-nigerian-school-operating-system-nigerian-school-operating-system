@@ -122,3 +122,5 @@ No throughput, latency, database saturation, or cost figure is claimed until thi
 ### Launch decision
 
 NSOS is **not approved for broad real-school onboarding or any 50K-capacity claim** at this point. The next non-code gate is the owner-controlled Resend sender-domain verification. The next engineering gate is an isolated staging environment with synthetic data, observability retention/alerting, restore rehearsal, and progressive recorded workload tests. No domain, DNS, payment, sender, provider, or production data setting was changed during this mission.
+
+The confirmation-gated sender sequence is documented in [`verified-email-sender-handoff.md`](./verified-email-sender-handoff.md); the fail-closed staging probe and staged evidence rules are documented in [`staged-load-test-prerequisites.md`](./staged-load-test-prerequisites.md).
