@@ -16,9 +16,26 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, typecheck, test, and build
+    name: Lint, typecheck, migration, test, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: nsos
+          MYSQL_USER: nsos
+          MYSQL_PASSWORD: nsos_test_password
+          MYSQL_ROOT_PASSWORD: root_test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_test_password --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -45,6 +62,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm check
+
+      - name: Validate database migrations
+        run: pnpm drizzle-kit migrate
 
       - name: Run tests
         run: pnpm test
