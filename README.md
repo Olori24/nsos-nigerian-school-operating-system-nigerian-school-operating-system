@@ -9,7 +9,7 @@
 [![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F)](https://orm.drizzle.team/)
 [![Vitest](https://img.shields.io/badge/Vitest-2.1-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
 
-**[Live managed preview](https://nsos-system-uhkdscaf.manus.space)** · **[Architecture](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md)** · **[Security](SECURITY.md)** · **[Product roadmap](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md)** · **[Learning Centre operating model](docs/learning-centre-of-excellence-operating-model.md)** · **[One-Prompt Institution Builder](docs/one-prompt-institution-builder-operating-model.md)**
+**[Live managed preview](https://nsos-system-uhkdscaf.manus.space)** · **[Architecture](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md)** · **[Security](SECURITY.md)** · **[Product roadmap](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md)** · **[Learning Centre operating model](docs/learning-centre-of-excellence-operating-model.md)** · **[One-Prompt Institution Builder](docs/one-prompt-institution-builder-operating-model.md)** · **[AI School Operator](docs/ai-school-operator-operating-model.md)**
 
 ---
 
@@ -82,9 +82,18 @@ NSOS now supports schools, vocational training centres, coaching centres, online
 | **Private issuer records** | Lets an institution separately draft and activate a programme policy, then create one tenant-private evidence-backed record after human completion and milestone review. | Represent a record as accreditation, a professional qualification, a public credential, or publicly verified certificate. |
 | **Single-Prompt Online School Launcher** | Creates one private, draft-only online-learning foundation and configuration-readiness record from a full owner prompt. | Create mock people, testimonials, payments, public content, tutor accounts, credentials, or revenue. |
 | **One-Prompt Institution Builder** | Makes “What do you want to build?” the primary owner experience. One natural-language prompt or template prepares an editable private institution plan with coherent module and lesson starters, practical projects, assessment-integrity guidance, learner experience, unpublished website/admissions/pricing readiness, quality checks, and protected lifecycle handoffs. Refinements create a new private version rather than overwriting the current record. | Publish an institution, create people, admit or enrol learners, set fees, collect payments, send messages, grade, complete learners, issue credentials, or change provider/domain settings. |
+| **AI School Operator** | Gives owners and administrators an on-demand, explainable view of tenant-scoped operating readiness: onboarding, programmes and active enrolments, pending admissions, outstanding invoices, email and automation failures, reviewed learning-evidence workload, private-record readiness, and website readiness. It can retain an owner-approved private operating profile and route a recommendation into its existing protected workspace. | Predict learner risk or demand, label individuals, change price, approve admissions, grade, alter progress, complete, enrol, certify, publish, create campaigns, spend, send messages, collect payments, retry external actions, or change providers, domains, or DNS. |
 | **19-Prompt Taster Library** | Provides one-tap course-launch prompts across digital, creative, business, trade, STEM, enterprise, and academic-support niches. | Make claims of demand, pricing, sales, accreditation, outcomes, or public availability. |
 
-The AI boundary is a product advantage: models produce strict structured plans and drafts; server-side code validates all inputs, owns the action catalog, and executes only allowlisted internal work. The system keeps human review where consequences become financial, public, identity-related, or irreversible. See the [builder-first phased institution contract](docs/builder-first-phased-institution-contract.md), [supervised AI operating model](docs/supervised-ai-agents-operating-model-2026-08-22.md), and [single-prompt launcher contract](docs/single-prompt-online-school-launcher-contract.md).
+The AI boundary is a product advantage: models produce strict structured plans and drafts; deterministic server-side aggregation supplies School Operator signals; server-side code validates all inputs, owns the action catalog, and executes only allowlisted internal work. The system keeps human review where consequences become financial, public, identity-related, academic, or irreversible. See the [AI School Operator operating model](docs/ai-school-operator-operating-model.md), [builder-first phased institution contract](docs/builder-first-phased-institution-contract.md), [supervised AI operating model](docs/supervised-ai-agents-operating-model-2026-08-22.md), and [single-prompt launcher contract](docs/single-prompt-online-school-launcher-contract.md).
+
+### Approval-first School Operator
+
+The School Operator is an owner/admin workspace, not an autonomous executive. It refreshes only when an authorised user asks for current tenant-scoped aggregates; it does not use background loops, timers, or unreviewed external activity. Each insight makes its evidence, limitation, and destination visible, and each destination is an existing role-protected workspace with its own confirmation rules.
+
+> **Detect → explain → recommend → owner approves → protected workflow executes → audit.**
+
+Students receive a separate low-stakes **Student Learning Copilot** recommendation based only on their own linked active programme context. It suggests a safe next learning step or instructor-guided practice. It never changes a programme, progress, assessment, result, completion state, or private issuer record. The complete boundaries, signal sources, private-memory rules, and no-action policy are documented in the [AI School Operator operating model](docs/ai-school-operator-operating-model.md).
 
 ---
 
@@ -161,10 +170,10 @@ The product is in **active engineering and controlled rollout preparation**. The
 | Evidence category | Current repository record |
 |---|---|
 | Managed preview | [NSOS managed preview](https://nsos-system-uhkdscaf.manus.space) is available; normal authentication and workspace setup apply. |
-| Latest product additions | Automation Desk, Quick Start, Course Studio, Single-Prompt Online School Launcher, and the 19-Prompt Taster Library. |
-| Focused validation | The most recent Taster Library release passed 11 focused tests across 3 files, TypeScript validation, a production build, and managed-shell rendering. |
-| Broader regression record | The last full-suite record before the taster-only UI/library addition was 336 passing tests across 97 files, with one external sender-domain authorization failure. |
-| Known external dependency | Branded sender activation remains blocked until compliant `nsos.ng` registration and Resend sender verification are resolved. No payment, DNS, domain, or sender change is made without written terms and explicit approval. |
+| Latest product additions | Approval-first AI School Operator, learner-owned Student Learning Copilot next-step guidance, Institution Builder, Automation Desk, Quick Start, Course Studio, Single-Prompt Online School Launcher, and the 19-Prompt Taster Library. |
+| Focused validation | The School Operator release passed focused owner/admin route, user-interface, Copilot, learner-guidance, and builder regressions, plus fresh TypeScript validation and a production build. |
+| Broader regression record | The latest full-suite record is **377/378 passing tests across 104/105 files**. The sole failure is the unchanged external sender-domain authorisation integration check for the currently unverified `resend.dev` sender. |
+| Known external dependency | Email sender activation remains blocked until a verified sending domain is configured. `nsos.top` is active at its registrar but is not bound to the managed deployment; no DNS, custom-domain, sender, payment, or short-link setting is changed without explicit approval and the required external access. |
 
 The visible external dependency is documented rather than hidden. See [communication reliability and email-service plan](docs/communication-reliability-and-email-service-plan-2026-08-22.md) and the [DomainKing decision record](docs/domainking-invoice-410679-status-2026-08-22.md).
 
@@ -179,6 +188,7 @@ The visible external dependency is documented rather than hidden. See [communica
 | Revenue foundations and commercial controls | [Revenue Foundation](docs/NSOS_REVENUE_FOUNDATION.md) |
 | Learning operating model | [Learning Centre of Excellence](docs/learning-centre-of-excellence-operating-model.md) |
 | AI and automation operating model | [Supervised AI Agents](docs/supervised-ai-agents-operating-model-2026-08-22.md) and [Automation Desk](docs/automation-desk-operating-model.md) |
+| Approval-first operational intelligence | [AI School Operator](docs/ai-school-operator-operating-model.md) |
 | Single-prompt and taster products | [Institution Builder](docs/one-prompt-institution-builder-operating-model.md), [Online School Launcher](docs/single-prompt-online-school-launcher-contract.md), and [Taster Library](docs/online-school-taster-library-operating-model.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |
 | Repository entity record | [NSOS Entity Card](docs/nsos-entity-card.md) |
@@ -191,8 +201,8 @@ The roadmap is deliberately driven by proof, safety, and operational utility rat
 
 | Horizon | Direction | Gate before broader rollout |
 |---|---|---|
-| **Now** | Validate multi-tenant operations, learning workflows, AI-assisted setup, migration controls, and the 19-prompt taster experience with real owner review. | Stable tenant boundaries, trusted workflows, and clear support feedback. |
-| **Next** | Deepen instructor delivery, guardian visibility policy, evidence uploads, selected background rules, and commercial packaging. | Explicit owner controls, privacy review, reliable delivery evidence, and clear operational recovery. |
+| **Now** | Validate multi-tenant operations, learning workflows, AI-assisted setup, approval-first School Operator handoffs, migration controls, and the 19-prompt taster experience with real owner review. | Stable tenant boundaries, trusted workflows, and clear support feedback. |
+| **Next** | Deepen instructor delivery, guardian visibility policy, evidence uploads, carefully reviewed recurring operations, and commercial packaging. | Explicit owner controls, privacy review, reliable delivery evidence, schedule governance, and clear operational recovery. |
 | **Later** | Add selected verified provider activation, public launch paths, and commercial expansion features where customer evidence supports them. | Written provider/domain terms, verified senders, live-service testing, and approved commercial policy. |
 
 This is direction, not a timetable or performance forecast.
