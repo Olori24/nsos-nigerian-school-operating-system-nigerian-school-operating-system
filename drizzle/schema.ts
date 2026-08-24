@@ -182,6 +182,49 @@ export const institutionBlueprints = mysqlTable(
   }),
 );
 
+export const institutionOperatingProfiles = mysqlTable(
+  "institutionOperatingProfiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    mission: text("mission"),
+    targetLearners: text("targetLearners"),
+    brandTone: varchar("brandTone", { length: 180 }),
+    teachingPhilosophy: text("teachingPhilosophy"),
+    curriculumStrategy: text("curriculumStrategy"),
+    pricingApproach: text("pricingApproach"),
+    policyNotes: text("policyNotes"),
+    operatingGoals: text("operatingGoals"),
+    updatedBy: int("updatedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolUnique: uniqueIndex("institution_operating_profile_school_unique").on(table.schoolId) }),
+);
+
+export const schoolOperatorInsights = mysqlTable(
+  "schoolOperatorInsights",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    insightType: mysqlEnum("insightType", ["readiness", "learning", "admissions", "revenue", "lifecycle", "health", "certificate"]).notNull(),
+    severity: mysqlEnum("severity", ["info", "attention", "review"]).notNull().default("info"),
+    status: mysqlEnum("status", ["open", "dismissed"]).notNull().default("open"),
+    dedupeKey: varchar("dedupeKey", { length: 128 }).notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    detail: varchar("detail", { length: 900 }).notNull(),
+    evidence: json("evidence").$type<{ metric: string; value: number; comparison?: string; source: string }>().notNull(),
+    actionDestination: varchar("actionDestination", { length: 48 }),
+    sourceVersion: varchar("sourceVersion", { length: 32 }).notNull().default("deterministic-v1"),
+    generatedAt: timestamp("generatedAt").defaultNow().notNull(),
+    dismissedBy: int("dismissedBy"),
+    dismissedAt: timestamp("dismissedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolGenerated: index("school_operator_insight_school_generated_idx").on(table.schoolId, table.generatedAt), schoolStatus: index("school_operator_insight_school_status_idx").on(table.schoolId, table.status), schoolDedupe: uniqueIndex("school_operator_insight_school_dedupe_unique").on(table.schoolId, table.dedupeKey) }),
+);
+
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),

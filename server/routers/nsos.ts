@@ -460,6 +460,33 @@ export const nsosRouter = router({
       }),
   }),
 
+  schoolOperator: router({
+    workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolOperatorWorkspace(input.schoolId)),
+    refresh: onboardingAdminProcedure
+      .input(schoolInput.extend({ confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-school-operator", route: "refresh", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `School Operator refresh is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const insights = await db.refreshSchoolOperatorInsights(input.schoolId);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_insights_refreshed", targetType: "school_operator", metadata: { confirmationRequired: true, insightCount: insights.length, source: "deterministic-v1", rawLearnerDataIncluded: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
+        return insights;
+      }),
+    saveProfile: onboardingAdminProcedure
+      .input(schoolInput.extend({ profile: z.object({ mission: z.string().trim().max(1600).optional(), targetLearners: z.string().trim().max(1000).optional(), brandTone: z.string().trim().max(180).optional(), teachingPhilosophy: z.string().trim().max(1600).optional(), curriculumStrategy: z.string().trim().max(1600).optional(), pricingApproach: z.string().trim().max(1600).optional(), policyNotes: z.string().trim().max(1600).optional(), operatingGoals: z.string().trim().max(1600).optional() }), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await db.saveInstitutionOperatingProfile({ schoolId: input.schoolId, updatedBy: ctx.user.id, profile: input.profile });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_profile_saved", targetType: "institution_operating_profile", metadata: { confirmationRequired: true, fieldsProvided: Object.values(input.profile).filter(Boolean).length, rawProfileTextStoredInAudit: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
+        return profile;
+      }),
+    dismissInsight: onboardingAdminProcedure
+      .input(schoolInput.extend({ insightId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const insights = await db.dismissSchoolOperatorInsight({ schoolId: input.schoolId, insightId: input.insightId, dismissedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_insight_dismissed", targetType: "school_operator_insight", targetId: input.insightId, metadata: { confirmationRequired: true, localVisibilityChanged: true, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
+        return insights;
+      }),
+  }),
+
   learningOperations: router({
     workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getLearningOperationsWorkspace(input.schoolId)),
     evidenceReviewQueue: learningEvidenceReviewerProcedure.input(schoolInput).query(({ ctx, input }) => db.listReviewableProgramMilestoneEvidence({ schoolId: input.schoolId, reviewerUserId: ctx.user.id, reviewerIsManagement: isManagementRole(ctx.schoolRole) })),

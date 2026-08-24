@@ -414,6 +414,13 @@
       "when": 1787530120309,
       "tag": "0058_round_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1787532991961,
+      "tag": "0059_mysterious_lionheart",
+      "breakpoints": true
     }
   ]
 }

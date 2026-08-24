@@ -15,8 +15,12 @@ describe("NSOS Copilot guidance", () => {
     expect(parentDestinations).not.toContain("finance");
     expect(parentDestinations).not.toContain("admissions");
     expect(parentDestinations).not.toContain("institution-builder");
+    expect(parentDestinations).not.toContain("school-operator");
     expect(destinationsForRole("owner").map(item => item.id)).toContain("institution-builder");
     expect(destinationsForRole("admin").map(item => item.id)).toContain("institution-builder");
+    expect(destinationsForRole("owner").map(item => item.id)).toContain("school-operator");
+    expect(destinationsForRole("admin").map(item => item.id)).toContain("school-operator");
+    expect(destinationsForRole("teacher").map(item => item.id)).not.toContain("school-operator");
   });
 
   it("rejects an AI-selected destination outside the signed-in role and uses a safe fallback", async () => {

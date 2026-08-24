@@ -30,6 +30,7 @@ import { StaffMigrationWorkspace } from "@/components/StaffMigrationWorkspace";
 import { AcademicMigrationWorkspace } from "@/components/AcademicMigrationWorkspace";
 import { AutomationDesk } from "@/components/AutomationDesk";
 import { InstitutionBuilder } from "@/components/InstitutionBuilder";
+import { SchoolOperator } from "@/components/SchoolOperator";
 import { LearningOperationsWorkspace } from "@/components/LearningOperationsWorkspace";
 import { NonSchoolCurriculumStart } from "@/components/NonSchoolCurriculumStart";
 import { LearnerProgramProgress } from "@/components/LearnerProgramProgress";
@@ -97,7 +98,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type View = "overview" | "institution-builder" | "automation" | "setup-management" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "tutor-analytics" | "account";
+type View = "overview" | "institution-builder" | "school-operator" | "automation" | "setup-management" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "tutor-analytics" | "account";
 type Role = "owner" | "admin" | "staff" | "teacher" | "finance" | "parent" | "student";
 
 const navGroups: { label: string; items: { id: View; label: string; icon: typeof LayoutDashboard; roles: Role[] }[] }[] = [
@@ -106,6 +107,7 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard, roles: ["owner", "admin", "staff", "teacher", "finance", "parent", "student"] },
       { id: "institution-builder", label: "Create with AI", icon: Sparkles, roles: ["owner", "admin"] },
+      { id: "school-operator", label: "School Operator", icon: Activity, roles: ["owner", "admin"] },
       { id: "automation", label: "Automation Desk", icon: Sparkles, roles: ["owner", "admin"] },
       { id: "reports", label: "Reports", icon: FileText, roles: ["owner", "admin", "finance"] },
     ],
@@ -156,6 +158,7 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
 const viewTitles: Record<View, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "Command center", title: "The school, in one considered view.", description: "A clear operating picture for leaders and teams." },
   "institution-builder": { eyebrow: "One-prompt institution builder", title: "Describe the institution. Keep the control.", description: "Create a private, reviewable learning-institution blueprint with clear handoffs and no invisible public or financial action." },
+  "school-operator": { eyebrow: "Approval-first school intelligence", title: "See what needs your attention.", description: "Review explainable tenant-scoped insights and open the protected workspace that owns each decision." },
   automation: { eyebrow: "Automation Desk", title: "Tell NSOS the goal. Keep the control.", description: "Turn approved setup work into a short, reviewable one-tap job with visible progress and honest recovery." },
   "setup-management": { eyebrow: "Owner controls", title: "Approve setup work with confidence.", description: "Review pending staff invitations and inactive fee drafts from one controlled workspace." },
   admissions: { eyebrow: "Admissions", title: "From application to arrival.", description: "Review, decide, document, and enroll without disconnected hand-offs." },
@@ -531,6 +534,7 @@ function Workspace({ view, schoolId, schoolName, operatingType, role, summary, a
   if (view === "account") return <AccountSecurity activeInstitutionId={activeInstitutionId} onSwitchInstitution={onSwitchInstitution} />;
   if (view === "overview") return <Overview schoolId={schoolId} role={role} summary={summary} announcements={announcements} onRefresh={onRefresh} onNavigate={onNavigate} />;
   if (view === "institution-builder") return role === "owner" || role === "admin" ? <InstitutionBuilder schoolId={schoolId} onNavigate={onNavigate} /> : <RoleWelcome role={role} announcements={announcements} />;
+  if (view === "school-operator") return role === "owner" || role === "admin" ? <SchoolOperator schoolId={schoolId} onNavigate={onNavigate} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "automation") return role === "owner" || role === "admin" ? <AutomationDesk schoolId={schoolId} onNavigate={onNavigate} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "setup-management") return role === "owner" ? <OwnerSetupManagementDashboard schoolId={schoolId} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "admissions") return <><Admissions schoolId={schoolId} schoolName={schoolName} applications={applications} academics={academics} canManageTemplates={role === "owner" || role === "admin"} onRefresh={onRefresh} /><AdmissionDocumentReview schoolId={schoolId} applications={applications.data ?? []} onDone={onRefresh} /><EnrollmentStation schoolId={schoolId} applications={applications.data ?? []} academic={academics.data} onDone={onRefresh} /></>;

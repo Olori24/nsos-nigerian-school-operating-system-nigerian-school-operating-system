@@ -40,6 +40,7 @@ import {
   invoiceLineItems,
   invoices,
   institutionBlueprints,
+  institutionOperatingProfiles,
   leaveRequests,
   lessonPlans,
   messageLogs,
@@ -78,6 +79,7 @@ import {
   securityAuditEvents,
   schoolMemberships,
   schoolDocumentTemplates,
+  schoolOperatorInsights,
   schoolWebsites,
   schoolWebsiteMedia,
   schools,
@@ -1590,6 +1592,31 @@ export async function getDashboardSummary(schoolId: number) {
   };
 }
 
+export type InstitutionOperatingProfileInput = { mission?: string; targetLearners?: string; brandTone?: string; teachingPhilosophy?: string; curriculumStrategy?: string; pricingApproach?: string; policyNotes?: string; operatingGoals?: string };
+export type SchoolOperatorInsightInput = { insightType: "readiness" | "learning" | "admissions" | "revenue" | "lifecycle" | "health" | "certificate"; severity: "info" | "attention" | "review"; dedupeKey: string; title: string; detail: string; evidence: { metric: string; value: number; comparison?: string; source: string }; actionDestination?: string };
+
+const operatorProfileDefault = { mission: null, targetLearners: null, brandTone: null, teachingPhilosophy: null, curriculumStrategy: null, pricingApproach: null, policyNotes: null, operatingGoals: null };
+
+export async function getInstitutionOperatingProfile(schoolId: number) {
+  const row = (await (await database()).select().from(institutionOperatingProfiles).where(eq(institutionOperatingProfiles.schoolId, schoolId)).limit(1))[0];
+  return row ?? { schoolId, ...operatorProfileDefault, updatedBy: null, createdAt: null, updatedAt: null };
+}
+
+export async function saveInstitutionOperatingProfile(input: { schoolId: number; updatedBy: number; profile: InstitutionOperatingProfileInput }) {
+  const values = { schoolId: input.schoolId, updatedBy: input.updatedBy, mission: input.profile.mission?.trim() || null, targetLearners: input.profile.targetLearners?.trim() || null, brandTone: input.profile.brandTone?.trim() || null, teachingPhilosophy: input.profile.teachingPhilosophy?.trim() || null, curriculumStrategy: input.profile.curriculumStrategy?.trim() || null, pricingApproach: input.profile.pricingApproach?.trim() || null, policyNotes: input.profile.policyNotes?.trim() || null, operatingGoals: input.profile.operatingGoals?.trim() || null };
+  await (await database()).insert(institutionOperatingProfiles).values(values).onDuplicateKeyUpdate({ set: values });
+  return getInstitutionOperatingProfile(input.schoolId);
+}
+
+async function upsertSchoolOperatorInsight(input: { schoolId: number } & SchoolOperatorInsightInput) {
+  const values = { ...input, actionDestination: input.actionDestination ?? null, sourceVersion: "deterministic-v1" as const, generatedAt: new Date() };
+  await (await database()).insert(schoolOperatorInsights).values(values).onDuplicateKeyUpdate({ set: { severity: values.severity, title: values.title, detail: values.detail, evidence: values.evidence, actionDestination: values.actionDestination, sourceVersion: values.sourceVersion, generatedAt: values.generatedAt } });
+}
+
+export async function listSchoolOperatorInsights(schoolId: number) {
+  return (await (await database()).select().from(schoolOperatorInsights).where(eq(schoolOperatorInsights.schoolId, schoolId)).orderBy(desc(schoolOperatorInsights.generatedAt)).limit(30));
+}
+
 export async function getTenantOnboardingStatus(schoolId: number) {
   const db = await database();
   const [school, sessionsCount, termsCount, classesCount, subjectsCount, classSubjectsCount, curriculumProfile, staffCount, studentsCount, feeStructuresCount, activeBankAccountsCount, website] = await Promise.all([
@@ -1653,6 +1680,56 @@ export async function getOperationsCommandCenter(schoolId: number) {
       academics: completedBatches(academicBatches),
     },
   };
+}
+
+export async function refreshSchoolOperatorInsights(schoolId: number) {
+  const db = await database();
+  const [dashboard, onboarding, commandCenter, programs, activeEnrollments, completedEnrollments, certificates, failedJobs, submittedEvidence, returnedEvidence] = await Promise.all([
+    getDashboardSummary(schoolId),
+    getTenantOnboardingStatus(schoolId),
+    getOperationsCommandCenter(schoolId),
+    db.select({ value: sql<number>`count(*)` }).from(learningPrograms).where(eq(learningPrograms.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(programEnrollments).where(and(eq(programEnrollments.schoolId, schoolId), eq(programEnrollments.status, "active"))),
+    db.select({ value: sql<number>`count(*)` }).from(programEnrollments).where(and(eq(programEnrollments.schoolId, schoolId), eq(programEnrollments.status, "completed"))),
+    db.select({ value: sql<number>`count(*)` }).from(programCertificates).where(eq(programCertificates.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(automationJobs).where(and(eq(automationJobs.schoolId, schoolId), eq(automationJobs.status, "failed"))),
+    db.select({ value: sql<number>`count(*)` }).from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId), eq(programMilestoneEvidenceSubmissions.status, "submitted"))),
+    db.select({ value: sql<number>`count(*)` }).from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId), eq(programMilestoneEvidenceSubmissions.status, "reviewed_returned"))),
+  ]);
+  const programmeCount = Number(programs[0]?.value ?? 0);
+  const activeEnrollmentCount = Number(activeEnrollments[0]?.value ?? 0);
+  const completedEnrollmentCount = Number(completedEnrollments[0]?.value ?? 0);
+  const certificateCount = Number(certificates[0]?.value ?? 0);
+  const failedJobCount = Number(failedJobs[0]?.value ?? 0);
+  const submittedEvidenceCount = Number(submittedEvidence[0]?.value ?? 0);
+  const returnedEvidenceCount = Number(returnedEvidence[0]?.value ?? 0);
+  const signals: SchoolOperatorInsightInput[] = [];
+  if (onboarding.completionPercent < 100) signals.push({ insightType: "readiness", severity: "attention", dedupeKey: "onboarding-incomplete", title: "Institution setup still needs review", detail: `${onboarding.completedSteps} of ${onboarding.totalSteps} readiness steps are complete. Review the next protected setup step before treating the institution as launch-ready.`, evidence: { metric: "onboarding_completion_percent", value: onboarding.completionPercent, source: "tenant_onboarding" }, actionDestination: onboarding.nextStep?.destination ?? "overview" });
+  if (programmeCount === 0) signals.push({ insightType: "learning", severity: "attention", dedupeKey: "no-programmes", title: "No internal learning programme is ready", detail: "Prepare a private learning foundation in School Builder or Course Studio, then review activation separately.", evidence: { metric: "learning_programme_count", value: 0, source: "learning_programmes" }, actionDestination: "learning" });
+  else if (activeEnrollmentCount === 0) signals.push({ insightType: "lifecycle", severity: "info", dedupeKey: "no-active-enrolments", title: "Programmes have no active learner enrolments", detail: "Review admissions and enrolment readiness. NSOS cannot infer demand, contact people, or enrol learners automatically.", evidence: { metric: "active_programme_enrolments", value: 0, source: "program_enrolments" }, actionDestination: "admissions" });
+  else signals.push({ insightType: "learning", severity: "info", dedupeKey: "active-learning", title: "Active learning delivery is visible", detail: `${activeEnrollmentCount} active programme enrolment${activeEnrollmentCount === 1 ? " is" : "s are"} available for human-reviewed learning operations. Review progress and support in Learning Centre.`, evidence: { metric: "active_programme_enrolments", value: activeEnrollmentCount, source: "program_enrolments" }, actionDestination: "learning" });
+  if (submittedEvidenceCount > 0) signals.push({ insightType: "learning", severity: "attention", dedupeKey: "milestone-evidence-awaiting-review", title: "Learning evidence is awaiting human review", detail: `${submittedEvidenceCount} private milestone-evidence submission${submittedEvidenceCount === 1 ? " is" : "s are"} awaiting a permitted reviewer. Open Learning Centre to review only the records you are authorised to access.`, evidence: { metric: "submitted_milestone_evidence", value: submittedEvidenceCount, source: "program_milestone_evidence" }, actionDestination: "learning" });
+  if (returnedEvidenceCount > 0) signals.push({ insightType: "learning", severity: "info", dedupeKey: "milestone-evidence-returned", title: "Some learning evidence has follow-up guidance", detail: `${returnedEvidenceCount} private milestone-evidence submission${returnedEvidenceCount === 1 ? " has" : "s have"} been returned through the existing human review workflow. NSOS does not automatically contact, grade, or complete learners.`, evidence: { metric: "returned_milestone_evidence", value: returnedEvidenceCount, source: "program_milestone_evidence" }, actionDestination: "learning" });
+  if (dashboard.pendingAdmissions > 0) signals.push({ insightType: "admissions", severity: "attention", dedupeKey: "pending-admissions", title: "Admissions need owner review", detail: `${dashboard.pendingAdmissions} submitted or under-review application${dashboard.pendingAdmissions === 1 ? " is" : "s are"} awaiting the protected admissions workflow.`, evidence: { metric: "pending_admissions", value: dashboard.pendingAdmissions, source: "admissions_applications" }, actionDestination: "admissions" });
+  if (dashboard.outstanding > 0) signals.push({ insightType: "revenue", severity: "attention", dedupeKey: "outstanding-balance", title: "Outstanding balances need finance review", detail: "Open Finance to review tenant invoices and payment evidence. NSOS does not chase, alter pricing, record payments, or send reminders from this insight.", evidence: { metric: "outstanding_invoice_value", value: dashboard.outstanding, source: "invoices" }, actionDestination: "finance" });
+  if (commandCenter.communications.email.failedCount > 0) signals.push({ insightType: "health", severity: "review", dedupeKey: "failed-email-delivery", title: "Email delivery needs configuration review", detail: `${commandCenter.communications.email.failedCount} tenant email delivery record${commandCenter.communications.email.failedCount === 1 ? " needs" : "s need"} review. NSOS will not retry or change the sender automatically.`, evidence: { metric: "failed_email_records", value: commandCenter.communications.email.failedCount, source: "email_service_readiness" }, actionDestination: "communications" });
+  if (failedJobCount > 0) signals.push({ insightType: "health", severity: "review", dedupeKey: "failed-automation-jobs", title: "Automation history has failed jobs", detail: `${failedJobCount} automation job${failedJobCount === 1 ? " needs" : "s need"} a manual target-workspace review. NSOS does not retry failed automation automatically.`, evidence: { metric: "failed_automation_jobs", value: failedJobCount, source: "automation_jobs" }, actionDestination: "automation" });
+  if (completedEnrollmentCount > 0 && certificateCount === 0) signals.push({ insightType: "certificate", severity: "info", dedupeKey: "certificate-readiness", title: "Completion records may need certificate-policy review", detail: "Review the controlled private-record and certificate policy workflow. NSOS does not issue certificates or create public verification claims from this insight.", evidence: { metric: "completed_programme_enrolments", value: completedEnrollmentCount, source: "program_enrolments" }, actionDestination: "learning" });
+  await Promise.all(signals.map(signal => upsertSchoolOperatorInsight({ schoolId, ...signal })));
+  return listSchoolOperatorInsights(schoolId);
+}
+
+export async function dismissSchoolOperatorInsight(input: { schoolId: number; insightId: number; dismissedBy: number }) {
+  const db = await database();
+  const existing = (await db.select({ id: schoolOperatorInsights.id }).from(schoolOperatorInsights).where(and(eq(schoolOperatorInsights.id, input.insightId), eq(schoolOperatorInsights.schoolId, input.schoolId))).limit(1))[0];
+  if (!existing) throw new Error("School Operator insight was not found in this institution.");
+  await db.update(schoolOperatorInsights).set({ status: "dismissed", dismissedBy: input.dismissedBy, dismissedAt: new Date() }).where(and(eq(schoolOperatorInsights.id, input.insightId), eq(schoolOperatorInsights.schoolId, input.schoolId)));
+  return listSchoolOperatorInsights(input.schoolId);
+}
+
+export async function getSchoolOperatorWorkspace(schoolId: number) {
+  const [profile, dashboard, onboarding, commandCenter, insights] = await Promise.all([getInstitutionOperatingProfile(schoolId), getDashboardSummary(schoolId), getTenantOnboardingStatus(schoolId), getOperationsCommandCenter(schoolId), listSchoolOperatorInsights(schoolId)]);
+  return { profile, dashboard, onboarding, commandCenter, insights, source: "deterministic-v1" as const, limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."] };
 }
 
 export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: number; executedBy: number; sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean }) {

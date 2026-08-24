@@ -1,7 +1,7 @@
 import { invokeLLM } from "./_core/llm";
 import type { SchoolRole } from "./roles";
 
-export type CopilotDestinationId = "overview" | "institution-builder" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "account";
+export type CopilotDestinationId = "overview" | "institution-builder" | "school-operator" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "account";
 
 export type CopilotDestination = {
   id: CopilotDestinationId;
@@ -14,6 +14,7 @@ export type CopilotDestination = {
 export const copilotDestinations: readonly CopilotDestination[] = [
   { id: "overview", label: "Overview", description: "See the school’s key operating picture.", roles: ["owner", "admin", "staff", "teacher", "finance", "parent", "student"], keywords: ["overview", "dashboard", "start", "home", "summary"] },
   { id: "institution-builder", label: "School Builder", description: "Describe, refine, and review a private institution blueprint before separately approving any operational work.", roles: ["owner", "admin"], keywords: ["institution", "build", "builder", "academy", "launch", "template", "blueprint", "refine"] },
+  { id: "school-operator", label: "School Operator", description: "Review private, explainable institution readiness, learning, revenue, admissions, and system-health signals before opening a protected workflow.", roles: ["owner", "admin"], keywords: ["operator", "attention", "health", "why", "dropout", "drop off", "performance", "inactive", "readiness", "what needs", "problem", "opportunity"] },
   { id: "admissions", label: "Admissions", description: "Review applications, documents, decisions, and enrollment.", roles: ["owner", "admin", "staff"], keywords: ["admission", "application", "applicant", "enrol", "enroll"] },
   { id: "students", label: "Students", description: "Manage learner records, guardians, and academic history.", roles: ["owner", "admin", "staff", "teacher"], keywords: ["student", "learner", "guardian", "promotion", "graduate"] },
   { id: "academics", label: "Academics", description: "Set up sessions, terms, classes, subjects, and learning plans.", roles: ["owner", "admin", "teacher"], keywords: ["academic", "class", "subject", "term", "timetable", "curriculum"] },
