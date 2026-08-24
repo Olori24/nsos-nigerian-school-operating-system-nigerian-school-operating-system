@@ -33,6 +33,15 @@ describe("School Operator interface", () => {
     expect(db).toContain("Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.");
   });
 
+  it("makes owner authority and the absence of unattended autopilot visible in the operating workspace", () => {
+    expect(operator).toContain("Owner authority stays on");
+    expect(operator).toContain("Your protected review remains required for every consequential action.");
+    expect(operator).toContain("A human remains responsible for assessment, grades, results, completion, and credentials.");
+    expect(operator).toContain("Publication, messages, campaigns, spend, fees, payments, admissions, enrolment, providers, and domains stay in separately confirmed workspaces.");
+    expect(operator).toContain("No unattended autopilot");
+    expect(operator).toContain("does not run background loops, automatic retries, or triggered consequential work from School Operator.");
+  });
+
   it("exposes explainable evidence, protected handoffs, and local dismissal rather than hidden automation", () => {
     expect(operator).toContain("Evidence:");
     expect(operator).toContain("Review in the protected workspace");

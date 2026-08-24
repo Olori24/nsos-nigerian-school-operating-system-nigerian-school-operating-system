@@ -56,15 +56,23 @@ describe("Institution Builder interface", () => {
   it("keeps admissions, pricing, website, communications, and tutor work as direct protected handoffs rather than hidden autonomous actions", () => {
     expect(builder).toContain("Direct next steps—not hidden automation");
     expect(builder).toContain("onNavigate(handoff.destination)");
-    expect(builder).toContain('type Destination = "learning" | "website" | "admissions" | "finance" | "communications" | "ai-tutors"');
+    expect(builder).toContain('type Destination = "learning" | "website" | "admissions" | "finance" | "communications" | "advertising" | "ai-tutors"');
     expect(builder).toContain("lifecycleHandoffs.map");
   });
 
   it("states that a blueprint cannot publish, create people, enrol learners, send messages, collect payment, award credentials, grade, complete, or change provider/domain settings", () => {
     expect(builder).toContain("never publishes, creates people, admits or enrols learners, sends messages, activates fees, collects payments, awards certificates, grades work, or changes providers or domains");
-    expect(builder).toContain("It does not create a website, admissions, people, fees, payments, messages, certificates, grades, completion, public content, or provider settings.");
+    expect(builder).toContain("It does not create a brand asset, website, admissions, people, fees, payments, campaigns, messages, certificates, grades, completion, public content, or provider settings.");
     expect(builder).toContain("not a public website, active programme, price, admission flow, or student experience");
     expect(builder).toContain("Meaningful private learning plan");
     expect(builder).toContain("Quality and launch readiness");
+  });
+
+  it("shows private brand and growth planning without representing assets, pricing, campaigns, leads, or automation as live", () => {
+    expect(builder).toContain("Private brand and logo direction");
+    expect(builder).toContain("Private offer and growth foundation");
+    expect(builder).toContain("{brandKit.assetBoundary}");
+    expect(builder).toContain("{growthPlan.boundary}");
+    expect(builder).toContain("No price or payment created");
   });
 });

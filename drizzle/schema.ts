@@ -441,7 +441,7 @@ export const programCourseMaterials = mysqlTable(
     programId: int("programId").notNull(),
     moduleId: int("moduleId"),
     title: varchar("title", { length: 180 }).notNull(),
-    materialType: mysqlEnum("materialType", ["facilitator_guide", "practice_activity", "project_brief", "discussion_prompt", "reflection_prompt", "resource_checklist"]).notNull(),
+    materialType: mysqlEnum("materialType", ["facilitator_guide", "lesson_guide", "practice_activity", "knowledge_check", "project_brief", "discussion_prompt", "reflection_prompt", "revision_sheet", "resource_checklist"]).notNull(),
     content: text("content").notNull(),
     status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
     createdBy: int("createdBy").notNull(),

@@ -3585,7 +3585,7 @@ export type AcceptedCourseStudioDraft = {
   evidenceReferences: Array<{ id: string; title: string; organisation: string; sourceUrl: string; category: string; allowedUse: string }>;
   learningExperience: { learningPace: "guided" | "flexible" | "intensive"; supportStyle: "balanced" | "step_by_step" | "worked_examples" | "concise_review"; practiceMode: "reflection" | "guided_practice" | "project_based"; accessibilityNote: string };
   modules: Array<{ title: string; description: string; learningType: "topic" | "practical" | "project" | "practice" | "resource"; milestones: Array<{ title: string; description: string }> }>;
-  materials: Array<{ title: string; materialType: "facilitator_guide" | "practice_activity" | "project_brief" | "discussion_prompt" | "reflection_prompt" | "resource_checklist"; modulePosition: number; content: string }>;
+  materials: Array<{ title: string; materialType: "facilitator_guide" | "lesson_guide" | "practice_activity" | "knowledge_check" | "project_brief" | "discussion_prompt" | "reflection_prompt" | "revision_sheet" | "resource_checklist"; modulePosition: number; content: string }>;
 };
 
 export async function applyCourseStudioDraft(input: { schoolId: number; createdBy: number; draft: AcceptedCourseStudioDraft }) {

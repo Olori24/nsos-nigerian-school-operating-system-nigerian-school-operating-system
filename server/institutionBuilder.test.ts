@@ -28,7 +28,11 @@ describe("Institution Builder planner", () => {
     expect(blueprint.identity.tagline).not.toMatch(/100%|job placement/i);
     expect(blueprint.websiteDraft.headline).not.toMatch(/number one/i);
     expect(blueprint.courseDraft).toEqual(courseDraft);
-    expect(blueprint.version).toBe(2);
+    expect(blueprint.version).toBe(3);
+    expect(blueprint.brandKit.logoConcept).toContain("owner review");
+    expect(blueprint.brandKit.assetBoundary).toContain("not a generated");
+    expect(blueprint.growthPlan.learnerJourney).toHaveLength(5);
+    expect(blueprint.growthPlan.boundary).toContain("no price, lead, campaign");
     expect(blueprint.learningExperience.moduleOutline).toHaveLength(3);
     expect(blueprint.learningExperience.lessonStarters).toHaveLength(3);
     expect(blueprint.learningExperience.projectBriefs).toHaveLength(1);
@@ -46,11 +50,14 @@ describe("Institution Builder planner", () => {
     const blueprint = await buildInstitutionBlueprint({ prompt: "Create a vocational fashion training centre.", operatingType: "vocational_institute" });
     expect(blueprint.source).toBe("guided");
     expect(blueprint.learning.learningPathLabel).toBe("Vocational competency pathway");
-    expect(blueprint.lifecycleHandoffs).toHaveLength(6);
-    expect(blueprint.lifecycleHandoffs.map(item => item.destination)).toEqual(expect.arrayContaining(["communications", "ai-tutors"]));
+    expect(blueprint.lifecycleHandoffs).toHaveLength(7);
+    expect(blueprint.lifecycleHandoffs.map(item => item.destination)).toEqual(expect.arrayContaining(["communications", "advertising", "ai-tutors"]));
     expect(blueprint.learningExperience.projectBriefs[0]?.title).toContain("Practical");
     expect(blueprint.qualityReadiness.ownerDecisions).toHaveLength(2);
     expect(blueprint.limitations.join(" ")).toContain("creates no public institution");
+    expect(blueprint.brandKit.colourDirection).toHaveLength(3);
+    expect(blueprint.growthPlan.contentThemes).toHaveLength(4);
+    expect(blueprint.growthPlan.boundary).toContain("scheduled work");
   });
 
   it("requires complete visible edits and synchronises an approved programme title and summary without applying a blueprint", async () => {

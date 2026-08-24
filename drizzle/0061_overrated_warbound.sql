@@ -1,0 +1,1 @@
+ALTER TABLE `programCourseMaterials` MODIFY COLUMN `materialType` enum('facilitator_guide','lesson_guide','practice_activity','knowledge_check','project_brief','discussion_prompt','reflection_prompt','revision_sheet','resource_checklist') NOT NULL;

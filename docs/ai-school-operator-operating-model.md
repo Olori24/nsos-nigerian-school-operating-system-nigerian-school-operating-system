@@ -42,6 +42,12 @@ Saving preferences is owner/admin-only, tenant-scoped, confirmation-gated, rate-
 
 > **A preference never removes a confirmation gate, role check, rate limit, required human review, or separate protected workflow.**
 
+## Visible owner-authority policy
+
+The School Operator dashboard now presents its operating authority directly alongside the private review controls. It states that insight refresh and planning are private preparation only, that a human remains responsible for assessment, grades, results, completion, and credentials, and that publishing, messages, campaigns, spend, fees, payments, admissions, enrolment, providers, and domains remain separately confirmed workflows.
+
+It also makes the absence of an unattended autopilot explicit. NSOS does not start a background loop, automatic retry, or triggered consequential action from School Operator; a private review cue remains only an owner’s planning preference.
+
 ## Recommendation and approval lifecycle
 
 Every insight includes a source label, a generated timestamp, a severity, an explainable evidence summary, a permitted destination, and a visible limitation. A recommendation can be dismissed locally by the tenant or opened in its owning workspace. It cannot execute a side effect itself.

@@ -19,15 +19,24 @@ describe("README approval-first School Operator release documentation", () => {
   });
 
   it("records the latest validation count and the unchanged external sender dependency", () => {
-    expect(readme).toContain("385/386 passing tests across 106/107 files");
+    expect(readme).toContain("388/389 passing tests across 106/107 files");
     expect(readme).toContain("currently unverified `resend.dev` sender");
     expect(readme).toContain("`nsos.top` is active at its registrar but is not bound to the managed deployment");
   });
 
-  it("documents the latest Institution Builder non-JSON recovery without overstating side effects", () => {
+  it("documents the latest Institution Builder recovery and private brand/growth foundation without overstating side effects", () => {
     expect(readme).toContain("typed transport rejects document responses before they reach the JSON parser");
     expect(readme).toContain("A transport failure does not create, apply, publish, or audit a blueprint.");
-    expect(readme).toContain("Institution Builder non-JSON response recovery");
-    expect(readme).toContain("16 focused transport, builder route, builder interface, and structured-planning regressions");
+    expect(readme).toContain("private original-brand/logo concept, private offer/growth foundation");
+    expect(readme).toContain("Create or license a brand asset");
+    expect(readme).toContain("price/lead/campaign/testimonial/referral");
+    expect(readme).toContain("Approval-first delivery contract");
+  });
+
+  it("documents the review-only Course Studio material expansion and visible owner authority policy", () => {
+    expect(readme).toContain("plain-language lesson guide, non-graded knowledge check");
+    expect(readme).toContain("calculate a score, grade, pass/fail result, progress change, completion, credential");
+    expect(readme).toContain("visible owner-authority policy");
+    expect(readme).toContain("Migration `0061_overrated_warbound` was reviewed and applied");
   });
 });

@@ -331,3 +331,4 @@
 - [x] Add tenant-scoped owner/admin approval-workflow preferences to the dashboard, with protected persistence, clear non-bypass limits, regressions, validation, publication, and GitHub synchronization.
 - [x] Diagnose and repair the Institution Builder mobile request failure that receives HTML where JSON is expected, add a clear recovery state, validate, publish, and synchronize GitHub safely.
 - [x] Review the latest GitHub commit against the README, correct factual documentation gaps, validate consistency, checkpoint, publish, and synchronize GitHub safely.
+- [x] Deliver the phased, approval-first AI education business engine assignment: audit current capabilities, strengthen real build-to-review workflows, expand curriculum/learner-support and private growth planning, extend Operator policy visibility, validate boundaries, document, publish, and synchronize GitHub.

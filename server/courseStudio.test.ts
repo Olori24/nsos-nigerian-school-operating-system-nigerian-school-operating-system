@@ -19,7 +19,9 @@ const validPlan = {
   ],
   materials: [
     { title: "Facilitator guide", materialType: "facilitator_guide", modulePosition: 1, content: "State the approved goal, introduce the learning boundaries, invite questions, and direct learners to a supervising instructor when support is needed." },
+    { title: "Lesson guide", materialType: "lesson_guide", modulePosition: 1, content: "Explain the approved concept in plain language, use an approved example, and invite learners to restate it before asking a supervising instructor for support." },
     { title: "Practice prompt", materialType: "practice_activity", modulePosition: 2, content: "Invite a short, non-graded design practice activity and use a human instructor review rather than automatic scoring or completion." },
+    { title: "Knowledge check", materialType: "knowledge_check", modulePosition: 2, content: "Use two low-stakes reflection questions and instructor discussion only; do not calculate a score, grade, result, completion, or credential." },
   ],
   setupRecommendation: "Review the internal programme draft, then use the existing protected activation workflow when the organisation is ready.",
   limitations: ["This is an internal draft and does not confirm curriculum approval or qualification.", "No learner, payment, message, publication, or credential action is created from this plan."],
@@ -33,11 +35,13 @@ describe("NSOS Course Studio", () => {
     const draft = await buildCourseStudioDraft(request);
     expect(draft).toEqual(expect.objectContaining({ source: "ai", requiresConfirmation: true, deliveryMode: "blended" }));
     expect(draft.modules).toHaveLength(2);
-    expect(draft.materials).toHaveLength(2);
+    expect(draft.materials).toHaveLength(4);
+    expect(draft.materials.map(item => item.materialType)).toEqual(expect.arrayContaining(["lesson_guide", "knowledge_check"]));
     expect(`${draft.courseTitle} ${draft.courseSummary}`).not.toMatch(/accredited|guaranteed/i);
     expect(draft.limitations.join(" ")).toMatch(/No learner|No learner/i);
     expect(draft.evidenceReferences).toEqual(request.evidenceReferences);
     expect(draft.learningExperience).toEqual(request.learningExperience);
+    expect(JSON.stringify(vi.mocked(invokeLLM).mock.calls[0]?.[0])).toContain("never calculate a score, grade, pass/fail result, progress change, completion, or credential");
   });
 
   it("falls back to a bounded, reviewable plan when model output is invalid", async () => {
@@ -46,6 +50,7 @@ describe("NSOS Course Studio", () => {
     expect(draft.source).toBe("guided");
     expect(draft.requiresConfirmation).toBe(true);
     expect(draft.materials.length).toBeGreaterThanOrEqual(2);
+    expect(draft.materials.map(item => item.materialType)).toEqual(expect.arrayContaining(["lesson_guide", "knowledge_check", "revision_sheet"]));
     expect(draft.limitations.join(" ")).toMatch(/No programme, material, tutor, enrolment/i);
     expect(draft.evidenceReferences).toEqual(request.evidenceReferences);
     expect(draft.learningExperience).toEqual(request.learningExperience);
