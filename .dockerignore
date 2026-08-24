@@ -1,0 +1,11 @@
+node_modules
+.git
+.github
+coverage
+dist
+*.log
+.env
+.env.*
+!.env.example
+attached_assets
+.tmp-nigeria-lga.csv
