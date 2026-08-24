@@ -1,0 +1,49 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: nsos
+      MYSQL_USER: nsos
+      MYSQL_PASSWORD: nsos_local_password
+      MYSQL_ROOT_PASSWORD: root_local_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - nsos_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -proot_local_password --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_APP_ID: ${VITE_APP_ID:-nsos-docker}
+        VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:-http://localhost:3000}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      VITE_APP_ID: ${VITE_APP_ID:-nsos-docker}
+      JWT_SECRET: ${JWT_SECRET:-replace-this-local-secret}
+      DATABASE_URL: mysql://nsos:nsos_local_password@mysql:3306/nsos
+      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-http://localhost:3000}
+      OWNER_OPEN_ID: ${OWNER_OPEN_ID:-local-owner}
+      BUILT_IN_FORGE_API_URL: ${BUILT_IN_FORGE_API_URL:-}
+      BUILT_IN_FORGE_API_KEY: ${BUILT_IN_FORGE_API_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-noreply@example.com}
+    ports:
+      - "3000:3000"
+
+volumes:
+  nsos_mysql_data:
