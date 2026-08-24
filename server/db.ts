@@ -39,6 +39,7 @@ import {
   guardians,
   invoiceLineItems,
   invoices,
+  institutionBlueprints,
   leaveRequests,
   lessonPlans,
   messageLogs,
@@ -103,6 +104,8 @@ import { invokeLLM } from "./_core/llm";
 import { generateSupervisedTutorResponse } from "./aiTutor";
 import { generateReviewableAdCopy } from "./advertisingCopy";
 import type { AcademicAutomationInput, AutomationJobType, AutomationPlan, FinanceAutomationInput, OnlineSchoolLaunchInput, StaffAutomationInput, ValidAutomationInput } from "./automationDesk";
+import { reviseInstitutionBlueprint, type InstitutionBlueprint, type InstitutionBlueprintEdits } from "./institutionBuilder";
+import type { CourseStudioDraft } from "./courseStudio";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
 import { deriveTenantOnboardingStatus } from "./tenantOnboarding";
@@ -1821,6 +1824,52 @@ async function automationJobForActor(input: { schoolId: number; userId: number; 
 
 async function addAutomationJobEvent(input: { schoolId: number; jobId: number; actorUserId?: number; eventType: "created" | "input_saved" | "approved" | "started" | "completed" | "blocked" | "failed" | "cancelled"; label: string; details?: { destination?: string; referenceCount?: number; retryable?: boolean } }) {
   await (await database()).insert(automationJobEvents).values(input);
+}
+
+export async function createInstitutionBlueprint(input: { schoolId: number; createdBy: number; blueprint: InstitutionBlueprint; idempotencyKey: string }) {
+  const db = await database();
+  const existing = (await db.select().from(institutionBlueprints).where(and(eq(institutionBlueprints.schoolId, input.schoolId), eq(institutionBlueprints.createdBy, input.createdBy), eq(institutionBlueprints.idempotencyKey, input.idempotencyKey))).limit(1))[0];
+  if (existing) return existing;
+  const created = await db.insert(institutionBlueprints).values({ schoolId: input.schoolId, createdBy: input.createdBy, blueprint: input.blueprint, idempotencyKey: input.idempotencyKey });
+  const blueprintId = Number(created[0].insertId);
+  return (await db.select().from(institutionBlueprints).where(and(eq(institutionBlueprints.id, blueprintId), eq(institutionBlueprints.schoolId, input.schoolId))).limit(1))[0]!;
+}
+
+export async function listInstitutionBlueprints(input: { schoolId: number }) {
+  return (await (await database()).select({ id: institutionBlueprints.id, schoolId: institutionBlueprints.schoolId, createdBy: institutionBlueprints.createdBy, status: institutionBlueprints.status, appliedProgramId: institutionBlueprints.appliedProgramId, appliedBy: institutionBlueprints.appliedBy, appliedAt: institutionBlueprints.appliedAt, createdAt: institutionBlueprints.createdAt, updatedAt: institutionBlueprints.updatedAt }).from(institutionBlueprints).where(eq(institutionBlueprints.schoolId, input.schoolId)).orderBy(desc(institutionBlueprints.updatedAt)).limit(20));
+}
+
+export async function getInstitutionBlueprint(input: { schoolId: number; blueprintId: number }) {
+  const blueprint = (await (await database()).select().from(institutionBlueprints).where(and(eq(institutionBlueprints.id, input.blueprintId), eq(institutionBlueprints.schoolId, input.schoolId))).limit(1))[0];
+  if (!blueprint) throw new Error("Institution blueprint was not found in this learning organisation.");
+  return blueprint;
+}
+
+export async function updateInstitutionBlueprint(input: { schoolId: number; blueprintId: number; edits: InstitutionBlueprintEdits }) {
+  const current = await getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId });
+  if (current.status !== "prepared") throw new Error("Only a prepared institution blueprint can be edited. Create a new blueprint for further changes.");
+  const blueprint = reviseInstitutionBlueprint(current.blueprint, input.edits);
+  await (await database()).update(institutionBlueprints).set({ blueprint, updatedAt: new Date() }).where(and(eq(institutionBlueprints.id, input.blueprintId), eq(institutionBlueprints.schoolId, input.schoolId), eq(institutionBlueprints.status, "prepared")));
+  return getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId });
+}
+
+export async function applyInstitutionBlueprint(input: { schoolId: number; blueprintId: number; appliedBy: number }) {
+  const db = await database();
+  const current = await getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId });
+  if (current.status === "applied") return { blueprint: current, applied: false, program: current.appliedProgramId ? { id: current.appliedProgramId } : null };
+  if (current.status !== "prepared") throw new Error("This institution blueprint is already being applied. Refresh to see its result.");
+  const claimed = await db.update(institutionBlueprints).set({ status: "applying", appliedBy: input.appliedBy, updatedAt: new Date() }).where(and(eq(institutionBlueprints.id, input.blueprintId), eq(institutionBlueprints.schoolId, input.schoolId), eq(institutionBlueprints.status, "prepared")));
+  const affectedRows = Number((claimed as any)?.[0]?.affectedRows ?? (claimed as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This institution blueprint changed while it was being reviewed. Refresh before applying it.");
+  try {
+    const draft = current.blueprint.courseDraft as CourseStudioDraft;
+    const program = await applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: input.appliedBy, draft: { ...draft, evidenceReferences: [], learningExperience: draft.learningExperience ?? { learningPace: "guided", supportStyle: "balanced", practiceMode: "guided_practice", accessibilityNote: "" } } });
+    await db.update(institutionBlueprints).set({ status: "applied", appliedProgramId: program.programId, appliedBy: input.appliedBy, appliedAt: new Date(), updatedAt: new Date() }).where(and(eq(institutionBlueprints.id, input.blueprintId), eq(institutionBlueprints.schoolId, input.schoolId), eq(institutionBlueprints.status, "applying")));
+    return { blueprint: await getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId }), applied: true, program: { id: program.programId, moduleCount: program.moduleCount, milestoneCount: program.milestoneCount, materialCount: program.materialCount } };
+  } catch (error) {
+    await db.update(institutionBlueprints).set({ status: "prepared", appliedBy: null, updatedAt: new Date() }).where(and(eq(institutionBlueprints.id, input.blueprintId), eq(institutionBlueprints.schoolId, input.schoolId), eq(institutionBlueprints.status, "applying")));
+    throw error;
+  }
 }
 
 export async function createAutomationJob(input: { schoolId: number; createdBy: number; jobType: AutomationJobType; requestSummary: string; plan: AutomationPlan; input?: ValidAutomationInput; idempotencyKey: string }) {

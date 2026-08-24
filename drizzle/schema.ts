@@ -160,6 +160,28 @@ export const automationJobEvents = mysqlTable(
   }),
 );
 
+export const institutionBlueprints = mysqlTable(
+  "institutionBlueprints",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    createdBy: int("createdBy").notNull(),
+    status: mysqlEnum("status", ["prepared", "applying", "applied"]).notNull().default("prepared"),
+    blueprint: json("blueprint").$type<import("../server/institutionBuilder").InstitutionBlueprint>().notNull(),
+    idempotencyKey: varchar("idempotencyKey", { length: 96 }).notNull(),
+    appliedProgramId: int("appliedProgramId"),
+    appliedBy: int("appliedBy"),
+    appliedAt: timestamp("appliedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolCreated: index("institution_blueprint_school_created_idx").on(table.schoolId, table.createdAt),
+    schoolStatus: index("institution_blueprint_school_status_idx").on(table.schoolId, table.status),
+    schoolActorKey: uniqueIndex("institution_blueprint_school_actor_key_unique").on(table.schoolId, table.createdBy, table.idempotencyKey),
+  }),
+);
+
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),

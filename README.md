@@ -9,7 +9,7 @@
 [![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F)](https://orm.drizzle.team/)
 [![Vitest](https://img.shields.io/badge/Vitest-2.1-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
 
-**[Live managed preview](https://nsos-system-uhkdscaf.manus.space)** · **[Architecture](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md)** · **[Security](SECURITY.md)** · **[Product roadmap](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md)** · **[Learning Centre operating model](docs/learning-centre-of-excellence-operating-model.md)**
+**[Live managed preview](https://nsos-system-uhkdscaf.manus.space)** · **[Architecture](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md)** · **[Security](SECURITY.md)** · **[Product roadmap](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md)** · **[Learning Centre operating model](docs/learning-centre-of-excellence-operating-model.md)** · **[One-Prompt Institution Builder](docs/one-prompt-institution-builder-operating-model.md)**
 
 ---
 
@@ -81,6 +81,7 @@ NSOS now supports schools, vocational training centres, coaching centres, online
 | **Course Studio** | Generates an editable internal programme, module, milestone, material, tutor-scope draft, and transparent learning-experience profile using optional server-resolved curated references. | Claim curriculum approval/accreditation, launch a public course, or create learner outcomes without review. |
 | **Private issuer records** | Lets an institution separately draft and activate a programme policy, then create one tenant-private evidence-backed record after human completion and milestone review. | Represent a record as accreditation, a professional qualification, a public credential, or publicly verified certificate. |
 | **Single-Prompt Online School Launcher** | Creates one private, draft-only online-learning foundation and configuration-readiness record from a full owner prompt. | Create mock people, testimonials, payments, public content, tutor accounts, credentials, or revenue. |
+| **One-Prompt Institution Builder** | Prepares a private, editable cross-provider institution blueprint with one draft learning foundation, positioning, website/admissions/pricing readiness, and direct protected handoffs. | Publish an institution, create people, admit or enrol learners, set fees, collect payments, send messages, grade, complete learners, issue credentials, or change provider/domain settings. |
 | **19-Prompt Taster Library** | Provides one-tap course-launch prompts across digital, creative, business, trade, STEM, enterprise, and academic-support niches. | Make claims of demand, pricing, sales, accreditation, outcomes, or public availability. |
 
 The AI boundary is a product advantage: models produce strict structured plans and drafts; server-side code validates all inputs, owns the action catalog, and executes only allowlisted internal work. The system keeps human review where consequences become financial, public, identity-related, or irreversible. See the [supervised AI operating model](docs/supervised-ai-agents-operating-model-2026-08-22.md) and [single-prompt launcher contract](docs/single-prompt-online-school-launcher-contract.md).
@@ -178,7 +179,7 @@ The visible external dependency is documented rather than hidden. See [communica
 | Revenue foundations and commercial controls | [Revenue Foundation](docs/NSOS_REVENUE_FOUNDATION.md) |
 | Learning operating model | [Learning Centre of Excellence](docs/learning-centre-of-excellence-operating-model.md) |
 | AI and automation operating model | [Supervised AI Agents](docs/supervised-ai-agents-operating-model-2026-08-22.md) and [Automation Desk](docs/automation-desk-operating-model.md) |
-| Single-prompt and taster products | [Online School Launcher](docs/single-prompt-online-school-launcher-contract.md) and [Taster Library](docs/online-school-taster-library-operating-model.md) |
+| Single-prompt and taster products | [Institution Builder](docs/one-prompt-institution-builder-operating-model.md), [Online School Launcher](docs/single-prompt-online-school-launcher-contract.md), and [Taster Library](docs/online-school-taster-library-operating-model.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |
 | Repository entity record | [NSOS Entity Card](docs/nsos-entity-card.md) |
 

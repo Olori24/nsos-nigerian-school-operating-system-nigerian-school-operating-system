@@ -7,6 +7,7 @@ import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
 import { buildAutomationPlan, jobCanRun, validateAutomationInput } from "../automationDesk";
 import { buildCourseStudioDraft } from "../courseStudio";
+import { buildInstitutionBlueprint } from "../institutionBuilder";
 import { curatedLearningSources, getCuratedLearningSource } from "@shared/curatedLearningSources";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildEnterpriseConciergePlan } from "../enterpriseConcierge";
@@ -415,6 +416,38 @@ export const nsosRouter = router({
         const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "finance-draft-activate", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         return db.activateCopilotSetupAgentFinanceDraft({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, approvedBy: ctx.user.id, approvalNote: input.approvalNote });
+      }),
+  }),
+
+  institutionBuilder: router({
+    list: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listInstitutionBlueprints({ schoolId: input.schoolId })),
+    detail: onboardingAdminProcedure.input(schoolInput.extend({ blueprintId: z.number().int().positive() })).query(({ input }) => db.getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId })),
+    create: onboardingAdminProcedure
+      .input(schoolInput.extend({ request: z.string().trim().min(24).max(700), idempotencyKey: z.string().trim().min(12).max(96) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-institution-builder", route: "blueprint-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Institution planning is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const operatingType = await db.getLearningOperatingType(input.schoolId);
+        const blueprint = await buildInstitutionBlueprint({ prompt: input.request, operatingType });
+        const record = await db.createInstitutionBlueprint({ schoolId: input.schoolId, createdBy: ctx.user.id, blueprint, idempotencyKey: input.idempotencyKey });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_prepared", targetType: "institution_blueprint", targetId: record.id, metadata: { source: blueprint.source, promptStored: false, requiresConfirmation: true, programmeModuleCount: blueprint.courseDraft.modules.length, materialCount: blueprint.courseDraft.materials.length, publicAction: false, accountCreated: false, enrollmentCreated: false, admissionCreated: false, paymentAction: false, messageSent: false, credentialIssued: false } });
+        return record;
+      }),
+    update: onboardingAdminProcedure
+      .input(schoolInput.extend({ blueprintId: z.number().int().positive(), edits: z.object({ nameSuggestion: z.string().trim().min(3).max(140), tagline: z.string().trim().min(3).max(180), description: z.string().trim().min(3).max(900), targetLearners: z.string().trim().min(3).max(360), positioning: z.string().trim().min(3).max(500), primaryProgramTitle: z.string().trim().min(3).max(180), primaryProgramSummary: z.string().trim().min(3).max(1200) }), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const record = await db.updateInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId, edits: input.edits });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_edited", targetType: "institution_blueprint", targetId: input.blueprintId, metadata: { confirmationRequired: true, rawEditTextStoredInAudit: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false } });
+        return record;
+      }),
+    applyBlueprint: onboardingAdminProcedure
+      .input(schoolInput.extend({ blueprintId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-institution-builder", route: "blueprint-apply", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Institution application is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const result = await db.applyInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId, appliedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_applied", targetType: "institution_blueprint", targetId: input.blueprintId, metadata: { confirmationRequired: true, applied: result.applied, programmeCreated: result.applied, moduleCount: result.program && "moduleCount" in result.program ? result.program.moduleCount : 0, milestoneCount: result.program && "milestoneCount" in result.program ? result.program.milestoneCount : 0, materialCount: result.program && "materialCount" in result.program ? result.program.materialCount : 0, publicAction: false, accountCreated: false, enrollmentCreated: false, admissionCreated: false, paymentAction: false, messageSent: false, credentialIssued: false, progressChanged: false } });
+        return result;
       }),
   }),
 
