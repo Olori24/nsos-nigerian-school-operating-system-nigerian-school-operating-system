@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck, test, and build
+    name: Lint, typecheck, test, and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -39,6 +39,9 @@ jobs:
 
       - name: Audit production dependencies
         run: pnpm audit --prod
+
+      - name: Lint and formatting check
+        run: pnpm lint
 
       - name: Typecheck
         run: pnpm check
