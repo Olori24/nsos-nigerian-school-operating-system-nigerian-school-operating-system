@@ -7,19 +7,26 @@ const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const builder = readFileSync(resolve(root, "client/src/components/InstitutionBuilder.tsx"), "utf8");
 
 describe("Institution Builder interface", () => {
-  it("mounts a prominent owner/admin Create with AI route while retaining the protected Automation Desk", () => {
+  it("mounts the School Builder as the primary owner/admin overview while retaining the protected Automation Desk", () => {
     expect(home).toContain('id: "institution-builder", label: "Create with AI"');
     expect(home).toContain('view === "institution-builder"');
     expect(home).toContain('<InstitutionBuilder schoolId={schoolId} onNavigate={onNavigate} />');
+    expect(home).toContain("BuilderFirstOwnerOverview");
+    expect(home).toContain("Run your institution");
     expect(home).toContain('roles: ["owner", "admin"]');
     expect(home).toContain('id: "automation", label: "Automation Desk"');
   });
 
   it("presents a one-prompt private blueprint, truthful preparation stages, and no sensitive-data instruction", () => {
     expect(builder).toContain("Create my institution with AI");
-    expect(builder).toContain("Tell us what you want to build");
-    expect(builder).toContain("Build my institution blueprint");
-    expect(builder).toContain("Understanding your learning-organisation idea");
+    expect(builder).toContain("What do you want to build?");
+    expect(builder).toContain("Build my institution");
+    expect(builder).toContain("Start from a template");
+    expect(builder).toContain("AI Academy");
+    expect(builder).toContain("Refine without replacing this version");
+    expect(builder).toContain("Prepare new version");
+    expect(builder).toContain("Owner-requested private refinement");
+    expect(builder).toContain("Understanding your idea");
     expect(builder).toContain("Preparing your review blueprint");
     expect(builder).toContain("Do not include passwords, bank details, provider keys, learner records, staff identities");
     expect(builder).toContain("Your full prompt is used to prepare this private blueprint and is not retained in the operational audit record.");
@@ -45,5 +52,7 @@ describe("Institution Builder interface", () => {
     expect(builder).toContain("never publishes, creates people, admits or enrols learners, sends messages, activates fees, collects payments, awards certificates, grades work, or changes providers or domains");
     expect(builder).toContain("It does not create a website, admissions, people, fees, payments, messages, certificates, grades, completion, public content, or provider settings.");
     expect(builder).toContain("not a public website, active programme, price, admission flow, or student experience");
+    expect(builder).toContain("Meaningful private learning plan");
+    expect(builder).toContain("Quality and launch readiness");
   });
 });

@@ -28,6 +28,14 @@ describe("Institution Builder planner", () => {
     expect(blueprint.identity.tagline).not.toMatch(/100%|job placement/i);
     expect(blueprint.websiteDraft.headline).not.toMatch(/number one/i);
     expect(blueprint.courseDraft).toEqual(courseDraft);
+    expect(blueprint.version).toBe(2);
+    expect(blueprint.learningExperience.moduleOutline).toHaveLength(3);
+    expect(blueprint.learningExperience.lessonStarters).toHaveLength(3);
+    expect(blueprint.learningExperience.projectBriefs).toHaveLength(1);
+    expect(blueprint.learningExperience.assessmentReadiness).toContain("graded assessment");
+    expect(blueprint.studentExperience.practiceSupport).toContain("high-stakes assessments");
+    expect(blueprint.qualityReadiness.completedChecks).toHaveLength(3);
+    expect(blueprint.qualityReadiness.launchBlockers.join(" ")).toContain("No public website");
     expect(buildCourseStudioDraft).toHaveBeenCalledWith(expect.objectContaining({ operatingType: "online_training_provider", audience: "Adult beginners and entrepreneurs" }));
     expect(JSON.stringify(invokeLLM.mock.calls[0][0])).toContain("Never create or imply publication, accounts, enrolment, payments, messages, credentials");
   });
@@ -38,7 +46,10 @@ describe("Institution Builder planner", () => {
     const blueprint = await buildInstitutionBlueprint({ prompt: "Create a vocational fashion training centre.", operatingType: "vocational_institute" });
     expect(blueprint.source).toBe("guided");
     expect(blueprint.learning.learningPathLabel).toBe("Vocational competency pathway");
-    expect(blueprint.lifecycleHandoffs).toHaveLength(4);
+    expect(blueprint.lifecycleHandoffs).toHaveLength(6);
+    expect(blueprint.lifecycleHandoffs.map(item => item.destination)).toEqual(expect.arrayContaining(["communications", "ai-tutors"]));
+    expect(blueprint.learningExperience.projectBriefs[0]?.title).toContain("Practical");
+    expect(blueprint.qualityReadiness.ownerDecisions).toHaveLength(2);
     expect(blueprint.limitations.join(" ")).toContain("creates no public institution");
   });
 

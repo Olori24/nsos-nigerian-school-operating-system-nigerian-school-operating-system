@@ -45,9 +45,9 @@ export function StudentAiTutorHub({ schoolId }: { schoolId: number }) {
   return (
     <div className="grid gap-6">
       <section className="rounded-[1.2rem] bg-[#123b31] p-6 text-white sm:p-7">
-        <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-white/50">Supervised study support</p>
-        <h2 className="mt-2 text-3xl font-semibold tracking-[-.045em]">Ask for help with a school subject.</h2>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">This is AI study support, not your teacher. It can explain approved topics and suggest practice steps. If something needs human judgment or feels unsafe, ask a trusted adult or use the teacher-support action below.</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-white/50">Student Learning Copilot</p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-[-.045em]">Ask for help with an approved learning topic.</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">This is AI study support, not your teacher. It can explain an approved topic differently, suggest practice steps, and direct you to supervising support. It does not complete assessed work, decide a result, grade your work, or replace human judgment.</p>
       </section>
 
       {!hub.data.studentLinked ? (

@@ -57,9 +57,10 @@ describe("NSOS Copilot setup agent interface", () => {
     expect(websiteAgent).toContain("No publication, message sending, domain change, image generation, or data invention occurs here.");
   });
 
-  it("presents the Enterprise Concierge as a prompt-led handoff into a reviewable job and remediates priority static workspace controls", () => {
-    expect(copilot).toContain("NSOS Enterprise Concierge");
-    expect(copilot).toContain("Describe an operational goal.");
+  it("presents the Institution Copilot as a prompt-led handoff into a reviewable job and remediates priority static workspace controls", () => {
+    expect(copilot).toContain("NSOS Institution Copilot");
+    expect(copilot).toContain("Describe what you want to build or operate.");
+    expect(copilot).toContain("Help me build or refine my institution.");
     expect(copilot).toContain("Review preparation");
     expect(copilot).toContain("Setup goals can continue in Automation Desk as a visible reviewed job");
     expect(home).toContain('selectView("communications")');
