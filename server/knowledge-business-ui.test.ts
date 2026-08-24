@@ -30,7 +30,20 @@ describe("Knowledge-to-Business interface", () => {
 
   it("lets an owner inspect and confirmed-delete their stored source and analyses", () => {
     expect(component).toContain("Inspect and delete stored material");
-    expect(component).toContain("permanently deletes this private source and its analyses");
+    expect(component).toContain("permanently deletes this private source, its analyses, and its lineage");
     expect(component).toContain("deleteSource.mutate({ schoolId, sourceId: selectedSource.id, confirmed: true })");
+  });
+
+  it("offers a clear owner-confirmed File-to-School path with honest supported-format and provenance boundaries", () => {
+    expect(component).toContain("File-to-School private library");
+    expect(component).toContain("Build from my knowledge file");
+    expect(component).toContain("TXT · Markdown · small CSV");
+    expect(component).toContain("Not parsed here: PDF, DOCX, PPTX, images, audio, video, or webpages");
+    expect(component).toContain("uploadAndAnalyse.mutate");
+    expect(component).toContain("Source lineage and review boundary");
+    expect(component).toContain("No external research or verification was added in this analysis.");
+    expect(component).toContain("private review cue, not an academic score, accreditation, or outcome claim");
+    expect(component).toContain("Create a reviewed source revision");
+    expect(component).toContain("revise.mutate({ schoolId, sourceId: source.id");
   });
 });

@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool, type Pool } from "mysql2";
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import {
   academicMigrationBatches,
@@ -41,6 +41,7 @@ import {
   invoices,
   institutionBlueprints,
   institutionKnowledgeAnalyses,
+  institutionKnowledgeSourceRevisions,
   institutionKnowledgeSources,
   institutionOperatingProfiles,
   leaveRequests,
@@ -110,7 +111,7 @@ import { generateSupervisedTutorResponse } from "./aiTutor";
 import { generateReviewableAdCopy } from "./advertisingCopy";
 import type { AcademicAutomationInput, AutomationJobType, AutomationPlan, FinanceAutomationInput, OnlineSchoolLaunchInput, StaffAutomationInput, ValidAutomationInput } from "./automationDesk";
 import { reviseInstitutionBlueprint, type InstitutionBlueprint, type InstitutionBlueprintEdits } from "./institutionBuilder";
-import type { KnowledgeBusinessAnalysis, KnowledgeSourceType } from "./knowledgeBusinessEngine";
+import type { KnowledgeBusinessAnalysis, KnowledgeSourceFormat, KnowledgeSourceType } from "./knowledgeBusinessEngine";
 import type { CourseStudioDraft } from "./courseStudio";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
@@ -1933,11 +1934,54 @@ export async function createInstitutionBlueprint(input: { schoolId: number; crea
   return (await db.select().from(institutionBlueprints).where(and(eq(institutionBlueprints.id, blueprintId), eq(institutionBlueprints.schoolId, input.schoolId))).limit(1))[0]!;
 }
 
-export async function createInstitutionKnowledgeSource(input: { schoolId: number; createdBy: number; sourceType: KnowledgeSourceType; title: string; sourceText: string }) {
+const knowledgeSourceFingerprint = (sourceText: string) => createHash("sha256").update(sourceText).digest("hex");
+const supportedKnowledgeUpload = new Map<string, KnowledgeSourceFormat>([["text/plain", "txt"], ["text/markdown", "markdown"], ["text/x-markdown", "markdown"], ["text/csv", "csv"]]);
+const knowledgeFormatByExtension = new Map<string, KnowledgeSourceFormat>([["txt", "txt"], ["md", "markdown"], ["markdown", "markdown"], ["csv", "csv"]]);
+
+function cleanKnowledgeFileName(fileName: string) {
+  const clean = fileName.replace(/[\\/\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 180);
+  if (!clean) throw new Error("Provide a valid text-file name for the private knowledge library.");
+  return clean;
+}
+
+function textFromKnowledgeUpload(input: { base64: string; fileName: string; mimeType: string }) {
+  const format = supportedKnowledgeUpload.get(input.mimeType);
+  if (!format) throw new Error("This first File-to-School release accepts TXT, Markdown, and CSV files only. Provide an authorised text extract for PDF, DOCX, PPTX, audio, video, image, or web content.");
+  const fileName = cleanKnowledgeFileName(input.fileName);
+  const extension = fileName.toLowerCase().split(".").pop();
+  if (!extension || knowledgeFormatByExtension.get(extension) !== format) throw new Error("The source filename and selected text type do not match. Use a supported .txt, .md, .markdown, or .csv file.");
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(input.base64) || input.base64.length % 4 !== 0) throw new Error("The supported text file could not be safely decoded.");
+  const bytes = Buffer.from(input.base64, "base64");
+  if (!bytes.length || bytes.length > 650_000) throw new Error("Use a text file smaller than 650 KB for the first File-to-School analysis.");
+  if (bytes.includes(0)) throw new Error("Use a valid UTF-8 text file; binary or null-byte content is not supported in this release.");
+  let decoded = "";
+  try { decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { throw new Error("Use a valid UTF-8 text file. NSOS cannot safely read this content as supported text."); }
+  const sourceText = decoded.replace(/^\uFEFF/, "").replace(format === "csv" ? /[,;]\s*/g : /\r\n?/g, format === "csv" ? " | " : "\n");
+  return { bytes, format, sourceText, fileName };
+}
+
+async function snapshotInstitutionKnowledgeSource(source: typeof institutionKnowledgeSources.$inferSelect) {
+  const input = { schoolId: source.schoolId, sourceId: source.id, createdBy: source.createdBy, revision: source.sourceRevision, title: source.title, sourceText: source.sourceText, sourceFormat: source.sourceFormat, originalFileName: source.originalFileName, mimeType: source.mimeType, storageKey: source.storageKey, byteSize: source.byteSize, sourceFingerprint: source.sourceFingerprint };
+  await (await database()).insert(institutionKnowledgeSourceRevisions).values(input).onDuplicateKeyUpdate({ set: { sourceFingerprint: input.sourceFingerprint } });
+}
+
+export async function createInstitutionKnowledgeSource(input: { schoolId: number; createdBy: number; sourceType: KnowledgeSourceType; title: string; sourceText: string; sourceFormat?: KnowledgeSourceFormat; originalFileName?: string; mimeType?: string; storageKey?: string; byteSize?: number }) {
   const db = await database();
-  const created = await db.insert(institutionKnowledgeSources).values({ schoolId: input.schoolId, createdBy: input.createdBy, sourceType: input.sourceType, title: input.title, sourceText: input.sourceText, status: "ready" });
+  const created = await db.insert(institutionKnowledgeSources).values({ schoolId: input.schoolId, createdBy: input.createdBy, sourceType: input.sourceType, sourceFormat: input.sourceFormat ?? "pasted_text", title: input.title, sourceText: input.sourceText, originalFileName: input.originalFileName, mimeType: input.mimeType, storageKey: input.storageKey, byteSize: input.byteSize, sourceRevision: 1, sourceFingerprint: knowledgeSourceFingerprint(input.sourceText), status: "ready" });
   const sourceId = Number(created[0].insertId);
-  return (await db.select().from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.id, sourceId), eq(institutionKnowledgeSources.schoolId, input.schoolId))).limit(1))[0]!;
+  const source = (await db.select().from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.id, sourceId), eq(institutionKnowledgeSources.schoolId, input.schoolId))).limit(1))[0]!;
+  await snapshotInstitutionKnowledgeSource(source);
+  return source;
+}
+
+export async function createInstitutionKnowledgeFileSource(input: { schoolId: number; createdBy: number; sourceType: KnowledgeSourceType; title: string; upload: { base64: string; fileName: string; mimeType: string }; sourceText: string }) {
+  const file = textFromKnowledgeUpload(input.upload);
+  const stored = await storagePut(`schools/${input.schoolId}/knowledge-library/${randomUUID()}/${file.fileName}`, file.bytes, input.upload.mimeType);
+  return createInstitutionKnowledgeSource({ schoolId: input.schoolId, createdBy: input.createdBy, sourceType: input.sourceType, title: input.title, sourceText: input.sourceText, sourceFormat: file.format, originalFileName: file.fileName, mimeType: input.upload.mimeType, storageKey: stored.key, byteSize: file.bytes.length });
+}
+
+export function extractInstitutionKnowledgeUploadText(input: { base64: string; fileName: string; mimeType: string }) {
+  return textFromKnowledgeUpload(input).sourceText;
 }
 
 export async function getInstitutionKnowledgeSource(input: { schoolId: number; sourceId: number }) {
@@ -1946,10 +1990,27 @@ export async function getInstitutionKnowledgeSource(input: { schoolId: number; s
   return source;
 }
 
+export async function getInstitutionKnowledgeSourceDetail(input: { schoolId: number; sourceId: number }) {
+  const source = await getInstitutionKnowledgeSource(input);
+  const revisions = await (await database()).select({ revision: institutionKnowledgeSourceRevisions.revision, title: institutionKnowledgeSourceRevisions.title, sourceFormat: institutionKnowledgeSourceRevisions.sourceFormat, originalFileName: institutionKnowledgeSourceRevisions.originalFileName, byteSize: institutionKnowledgeSourceRevisions.byteSize, createdAt: institutionKnowledgeSourceRevisions.createdAt }).from(institutionKnowledgeSourceRevisions).where(and(eq(institutionKnowledgeSourceRevisions.schoolId, input.schoolId), eq(institutionKnowledgeSourceRevisions.sourceId, input.sourceId))).orderBy(desc(institutionKnowledgeSourceRevisions.revision)).limit(20);
+  return { ...source, revisions };
+}
+
+export async function reviseInstitutionKnowledgeSource(input: { schoolId: number; sourceId: number; title: string; sourceText: string }) {
+  const db = await database();
+  const source = await getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
+  await snapshotInstitutionKnowledgeSource(source);
+  const sourceFingerprint = knowledgeSourceFingerprint(input.sourceText);
+  await db.update(institutionKnowledgeSources).set({ title: input.title, sourceText: input.sourceText, sourceFormat: "pasted_text", originalFileName: null, mimeType: null, storageKey: null, byteSize: null, sourceRevision: source.sourceRevision + 1, sourceFingerprint }).where(and(eq(institutionKnowledgeSources.id, input.sourceId), eq(institutionKnowledgeSources.schoolId, input.schoolId)));
+  const revised = await getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
+  await snapshotInstitutionKnowledgeSource(revised);
+  return revised;
+}
+
 export async function createInstitutionKnowledgeAnalysis(input: { schoolId: number; sourceId: number; createdBy: number; analysis: KnowledgeBusinessAnalysis }) {
   const db = await database();
-  await getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
-  const created = await db.insert(institutionKnowledgeAnalyses).values({ schoolId: input.schoolId, sourceId: input.sourceId, createdBy: input.createdBy, analysis: input.analysis, sourceVersion: "knowledge-business-v1" });
+  const source = await getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
+  const created = await db.insert(institutionKnowledgeAnalyses).values({ schoolId: input.schoolId, sourceId: input.sourceId, createdBy: input.createdBy, analysis: input.analysis, sourceVersion: "file-to-school-v1", sourceRevision: source.sourceRevision, provenance: { sourceFormat: source.sourceFormat, sourceRevision: source.sourceRevision, labels: ["source_based", "ai_expanded", "ai_suggested"], externalResearchIncluded: false } });
   const analysisId = Number(created[0].insertId);
   return (await db.select().from(institutionKnowledgeAnalyses).where(and(eq(institutionKnowledgeAnalyses.id, analysisId), eq(institutionKnowledgeAnalyses.schoolId, input.schoolId))).limit(1))[0]!;
 }
@@ -1962,8 +2023,8 @@ export async function getInstitutionKnowledgeAnalysis(input: { schoolId: number;
 
 export async function listInstitutionKnowledgeWorkspace(input: { schoolId: number }) {
   const db = await database();
-  const sources = await db.select({ id: institutionKnowledgeSources.id, sourceType: institutionKnowledgeSources.sourceType, title: institutionKnowledgeSources.title, createdBy: institutionKnowledgeSources.createdBy, createdAt: institutionKnowledgeSources.createdAt, updatedAt: institutionKnowledgeSources.updatedAt }).from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.schoolId, input.schoolId), eq(institutionKnowledgeSources.status, "ready"))).orderBy(desc(institutionKnowledgeSources.updatedAt)).limit(20);
-  const analyses = await db.select({ id: institutionKnowledgeAnalyses.id, sourceId: institutionKnowledgeAnalyses.sourceId, analysis: institutionKnowledgeAnalyses.analysis, sourceVersion: institutionKnowledgeAnalyses.sourceVersion, createdBy: institutionKnowledgeAnalyses.createdBy, createdAt: institutionKnowledgeAnalyses.createdAt, updatedAt: institutionKnowledgeAnalyses.updatedAt, sourceTitle: institutionKnowledgeSources.title, sourceType: institutionKnowledgeSources.sourceType }).from(institutionKnowledgeAnalyses).innerJoin(institutionKnowledgeSources, eq(institutionKnowledgeAnalyses.sourceId, institutionKnowledgeSources.id)).where(and(eq(institutionKnowledgeAnalyses.schoolId, input.schoolId), eq(institutionKnowledgeSources.schoolId, input.schoolId), eq(institutionKnowledgeSources.status, "ready"))).orderBy(desc(institutionKnowledgeAnalyses.updatedAt)).limit(20);
+  const sources = await db.select({ id: institutionKnowledgeSources.id, sourceType: institutionKnowledgeSources.sourceType, sourceFormat: institutionKnowledgeSources.sourceFormat, title: institutionKnowledgeSources.title, originalFileName: institutionKnowledgeSources.originalFileName, mimeType: institutionKnowledgeSources.mimeType, byteSize: institutionKnowledgeSources.byteSize, sourceRevision: institutionKnowledgeSources.sourceRevision, createdBy: institutionKnowledgeSources.createdBy, createdAt: institutionKnowledgeSources.createdAt, updatedAt: institutionKnowledgeSources.updatedAt }).from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.schoolId, input.schoolId), eq(institutionKnowledgeSources.status, "ready"))).orderBy(desc(institutionKnowledgeSources.updatedAt)).limit(20);
+  const analyses = await db.select({ id: institutionKnowledgeAnalyses.id, sourceId: institutionKnowledgeAnalyses.sourceId, analysis: institutionKnowledgeAnalyses.analysis, sourceVersion: institutionKnowledgeAnalyses.sourceVersion, sourceRevision: institutionKnowledgeAnalyses.sourceRevision, provenance: institutionKnowledgeAnalyses.provenance, createdBy: institutionKnowledgeAnalyses.createdBy, createdAt: institutionKnowledgeAnalyses.createdAt, updatedAt: institutionKnowledgeAnalyses.updatedAt, sourceTitle: institutionKnowledgeSources.title, sourceType: institutionKnowledgeSources.sourceType, sourceFormat: institutionKnowledgeSources.sourceFormat }).from(institutionKnowledgeAnalyses).innerJoin(institutionKnowledgeSources, eq(institutionKnowledgeAnalyses.sourceId, institutionKnowledgeSources.id)).where(and(eq(institutionKnowledgeAnalyses.schoolId, input.schoolId), eq(institutionKnowledgeSources.schoolId, input.schoolId), eq(institutionKnowledgeSources.status, "ready"))).orderBy(desc(institutionKnowledgeAnalyses.updatedAt)).limit(20);
   return { sources, analyses };
 }
 
@@ -1972,6 +2033,7 @@ export async function deleteInstitutionKnowledgeSource(input: { schoolId: number
   const source = await getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
   await db.transaction(async tx => {
     await tx.delete(institutionKnowledgeAnalyses).where(and(eq(institutionKnowledgeAnalyses.schoolId, input.schoolId), eq(institutionKnowledgeAnalyses.sourceId, input.sourceId)));
+    await tx.delete(institutionKnowledgeSourceRevisions).where(and(eq(institutionKnowledgeSourceRevisions.schoolId, input.schoolId), eq(institutionKnowledgeSourceRevisions.sourceId, input.sourceId)));
     await tx.delete(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.id, input.sourceId), eq(institutionKnowledgeSources.schoolId, input.schoolId)));
   });
   return { id: source.id, deleted: true as const };

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), listInstitutionKnowledgeWorkspace: vi.fn(), createInstitutionKnowledgeSource: vi.fn(), createInstitutionKnowledgeAnalysis: vi.fn(), getInstitutionKnowledgeAnalysis: vi.fn(), getLearningOperatingType: vi.fn(), createInstitutionBlueprint: vi.fn(), deleteInstitutionKnowledgeSource: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), listInstitutionKnowledgeWorkspace: vi.fn(), getInstitutionKnowledgeSourceDetail: vi.fn(), createInstitutionKnowledgeSource: vi.fn(), createInstitutionKnowledgeFileSource: vi.fn(), extractInstitutionKnowledgeUploadText: vi.fn(), reviseInstitutionKnowledgeSource: vi.fn(), createInstitutionKnowledgeAnalysis: vi.fn(), getInstitutionKnowledgeAnalysis: vi.fn(), getLearningOperatingType: vi.fn(), createInstitutionBlueprint: vi.fn(), deleteInstitutionKnowledgeSource: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 const engine = vi.hoisted(() => ({ analyseKnowledgeForBusiness: vi.fn(), validateKnowledgeSourceText: vi.fn() }));
 const builder = vi.hoisted(() => ({ buildInstitutionBlueprint: vi.fn() }));
 vi.mock("./db", async importOriginal => ({ ...(await importOriginal<typeof import("./db")>()), ...db }));
@@ -22,8 +22,12 @@ describe("Knowledge-to-Business protected routes", () => {
     db.getSchoolMembership.mockResolvedValue(membership);
     db.consumeSharedRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
     db.listInstitutionKnowledgeWorkspace.mockResolvedValue({ sources: [], analyses: [] });
+    db.getInstitutionKnowledgeSourceDetail.mockResolvedValue({ id: 71, schoolId: 34, sourceType: "expertise_notes", sourceFormat: "pasted_text", sourceRevision: 1, title: "My notes", sourceText: "A sufficiently long approved knowledge source for private planning and a bounded learning foundation.", revisions: [{ revision: 1, title: "My notes", sourceFormat: "pasted_text", originalFileName: null, byteSize: null, createdAt: new Date() }] });
     engine.validateKnowledgeSourceText.mockImplementation((value: string) => value);
-    db.createInstitutionKnowledgeSource.mockResolvedValue({ id: 71, schoolId: 34, sourceType: "expertise_notes", title: "My notes", sourceText: "A sufficiently long approved knowledge source for private planning and a bounded learning foundation.", createdAt: new Date() });
+    db.createInstitutionKnowledgeSource.mockResolvedValue({ id: 71, schoolId: 34, sourceType: "expertise_notes", sourceFormat: "pasted_text", sourceRevision: 1, title: "My notes", sourceText: "A sufficiently long approved knowledge source for private planning and a bounded learning foundation.", createdAt: new Date() });
+    db.extractInstitutionKnowledgeUploadText.mockReturnValue("A sufficiently long approved knowledge source that arrives from a supported UTF-8 private text file for source-traceable planning and review.");
+    db.createInstitutionKnowledgeFileSource.mockResolvedValue({ id: 74, schoolId: 34, sourceType: "structured_notes", sourceFormat: "markdown", sourceRevision: 1, title: "Private curriculum notes", sourceText: "A sufficiently long approved knowledge source that arrives from a supported UTF-8 private text file for source-traceable planning and review.", originalFileName: "curriculum.md", byteSize: 280, createdAt: new Date() });
+    db.reviseInstitutionKnowledgeSource.mockResolvedValue({ id: 71, schoolId: 34, sourceType: "expertise_notes", sourceFormat: "pasted_text", sourceRevision: 2, title: "Updated notes", sourceText: "A sufficiently long approved revised knowledge source for a new private planning review and no automated educational action.", createdAt: new Date() });
     engine.analyseKnowledgeForBusiness.mockResolvedValue(analysis);
     db.createInstitutionKnowledgeAnalysis.mockResolvedValue({ id: 72, schoolId: 34, sourceId: 71, analysis });
     db.getInstitutionKnowledgeAnalysis.mockResolvedValue({ id: 72, schoolId: 34, sourceId: 71, analysis });
@@ -39,6 +43,13 @@ describe("Knowledge-to-Business protected routes", () => {
     expect(db.listInstitutionKnowledgeWorkspace).toHaveBeenCalledWith({ schoolId: 34 });
     db.getSchoolMembership.mockResolvedValue({ ...membership, role: "teacher" });
     await expect(caller().nsos.knowledgeBusiness.workspace({ schoolId: 34 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("returns a source and immutable revision lineage only for the active institution owner/admin", async () => {
+    await expect(caller().nsos.knowledgeBusiness.sourceDetail({ schoolId: 34, sourceId: 71 })).resolves.toMatchObject({ id: 71, sourceRevision: 1, revisions: [{ revision: 1 }] });
+    expect(db.getInstitutionKnowledgeSourceDetail).toHaveBeenCalledWith({ schoolId: 34, sourceId: 71 });
+    db.getSchoolMembership.mockResolvedValue({ ...membership, role: "teacher" });
+    await expect(caller().nsos.knowledgeBusiness.sourceDetail({ schoolId: 34, sourceId: 71 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("requires confirmed analysis, audits no raw source text, and creates no action", async () => {
@@ -60,6 +71,24 @@ describe("Knowledge-to-Business protected routes", () => {
   it("allows an owner to delete a private source and its analyses only with confirmation", async () => {
     await expect(caller().nsos.knowledgeBusiness.deleteSource({ schoolId: 34, sourceId: 71, confirmed: true })).resolves.toEqual({ id: 71, deleted: true });
     expect(db.deleteInstitutionKnowledgeSource).toHaveBeenCalledWith({ schoolId: 34, sourceId: 71 });
-    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "institution_knowledge_source_deleted", metadata: expect.objectContaining({ confirmationRequired: true, rawSourceStoredInAudit: false, analysesRemoved: true, publicAction: false }) }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "institution_knowledge_source_deleted", metadata: expect.objectContaining({ confirmationRequired: true, rawSourceStoredInAudit: false, analysesRemoved: true, lineageRemoved: true, publicAction: false }) }));
+  });
+
+  it("stores only a confirmed supported text file privately, creates a source-traceable analysis, and excludes the file from audits", async () => {
+    const base64 = "cHJpdmF0ZS1jb3Vyc2Utbm90ZXM=";
+    const input = { schoolId: 34, sourceType: "structured_notes" as const, title: "Private curriculum notes", upload: { base64, fileName: "curriculum.md", mimeType: "text/markdown" as const }, confirmed: true };
+    await expect(caller().nsos.knowledgeBusiness.uploadAndAnalyse(input)).resolves.toMatchObject({ source: { id: 74, sourceFormat: "markdown", sourceRevision: 1 }, analysis: { id: 72 } });
+    expect(db.createInstitutionKnowledgeFileSource).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 34, createdBy: 119, sourceType: "structured_notes", title: "Private curriculum notes", upload: input.upload }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "institution_knowledge_file_analysed", metadata: expect.objectContaining({ confirmationRequired: true, sourceFormat: "markdown", originalFileStored: true, sourceTextStoredInAudit: false, rawFileStoredInAudit: false, externalResearchIncluded: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false }) }));
+    expect(JSON.stringify(db.recordSecurityAuditEvent.mock.calls)).not.toContain(base64);
+    await expect(caller().nsos.knowledgeBusiness.uploadAndAnalyse({ ...input, confirmed: false as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("requires confirmation for a new private source revision and retains the no-action boundary", async () => {
+    const input = { schoolId: 34, sourceId: 71, title: "Updated notes", sourceText: "A sufficiently long approved revised knowledge source for a new private planning review and no automated educational action.", confirmed: true };
+    await expect(caller().nsos.knowledgeBusiness.reviseAndAnalyse(input)).resolves.toMatchObject({ source: { id: 71, sourceRevision: 2 }, analysis: { id: 72 } });
+    expect(db.reviseInstitutionKnowledgeSource).toHaveBeenCalledWith({ schoolId: 34, sourceId: 71, title: input.title, sourceText: input.sourceText });
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "institution_knowledge_source_revised", metadata: expect.objectContaining({ confirmationRequired: true, sourceRevision: 2, sourceTextStoredInAudit: false, rawFileStoredInAudit: false, externalResearchIncluded: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false }) }));
+    expect(JSON.stringify(db.recordSecurityAuditEvent.mock.calls)).not.toContain(input.sourceText);
   });
 });

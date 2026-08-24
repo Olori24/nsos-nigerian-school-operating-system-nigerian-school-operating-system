@@ -189,8 +189,15 @@ export const institutionKnowledgeSources = mysqlTable(
     schoolId: int("schoolId").notNull(),
     createdBy: int("createdBy").notNull(),
     sourceType: mysqlEnum("sourceType", ["description", "expertise_notes", "structured_notes", "course_material", "transcript"]).notNull(),
+    sourceFormat: mysqlEnum("sourceFormat", ["pasted_text", "txt", "markdown", "csv", "transcript_text"]).notNull().default("pasted_text"),
     title: varchar("title", { length: 180 }).notNull(),
     sourceText: text("sourceText").notNull(),
+    originalFileName: varchar("originalFileName", { length: 255 }),
+    mimeType: varchar("mimeType", { length: 120 }),
+    storageKey: varchar("storageKey", { length: 512 }),
+    byteSize: int("byteSize"),
+    sourceRevision: int("sourceRevision").notNull().default(1),
+    sourceFingerprint: varchar("sourceFingerprint", { length: 64 }).notNull().default(""),
     status: mysqlEnum("status", ["ready", "archived"]).notNull().default("ready"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -198,6 +205,31 @@ export const institutionKnowledgeSources = mysqlTable(
   table => ({
     schoolCreated: index("institution_knowledge_source_school_created_idx").on(table.schoolId, table.createdAt),
     schoolStatus: index("institution_knowledge_source_school_status_idx").on(table.schoolId, table.status),
+    schoolRevision: index("institution_knowledge_source_school_revision_idx").on(table.schoolId, table.sourceRevision),
+  }),
+);
+
+export const institutionKnowledgeSourceRevisions = mysqlTable(
+  "institutionKnowledgeSourceRevisions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    sourceId: int("sourceId").notNull(),
+    createdBy: int("createdBy").notNull(),
+    revision: int("revision").notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    sourceText: text("sourceText").notNull(),
+    sourceFormat: mysqlEnum("sourceFormat", ["pasted_text", "txt", "markdown", "csv", "transcript_text"]).notNull(),
+    originalFileName: varchar("originalFileName", { length: 255 }),
+    mimeType: varchar("mimeType", { length: 120 }),
+    storageKey: varchar("storageKey", { length: 512 }),
+    byteSize: int("byteSize"),
+    sourceFingerprint: varchar("sourceFingerprint", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    schoolSourceRevision: uniqueIndex("institution_knowledge_revision_school_source_revision_unique").on(table.schoolId, table.sourceId, table.revision),
+    schoolSourceCreated: index("institution_knowledge_revision_school_source_created_idx").on(table.schoolId, table.sourceId, table.createdAt),
   }),
 );
 
@@ -210,12 +242,15 @@ export const institutionKnowledgeAnalyses = mysqlTable(
     createdBy: int("createdBy").notNull(),
     analysis: json("analysis").$type<import("../server/knowledgeBusinessEngine").KnowledgeBusinessAnalysis>().notNull(),
     sourceVersion: varchar("sourceVersion", { length: 48 }).notNull().default("knowledge-business-v1"),
+    sourceRevision: int("sourceRevision").notNull().default(1),
+    provenance: json("provenance").$type<{ sourceFormat: "pasted_text" | "txt" | "markdown" | "csv" | "transcript_text"; sourceRevision: number; labels: Array<"source_based" | "ai_expanded" | "ai_suggested">; externalResearchIncluded: false }>(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
     schoolCreated: index("institution_knowledge_analysis_school_created_idx").on(table.schoolId, table.createdAt),
     schoolSource: index("institution_knowledge_analysis_school_source_idx").on(table.schoolId, table.sourceId),
+    schoolSourceRevision: index("institution_knowledge_analysis_school_source_revision_idx").on(table.schoolId, table.sourceId, table.sourceRevision),
   }),
 );
 

@@ -463,7 +463,7 @@ export const nsosRouter = router({
 
   knowledgeBusiness: router({
     workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listInstitutionKnowledgeWorkspace({ schoolId: input.schoolId })),
-    sourceDetail: onboardingAdminProcedure.input(schoolInput.extend({ sourceId: z.number().int().positive() })).query(({ input }) => db.getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId })),
+    sourceDetail: onboardingAdminProcedure.input(schoolInput.extend({ sourceId: z.number().int().positive() })).query(({ input }) => db.getInstitutionKnowledgeSourceDetail({ schoolId: input.schoolId, sourceId: input.sourceId })),
     analyse: onboardingAdminProcedure
       .input(schoolInput.extend({ sourceType: z.enum(["description", "expertise_notes", "structured_notes", "course_material", "transcript"]), title: z.string().trim().min(3).max(180), sourceText: z.string().trim().min(80).max(12_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
@@ -475,6 +475,31 @@ export const nsosRouter = router({
         const record = await db.createInstitutionKnowledgeAnalysis({ schoolId: input.schoolId, sourceId: source.id, createdBy: ctx.user.id, analysis });
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_analysed", targetType: "institution_knowledge_source", targetId: source.id, metadata: { sourceType: source.sourceType, sourceStored: true, sourceTextStoredInAudit: false, sourceCharacterBand: sourceText.length > 6000 ? "long" : sourceText.length > 1500 ? "medium" : "short", analysisSource: analysis.source, objectiveCount: analysis.learningObjectives.length, programmeIdeaCount: analysis.programmeIdeas.length, projectIdeaCount: analysis.projectIdeas.length, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false } });
         return { source: { id: source.id, sourceType: source.sourceType, title: source.title, createdAt: source.createdAt }, analysis: record };
+      }),
+    uploadAndAnalyse: onboardingAdminProcedure
+      .input(schoolInput.extend({ sourceType: z.enum(["description", "expertise_notes", "structured_notes", "course_material", "transcript"]), title: z.string().trim().min(3).max(180), upload: z.object({ base64: z.string().min(8).max(900_000), fileName: z.string().trim().min(1).max(180), mimeType: z.enum(["text/plain", "text/markdown", "text/x-markdown", "text/csv"]) }), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-file-to-school", route: "file-upload-analyse", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `File-to-School analysis is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const extractedText = db.extractInstitutionKnowledgeUploadText(input.upload);
+        const sourceText = validateKnowledgeSourceText(extractedText);
+        const source = await db.createInstitutionKnowledgeFileSource({ schoolId: input.schoolId, createdBy: ctx.user.id, sourceType: input.sourceType, title: input.title, upload: input.upload, sourceText });
+        const analysis = await analyseKnowledgeForBusiness({ title: source.title, sourceType: source.sourceType, sourceText: source.sourceText });
+        const record = await db.createInstitutionKnowledgeAnalysis({ schoolId: input.schoolId, sourceId: source.id, createdBy: ctx.user.id, analysis });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_file_analysed", targetType: "institution_knowledge_source", targetId: source.id, metadata: { confirmationRequired: true, sourceFormat: source.sourceFormat, originalFileStored: true, sourceTextStoredInAudit: false, rawFileStoredInAudit: false, sourceRevision: source.sourceRevision, byteSizeBand: (source.byteSize ?? 0) > 400_000 ? "large" : (source.byteSize ?? 0) > 80_000 ? "medium" : "small", analysisSource: analysis.source, externalResearchIncluded: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false } });
+        return { source: { id: source.id, sourceType: source.sourceType, sourceFormat: source.sourceFormat, title: source.title, originalFileName: source.originalFileName, sourceRevision: source.sourceRevision, createdAt: source.createdAt }, analysis: record };
+      }),
+    reviseAndAnalyse: onboardingAdminProcedure
+      .input(schoolInput.extend({ sourceId: z.number().int().positive(), title: z.string().trim().min(3).max(180), sourceText: z.string().trim().min(80).max(12_000), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-file-to-school", route: "source-revise-analyse", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Source revision is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const sourceText = validateKnowledgeSourceText(input.sourceText);
+        const source = await db.reviseInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId, title: input.title, sourceText });
+        const analysis = await analyseKnowledgeForBusiness({ title: source.title, sourceType: source.sourceType, sourceText: source.sourceText });
+        const record = await db.createInstitutionKnowledgeAnalysis({ schoolId: input.schoolId, sourceId: source.id, createdBy: ctx.user.id, analysis });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_source_revised", targetType: "institution_knowledge_source", targetId: source.id, metadata: { confirmationRequired: true, sourceRevision: source.sourceRevision, sourceTextStoredInAudit: false, rawFileStoredInAudit: false, analysisSource: analysis.source, externalResearchIncluded: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false } });
+        return { source, analysis: record };
       }),
     prepareBuilder: onboardingAdminProcedure
       .input(schoolInput.extend({ analysisId: z.number().int().positive(), idempotencyKey: z.string().trim().min(12).max(96), confirmed: z.literal(true) }))
@@ -494,7 +519,7 @@ export const nsosRouter = router({
         const rate = await db.consumeSharedRateLimit({ namespace: "nsos-knowledge-business", route: "source-delete", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Knowledge-source deletion is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const result = await db.deleteInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
-        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_source_deleted", targetType: "institution_knowledge_source", targetId: input.sourceId, metadata: { confirmationRequired: true, rawSourceStoredInAudit: false, analysesRemoved: true, publicAction: false } });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_source_deleted", targetType: "institution_knowledge_source", targetId: input.sourceId, metadata: { confirmationRequired: true, rawSourceStoredInAudit: false, analysesRemoved: true, lineageRemoved: true, publicAction: false } });
         return result;
       }),
   }),

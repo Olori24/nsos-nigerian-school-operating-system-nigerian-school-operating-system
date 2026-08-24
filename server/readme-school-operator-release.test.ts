@@ -43,9 +43,19 @@ describe("README approval-first School Operator release documentation", () => {
   it("documents the private Knowledge-to-Business release and its source, deletion, and no-action boundaries", () => {
     expect(readme).toContain("Knowledge-to-Business Engine");
     expect(readme).toContain("docs/knowledge-to-business-engine-contract.md");
-    expect(readme).toContain("raw text out of audit metadata");
-    expect(readme).toContain("Owners can inspect or confirmed-delete stored source text and analyses");
+    expect(readme).toContain("raw text and file bytes out of audit metadata");
+    expect(readme).toContain("Owners can inspect/revise/confirmed-delete stored sources and lineage");
     expect(readme).toContain("does not infer individual ability, readiness, risk, eligibility, or career prospects");
     expect(readme).toContain("0062_unknown_radioactive_man");
+  });
+
+  it("documents the File-to-School release without overstating parsing, verification, or side effects", () => {
+    expect(readme).toContain("[File-to-School Engine](docs/file-to-school-engine-contract.md)");
+    expect(readme).toContain("bounded UTF-8 TXT, Markdown, or CSV source");
+    expect(readme).toContain("Original supported file bytes remain in tenant-scoped object storage");
+    expect(readme).toContain("immutable source-revision snapshots");
+    expect(readme).toContain("source-based, AI-expanded, and AI-suggested");
+    expect(readme).toContain("Parse PDFs, DOCX, PPTX, images, websites, video, or audio");
+    expect(readme).toContain("silently add external research");
   });
 });

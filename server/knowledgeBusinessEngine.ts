@@ -1,6 +1,7 @@
 import { invokeLLM } from "./_core/llm";
 
 export type KnowledgeSourceType = "description" | "expertise_notes" | "structured_notes" | "course_material" | "transcript";
+export type KnowledgeSourceFormat = "pasted_text" | "txt" | "markdown" | "csv" | "transcript_text";
 
 export type KnowledgeBusinessAnalysis = {
   version: 1;
