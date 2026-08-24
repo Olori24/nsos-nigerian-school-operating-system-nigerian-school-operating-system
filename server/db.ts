@@ -40,6 +40,8 @@ import {
   invoiceLineItems,
   invoices,
   institutionBlueprints,
+  institutionKnowledgeAnalyses,
+  institutionKnowledgeSources,
   institutionOperatingProfiles,
   leaveRequests,
   lessonPlans,
@@ -108,6 +110,7 @@ import { generateSupervisedTutorResponse } from "./aiTutor";
 import { generateReviewableAdCopy } from "./advertisingCopy";
 import type { AcademicAutomationInput, AutomationJobType, AutomationPlan, FinanceAutomationInput, OnlineSchoolLaunchInput, StaffAutomationInput, ValidAutomationInput } from "./automationDesk";
 import { reviseInstitutionBlueprint, type InstitutionBlueprint, type InstitutionBlueprintEdits } from "./institutionBuilder";
+import type { KnowledgeBusinessAnalysis, KnowledgeSourceType } from "./knowledgeBusinessEngine";
 import type { CourseStudioDraft } from "./courseStudio";
 import type { SchoolRole } from "./roles";
 import { storagePut } from "./storage";
@@ -1928,6 +1931,50 @@ export async function createInstitutionBlueprint(input: { schoolId: number; crea
   const created = await db.insert(institutionBlueprints).values({ schoolId: input.schoolId, createdBy: input.createdBy, blueprint: input.blueprint, idempotencyKey: input.idempotencyKey });
   const blueprintId = Number(created[0].insertId);
   return (await db.select().from(institutionBlueprints).where(and(eq(institutionBlueprints.id, blueprintId), eq(institutionBlueprints.schoolId, input.schoolId))).limit(1))[0]!;
+}
+
+export async function createInstitutionKnowledgeSource(input: { schoolId: number; createdBy: number; sourceType: KnowledgeSourceType; title: string; sourceText: string }) {
+  const db = await database();
+  const created = await db.insert(institutionKnowledgeSources).values({ schoolId: input.schoolId, createdBy: input.createdBy, sourceType: input.sourceType, title: input.title, sourceText: input.sourceText, status: "ready" });
+  const sourceId = Number(created[0].insertId);
+  return (await db.select().from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.id, sourceId), eq(institutionKnowledgeSources.schoolId, input.schoolId))).limit(1))[0]!;
+}
+
+export async function getInstitutionKnowledgeSource(input: { schoolId: number; sourceId: number }) {
+  const source = (await (await database()).select().from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.id, input.sourceId), eq(institutionKnowledgeSources.schoolId, input.schoolId), eq(institutionKnowledgeSources.status, "ready"))).limit(1))[0];
+  if (!source) throw new Error("This private knowledge source is unavailable in the active institution.");
+  return source;
+}
+
+export async function createInstitutionKnowledgeAnalysis(input: { schoolId: number; sourceId: number; createdBy: number; analysis: KnowledgeBusinessAnalysis }) {
+  const db = await database();
+  await getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
+  const created = await db.insert(institutionKnowledgeAnalyses).values({ schoolId: input.schoolId, sourceId: input.sourceId, createdBy: input.createdBy, analysis: input.analysis, sourceVersion: "knowledge-business-v1" });
+  const analysisId = Number(created[0].insertId);
+  return (await db.select().from(institutionKnowledgeAnalyses).where(and(eq(institutionKnowledgeAnalyses.id, analysisId), eq(institutionKnowledgeAnalyses.schoolId, input.schoolId))).limit(1))[0]!;
+}
+
+export async function getInstitutionKnowledgeAnalysis(input: { schoolId: number; analysisId: number }) {
+  const analysis = (await (await database()).select().from(institutionKnowledgeAnalyses).where(and(eq(institutionKnowledgeAnalyses.id, input.analysisId), eq(institutionKnowledgeAnalyses.schoolId, input.schoolId))).limit(1))[0];
+  if (!analysis) throw new Error("This private knowledge analysis is unavailable in the active institution.");
+  return analysis;
+}
+
+export async function listInstitutionKnowledgeWorkspace(input: { schoolId: number }) {
+  const db = await database();
+  const sources = await db.select({ id: institutionKnowledgeSources.id, sourceType: institutionKnowledgeSources.sourceType, title: institutionKnowledgeSources.title, createdBy: institutionKnowledgeSources.createdBy, createdAt: institutionKnowledgeSources.createdAt, updatedAt: institutionKnowledgeSources.updatedAt }).from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.schoolId, input.schoolId), eq(institutionKnowledgeSources.status, "ready"))).orderBy(desc(institutionKnowledgeSources.updatedAt)).limit(20);
+  const analyses = await db.select({ id: institutionKnowledgeAnalyses.id, sourceId: institutionKnowledgeAnalyses.sourceId, analysis: institutionKnowledgeAnalyses.analysis, sourceVersion: institutionKnowledgeAnalyses.sourceVersion, createdBy: institutionKnowledgeAnalyses.createdBy, createdAt: institutionKnowledgeAnalyses.createdAt, updatedAt: institutionKnowledgeAnalyses.updatedAt, sourceTitle: institutionKnowledgeSources.title, sourceType: institutionKnowledgeSources.sourceType }).from(institutionKnowledgeAnalyses).innerJoin(institutionKnowledgeSources, eq(institutionKnowledgeAnalyses.sourceId, institutionKnowledgeSources.id)).where(and(eq(institutionKnowledgeAnalyses.schoolId, input.schoolId), eq(institutionKnowledgeSources.schoolId, input.schoolId), eq(institutionKnowledgeSources.status, "ready"))).orderBy(desc(institutionKnowledgeAnalyses.updatedAt)).limit(20);
+  return { sources, analyses };
+}
+
+export async function deleteInstitutionKnowledgeSource(input: { schoolId: number; sourceId: number }) {
+  const db = await database();
+  const source = await getInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
+  await db.transaction(async tx => {
+    await tx.delete(institutionKnowledgeAnalyses).where(and(eq(institutionKnowledgeAnalyses.schoolId, input.schoolId), eq(institutionKnowledgeAnalyses.sourceId, input.sourceId)));
+    await tx.delete(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.id, input.sourceId), eq(institutionKnowledgeSources.schoolId, input.schoolId)));
+  });
+  return { id: source.id, deleted: true as const };
 }
 
 export async function listInstitutionBlueprints(input: { schoolId: number }) {

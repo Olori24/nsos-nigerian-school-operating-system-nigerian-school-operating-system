@@ -19,7 +19,7 @@ describe("README approval-first School Operator release documentation", () => {
   });
 
   it("records the latest validation count and the unchanged external sender dependency", () => {
-    expect(readme).toContain("388/389 passing tests across 106/107 files");
+    expect(readme).toContain("399/400 passing tests across 109/110 files");
     expect(readme).toContain("currently unverified `resend.dev` sender");
     expect(readme).toContain("`nsos.top` is active at its registrar but is not bound to the managed deployment");
   });
@@ -37,6 +37,15 @@ describe("README approval-first School Operator release documentation", () => {
     expect(readme).toContain("plain-language lesson guide, non-graded knowledge check");
     expect(readme).toContain("calculate a score, grade, pass/fail result, progress change, completion, credential");
     expect(readme).toContain("visible owner-authority policy");
-    expect(readme).toContain("Migration `0061_overrated_warbound` was reviewed and applied");
+    expect(readme).toContain("Migration `0062_unknown_radioactive_man` was reviewed and applied");
+  });
+
+  it("documents the private Knowledge-to-Business release and its source, deletion, and no-action boundaries", () => {
+    expect(readme).toContain("Knowledge-to-Business Engine");
+    expect(readme).toContain("docs/knowledge-to-business-engine-contract.md");
+    expect(readme).toContain("raw text out of audit metadata");
+    expect(readme).toContain("Owners can inspect or confirmed-delete stored source text and analyses");
+    expect(readme).toContain("does not infer individual ability, readiness, risk, eligibility, or career prospects");
+    expect(readme).toContain("0062_unknown_radioactive_man");
   });
 });

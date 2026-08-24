@@ -435,6 +435,13 @@
       "when": 1787537891594,
       "tag": "0061_overrated_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "5",
+      "when": 1787550254255,
+      "tag": "0062_unknown_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

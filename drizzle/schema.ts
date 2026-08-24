@@ -182,6 +182,43 @@ export const institutionBlueprints = mysqlTable(
   }),
 );
 
+export const institutionKnowledgeSources = mysqlTable(
+  "institutionKnowledgeSources",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    createdBy: int("createdBy").notNull(),
+    sourceType: mysqlEnum("sourceType", ["description", "expertise_notes", "structured_notes", "course_material", "transcript"]).notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    sourceText: text("sourceText").notNull(),
+    status: mysqlEnum("status", ["ready", "archived"]).notNull().default("ready"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolCreated: index("institution_knowledge_source_school_created_idx").on(table.schoolId, table.createdAt),
+    schoolStatus: index("institution_knowledge_source_school_status_idx").on(table.schoolId, table.status),
+  }),
+);
+
+export const institutionKnowledgeAnalyses = mysqlTable(
+  "institutionKnowledgeAnalyses",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    sourceId: int("sourceId").notNull(),
+    createdBy: int("createdBy").notNull(),
+    analysis: json("analysis").$type<import("../server/knowledgeBusinessEngine").KnowledgeBusinessAnalysis>().notNull(),
+    sourceVersion: varchar("sourceVersion", { length: 48 }).notNull().default("knowledge-business-v1"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolCreated: index("institution_knowledge_analysis_school_created_idx").on(table.schoolId, table.createdAt),
+    schoolSource: index("institution_knowledge_analysis_school_source_idx").on(table.schoolId, table.sourceId),
+  }),
+);
+
 export const institutionOperatingProfiles = mysqlTable(
   "institutionOperatingProfiles",
   {

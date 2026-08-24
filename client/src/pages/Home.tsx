@@ -30,6 +30,7 @@ import { StaffMigrationWorkspace } from "@/components/StaffMigrationWorkspace";
 import { AcademicMigrationWorkspace } from "@/components/AcademicMigrationWorkspace";
 import { AutomationDesk } from "@/components/AutomationDesk";
 import { InstitutionBuilder } from "@/components/InstitutionBuilder";
+import { KnowledgeBusinessEngine } from "@/components/KnowledgeBusinessEngine";
 import { SchoolOperator } from "@/components/SchoolOperator";
 import { LearningOperationsWorkspace } from "@/components/LearningOperationsWorkspace";
 import { NonSchoolCurriculumStart } from "@/components/NonSchoolCurriculumStart";
@@ -64,6 +65,7 @@ import {
   BadgeCheck,
   Banknote,
   Bell,
+  BrainCircuit,
   BookOpenCheck,
   CalendarDays,
   Check,
@@ -98,7 +100,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type View = "overview" | "institution-builder" | "school-operator" | "automation" | "setup-management" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "tutor-analytics" | "account";
+type View = "overview" | "knowledge-business" | "institution-builder" | "school-operator" | "automation" | "setup-management" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "tutor-analytics" | "account";
 type Role = "owner" | "admin" | "staff" | "teacher" | "finance" | "parent" | "student";
 
 const navGroups: { label: string; items: { id: View; label: string; icon: typeof LayoutDashboard; roles: Role[] }[] }[] = [
@@ -106,6 +108,7 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
     label: "Command center",
     items: [
       { id: "overview", label: "Overview", icon: LayoutDashboard, roles: ["owner", "admin", "staff", "teacher", "finance", "parent", "student"] },
+      { id: "knowledge-business", label: "Knowledge to business", icon: BrainCircuit, roles: ["owner", "admin"] },
       { id: "institution-builder", label: "Create with AI", icon: Sparkles, roles: ["owner", "admin"] },
       { id: "school-operator", label: "School Operator", icon: Activity, roles: ["owner", "admin"] },
       { id: "automation", label: "Automation Desk", icon: Sparkles, roles: ["owner", "admin"] },
@@ -157,6 +160,7 @@ const navGroups: { label: string; items: { id: View; label: string; icon: typeof
 
 const viewTitles: Record<View, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "Command center", title: "The school, in one considered view.", description: "A clear operating picture for leaders and teams." },
+  "knowledge-business": { eyebrow: "Knowledge-to-Business Engine", title: "Start from what you know.", description: "Turn approved knowledge into a private, reviewable learning and offer foundation before using separate protected workflows." },
   "institution-builder": { eyebrow: "One-prompt institution builder", title: "Describe the institution. Keep the control.", description: "Create a private, reviewable learning-institution blueprint with clear handoffs and no invisible public or financial action." },
   "school-operator": { eyebrow: "Approval-first school intelligence", title: "See what needs your attention.", description: "Review explainable tenant-scoped insights and open the protected workspace that owns each decision." },
   automation: { eyebrow: "Automation Desk", title: "Tell NSOS the goal. Keep the control.", description: "Turn approved setup work into a short, reviewable one-tap job with visible progress and honest recovery." },
@@ -533,6 +537,7 @@ type Query<T> = { data?: T; isLoading: boolean; error?: { message: string } | nu
 function Workspace({ view, schoolId, schoolName, operatingType, role, summary, applications, students, academics, attendance, absenceAlerts, results, finance, staff, staffOperations, announcements, guardianPortal, studentPortal, onRefresh, onNavigate, activeInstitutionId, onSwitchInstitution }: { view: View; schoolId: number; schoolName: string; operatingType: "school" | "vocational_institute" | "coaching_centre" | "online_training_provider" | "hybrid_learning_provider" | "corporate_academy"; role: Role; summary: Query<any>; applications: Query<any[]>; students: Query<any[]>; academics: Query<any>; attendance: Query<any[]>; absenceAlerts: Query<any>; results: Query<any>; finance: Query<any>; staff: Query<any[]>; staffOperations: Query<any>; announcements: Query<any[]>; guardianPortal: Query<any>; studentPortal: Query<any>; onRefresh: () => void; onNavigate: (view: View) => void; activeInstitutionId: number; onSwitchInstitution: (institutionId: number) => void }) {
   if (view === "account") return <AccountSecurity activeInstitutionId={activeInstitutionId} onSwitchInstitution={onSwitchInstitution} />;
   if (view === "overview") return <Overview schoolId={schoolId} role={role} summary={summary} announcements={announcements} onRefresh={onRefresh} onNavigate={onNavigate} />;
+  if (view === "knowledge-business") return role === "owner" || role === "admin" ? <KnowledgeBusinessEngine schoolId={schoolId} onNavigate={onNavigate} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "institution-builder") return role === "owner" || role === "admin" ? <InstitutionBuilder schoolId={schoolId} onNavigate={onNavigate} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "school-operator") return role === "owner" || role === "admin" ? <SchoolOperator schoolId={schoolId} onNavigate={onNavigate} /> : <RoleWelcome role={role} announcements={announcements} />;
   if (view === "automation") return role === "owner" || role === "admin" ? <AutomationDesk schoolId={schoolId} onNavigate={onNavigate} /> : <RoleWelcome role={role} announcements={announcements} />;
