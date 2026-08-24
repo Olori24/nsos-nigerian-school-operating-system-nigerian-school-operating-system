@@ -202,6 +202,22 @@ export const institutionOperatingProfiles = mysqlTable(
   table => ({ schoolUnique: uniqueIndex("institution_operating_profile_school_unique").on(table.schoolId) }),
 );
 
+export const schoolOperatorWorkflowPreferences = mysqlTable(
+  "schoolOperatorWorkflowPreferences",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    reviewFocus: mysqlEnum("reviewFocus", ["balanced", "learning", "admissions", "revenue", "operational_readiness"]).notNull().default("balanced"),
+    reviewCadence: mysqlEnum("reviewCadence", ["daily", "weekly", "monthly"]).notNull().default("weekly"),
+    evidenceDetail: mysqlEnum("evidenceDetail", ["concise", "standard"]).notNull().default("standard"),
+    showDismissedInsights: boolean("showDismissedInsights").notNull().default(false),
+    updatedBy: int("updatedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ schoolUnique: uniqueIndex("school_operator_workflow_preference_school_unique").on(table.schoolId) }),
+);
+
 export const schoolOperatorInsights = mysqlTable(
   "schoolOperatorInsights",
   {

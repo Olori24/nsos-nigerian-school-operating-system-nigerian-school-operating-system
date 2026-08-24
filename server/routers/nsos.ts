@@ -478,6 +478,15 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_profile_saved", targetType: "institution_operating_profile", metadata: { confirmationRequired: true, fieldsProvided: Object.values(input.profile).filter(Boolean).length, rawProfileTextStoredInAudit: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
         return profile;
       }),
+    saveWorkflowPreferences: onboardingAdminProcedure
+      .input(schoolInput.extend({ preferences: z.object({ reviewFocus: z.enum(["balanced", "learning", "admissions", "revenue", "operational_readiness"]), reviewCadence: z.enum(["daily", "weekly", "monthly"]), evidenceDetail: z.enum(["concise", "standard"]), showDismissedInsights: z.boolean() }), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-school-operator", route: "workflow-preferences-save", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Workflow preference saving is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const preferences = await db.saveSchoolOperatorWorkflowPreferences({ schoolId: input.schoolId, updatedBy: ctx.user.id, preferences: input.preferences });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_workflow_preferences_saved", targetType: "school_operator_workflow_preferences", metadata: { confirmationRequired: true, reviewFocus: input.preferences.reviewFocus, reviewCadence: input.preferences.reviewCadence, evidenceDetail: input.preferences.evidenceDetail, showDismissedInsights: input.preferences.showDismissedInsights, scheduleCreated: false, rulesBypassed: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
+        return preferences;
+      }),
     dismissInsight: onboardingAdminProcedure
       .input(schoolInput.extend({ insightId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {

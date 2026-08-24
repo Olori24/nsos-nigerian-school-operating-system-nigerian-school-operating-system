@@ -328,3 +328,4 @@
 - [x] Extend the role-scoped Institution Copilot and Automation Desk with safe one-prompt operations and reusable automation templates that require explicit approval for consequential execution.
 - [x] Add comprehensive tenant-isolation, authorization, privacy, recommendation-source, approval-boundary, academic-integrity, lifecycle, and mobile interface regressions, then validate, document, checkpoint, publish, and synchronize GitHub safely.
 - [x] Refresh the repository README with factual approval-first AI School Operator release details, validate documentation consistency, checkpoint, publish, and synchronize GitHub main.
+- [x] Add tenant-scoped owner/admin approval-workflow preferences to the dashboard, with protected persistence, clear non-bypass limits, regressions, validation, publication, and GitHub synchronization.

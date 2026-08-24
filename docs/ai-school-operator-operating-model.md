@@ -27,6 +27,21 @@ An institution can store a concise **owner-approved operating profile**: mission
 
 The School Builder may propose this context, but an owner must confirm any persistence. AI audit records retain only source/version/count metadata and never raw operating-profile prose or user prompts.
 
+## Approval-first workflow preferences
+
+Owners and administrators can save a small tenant-scoped **workflow-preference** record for the School Operator dashboard. It supports a review focus, a private review cue, an evidence-display preference, and optional visibility of locally dismissed insights. The review cue is a planning label only; it never creates a job, timer, schedule, background refresh, notification, retry, or external activity.
+
+| Preference | What it changes | What it cannot change |
+| --- | --- | --- |
+| Review focus | Visually highlights current private insight categories for learning, admissions, revenue, operational readiness, or a balanced review. | The signals calculated, their underlying records, their severity, or any protected action. |
+| Private review cue | Lets the owner record a daily, weekly, or monthly internal review intention. | Create monitoring, automation, reminders, scheduled refreshes, or communication. |
+| Evidence display | Chooses a concise source label or the standard metric-and-source presentation in the owner’s private dashboard. | Hide tenant boundaries, invent evidence, change data, or make an insight actionable on its own. |
+| Dismissed-insight visibility | Lets the owner include locally dismissed records in the dashboard for context. | Reopen an insight, execute a handoff, or alter the originating workflow. |
+
+Saving preferences is owner/admin-only, tenant-scoped, confirmation-gated, rate-limited, and audit-recorded with bounded enum/boolean metadata only. It does not store prompts, operating-profile text, learner information, credentials, finance information, or raw evidence in the preference record or audit metadata.
+
+> **A preference never removes a confirmation gate, role check, rate limit, required human review, or separate protected workflow.**
+
 ## Recommendation and approval lifecycle
 
 Every insight includes a source label, a generated timestamp, a severity, an explainable evidence summary, a permitted destination, and a visible limitation. A recommendation can be dismissed locally by the tenant or opened in its owning workspace. It cannot execute a side effect itself.
@@ -53,7 +68,7 @@ Similarly, revenue recommendations may describe missing readiness information or
 
 ## Continuous monitoring and system health
 
-The School Operator is refreshed on-demand in the first release from current tenant-scoped data. It must not use `setInterval`, `node-cron`, or an in-process timer. Any future recurring refresh must use a deployed, idempotent Heartbeat endpoint, a task UID persisted on the owning record, and explicit schedule management. It will generate private records or owner-visible health information only; it will not send messages or retry external actions automatically.
+The School Operator is refreshed on-demand in the first release from current tenant-scoped data. It must not use `setInterval`, `node-cron`, or an in-process timer. A saved private review cue is not a schedule. Any future recurring refresh must use a deployed, idempotent Heartbeat endpoint, a task UID persisted on the owning record, and explicit schedule management. It will generate private records or owner-visible health information only; it will not send messages or retry external actions automatically.
 
 System health uses available workflow failures and configuration status. It reports **healthy**, **attention required**, or **needs review** rather than promising complete infrastructure monitoring that the platform does not yet collect.
 

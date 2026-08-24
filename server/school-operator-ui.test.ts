@@ -21,6 +21,18 @@ describe("School Operator interface", () => {
     expect(operator).toContain("no grades, certificates, prices, people, payments, provider changes, messages, domains, or public content are changed here");
   });
 
+  it("provides a confirmed owner review-preference panel without scheduling or bypassing protected actions", () => {
+    expect(operator).toContain("Approval-first workflow preferences");
+    expect(operator).toContain("A review cue is a planning preference only.");
+    expect(operator).toContain("does not schedule, monitor, refresh, message, retry, or execute work in the background");
+    expect(operator).toContain("They cannot approve, publish, send, charge, enrol, grade, complete, certify, or change provider or domain settings.");
+    expect(operator).toContain("saveWorkflowPreferences.mutate({ schoolId, preferences: workflowPreferences, confirmed: true })");
+    expect(operator).toContain("Save workflow preferences");
+    expect(operator).toContain("Also show locally dismissed insights");
+    expect(db).toContain("operatorWorkflowPreferenceDefault");
+    expect(db).toContain("Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.");
+  });
+
   it("exposes explainable evidence, protected handoffs, and local dismissal rather than hidden automation", () => {
     expect(operator).toContain("Evidence:");
     expect(operator).toContain("Review in the protected workspace");

@@ -80,6 +80,7 @@ import {
   schoolMemberships,
   schoolDocumentTemplates,
   schoolOperatorInsights,
+  schoolOperatorWorkflowPreferences,
   schoolWebsites,
   schoolWebsiteMedia,
   schools,
@@ -1595,8 +1596,10 @@ export async function getDashboardSummary(schoolId: number) {
 
 export type InstitutionOperatingProfileInput = { mission?: string; targetLearners?: string; brandTone?: string; teachingPhilosophy?: string; curriculumStrategy?: string; pricingApproach?: string; policyNotes?: string; operatingGoals?: string };
 export type SchoolOperatorInsightInput = { insightType: "readiness" | "learning" | "admissions" | "revenue" | "lifecycle" | "health" | "certificate"; severity: "info" | "attention" | "review"; dedupeKey: string; title: string; detail: string; evidence: { metric: string; value: number; comparison?: string; source: string }; actionDestination?: string };
+export type SchoolOperatorWorkflowPreferenceInput = { reviewFocus: "balanced" | "learning" | "admissions" | "revenue" | "operational_readiness"; reviewCadence: "daily" | "weekly" | "monthly"; evidenceDetail: "concise" | "standard"; showDismissedInsights: boolean };
 
 const operatorProfileDefault = { mission: null, targetLearners: null, brandTone: null, teachingPhilosophy: null, curriculumStrategy: null, pricingApproach: null, policyNotes: null, operatingGoals: null };
+const operatorWorkflowPreferenceDefault: SchoolOperatorWorkflowPreferenceInput = { reviewFocus: "balanced", reviewCadence: "weekly", evidenceDetail: "standard", showDismissedInsights: false };
 
 export async function getInstitutionOperatingProfile(schoolId: number) {
   const row = (await (await database()).select().from(institutionOperatingProfiles).where(eq(institutionOperatingProfiles.schoolId, schoolId)).limit(1))[0];
@@ -1607,6 +1610,17 @@ export async function saveInstitutionOperatingProfile(input: { schoolId: number;
   const values = { schoolId: input.schoolId, updatedBy: input.updatedBy, mission: input.profile.mission?.trim() || null, targetLearners: input.profile.targetLearners?.trim() || null, brandTone: input.profile.brandTone?.trim() || null, teachingPhilosophy: input.profile.teachingPhilosophy?.trim() || null, curriculumStrategy: input.profile.curriculumStrategy?.trim() || null, pricingApproach: input.profile.pricingApproach?.trim() || null, policyNotes: input.profile.policyNotes?.trim() || null, operatingGoals: input.profile.operatingGoals?.trim() || null };
   await (await database()).insert(institutionOperatingProfiles).values(values).onDuplicateKeyUpdate({ set: values });
   return getInstitutionOperatingProfile(input.schoolId);
+}
+
+export async function getSchoolOperatorWorkflowPreferences(schoolId: number) {
+  const row = (await (await database()).select().from(schoolOperatorWorkflowPreferences).where(eq(schoolOperatorWorkflowPreferences.schoolId, schoolId)).limit(1))[0];
+  return row ?? { schoolId, ...operatorWorkflowPreferenceDefault, updatedBy: null, createdAt: null, updatedAt: null };
+}
+
+export async function saveSchoolOperatorWorkflowPreferences(input: { schoolId: number; updatedBy: number; preferences: SchoolOperatorWorkflowPreferenceInput }) {
+  const values = { schoolId: input.schoolId, updatedBy: input.updatedBy, ...input.preferences };
+  await (await database()).insert(schoolOperatorWorkflowPreferences).values(values).onDuplicateKeyUpdate({ set: { reviewFocus: values.reviewFocus, reviewCadence: values.reviewCadence, evidenceDetail: values.evidenceDetail, showDismissedInsights: values.showDismissedInsights, updatedBy: values.updatedBy } });
+  return getSchoolOperatorWorkflowPreferences(input.schoolId);
 }
 
 async function upsertSchoolOperatorInsight(input: { schoolId: number } & SchoolOperatorInsightInput) {
@@ -1732,8 +1746,8 @@ export async function dismissSchoolOperatorInsight(input: { schoolId: number; in
 }
 
 export async function getSchoolOperatorWorkspace(schoolId: number) {
-  const [profile, dashboard, onboarding, commandCenter, insights] = await Promise.all([getInstitutionOperatingProfile(schoolId), getDashboardSummary(schoolId), getTenantOnboardingStatus(schoolId), getOperationsCommandCenter(schoolId), listSchoolOperatorInsights(schoolId)]);
-  return { profile, dashboard, onboarding, commandCenter, insights, source: "deterministic-v1" as const, limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."] };
+  const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights] = await Promise.all([getInstitutionOperatingProfile(schoolId), getSchoolOperatorWorkflowPreferences(schoolId), getDashboardSummary(schoolId), getTenantOnboardingStatus(schoolId), getOperationsCommandCenter(schoolId), listSchoolOperatorInsights(schoolId)]);
+  return { profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, source: "deterministic-v1" as const, limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."] };
 }
 
 export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: number; executedBy: number; sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean }) {
