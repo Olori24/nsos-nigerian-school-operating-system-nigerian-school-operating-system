@@ -36,6 +36,10 @@ describe("Institution Builder interface", () => {
     expect(builder).toContain("Edit your private blueprint");
     expect(builder).toContain("Saving them does not publish or activate anything.");
     expect(builder).toContain("Save private blueprint edits");
+    expect(builder).toContain("Save only the unpublished website draft");
+    expect(builder).toContain("I approve saving this unpublished website draft only.");
+    expect(builder).toContain("Save unpublished website draft");
+    expect(builder).toContain("saveWebsiteDraft.mutate({ schoolId, blueprintId: activeId, confirmed: true })");
     expect(builder).toContain("I approve this private internal learning-draft application only.");
     expect(builder).toContain("Approve internal learning foundation");
     expect(builder).toContain("apply.mutate({ schoolId, blueprintId: activeId, confirmed: true })");

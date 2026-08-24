@@ -28,13 +28,14 @@ The School Builder is the primary entry point for owners and administrators. It 
 |---|---|---|
 | **Private blueprint** | AI has prepared editable content and readiness guidance. | Review, edit, regenerate a new version, or open protected handoffs. |
 | **Internal foundation applied** | An owner has explicitly applied an inactive internal learning foundation. | Review the Learning Centre and activate individual elements through their existing controls. |
+| **Unpublished website draft saved** | An owner has separately confirmed the blueprint’s reviewed headline and introduction for an existing unpublished NSOS website draft. | Review the protected website workspace; publication, media, domain/DNS, admissions visibility, and public claims remain separate controls. |
 | **Publication ready** | The quality report has no required private-content gaps, but external and consequential controls can still remain unavailable or pending. | Review each independent publication, finance, admissions, communications, domain, and provider control. |
 
 `Publication ready` is a review state, never an automatic publication or commercial-launch action.
 
 ## Version and regeneration rule
 
-Regeneration creates a **new private blueprint version**. It cannot overwrite an applied programme, published website, active fee, learner state, message history, result, or credential. An owner can edit the new private blueprint and selectively apply supported drafts after confirming each action.
+Regeneration creates a **new private blueprint version**. It cannot overwrite an applied programme, published website, active fee, learner state, message history, result, or credential. An owner can edit the new private blueprint and selectively apply supported drafts after confirming each action. The supported website-draft action saves only the blueprint’s reviewed headline and introduction, and it rejects a website that is already published.
 
 ## Hard boundaries
 

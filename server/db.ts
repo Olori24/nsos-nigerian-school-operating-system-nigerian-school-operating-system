@@ -1872,6 +1872,23 @@ export async function applyInstitutionBlueprint(input: { schoolId: number; bluep
   }
 }
 
+export async function saveInstitutionBlueprintWebsiteDraft(input: { schoolId: number; blueprintId: number }) {
+  const db = await database();
+  const blueprint = await getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId });
+  const existing = (await db.select().from(schoolWebsites).where(eq(schoolWebsites.schoolId, input.schoolId)).limit(1))[0];
+  if (existing?.published) throw new Error("This institution already has a published website. Review the protected website workspace before changing any public content.");
+  const headline = blueprint.blueprint.websiteDraft.headline;
+  const introduction = blueprint.blueprint.websiteDraft.introduction;
+  if (existing) {
+    const updated = await db.update(schoolWebsites).set({ headline, introduction }).where(and(eq(schoolWebsites.id, existing.id), eq(schoolWebsites.schoolId, input.schoolId), eq(schoolWebsites.published, false)));
+    const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
+    if (affectedRows !== 1) throw new Error("The website changed while this draft was being reviewed. Refresh before saving an unpublished draft.");
+  } else {
+    await db.insert(schoolWebsites).values({ schoolId: input.schoolId, headline, introduction, published: false });
+  }
+  return { blueprint, saved: true, headline, introduction, published: false };
+}
+
 export async function createAutomationJob(input: { schoolId: number; createdBy: number; jobType: AutomationJobType; requestSummary: string; plan: AutomationPlan; input?: ValidAutomationInput; idempotencyKey: string }) {
   const db = await database();
   const existing = (await db.select().from(automationJobs).where(and(eq(automationJobs.schoolId, input.schoolId), eq(automationJobs.createdBy, input.createdBy), eq(automationJobs.idempotencyKey, input.idempotencyKey))).limit(1))[0];

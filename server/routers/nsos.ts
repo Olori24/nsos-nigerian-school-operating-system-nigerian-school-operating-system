@@ -449,6 +449,15 @@ export const nsosRouter = router({
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_applied", targetType: "institution_blueprint", targetId: input.blueprintId, metadata: { confirmationRequired: true, applied: result.applied, programmeCreated: result.applied, moduleCount: result.program && "moduleCount" in result.program ? result.program.moduleCount : 0, milestoneCount: result.program && "milestoneCount" in result.program ? result.program.milestoneCount : 0, materialCount: result.program && "materialCount" in result.program ? result.program.materialCount : 0, publicAction: false, accountCreated: false, enrollmentCreated: false, admissionCreated: false, paymentAction: false, messageSent: false, credentialIssued: false, progressChanged: false } });
         return result;
       }),
+    saveWebsiteDraft: onboardingAdminProcedure
+      .input(schoolInput.extend({ blueprintId: z.number().int().positive(), confirmed: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-institution-builder", route: "blueprint-website-draft-save", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Website-draft saving is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const result = await db.saveInstitutionBlueprintWebsiteDraft({ schoolId: input.schoolId, blueprintId: input.blueprintId });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_website_draft_saved", targetType: "institution_blueprint", targetId: input.blueprintId, metadata: { confirmationRequired: true, unpublishedDraftSaved: result.saved, publicAction: false, published: false, domainChanged: false, admissionsChanged: false, accountCreated: false, enrollmentCreated: false, paymentAction: false, messageSent: false, credentialIssued: false } });
+        return result;
+      }),
   }),
 
   learningOperations: router({

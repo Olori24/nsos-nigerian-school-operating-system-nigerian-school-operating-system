@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperatingType: vi.fn(), createInstitutionBlueprint: vi.fn(), listInstitutionBlueprints: vi.fn(), getInstitutionBlueprint: vi.fn(), updateInstitutionBlueprint: vi.fn(), applyInstitutionBlueprint: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperatingType: vi.fn(), createInstitutionBlueprint: vi.fn(), listInstitutionBlueprints: vi.fn(), getInstitutionBlueprint: vi.fn(), updateInstitutionBlueprint: vi.fn(), applyInstitutionBlueprint: vi.fn(), saveInstitutionBlueprintWebsiteDraft: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 const builder = vi.hoisted(() => ({ buildInstitutionBlueprint: vi.fn() }));
 
 vi.mock("./db", async importOriginal => ({ ...(await importOriginal<typeof import("./db")>()), ...db }));
@@ -37,6 +37,7 @@ describe("NSOS institution builder routes", () => {
     db.getInstitutionBlueprint.mockResolvedValue(record);
     db.updateInstitutionBlueprint.mockResolvedValue(record);
     db.applyInstitutionBlueprint.mockResolvedValue({ blueprint: { ...record, status: "applied", appliedProgramId: 91 }, applied: true, program: { id: 91, moduleCount: 2, milestoneCount: 2, materialCount: 2 } });
+    db.saveInstitutionBlueprintWebsiteDraft.mockResolvedValue({ blueprint: record, saved: true, headline: "Learn by building.", introduction: "An editable unpublished website starting point for an owner-reviewed practical learning offer.", published: false });
   });
 
   it("prepares a private, tenant-scoped blueprint without retaining the raw owner prompt in audit evidence or applying a programme", async () => {
@@ -63,6 +64,14 @@ describe("NSOS institution builder routes", () => {
     expect(db.applyInstitutionBlueprint).toHaveBeenCalledWith({ schoolId: 34, blueprintId: 501, appliedBy: 116 });
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "institution_blueprint_applied", metadata: expect.objectContaining({ confirmationRequired: true, programmeCreated: true, publicAction: false, accountCreated: false, enrollmentCreated: false, admissionCreated: false, paymentAction: false, messageSent: false, credentialIssued: false, progressChanged: false }) }));
     await expect(caller().nsos.institutionBuilder.applyBlueprint({ schoolId: 34, blueprintId: 501, confirmed: false as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("saves only a separately confirmed unpublished website draft and never publishes, changes a domain, or applies the learning foundation", async () => {
+    await expect(caller().nsos.institutionBuilder.saveWebsiteDraft({ schoolId: 34, blueprintId: 501, confirmed: true })).resolves.toMatchObject({ saved: true, published: false });
+    expect(db.saveInstitutionBlueprintWebsiteDraft).toHaveBeenCalledWith({ schoolId: 34, blueprintId: 501 });
+    expect(db.applyInstitutionBlueprint).not.toHaveBeenCalled();
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "institution_blueprint_website_draft_saved", metadata: expect.objectContaining({ confirmationRequired: true, unpublishedDraftSaved: true, publicAction: false, published: false, domainChanged: false, admissionsChanged: false, paymentAction: false, messageSent: false, credentialIssued: false }) }));
+    await expect(caller().nsos.institutionBuilder.saveWebsiteDraft({ schoolId: 34, blueprintId: 501, confirmed: false as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("blocks teachers and rate-limited calls before planner or persistence work", async () => {
