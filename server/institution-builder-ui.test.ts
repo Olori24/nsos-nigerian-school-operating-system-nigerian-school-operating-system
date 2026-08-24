@@ -32,6 +32,14 @@ describe("Institution Builder interface", () => {
     expect(builder).toContain("Your full prompt is used to prepare this private blueprint and is not retained in the operational audit record.");
   });
 
+  it("replaces a raw non-JSON parsing failure with a safe mobile recovery state", () => {
+    expect(builder).toContain("formatInstitutionBuilderError");
+    expect(builder).toContain('role="alert"');
+    expect(builder).toContain("Your private blueprint was not created");
+    expect(builder).toContain("Your idea was not applied, published, or added to an operational audit record.");
+    expect(builder).toContain("Reload NSOS and try again");
+  });
+
   it("requires visible confirmation for private edits and the limited learning-foundation application", () => {
     expect(builder).toContain("Edit your private blueprint");
     expect(builder).toContain("Saving them does not publish or activate anything.");

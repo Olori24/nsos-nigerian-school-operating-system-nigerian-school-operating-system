@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
+import { assertJsonTrpcResponse } from "./lib/apiResponseRecovery";
 import "./index.css";
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
@@ -72,7 +73,7 @@ const trpcClient = trpc.createClient({
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
-        });
+        }).then(assertJsonTrpcResponse);
       },
     }),
   ],

@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { ArrowRight, BadgeCheck, BookOpenCheck, CheckCircle2, CircleDollarSign, ClipboardList, FileText, Globe2, Loader2, PenLine, Rocket, ShieldCheck, Sparkles, UsersRound, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { formatInstitutionBuilderError } from "@/lib/apiResponseRecovery";
 
 type Destination = "learning" | "website" | "admissions" | "finance" | "communications" | "ai-tutors";
 type Blueprint = any;
@@ -31,16 +32,18 @@ export function InstitutionBuilder({ schoolId, onNavigate }: { schoolId: number;
   const [editConfirmed, setEditConfirmed] = useState(false);
   const [applyConfirmed, setApplyConfirmed] = useState(false);
   const [websiteDraftConfirmed, setWebsiteDraftConfirmed] = useState(false);
+  const [builderRecovery, setBuilderRecovery] = useState<string | null>(null);
   const [edits, setEdits] = useState({ nameSuggestion: "", tagline: "", description: "", targetLearners: "", positioning: "", primaryProgramTitle: "", primaryProgramSummary: "" });
   const utils = trpc.useUtils();
   const list = trpc.nsos.institutionBuilder.list.useQuery({ schoolId });
   const activeId = selectedId ?? list.data?.[0]?.id ?? null;
   const detail = trpc.nsos.institutionBuilder.detail.useQuery({ schoolId, blueprintId: activeId ?? 0 }, { enabled: Boolean(activeId) });
   const refresh = async () => { await Promise.all([list.refetch(), activeId ? detail.refetch() : Promise.resolve()]); };
-  const create = trpc.nsos.institutionBuilder.create.useMutation({ onSuccess: async record => { setSelectedId(record.id); setEditing(false); setApplyConfirmed(false); toast.success("Your private institution blueprint is ready to review."); await utils.nsos.institutionBuilder.list.invalidate({ schoolId }); }, onError: error => toast.error(error.message) });
-  const update = trpc.nsos.institutionBuilder.update.useMutation({ onSuccess: async record => { setSelectedId(record.id); setEditing(false); setEditConfirmed(false); toast.success("Your private blueprint edits were saved."); await detail.refetch(); await list.refetch(); }, onError: error => toast.error(error.message) });
-  const apply = trpc.nsos.institutionBuilder.applyBlueprint.useMutation({ onSuccess: async outcome => { setApplyConfirmed(false); toast.success(outcome.applied ? "Your internal learning foundation has been created as drafts." : "This blueprint has already been applied."); await refresh(); }, onError: error => toast.error(error.message) });
-  const saveWebsiteDraft = trpc.nsos.institutionBuilder.saveWebsiteDraft.useMutation({ onSuccess: async () => { setWebsiteDraftConfirmed(false); toast.success("Your unpublished website draft was saved for review."); await refresh(); }, onError: error => toast.error(error.message) });
+  const reportBuilderError = (error: unknown) => { const message = formatInstitutionBuilderError(error); setBuilderRecovery(message); toast.error(message); };
+  const create = trpc.nsos.institutionBuilder.create.useMutation({ onMutate: () => setBuilderRecovery(null), onSuccess: async record => { setSelectedId(record.id); setEditing(false); setApplyConfirmed(false); toast.success("Your private institution blueprint is ready to review."); await utils.nsos.institutionBuilder.list.invalidate({ schoolId }); }, onError: reportBuilderError });
+  const update = trpc.nsos.institutionBuilder.update.useMutation({ onMutate: () => setBuilderRecovery(null), onSuccess: async record => { setSelectedId(record.id); setEditing(false); setEditConfirmed(false); toast.success("Your private blueprint edits were saved."); await detail.refetch(); await list.refetch(); }, onError: reportBuilderError });
+  const apply = trpc.nsos.institutionBuilder.applyBlueprint.useMutation({ onMutate: () => setBuilderRecovery(null), onSuccess: async outcome => { setApplyConfirmed(false); toast.success(outcome.applied ? "Your internal learning foundation has been created as drafts." : "This blueprint has already been applied."); await refresh(); }, onError: reportBuilderError });
+  const saveWebsiteDraft = trpc.nsos.institutionBuilder.saveWebsiteDraft.useMutation({ onMutate: () => setBuilderRecovery(null), onSuccess: async () => { setWebsiteDraftConfirmed(false); toast.success("Your unpublished website draft was saved for review."); await refresh(); }, onError: reportBuilderError });
   const pending = create.isPending || update.isPending || apply.isPending || saveWebsiteDraft.isPending;
   const blueprint: Blueprint | null = detail.data ?? null;
   const progress = Math.round(((Math.min(stage, planningStages.length - 1) + 1) / planningStages.length) * 100);
@@ -83,6 +86,7 @@ export function InstitutionBuilder({ schoolId, onNavigate }: { schoolId: number;
         <div className="mt-4"><p className="text-[10px] font-extrabold uppercase tracking-[.1em] text-[#5d7c6b]">Start from a template</p><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{templates.map(template => <button type="button" key={template.label} disabled={pending} onClick={() => setIdea(template.prompt)} className="rounded-xl border border-[#d4e8db] bg-[#f8fcf9] p-2.5 text-left transition hover:border-[#8dc6a4] hover:bg-[#eff9f2] disabled:opacity-50"><span className="block text-[10px] font-extrabold text-[#247055]">{template.label}</span><span className="mt-0.5 block text-[9px] leading-3 text-[#6b8175]">{template.description}</span></button>)}</div></div>
         <div className="mt-3 flex flex-wrap gap-2">{examples.map((example, index) => <button type="button" key={example} disabled={pending} onClick={() => setIdea(example)} className="rounded-full border border-[#d4e8db] bg-white px-3 py-1.5 text-[10px] font-bold text-[#247055] transition hover:border-[#8dc6a4] hover:bg-[#eff9f2] disabled:opacity-50">{index === 0 ? "Use the AI academy example" : index === 1 ? "Use the vocational example" : "Use the corporate example"}</button>)}</div>
         {create.isPending && <PlanningProgress stage={stage} progress={progress} />}
+        {builderRecovery && <div className="mt-4 rounded-xl border border-[#efc6be] bg-[#fff5f2] p-3 text-left" role="alert"><p className="text-xs font-extrabold text-[#8d4137]">Your private blueprint was not created</p><p className="mt-1 text-[11px] leading-5 text-[#8d4137]">{builderRecovery}</p><p className="mt-2 text-[10px] leading-4 text-[#9d5c52]">Your idea was not applied, published, or added to an operational audit record. Reloading only refreshes the workspace; it does not create a record.</p><button type="button" onClick={() => window.location.reload()} className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-[#d89489] bg-white px-3 text-[10px] font-extrabold text-[#8d4137]">Reload NSOS and try again</button></div>}
         <button type="button" disabled={!canCreate || pending} onClick={start} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#087158] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#055846] active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">{create.isPending ? <><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />Preparing your private blueprint…</> : <><Rocket className="h-4 w-4" />Build my institution</>}</button>
         <p className="mt-3 text-[10px] leading-4 text-[#6c8076]">Your full prompt is used to prepare this private blueprint and is not retained in the operational audit record.</p>
       </div>
