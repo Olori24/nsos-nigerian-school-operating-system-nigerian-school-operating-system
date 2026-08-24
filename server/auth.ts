@@ -6,6 +6,7 @@ import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
+import { writeOperationalEvent } from "./observability";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
@@ -166,8 +167,8 @@ export function registerGoogleAuthRoutes(app: Express) {
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
       res.redirect(302, `${loginState.origin}/`);
-    } catch (error) {
-      console.error("[Auth] Google callback failed", error);
+    } catch {
+      writeOperationalEvent("warn", "auth_google_callback_failed", { category: "provider_or_identity_failure" });
       res.status(502).json({ error: "Google sign-in could not be completed. Please try again." });
     }
   });
@@ -185,7 +186,7 @@ export function registerEmailAuthRoutes(app: Express) {
       res.status(202).json({ success: true, message: "If this email can receive NSOS sign-in links, one is on its way." });
     } catch (error) {
       if (error instanceof Error && error.message === "Enter a valid email address.") return res.status(400).json({ error: error.message });
-      console.error("[Auth] Passwordless email request failed", error);
+      writeOperationalEvent("warn", "auth_passwordless_request_failed", { category: "provider_or_configuration_failure" });
       res.status(503).json({ error: "We could not send a sign-in link right now. Please try again shortly." });
     }
   });
@@ -202,8 +203,8 @@ export function registerEmailAuthRoutes(app: Express) {
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);
       res.redirect(302, `${origin}/`);
-    } catch (error) {
-      console.error("[Auth] Passwordless email verification failed", error);
+    } catch {
+      writeOperationalEvent("warn", "auth_passwordless_verification_failed", { category: "invalid_or_expired_link" });
       res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });
     }
   });

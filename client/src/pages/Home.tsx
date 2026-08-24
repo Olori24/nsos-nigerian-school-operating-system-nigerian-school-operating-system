@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AttendanceExport, DepartmentStation, FinanceReceiptStation, MessageHistory, ReportCardPrint, StudentLifecycleControls } from "@/components/OperationalAddons";
-import { CashAssuranceWorkbench } from "@/components/CashAssuranceWorkbench";
 import { FamilyCashAssurance } from "@/components/FamilyCashAssurance";
 import { CurriculumStation } from "@/components/CurriculumStation";
 import { EnrollmentStation } from "@/components/EnrollmentStation";
@@ -13,30 +12,17 @@ import { AcademicHistoryStation } from "@/components/AcademicHistoryStation";
 import { GuardianProfilePanel } from "@/components/GuardianProfilePanel";
 import { GuardianPortalOnboardingChecklist } from "@/components/GuardianPortalOnboardingChecklist";
 import { StaffAssignments } from "@/components/StaffAssignments";
-import { WebsiteStudio } from "@/components/WebsiteStudio";
-import { AdvertisingWorkspace } from "@/components/AdvertisingWorkspace";
-import { AiTutorWorkspace } from "@/components/AiTutorWorkspace";
-import { StudentAiTutorHub } from "@/components/StudentAiTutorHub";
-import { TeacherAiTutorAnalytics } from "@/components/TeacherAiTutorAnalytics";
 import { TenantOnboardingTracker } from "@/components/TenantOnboardingTracker";
 import { NigerianCurriculumSetup, SchoolBankAccountSetup } from "@/components/NigerianSchoolSetup";
 import { SchemeOfWorkImporter } from "@/components/SchemeOfWorkImporter";
 import { TeacherWeeklyPlanReview } from "@/components/TeacherWeeklyPlanReview";
 import { AdmissionTemplateCard, FeeScheduleTemplateCard } from "@/components/DocumentTemplateStudio";
 import { NsosCopilot } from "@/components/NsosCopilot";
-import { OwnerSetupManagementDashboard } from "@/components/OwnerSetupManagementDashboard";
 import { StudentMigrationWorkspace } from "@/components/StudentMigrationWorkspace";
 import { StaffMigrationWorkspace } from "@/components/StaffMigrationWorkspace";
-import { AcademicMigrationWorkspace } from "@/components/AcademicMigrationWorkspace";
-import { AutomationDesk } from "@/components/AutomationDesk";
-import { InstitutionBuilder } from "@/components/InstitutionBuilder";
-import { KnowledgeBusinessEngine } from "@/components/KnowledgeBusinessEngine";
 import { DashboardAppearanceSettings } from "@/components/DashboardAppearanceSettings";
-import { SchoolOperator } from "@/components/SchoolOperator";
-import { LearningOperationsWorkspace } from "@/components/LearningOperationsWorkspace";
 import { NonSchoolCurriculumStart } from "@/components/NonSchoolCurriculumStart";
 import { LearnerProgramProgress } from "@/components/LearnerProgramProgress";
-import { LearningEvidenceReview } from "@/components/LearningEvidenceReview";
 import { InstitutionSwitcher } from "@/components/InstitutionSwitcher";
 import { InstitutionProfileSummary } from "@/components/InstitutionProfileSummary";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
@@ -98,11 +84,30 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+const KnowledgeBusinessEngine = lazy(() => import("@/components/KnowledgeBusinessEngine").then(module => ({ default: module.KnowledgeBusinessEngine })));
+const CashAssuranceWorkbench = lazy(() => import("@/components/CashAssuranceWorkbench").then(module => ({ default: module.CashAssuranceWorkbench })));
+const InstitutionBuilder = lazy(() => import("@/components/InstitutionBuilder").then(module => ({ default: module.InstitutionBuilder })));
+const SchoolOperator = lazy(() => import("@/components/SchoolOperator").then(module => ({ default: module.SchoolOperator })));
+const AutomationDesk = lazy(() => import("@/components/AutomationDesk").then(module => ({ default: module.AutomationDesk })));
+const OwnerSetupManagementDashboard = lazy(() => import("@/components/OwnerSetupManagementDashboard").then(module => ({ default: module.OwnerSetupManagementDashboard })));
+const AcademicMigrationWorkspace = lazy(() => import("@/components/AcademicMigrationWorkspace").then(module => ({ default: module.AcademicMigrationWorkspace })));
+const LearningOperationsWorkspace = lazy(() => import("@/components/LearningOperationsWorkspace").then(module => ({ default: module.LearningOperationsWorkspace })));
+const LearningEvidenceReview = lazy(() => import("@/components/LearningEvidenceReview").then(module => ({ default: module.LearningEvidenceReview })));
+const WebsiteStudio = lazy(() => import("@/components/WebsiteStudio").then(module => ({ default: module.WebsiteStudio })));
+const AdvertisingWorkspace = lazy(() => import("@/components/AdvertisingWorkspace").then(module => ({ default: module.AdvertisingWorkspace })));
+const AiTutorWorkspace = lazy(() => import("@/components/AiTutorWorkspace").then(module => ({ default: module.AiTutorWorkspace })));
+const StudentAiTutorHub = lazy(() => import("@/components/StudentAiTutorHub").then(module => ({ default: module.StudentAiTutorHub })));
+const TeacherAiTutorAnalytics = lazy(() => import("@/components/TeacherAiTutorAnalytics").then(module => ({ default: module.TeacherAiTutorAnalytics })));
 
 type View = "overview" | "knowledge-business" | "institution-builder" | "school-operator" | "automation" | "setup-management" | "admissions" | "students" | "academics" | "attendance" | "results" | "finance" | "staff" | "learning" | "portal" | "communications" | "reports" | "website" | "advertising" | "ai-tutors" | "tutor-analytics" | "account";
 type Role = "owner" | "admin" | "staff" | "teacher" | "finance" | "parent" | "student";
+
+function WorkspaceLoading() {
+  return <div role="status" aria-live="polite" className="grid min-h-48 place-items-center rounded-2xl border border-[#dce7de] bg-white p-6 text-center text-sm text-[#52675d]"><div><Loader2 className="mx-auto h-5 w-5 animate-spin text-[#0f5c4f]" aria-hidden="true" /><p className="mt-3 font-semibold text-[#294238]">Opening workspace</p><p className="mt-1 text-xs">Your selected school module is loading securely.</p></div></div>;
+}
 
 const navGroups: { label: string; items: { id: View; label: string; icon: typeof LayoutDashboard; roles: Role[] }[] }[] = [
   {
@@ -518,7 +523,7 @@ export default function Home() {
         <Sidebar activeView={activeView} role={role!} operatingType={school.operatingType} schoolName={school.name} schoolCode={school.shortCode} userName={user.name} onSelect={selectView} onSignOut={logout} open={mobileNav} onClose={() => setMobileNav(false)} />
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-[#e0e5df] bg-[#f5f6f1]/90 px-5 backdrop-blur-xl sm:px-8 lg:px-10"><div className="flex min-w-0 items-center gap-3"><button className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5df] bg-white text-[#365047] lg:hidden" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu className="h-4 w-4" /></button><InstitutionSwitcher institutions={schoolsQuery.data} activeInstitutionId={schoolId} onSwitch={switchInstitution} onCreated={activateCreatedInstitution} /><div className="hidden min-w-0 sm:block"><p className="mono truncate text-[10px] uppercase tracking-[0.14em] text-[#7a847e]">{school.shortCode} / {contextQuery.data.terms.find(term => term.isCurrent)?.name ?? "No current term"}</p><p className="truncate text-sm font-semibold text-[#20342c]">{school.name}</p></div></div><div className="flex items-center gap-2 sm:gap-3"><NsosCopilot schoolId={schoolId} role={role!} onNavigate={view => selectView(view as View)} />{platformAdmin && <button onClick={() => setPlatformRevenueOpen(true)} className="hidden items-center gap-2 rounded-lg border border-[#b9d5c0] bg-[#eff8f0] px-3 py-2 text-xs font-semibold text-[#176145] sm:inline-flex"><Banknote className="h-3.5 w-3.5" />Platform revenue</button>}<button onClick={() => selectView("communications")} className="relative grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5df] bg-white text-[#486057] transition hover:border-[#b8c8be]" aria-label="Open school communications and notices" title="Open school communications and notices"><Bell className="h-4 w-4" /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#c89135]" /></button><div className="hidden h-6 w-px bg-[#dfe5df] sm:block" /><div className="hidden text-right sm:block"><p className="text-xs font-semibold text-[#34483f]">{user.name ?? "School user"}</p><p className="mt-0.5 text-[10px] capitalize text-[#7a847e]">{role}</p></div><div className="grid h-9 w-9 place-items-center rounded-full bg-[#dceee3] text-xs font-bold text-[#0f5c4f]">{initials(user.name)}</div></div></header>
-          <main className="app-grid min-h-[calc(100vh-70px)] px-5 py-7 sm:px-8 sm:py-9 lg:px-10"><div className="mx-auto max-w-[1440px] soft-enter"><Workspace view={activeView} schoolId={schoolId} schoolName={school.name} operatingType={school.operatingType} role={role!} summary={summaryQuery} applications={applicationsQuery} students={studentsQuery} academics={academicsQuery} attendance={attendanceQuery} absenceAlerts={absenceAlertsQuery} results={resultsQuery} finance={financeQuery} staff={staffQuery} staffOperations={staffOperationsQuery} announcements={announcementsQuery} guardianPortal={guardianPortalQuery} studentPortal={studentPortalQuery} onRefresh={refresh} onNavigate={selectView} activeInstitutionId={schoolId} onSwitchInstitution={switchInstitution} /></div></main>
+          <main className="app-grid min-h-[calc(100vh-70px)] px-5 py-7 sm:px-8 sm:py-9 lg:px-10"><div className="mx-auto max-w-[1440px] soft-enter"><Suspense fallback={<WorkspaceLoading />}><Workspace view={activeView} schoolId={schoolId} schoolName={school.name} operatingType={school.operatingType} role={role!} summary={summaryQuery} applications={applicationsQuery} students={studentsQuery} academics={academicsQuery} attendance={attendanceQuery} absenceAlerts={absenceAlertsQuery} results={resultsQuery} finance={financeQuery} staff={staffQuery} staffOperations={staffOperationsQuery} announcements={announcementsQuery} guardianPortal={guardianPortalQuery} studentPortal={studentPortalQuery} onRefresh={refresh} onNavigate={selectView} activeInstitutionId={schoolId} onSwitchInstitution={switchInstitution} /></Suspense></div></main>
           {platformAdmin && <PlatformRevenueConsole open={platformRevenueOpen} onClose={() => setPlatformRevenueOpen(false)} />}
         </div>
       </div>

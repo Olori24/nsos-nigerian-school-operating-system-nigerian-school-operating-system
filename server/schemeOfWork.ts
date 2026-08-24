@@ -2,7 +2,6 @@ export type ReviewedSchemeRow = { weekNo: number; topic: string; objectives?: st
 
 export const SUPPORTED_SCHEME_MIME_TYPES = [
   "text/csv",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ] as const;
 
 export const MAX_SCHEME_FILE_BYTES = 2 * 1024 * 1024;
@@ -29,6 +28,6 @@ export function normaliseReviewedSchemeRows(rows: ReviewedSchemeRow[]) {
 
 export function safeSchemeFileName(fileName: string) {
   const cleaned = fileName.trim().replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 180);
-  if (!/\.(csv|xlsx)$/i.test(cleaned)) throw new Error("Upload a CSV or Excel (.xlsx) scheme-of-work file.");
+  if (!/\.csv$/i.test(cleaned)) throw new Error("Upload a CSV scheme-of-work file. Excel (.xlsx) imports are temporarily unavailable.");
   return cleaned;
 }

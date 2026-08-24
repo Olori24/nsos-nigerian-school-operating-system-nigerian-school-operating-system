@@ -937,15 +937,15 @@ export const nsosRouter = router({
         return db.createPublicApplicationWithDocuments({ ...application, schoolId: school.id, dateOfBirth, gender, priorSchool, supplementalData, declarationAccepted: declarationAccepted === true, documents: documents ?? [] });
       }),
     list: managementProcedure("students.read")
-      .input(schoolInput.extend({ status: z.enum(["submitted", "under_review", "accepted", "declined", "enrolled"]).optional() }))
-      .query(({ input }) => db.listApplications(input.schoolId, input.status)),
+      .input(schoolInput.extend({ status: z.enum(["submitted", "under_review", "accepted", "declined", "enrolled"]).optional(), limit: z.number().int().min(1).max(100).optional() }))
+      .query(({ input }) => db.listApplications(input.schoolId, input.status, input.limit)),
     submit: managementProcedure("students.read")
       .input(schoolInput.extend({ firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), applyingForClassId: z.number().int().positive().optional(), priorSchool: z.string().max(255).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), notes: z.string().max(5000).optional() }))
       .mutation(({ input }) => { const origin = validatedNigerianOrigin(input); const { stateOfOrigin: _stateOfOrigin, localGovernmentOfOrigin: _localGovernmentOfOrigin, ...application } = input; return db.createApplication({ ...application, supplementalData: Object.fromEntries(Object.entries(origin).filter(([, value]) => Boolean(value))) }); }),
     review: managementProcedure("students.read")
       .input(schoolInput.extend({ applicationId: z.number().int().positive(), status: z.enum(["under_review", "accepted", "declined"]), decisionNote: z.string().max(5000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.reviewApplication(input.applicationId, input.status, input.decisionNote, ctx.user.id);
+        const result = await db.reviewApplication({ schoolId: input.schoolId, applicationId: input.applicationId, status: input.status, decisionNote: input.decisionNote, reviewerId: ctx.user.id });
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_reviewed", targetType: "admissions_application", targetId: input.applicationId, metadata: { decision: input.status } });
         return result;
       }),
@@ -981,7 +981,7 @@ export const nsosRouter = router({
   }),
 
   students: router({
-    list: managementProcedure("students.read").input(schoolInput.extend({ search: z.string().max(120).optional() })).query(({ input }) => db.listStudents(input.schoolId, input.search)),
+    list: managementProcedure("students.read").input(schoolInput.extend({ search: z.string().max(120).optional(), limit: z.number().int().min(1).max(100).optional() })).query(({ input }) => db.listStudents(input.schoolId, input.search, input.limit)),
     migrationPreview: studentMigrationAdminProcedure.input(schoolInput.extend({ classId: z.number().int().positive(), sessionId: z.number().int().positive(), rows: z.array(studentMigrationRowInput).min(1).max(100) })).mutation(({ input }) => db.previewStudentMigration(input)),
     migrationImport: studentMigrationAdminProcedure
       .input(schoolInput.extend({ classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), idempotencyKey: z.string().uuid(), rows: z.array(studentMigrationRowInput).min(1).max(100), confirmed: z.literal(true) }))

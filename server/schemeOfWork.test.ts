@@ -9,7 +9,8 @@ describe("approved scheme-of-work validation", () => {
   it("rejects duplicate weeks, invalid weeks, and unsafe file names before persistence", () => {
     expect(() => normaliseReviewedSchemeRows([{ weekNo: 1, topic: "One" }, { weekNo: 1, topic: "Duplicate" }])).toThrow(/appears more than once/i);
     expect(() => normaliseReviewedSchemeRows([{ weekNo: 21, topic: "Outside term" }])).toThrow(/1 to 20/i);
-    expect(() => safeSchemeFileName("scheme.pdf")).toThrow(/CSV or Excel/i);
-    expect(safeSchemeFileName("First Term Scheme.xlsx")).toBe("First_Term_Scheme.xlsx");
+    expect(() => safeSchemeFileName("scheme.pdf")).toThrow(/CSV scheme/i);
+    expect(() => safeSchemeFileName("First Term Scheme.xlsx")).toThrow(/temporarily unavailable/i);
+    expect(safeSchemeFileName("First Term Scheme.csv")).toBe("First_Term_Scheme.csv");
   });
 });

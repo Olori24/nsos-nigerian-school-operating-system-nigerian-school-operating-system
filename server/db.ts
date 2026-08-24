@@ -1556,6 +1556,49 @@ export async function getSchoolMembership(userId: number, schoolId: number) {
   return (await db.select().from(schoolMemberships).where(and(eq(schoolMemberships.userId, userId), eq(schoolMemberships.schoolId, schoolId))).limit(1))[0];
 }
 
+export type StoredObjectAccessRecord = { schoolId: number; scope: "public_website_media" | "website_media" | "admission_document" | "knowledge_source" | "curriculum_scheme" | "payment_evidence"; createdBy?: number };
+
+function schoolIdFromStoredObjectKey(key: string) {
+  const match = /^schools\/([1-9]\d*)\//.exec(key);
+  return match ? Number(match[1]) : undefined;
+}
+
+export async function getStoredObjectAccessRecord(key: string): Promise<StoredObjectAccessRecord | undefined> {
+  const schoolId = schoolIdFromStoredObjectKey(key);
+  if (!schoolId) return undefined;
+  const db = await database();
+
+  if (key.includes("/website-media/")) {
+    const media = (await db.select({ id: schoolWebsiteMedia.id, schoolId: schoolWebsiteMedia.schoolId, published: schoolWebsites.published, logoMediaId: schoolWebsites.logoMediaId, heroMediaId: schoolWebsites.heroMediaId }).from(schoolWebsiteMedia).leftJoin(schoolWebsites, eq(schoolWebsiteMedia.schoolId, schoolWebsites.schoolId)).where(and(eq(schoolWebsiteMedia.schoolId, schoolId), eq(schoolWebsiteMedia.storageKey, key))).limit(1))[0];
+    if (!media) return undefined;
+    const publicMedia = media.published === true && (media.logoMediaId === media.id || media.heroMediaId === media.id);
+    return { schoolId, scope: publicMedia ? "public_website_media" : "website_media" };
+  }
+
+  if (key.includes("/admissions/")) {
+    const document = (await db.select({ schoolId: admissionsApplications.schoolId }).from(admissionDocuments).innerJoin(admissionsApplications, eq(admissionDocuments.applicationId, admissionsApplications.id)).where(and(eq(admissionsApplications.schoolId, schoolId), eq(admissionDocuments.storageKey, key))).limit(1))[0];
+    return document ? { schoolId: document.schoolId, scope: "admission_document" } : undefined;
+  }
+
+  if (key.includes("/knowledge-library/")) {
+    const source = (await db.select({ schoolId: institutionKnowledgeSources.schoolId }).from(institutionKnowledgeSources).where(and(eq(institutionKnowledgeSources.schoolId, schoolId), eq(institutionKnowledgeSources.storageKey, key))).limit(1))[0]
+      ?? (await db.select({ schoolId: institutionKnowledgeSourceRevisions.schoolId }).from(institutionKnowledgeSourceRevisions).where(and(eq(institutionKnowledgeSourceRevisions.schoolId, schoolId), eq(institutionKnowledgeSourceRevisions.storageKey, key))).limit(1))[0];
+    return source ? { schoolId: source.schoolId, scope: "knowledge_source" } : undefined;
+  }
+
+  if (key.includes("/curriculum-schemes/")) {
+    const imported = (await db.select({ schoolId: schemeOfWorkImports.schoolId }).from(schemeOfWorkImports).where(and(eq(schemeOfWorkImports.schoolId, schoolId), eq(schemeOfWorkImports.fileKey, key))).limit(1))[0];
+    return imported ? { schoolId: imported.schoolId, scope: "curriculum_scheme" } : undefined;
+  }
+
+  if (key.includes("/cash-assurance/")) {
+    const evidence = (await db.select({ schoolId: paymentEvidence.schoolId, createdBy: paymentEvidence.createdBy }).from(paymentEvidence).where(and(eq(paymentEvidence.schoolId, schoolId), eq(paymentEvidence.evidenceFileKey, key))).limit(1))[0];
+    return evidence ? { schoolId: evidence.schoolId, scope: "payment_evidence", createdBy: evidence.createdBy } : undefined;
+  }
+
+  return undefined;
+}
+
 export async function upsertMembership(schoolId: number, userId: number, role: SchoolRole) {
   const db = await database();
   await db.insert(schoolMemberships).values({ schoolId, userId, role, status: "active" }).onDuplicateKeyUpdate({ set: { role, status: "active" } });
@@ -2178,9 +2221,16 @@ export async function executeAutomationJob(input: { schoolId: number; userId: nu
   throw new Error("This goal requires its dedicated review workspace and cannot run as a one-tap job.");
 }
 
-export async function listApplications(schoolId: number, status?: "submitted" | "under_review" | "accepted" | "declined" | "enrolled") {
+export const DEFAULT_OPERATIONAL_LIST_LIMIT = 50;
+export const MAX_OPERATIONAL_LIST_LIMIT = 100;
+
+export function boundedOperationalListLimit(value: number | undefined) {
+  return Math.min(MAX_OPERATIONAL_LIST_LIMIT, Math.max(1, Math.floor(value ?? DEFAULT_OPERATIONAL_LIST_LIMIT)));
+}
+
+export async function listApplications(schoolId: number, status?: "submitted" | "under_review" | "accepted" | "declined" | "enrolled", limit?: number) {
   const db = await database();
-  return db.select().from(admissionsApplications).where(status ? and(eq(admissionsApplications.schoolId, schoolId), eq(admissionsApplications.status, status)) : eq(admissionsApplications.schoolId, schoolId)).orderBy(desc(admissionsApplications.submittedAt));
+  return db.select().from(admissionsApplications).where(status ? and(eq(admissionsApplications.schoolId, schoolId), eq(admissionsApplications.status, status)) : eq(admissionsApplications.schoolId, schoolId)).orderBy(desc(admissionsApplications.submittedAt)).limit(boundedOperationalListLimit(limit));
 }
 
 export async function createApplication(input: Record<string, unknown>) {
@@ -2190,9 +2240,11 @@ export async function createApplication(input: Record<string, unknown>) {
   return { applicationId: Number(created[0].insertId) };
 }
 
-export async function reviewApplication(applicationId: number, status: "under_review" | "accepted" | "declined", decisionNote: string | undefined, reviewerId: number) {
+export async function reviewApplication(input: { schoolId: number; applicationId: number; status: "under_review" | "accepted" | "declined"; decisionNote?: string; reviewerId: number }) {
   const db = await database();
-  await db.update(admissionsApplications).set({ status, reviewerId, decisionNote: decisionNote ?? null, decidedAt: status === "under_review" ? null : new Date() }).where(eq(admissionsApplications.id, applicationId));
+  const application = (await db.select({ id: admissionsApplications.id }).from(admissionsApplications).where(and(eq(admissionsApplications.id, input.applicationId), eq(admissionsApplications.schoolId, input.schoolId))).limit(1))[0];
+  if (!application) throw new Error("Admission application not found in this school.");
+  await db.update(admissionsApplications).set({ status: input.status, reviewerId: input.reviewerId, decisionNote: input.decisionNote ?? null, decidedAt: input.status === "under_review" ? null : new Date() }).where(and(eq(admissionsApplications.id, input.applicationId), eq(admissionsApplications.schoolId, input.schoolId)));
   return { success: true };
 }
 
@@ -2295,10 +2347,10 @@ export async function enrolApplication(input: { schoolId: number; applicationId:
   return { studentId, biodataTransferred: true, guardianLinked: true, guardianCreated, admissionLetter: { guardianEmail: application.guardianEmail ?? null, guardianName: application.guardianName, studentName: [application.firstName, supplement.middleName?.trim(), application.lastName].filter(Boolean).join(" "), schoolName: school.name, schoolAddress: school.address ?? school.state, admissionNo: input.admissionNo, className: classRow.name, sessionName: session.name, admittedOn: input.admittedOn } };
 }
 
-export async function listStudents(schoolId: number, search?: string) {
+export async function listStudents(schoolId: number, search?: string, limit?: number) {
   const db = await database();
   const criteria = search ? and(eq(studentProfiles.schoolId, schoolId), or(like(studentProfiles.firstName, `%${search}%`), like(studentProfiles.lastName, `%${search}%`), like(studentProfiles.admissionNo, `%${search}%`))) : eq(studentProfiles.schoolId, schoolId);
-  return db.select().from(studentProfiles).where(criteria).orderBy(desc(studentProfiles.createdAt));
+  return db.select().from(studentProfiles).where(criteria).orderBy(desc(studentProfiles.createdAt)).limit(boundedOperationalListLimit(limit));
 }
 
 export type StudentMigrationRow = {

@@ -337,3 +337,11 @@
 - [x] Add a persistent accessible dark-mode toggle to dashboard settings, validate contrast and responsive behavior, publish, and synchronize GitHub.
 - [x] Add a persistent accessible dark-mode toggle to dashboard settings, validate contrast and responsive behavior, publish, and synchronize GitHub.
 - [x] Build the approval-first File-to-School AI Engine: private knowledge-library sources, source-traceable curriculum/quality/gap drafts, owner-controlled improvement recommendations, protected Course Studio/Builder handoffs, safety regressions, documentation, publication, and GitHub synchronization.
+- [x] Establish an evidence-based NSOS production-readiness baseline by auditing current architecture, migrations, runtime controls, environment boundaries, CI/CD, tests, dependencies, and actual validation results without relying on prior claims.
+- [x] Create and maintain a P0–P3 launch-gap inventory with source evidence, an explicit 50K registered-user workload model, and a readiness scorecard that marks unmeasured areas as UNKNOWN rather than PASS.
+- [ ] Audit and harden tenant isolation, identity/session controls, role and membership revocation, critical school operations, uploaded-file access, and AI-context boundaries with direct cross-tenant regression coverage.
+- [ ] Audit and remediate verified launch risks in data integrity, finance, File-to-School security, AI safeguards/cost controls, provider resilience, rate limits, privacy-safe logging, and error handling.
+- [x] Measure and improve verified database, API, and frontend bottlenecks, including collection bounds, expensive query paths, bundle composition, and mobile-sensitive delivery without inventing capacity metrics.
+- [ ] Add production-appropriate observability, correlation-safe error reporting, CI validation gates, recovery/backup evidence, and deployment controls within the managed stateless architecture.
+- [ ] Define and run only safe, synthetic-data load-test prerequisites and staged benchmark methodology; do not claim 50K capacity without isolated staging infrastructure and recorded measurements.
+- [ ] Validate critical owner/admin/teacher/guardian/student and public-admission journeys, publish the factual CTO readiness report, checkpoint, release, and synchronize GitHub.
