@@ -19,8 +19,15 @@ describe("README approval-first School Operator release documentation", () => {
   });
 
   it("records the latest validation count and the unchanged external sender dependency", () => {
-    expect(readme).toContain("377/378 passing tests across 104/105 files");
+    expect(readme).toContain("385/386 passing tests across 106/107 files");
     expect(readme).toContain("currently unverified `resend.dev` sender");
     expect(readme).toContain("`nsos.top` is active at its registrar but is not bound to the managed deployment");
+  });
+
+  it("documents the latest Institution Builder non-JSON recovery without overstating side effects", () => {
+    expect(readme).toContain("typed transport rejects document responses before they reach the JSON parser");
+    expect(readme).toContain("A transport failure does not create, apply, publish, or audit a blueprint.");
+    expect(readme).toContain("Institution Builder non-JSON response recovery");
+    expect(readme).toContain("16 focused transport, builder route, builder interface, and structured-planning regressions");
   });
 });
