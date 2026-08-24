@@ -7,6 +7,8 @@ const projectRoot = resolve(import.meta.dirname, "..");
 const appSource = readFileSync(resolve(projectRoot, "client/src/App.tsx"), "utf8");
 const styles = readFileSync(resolve(projectRoot, "client/src/index.css"), "utf8");
 const previewDialog = readFileSync(resolve(projectRoot, "client/src/components/BiodataPreviewDialog.tsx"), "utf8");
+const dashboardAppearance = readFileSync(resolve(projectRoot, "client/src/components/DashboardAppearanceSettings.tsx"), "utf8");
+const homeSource = readFileSync(resolve(projectRoot, "client/src/pages/Home.tsx"), "utf8");
 
 describe("biodata dark-mode preference", () => {
   it("normalizes a persistent theme preference safely and switches both directions", () => {
@@ -26,5 +28,18 @@ describe("biodata dark-mode preference", () => {
     expect(styles).toContain(".dark .biodata-dialog");
     expect(previewDialog).toContain("biodata-preview-trigger");
     expect(previewDialog).toContain("biodata-dialog");
+  });
+
+  it("exposes a persistent accessible dark-mode control in owner/admin dashboard settings", () => {
+    expect(homeSource).toContain('import { DashboardAppearanceSettings } from "@/components/DashboardAppearanceSettings"');
+    expect(homeSource).toContain("<DashboardAppearanceSettings />");
+    expect(homeSource).toContain('document.getElementById("dashboard-appearance-settings")');
+    expect(dashboardAppearance).toContain("Dashboard appearance");
+    expect(dashboardAppearance).toContain("This preference is saved on this device");
+    expect(dashboardAppearance).toContain("aria-pressed={isDark}");
+    expect(dashboardAppearance).toContain("Use dark mode");
+    expect(dashboardAppearance).toContain("Use light mode");
+    expect(styles).toContain(".dark .app-grid");
+    expect(styles).toContain(".dark .text-\\[\\#294d3d\\]");
   });
 });

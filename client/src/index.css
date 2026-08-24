@@ -78,6 +78,10 @@ button, input, select, textarea { font: inherit; }
 .dark .text-\[\#15201c\], .dark .text-\[\#20342c\], .dark .text-\[\#243b31\], .dark .text-\[\#29473a\], .dark .text-\[\#43534c\], .dark .text-\[\#45584f\], .dark .text-\[\#486057\], .dark .text-\[\#542c28\] { color: #edf5ef !important; }
 .dark .text-\[\#6c7972\], .dark .text-\[\#6b7b73\], .dark .text-\[\#68776f\], .dark .text-\[\#708077\], .dark .text-\[\#735d59\], .dark .text-\[\#557168\] { color: #b8c8bf !important; }
 .dark .text-\[\#0f5c4f\], .dark .biodata-field-feedback { color: #8cd3a6 !important; }
+.dark .text-\[\#19392d\], .dark .text-\[\#254b3b\], .dark .text-\[\#294d3d\], .dark .text-\[\#315746\], .dark .text-\[\#315946\], .dark .text-\[\#315b47\], .dark .text-\[\#365948\], .dark .text-\[\#43534c\], .dark .text-\[\#476456\], .dark .text-\[\#4e6a5d\] { color: #edf5ef !important; }
+.dark .text-\[\#6c7d74\], .dark .text-\[\#6d8276\], .dark .text-\[\#6e8177\], .dark .text-\[\#718179\], .dark .text-\[\#73847b\] { color: #b8c8bf !important; }
+.dark .border-\[\#dce9e0\], .dark .border-\[\#deebe2\], .dark .border-\[\#e2ece5\] { border-color: #3d5147 !important; }
+.dark .app-grid { background-image: linear-gradient(rgba(123, 189, 146, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(123, 189, 146, 0.08) 1px, transparent 1px); }
 .dark .biodata-draft-notice { border-color: #3d604e !important; background: #183126 !important; color: #cce6d5 !important; }
 .dark .biodata-draft-notice .text-\[\#24563f\], .dark .biodata-draft-notice .text-\[\#0f5c4f\] { color: #a8dfba !important; }
 .dark .biodata-dialog { background: #18231f !important; border-color: #34463e !important; color: #edf5ef !important; }
