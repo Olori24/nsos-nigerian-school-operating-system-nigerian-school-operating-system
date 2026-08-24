@@ -14,8 +14,10 @@ The first release deliberately favours accurate operational readiness over specu
 | --- | --- | --- | --- |
 | Institution readiness | Existing onboarding, website, provider, and communication readiness | Opens the relevant protected setup workspace | Publishing, domain/DNS changes, provider changes, or messaging |
 | Learning readiness | Programme, module, milestone, internal material, enrolment, and reviewed-evidence counts | Opens Learning Centre or Course Studio for human review | Programme activation, enrolment, milestone completion, grade, credential, or tutor change |
+| Learner practice | The authenticated learner’s own linked active-programme context and approved tutor scope | Suggests reviewing a human-managed milestone or asking the existing Student Learning Copilot for practice support | Programme/progress change, assessment answer, grade, completion, certificate, or learner message |
 | Admissions readiness | Tenant-scoped pending application count and approved public-entry configuration state | Opens Admissions to review real applications or configuration | Eligibility decision, admission offer, guardian record, or enrolment |
 | Revenue readiness | Existing invoice, collection, outstanding, draft-fee, and provider-readiness aggregates | Opens Finance to review safe next steps | Price, discount, invoice, payment collection, bank, or provider mutation |
+| Public-presence readiness | Existing internal programme count and current NSOS website publication state | Opens Website Studio to review an editable website and its separate publication controls | Website publication, domain/DNS change, advert, spend, lead capture, campaign, or message |
 | Delivery health | Existing failed email/provider states, automation history, and migration outcomes | Opens Communications, Automation Desk, or Operations Command Center | Sending, retrying, or changing a provider |
 | Student support | Aggregated active-enrolment, reviewed-progress, attendance, and available learning-support evidence only | Opens learner support or instructor review workflows | Student messages, interventions, risk labels, grades, pass/fail, or certificate actions |
 

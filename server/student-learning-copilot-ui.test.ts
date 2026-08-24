@@ -17,4 +17,11 @@ describe("Student Learning Copilot interface", () => {
     expect(hub).toContain("does not complete assessed work, decide a result, grade your work, or replace human judgment");
     expect(hub).toContain("For personal, health, safety, welfare, assessment, or disciplinary matters");
   });
+
+  it("presents a learner-owned next practice step without changing the learning record", () => {
+    expect(hub).toContain("Your next safe learning step");
+    expect(hub).toContain("hub.data.learningRecommendation");
+    expect(hub).toContain("does not change your programme, progress, assessment, result, completion, or certificate");
+    expect(hub).toContain("ask an instructor when unsure");
+  });
 });

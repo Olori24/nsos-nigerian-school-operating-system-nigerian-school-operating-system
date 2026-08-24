@@ -322,8 +322,8 @@
 - [x] Define the approval-first AI School Operator contract, institution memory model, supported analytics signals, recommendation lifecycle, data-minimisation rules, and hard no-action boundaries.
 - [x] Add tenant-scoped institution memory and durable, safe School Operator insight records with source status, owner visibility, idempotency, audit evidence, and no raw sensitive student data in AI prompts or audits.
 - [x] Build a simple owner-facing AI School Operator overview that presents real, explainable institution insights and routes every recommendation into a separately protected approval or review workflow.
-- [ ] Add controlled curriculum, instructor, learner-progress, personalized-practice, and early-support recommendations that never grade, pass/fail, complete, certify, or message an individual autonomously.
-- [ ] Add private admissions, marketing, revenue, lifecycle, and automation readiness recommendations with truthful unavailable states and owner-approved handoffs only.
+- [x] Add controlled curriculum, instructor, learner-progress, personalized-practice, and early-support recommendations that never grade, pass/fail, complete, certify, or message an individual autonomously.
+- [x] Add private admissions, marketing, revenue, lifecycle, and automation readiness recommendations with truthful unavailable states and owner-approved handoffs only.
 - [x] Add controlled certificate/verification readiness, non-technical executive analytics, and system-health visibility without publicly exposing learner data, issuing certificates automatically, or inventing metrics.
-- [ ] Extend the role-scoped Institution Copilot and Automation Desk with safe one-prompt operations and reusable automation templates that require explicit approval for consequential execution.
+- [x] Extend the role-scoped Institution Copilot and Automation Desk with safe one-prompt operations and reusable automation templates that require explicit approval for consequential execution.
 - [ ] Add comprehensive tenant-isolation, authorization, privacy, recommendation-source, approval-boundary, academic-integrity, lifecycle, and mobile interface regressions, then validate, document, checkpoint, publish, and synchronize GitHub safely.
