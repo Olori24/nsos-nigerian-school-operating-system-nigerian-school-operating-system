@@ -326,4 +326,4 @@
 - [x] Add private admissions, marketing, revenue, lifecycle, and automation readiness recommendations with truthful unavailable states and owner-approved handoffs only.
 - [x] Add controlled certificate/verification readiness, non-technical executive analytics, and system-health visibility without publicly exposing learner data, issuing certificates automatically, or inventing metrics.
 - [x] Extend the role-scoped Institution Copilot and Automation Desk with safe one-prompt operations and reusable automation templates that require explicit approval for consequential execution.
-- [ ] Add comprehensive tenant-isolation, authorization, privacy, recommendation-source, approval-boundary, academic-integrity, lifecycle, and mobile interface regressions, then validate, document, checkpoint, publish, and synchronize GitHub safely.
+- [x] Add comprehensive tenant-isolation, authorization, privacy, recommendation-source, approval-boundary, academic-integrity, lifecycle, and mobile interface regressions, then validate, document, checkpoint, publish, and synchronize GitHub safely.
