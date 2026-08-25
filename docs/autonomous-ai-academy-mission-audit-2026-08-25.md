@@ -79,6 +79,12 @@ The authenticated OAE Online Academy owner workspace visibly lists blueprint `21
 
 Reviewing blueprint `210001` confirms that it remains private and unapplied, but its displayed content is a safe guided fallback rather than a fully tailored OEA Academy design because the upstream planner experienced network retries. The owner must review, edit, or regenerate its recommendations before any separate application decision; this fallback is not evidence of an approved five-programme curriculum, a public offer, or a launch-ready academy.
 
+An earlier tenant-context mismatch created a separate, private, unapplied blueprint (`180001`) in the regular **OAE Academy** tenant. The owner explicitly authorised deletion of that exact draft. Immediately before deletion, the protected workspace showed that tenant and its single `Private review ready` blueprint; no applied programme was present. The owner-selected OAE Online Academy blueprint (`210001`) remains a separate tenant-scoped private review record and is outside this corrective action.
+
+The first deployed visibility check did not render the new deletion control despite the private prepared record being visible. No deletion request was submitted. The control must be repaired and revalidated before the owner-authorized correction proceeds.
+
+A read-only browser asset check showed the served Institution Builder bundle did not contain the new deletion-control text. This is treated as a deployment-asset mismatch, not permission to bypass the protected workflow or issue a direct data write.
+
 ## Current launch verdict
 
 | Verdict dimension | Status |

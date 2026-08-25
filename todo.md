@@ -357,3 +357,4 @@
 - [x] Repair the OEA Academy Institution Builder template so its protected private-blueprint request fits the server’s bounded request contract; retain the no-side-effect error path and add a regression test.
 - [ ] Reconcile the unintended un-applied private blueprint created in the regular OAE Academy tenant during the tenant-context mismatch; do not apply, publish, or alter it without a protected owner decision.
 - [ ] Delete only OAE Academy blueprint #180001 after verifying it remains private and unapplied, through a tenant-scoped owner-confirmed workflow with safe audit metadata.
+- [ ] Repair the deployed Institution Builder visibility of the prepared-only delete control, then delete only owner-authorized OAE Academy blueprint #180001 through that protected control.
