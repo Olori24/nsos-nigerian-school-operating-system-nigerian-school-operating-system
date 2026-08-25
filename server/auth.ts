@@ -7,6 +7,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
+import { buildStudentRecordPdfAttachment, studentRecordEmailCopy } from "./studentRecordEmail";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
@@ -104,6 +105,37 @@ export async function sendAdmissionLetterEmail(input: { email: string; subject: 
   });
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) throw new Error(`Resend rejected admission-letter delivery with status ${response.status}`);
+  return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
+}
+
+export async function getStudentRecordEmailSenderReadiness() {
+  if (!ENV.resendApiKey || !ENV.authEmailFrom) return { ready: false, state: "not_configured" as const, message: "NSOS email delivery is not configured." };
+  const sender = normaliseAuthSender(ENV.authEmailFrom);
+  const senderDomain = sender.match(/@([^>\s]+)/)?.[1]?.toLowerCase();
+  if (!senderDomain) return { ready: false, state: "not_configured" as const, message: "NSOS email sender is not configured safely." };
+  try {
+    const response = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${ENV.resendApiKey}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
+    const payload = await response.json().catch(() => ({})) as { data?: Array<{ name?: string; status?: string }> };
+    const domain = payload.data?.find(item => item.name?.toLowerCase() === senderDomain);
+    if (!response.ok || domain?.status !== "verified") return { ready: false, state: "unverified" as const, message: "Email sharing is blocked until the configured sender domain is verified." };
+    return { ready: true, state: "verified" as const, message: "Configured sender domain is verified. A final confirmation is still required before sharing." };
+  } catch {
+    return { ready: false, state: "unavailable" as const, message: "NSOS could not verify the configured sender domain right now. No email can be sent." };
+  }
+}
+
+export async function sendStudentEnrollmentRecordEmail(input: { email: string; record: Parameters<typeof buildStudentRecordPdfAttachment>[0]; enrollmentId: number }) {
+  const email = db.normaliseAuthEmail(input.email);
+  const attachment = await buildStudentRecordPdfAttachment(input.record, input.enrollmentId);
+  const copy = studentRecordEmailCopy(attachment);
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json", "Idempotency-Key": attachment.idempotencyKey },
+    signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
+    body: JSON.stringify({ from: normaliseAuthSender(ENV.authEmailFrom), to: email, subject: copy.subject, text: copy.text, html: copy.html, attachments: [{ filename: attachment.filename, content: attachment.base64, content_type: "application/pdf" }] }),
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) throw new Error(`Resend rejected protected record delivery with status ${response.status}`);
   return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
 }
 

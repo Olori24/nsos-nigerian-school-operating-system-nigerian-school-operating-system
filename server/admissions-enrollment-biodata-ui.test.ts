@@ -17,6 +17,11 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain("View student profile");
     expect(enrollmentStation).toContain("View enrollment record");
     expect(enrollmentStation).toContain("Download PDF");
+    expect(enrollmentStation).toContain("Share via Email");
+    expect(enrollmentStation).toContain("Confirm and send PDF");
+    expect(enrollmentStation).toContain("recordEmailReadiness.useQuery");
+    expect(enrollmentStation).toContain("shareRecordPdf.useMutation");
+    expect(enrollmentStation).toContain("confirmed: true");
     expect(enrollmentStation).toContain("Download student profile and enrollment record as PDF");
     expect(enrollmentStation).toContain("exportStudentRecordPdf");
     expect(enrollmentStation).toContain("const canExport");

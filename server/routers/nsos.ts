@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import { sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffSetupInvitationEmail } from "../auth";
+import { getStudentRecordEmailSenderReadiness, sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffSetupInvitationEmail, sendStudentEnrollmentRecordEmail } from "../auth";
+import { resolveStudentRecordEmailRecipient, studentRecordEmailRecipients } from "../studentRecordEmail";
 import { buildAdmissionLetter } from "../admissionLetter";
 import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
@@ -1006,6 +1007,33 @@ export const nsosRouter = router({
     migrationHistory: studentMigrationAdminProcedure.input(schoolInput).query(({ input }) => db.listStudentMigrationBatches(input.schoolId)),
     history: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive() })).query(({ input }) => db.getStudentAcademicHistory(input.schoolId, input.studentId)),
     record: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive() })).query(({ input }) => db.getStudentEnrollmentRecord(input.schoolId, input.studentId)),
+    recordEmailReadiness: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive(), enrollmentId: z.number().int().positive() })).query(async ({ input }) => {
+      const record = await db.getStudentEnrollmentRecord(input.schoolId, input.studentId);
+      if (!record || !record.enrollments.some(enrollment => enrollment.id === input.enrollmentId)) throw new TRPCError({ code: "NOT_FOUND", message: "Student enrollment record was not found in this school." });
+      return { sender: await getStudentRecordEmailSenderReadiness(), recipients: studentRecordEmailRecipients(record) };
+    }),
+    shareRecordPdf: managementProcedure("students.write")
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), enrollmentId: z.number().int().positive(), recipientKind: z.enum(["student", "guardian"]), guardianId: z.number().int().positive().optional(), confirmed: z.literal(true) }).superRefine((value, ctx) => { if (value.recipientKind === "guardian" && !value.guardianId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianId"], message: "Select a guardian recipient." }); if (value.recipientKind === "student" && value.guardianId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianId"], message: "Student delivery cannot target a guardian record." }); }))
+      .mutation(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "student-record-email", route: "share", clientKey: `${input.schoolId}:${ctx.user.id}:${input.studentId}`, limit: 3, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Record email sharing is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const sender = await getStudentRecordEmailSenderReadiness();
+        if (!sender.ready) throw new TRPCError({ code: "PRECONDITION_FAILED", message: sender.message });
+        const record = await db.getStudentEnrollmentRecord(input.schoolId, input.studentId);
+        if (!record || !record.enrollments.some(enrollment => enrollment.id === input.enrollmentId)) throw new TRPCError({ code: "NOT_FOUND", message: "Student enrollment record was not found in this school." });
+        const resolvedRecipient = resolveStudentRecordEmailRecipient(record, { kind: input.recipientKind, guardianId: input.guardianId });
+        const messageLog = await db.createMessageLog({ schoolId: input.schoolId, channel: "email", audience: input.recipientKind === "student" ? "students" : "guardians", subject: "Student record PDF delivery", body: "A protected student profile and enrollment record PDF was prepared for confirmed delivery.", recipientCount: 1, createdBy: ctx.user.id });
+        try {
+          const providerMessageId = await sendStudentEnrollmentRecordEmail({ email: resolvedRecipient.email, record, enrollmentId: input.enrollmentId });
+          await db.updateMessageLogDelivery({ schoolId: input.schoolId, messageId: messageLog.messageId, status: "sent", providerMessageId });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_record_pdf_email_submitted", targetType: "student_profile", targetId: input.studentId, metadata: { enrollmentId: input.enrollmentId, recipientKind: input.recipientKind, attachment: "student_enrollment_pdf", confirmationRequired: true } });
+          return { deliveryState: "submitted" as const, recipient: resolvedRecipient.recipient };
+        } catch {
+          await db.updateMessageLogDelivery({ schoolId: input.schoolId, messageId: messageLog.messageId, status: "failed" });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_record_pdf_email_failed", targetType: "student_profile", targetId: input.studentId, metadata: { enrollmentId: input.enrollmentId, recipientKind: input.recipientKind, attachment: "student_enrollment_pdf", confirmationRequired: true } });
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "NSOS could not submit the protected record email. The enrollment was not changed." });
+        }
+      }),
     create: managementProcedure("students.write")
       .input(schoolInput.extend({ admissionNo: z.string().min(2).max(64), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
       .mutation(({ input }) => { const origin = validatedNigerianOrigin(input); const { localGovernmentOfOrigin: _localGovernmentOfOrigin, ...student } = input; return db.createStudent({ ...student, stateOfOrigin: origin.stateOfOrigin, localGovernment: origin.localGovernmentOfOrigin }); }),

@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
-  return { ...actual, getSchoolMembership: vi.fn(), enrolApplication: vi.fn(), getStudentEnrollmentRecord: vi.fn(), createMessageLog: vi.fn(), updateMessageLogDelivery: vi.fn(), recordSecurityAuditEvent: vi.fn() };
+  return { ...actual, getSchoolMembership: vi.fn(), enrolApplication: vi.fn(), getStudentEnrollmentRecord: vi.fn(), createMessageLog: vi.fn(), updateMessageLogDelivery: vi.fn(), recordSecurityAuditEvent: vi.fn(), consumeSharedRateLimit: vi.fn() };
 });
 
-vi.mock("./auth", () => ({ sendAdmissionLetterEmail: vi.fn(), sendGuardianPortalInvitationEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn() }));
+vi.mock("./auth", () => ({ sendAdmissionLetterEmail: vi.fn(), sendGuardianPortalInvitationEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn(), getStudentRecordEmailSenderReadiness: vi.fn(), sendStudentEnrollmentRecordEmail: vi.fn() }));
 
 import * as db from "./db";
-import { sendAdmissionLetterEmail } from "./auth";
+import { getStudentRecordEmailSenderReadiness, sendAdmissionLetterEmail, sendStudentEnrollmentRecordEmail } from "./auth";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -25,6 +25,9 @@ describe("confirmed admission enrollment and letter delivery", () => {
     vi.mocked(db.enrolApplication).mockResolvedValue(enrollment as any);
     vi.mocked(db.createMessageLog).mockResolvedValue({ messageId: 501 });
     vi.mocked(sendAdmissionLetterEmail).mockResolvedValue("resend-admission-501");
+    vi.mocked(db.consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 0 } as any);
+    vi.mocked(getStudentRecordEmailSenderReadiness).mockResolvedValue({ ready: true, state: "verified", message: "Verified" } as any);
+    vi.mocked(sendStudentEnrollmentRecordEmail).mockResolvedValue("resend-record-501");
   });
 
   it("transfers confirmed enrollment, sends the generated letter, and records a sent delivery audit", async () => {
@@ -63,6 +66,19 @@ describe("confirmed admission enrollment and letter delivery", () => {
     vi.mocked(db.getStudentEnrollmentRecord).mockResolvedValue({ student: { id: 44, schoolId: 7 }, guardians: [], enrollments: [] } as any);
     await expect(caller().nsos.students.record({ schoolId: 7, studentId: 44 })).resolves.toMatchObject({ student: { id: 44, schoolId: 7 } });
     expect(db.getStudentEnrollmentRecord).toHaveBeenCalledWith(7, 44);
+  });
+
+  it("lists masked registered record recipients and submits a PDF only after a separate final confirmation", async () => {
+    vi.mocked(db.getStudentEnrollmentRecord).mockResolvedValue({ student: { id: 44, schoolId: 7, email: "student@example.com" }, guardians: [{ id: 12, firstName: "Ngozi", lastName: "Okafor", email: "guardian@example.com", isPrimary: true }], enrollments: [{ id: 55 }] } as any);
+    await expect(caller().nsos.students.recordEmailReadiness({ schoolId: 7, studentId: 44, enrollmentId: 55 })).resolves.toMatchObject({ sender: { ready: true }, recipients: [expect.objectContaining({ kind: "student", maskedEmail: expect.any(String) }), expect.objectContaining({ kind: "guardian", guardianId: 12, maskedEmail: expect.any(String) })] });
+    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "guardian", guardianId: 12, confirmed: true })).resolves.toMatchObject({ deliveryState: "submitted", recipient: { kind: "guardian" } });
+    expect(sendStudentEnrollmentRecordEmail).toHaveBeenCalledWith(expect.objectContaining({ email: "guardian@example.com", enrollmentId: 55 }));
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ recipientKind: "guardian", confirmationRequired: true }) }));
+  });
+
+  it("rejects a record PDF email request without the required final confirmation", async () => {
+    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "student", confirmed: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(sendStudentEnrollmentRecordEmail).not.toHaveBeenCalled();
   });
 
   it("keeps enrollment restricted to active roles with student-write permission", async () => {

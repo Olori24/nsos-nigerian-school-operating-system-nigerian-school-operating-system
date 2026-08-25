@@ -365,3 +365,4 @@
 - [x] Add an accessible skeleton loading state for protected student profile and enrollment record details in the post-enrollment success dialog.
 - [x] Add a smooth reduced-motion-safe fade-in transition from the protected record skeleton to loaded student profile and enrollment details.
 - [x] Add a loaded-state-guarded PDF export button for the tenant-scoped student profile and enrollment record shown after confirmed enrollment.
+- [x] Add a tenant-scoped, recipient-selecting, confirmation-gated PDF email-share handoff for the loaded student record, with no automatic send and visible sender-verification state.
