@@ -85,6 +85,14 @@ The first deployed visibility check did not render the new deletion control desp
 
 A read-only browser asset check showed the served Institution Builder bundle did not contain the new deletion-control text. This is treated as a deployment-asset mismatch, not permission to bypass the protected workflow or issue a direct data write.
 
+After a deployment-refresh checkpoint, the protected OAE Academy owner page visibly rendered the prepared-only deletion acknowledgement and disabled deletion control for blueprint `180001`. The confirmation is separate from any application action and does not affect OAE Online Academy blueprint `210001`.
+
+The owner-confirmed deletion of `180001` was then submitted through that protected control. The shared Builder pending display reused the generic busy label for the separate learning-application button; no application checkbox was selected and no programme application request was submitted. The deletion result must be verified from the refreshed tenant-scoped blueprint list and audit evidence before treating the correction as complete.
+
+The protected OAE Academy workspace then showed **0 saved** private blueprints. A read-only database check returned no record for `schoolId` 30001 / blueprint `180001`, while returning the selected OAE Online Academy blueprint `210001` as **prepared** with a null applied-programme reference. The unintended wrong-tenant draft is therefore removed; OAE Online Academy’s private foundation remains untouched and unapplied.
+
+The Builder now tracks deletion progress separately, so a pending deletion reports `Deleting private blueprint…` rather than the unrelated learning-application label. Focused TypeScript and Institution Builder regressions passed after this correction.
+
 ## Current launch verdict
 
 | Verdict dimension | Status |
