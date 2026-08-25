@@ -16,6 +16,10 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain("Enrollment complete");
     expect(enrollmentStation).toContain("View student profile");
     expect(enrollmentStation).toContain("View enrollment record");
+    expect(enrollmentStation).toContain("Download PDF");
+    expect(enrollmentStation).toContain("Download student profile and enrollment record as PDF");
+    expect(enrollmentStation).toContain("exportStudentRecordPdf");
+    expect(enrollmentStation).toContain("const canExport");
     expect(enrollmentStation).toContain("trpc.nsos.students.record.useQuery");
     expect(enrollmentStation).toContain("RecordViewSkeleton");
     expect(enrollmentStation).toContain('aria-busy="true"');

@@ -364,3 +364,4 @@
 - [x] Add an authorized post-enrollment success view that opens the newly created student profile and enrollment record directly from the completed Admissions confirmation flow.
 - [x] Add an accessible skeleton loading state for protected student profile and enrollment record details in the post-enrollment success dialog.
 - [x] Add a smooth reduced-motion-safe fade-in transition from the protected record skeleton to loaded student profile and enrollment details.
+- [x] Add a loaded-state-guarded PDF export button for the tenant-scoped student profile and enrollment record shown after confirmed enrollment.
