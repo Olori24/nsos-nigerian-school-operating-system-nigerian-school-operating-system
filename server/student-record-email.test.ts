@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveStudentRecordEmailRecipient, studentRecordEmailRecipients } from "./studentRecordEmail";
+import { buildStudentRecordPdfAttachment, resolveStudentRecordEmailRecipient, studentRecordEmailRecipients } from "./studentRecordEmail";
 
 describe("protected student record email recipients", () => {
   const record = {
@@ -17,5 +17,12 @@ describe("protected student record email recipients", () => {
 
   it("refuses an unlinked guardian recipient", () => {
     expect(() => resolveStudentRecordEmailRecipient(record, { kind: "guardian", guardianId: 99 })).toThrow(/registered email address/i);
+  });
+
+  it("generates an in-memory PDF attachment for the exact authorized enrollment", async () => {
+    const attachment = await buildStudentRecordPdfAttachment(record, 91);
+    expect(attachment.filename).toBe("nsos-2026-014-student-enrollment-record.pdf");
+    expect(Buffer.from(attachment.base64, "base64").subarray(0, 4).toString()).toBe("%PDF");
+    expect(attachment.idempotencyKey).toContain("student-record-7-91-");
   });
 });

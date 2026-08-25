@@ -366,3 +366,5 @@
 - [x] Add a smooth reduced-motion-safe fade-in transition from the protected record skeleton to loaded student profile and enrollment details.
 - [x] Add a loaded-state-guarded PDF export button for the tenant-scoped student profile and enrollment record shown after confirmed enrollment.
 - [x] Add a tenant-scoped, recipient-selecting, confirmation-gated PDF email-share handoff for the loaded student record, with no automatic send and visible sender-verification state.
+- [ ] Add editable, bounded, server-sanitized subject and body text to the confirmation-gated student-record PDF email-share workflow.
+- [x] Run controlled pre-deployment verification of the protected student-record PDF export and email-share confirmation/sender-readiness safeguards without sending a real recipient email.
