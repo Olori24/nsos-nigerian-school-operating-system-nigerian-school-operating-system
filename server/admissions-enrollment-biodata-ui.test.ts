@@ -6,8 +6,13 @@ const dbSource = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
 
 describe("admissions enrollment biodata and letter wiring", () => {
   it("explains the confirmed-enrollment letter trigger to school staff", () => {
-    expect(enrollmentStation).toContain("Enroll & send admission letter");
-    expect(enrollmentStation).toContain("approved admission biodata");
+    expect(enrollmentStation).toContain("Accepted applicant to enrolled learner");
+    expect(enrollmentStation).toContain("Review enrollment details");
+    expect(enrollmentStation).toContain("Final enrollment confirmation");
+    expect(enrollmentStation).toContain("Confirm enrollment");
+    expect(enrollmentStation).toContain("confirmed: true");
+    expect(enrollmentStation).toContain("does not collect or record payment");
+    expect(enrollmentStation).toContain("Accepted applicant to enrolled learner");
     expect(enrollmentStation).toContain("not_sent_no_guardian_email");
     expect(enrollmentStation).toContain("guardian record was created and linked");
   });

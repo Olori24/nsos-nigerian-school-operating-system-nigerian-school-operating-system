@@ -966,9 +966,10 @@ export const nsosRouter = router({
       .input(schoolInput.extend({ documentId: z.number().int().positive(), status: z.enum(["verified", "rejected"]), reviewNote: z.string().max(2000).optional() }))
       .mutation(({ ctx, input }) => db.reviewAdmissionDocument({ ...input, reviewerId: ctx.user.id })),
     enrol: managementProcedure("students.write")
-      .input(schoolInput.extend({ applicationId: z.number().int().positive(), admissionNo: z.string().min(2).max(64), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
+      .input(schoolInput.extend({ applicationId: z.number().int().positive(), admissionNo: z.string().min(2).max(64), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const { admissionLetter, ...enrollment } = await db.enrolApplication(input);
+        const { confirmed: _confirmed, ...enrollmentInput } = input;
+        const { admissionLetter, ...enrollment } = await db.enrolApplication(enrollmentInput);
         let letterDelivery: "sent" | "failed" | "not_sent_no_guardian_email" = "not_sent_no_guardian_email";
         let messageLogId: number | undefined;
         if (admissionLetter.guardianEmail) {

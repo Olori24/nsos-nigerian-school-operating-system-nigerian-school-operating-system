@@ -15,7 +15,7 @@ import type { TrpcContext } from "./_core/context";
 const owner = { id: 91, openId: "school-owner", name: "School Owner", email: "owner@example.com", loginMethod: "email", role: "user" as const, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() };
 const membership = { id: 1, schoolId: 7, userId: 91, role: "owner", status: "active", createdAt: new Date(), updatedAt: new Date() };
 const enrollment = { studentId: 44, biodataTransferred: true, guardianLinked: true, guardianCreated: true, admissionLetter: { guardianEmail: "guardian@example.com", guardianName: "Mrs. Okafor", studentName: "Amina Chiamaka Okafor", schoolName: "Greener Future Academy", schoolAddress: "Abeokuta, Ogun State", admissionNo: "GFA/2026/014", className: "Primary 1", sessionName: "2026/2027 Session", admittedOn: "2026-09-01" } };
-const input = { schoolId: 7, applicationId: 32, admissionNo: "GFA/2026/014", classId: 4, sessionId: 3, admittedOn: "2026-09-01" };
+const input = { schoolId: 7, applicationId: 32, admissionNo: "GFA/2026/014", classId: 4, sessionId: 3, admittedOn: "2026-09-01", confirmed: true };
 const caller = () => appRouter.createCaller({ user: owner, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 
 describe("confirmed admission enrollment and letter delivery", () => {
@@ -59,5 +59,11 @@ describe("confirmed admission enrollment and letter delivery", () => {
     vi.mocked(db.getSchoolMembership).mockResolvedValue({ ...membership, role: "teacher" } as any);
     await expect(caller().nsos.admissions.enrol(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(db.enrolApplication).not.toHaveBeenCalled();
+  });
+
+  it("requires an explicit final enrollment confirmation before any learner or letter workflow begins", async () => {
+    await expect(caller().nsos.admissions.enrol({ ...input, confirmed: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(db.enrolApplication).not.toHaveBeenCalled();
+    expect(sendAdmissionLetterEmail).not.toHaveBeenCalled();
   });
 });
