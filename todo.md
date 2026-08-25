@@ -362,3 +362,4 @@
 - [x] Create a tenant-scoped, approval-first payment integration interface that displays sanitized provider evidence and controlled enrollment handoff readiness without activating a provider, collecting payment, or enrolling a learner.
 - [x] Complete the Admissions workspace path from applicant acceptance to explicit, confirmation-gated student enrollment with tenant-scoped onboarding evidence and no automatic payment or message action.
 - [x] Add an authorized post-enrollment success view that opens the newly created student profile and enrollment record directly from the completed Admissions confirmation flow.
+- [x] Add an accessible skeleton loading state for protected student profile and enrollment record details in the post-enrollment success dialog.

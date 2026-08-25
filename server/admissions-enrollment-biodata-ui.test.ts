@@ -16,6 +16,10 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain("View student profile");
     expect(enrollmentStation).toContain("View enrollment record");
     expect(enrollmentStation).toContain("trpc.nsos.students.record.useQuery");
+    expect(enrollmentStation).toContain("RecordViewSkeleton");
+    expect(enrollmentStation).toContain('aria-busy="true"');
+    expect(enrollmentStation).toContain("animate-pulse motion-reduce:animate-none");
+    expect(enrollmentStation).toContain("Loading the protected");
     expect(enrollmentStation).toContain("Accepted applicant to enrolled learner");
     expect(enrollmentStation).toContain("not_sent_no_guardian_email");
     expect(enrollmentStation).toContain("guardian record was created and linked");
