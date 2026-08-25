@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
-const dbSource = readFileSync(resolve(root, "server/db.ts"), "utf8");
+const dbSource = readFileSync(resolve(root, "server/db/core.ts"), "utf8");
 const routerSource = readFileSync(resolve(root, "server/routers/nsos.ts"), "utf8");
 
 describe("leader recommendation expiry safeguards", () => {

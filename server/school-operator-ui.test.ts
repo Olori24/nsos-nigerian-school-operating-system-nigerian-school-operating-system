@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 const operator = readFileSync(new URL("../client/src/components/SchoolOperator.tsx", import.meta.url), "utf8");
 const home = readFileSync(new URL("../client/src/pages/Home.tsx", import.meta.url), "utf8");
-const db = readFileSync(new URL("./db.ts", import.meta.url), "utf8");
+const db = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
 
 describe("School Operator interface", () => {
   it("makes School Operator owner/admin-only and available in the command center navigation", () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const dbSource = readFileSync(new URL("./db.ts", import.meta.url), "utf8");
+const dbSource = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
 
 describe("family portal announcement visibility", () => {
   it("limits family portal payloads to published messages for the relevant audience", () => {

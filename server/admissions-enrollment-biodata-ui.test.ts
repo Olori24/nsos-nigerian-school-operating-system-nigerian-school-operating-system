@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const enrollmentStation = readFileSync(new URL("../client/src/components/EnrollmentStation.tsx", import.meta.url), "utf8");
-const dbSource = readFileSync(new URL("./db.ts", import.meta.url), "utf8");
+const dbSource = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
 
 describe("admissions enrollment biodata and letter wiring", () => {
   it("explains the confirmed-enrollment letter trigger to school staff", () => {
