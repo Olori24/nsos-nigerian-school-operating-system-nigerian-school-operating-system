@@ -368,3 +368,5 @@
 - [x] Add a tenant-scoped, recipient-selecting, confirmation-gated PDF email-share handoff for the loaded student record, with no automatic send and visible sender-verification state.
 - [ ] Add editable, bounded, server-sanitized subject and body text to the confirmation-gated student-record PDF email-share workflow.
 - [x] Run controlled pre-deployment verification of the protected student-record PDF export and email-share confirmation/sender-readiness safeguards without sending a real recipient email.
+- [ ] Inspect and prepare a confirmation-gated Resend sender-domain verification handoff for `nsos.top`, including exact provider-issued DNS records and sender-readiness validation; do not alter DNS, domain registration, or provider settings without final approval.
+- [x] Request and document a DomainKing-supported DNS-only management path for `nsos.top` because the available zone-creation flow requires an unsupplied IP address; do not invent an A record or alter unrelated domain settings. DomainKing Support ticket #738432 is open, awaiting a provider response.
