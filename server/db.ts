@@ -818,14 +818,23 @@ async function tutorWithSubject(schoolId: number, tutorId: number) {
 
 export async function getAiTutorWorkspace(schoolId: number) {
   const db = await database();
-  const tutors = await db.select({ tutor: aiTutors, subjectName: subjects.name, subjectCode: subjects.code, supervisorName: users.name }).from(aiTutors).innerJoin(subjects, eq(aiTutors.subjectId, subjects.id)).leftJoin(users, eq(aiTutors.supervisorUserId, users.id)).where(eq(aiTutors.schoolId, schoolId)).orderBy(desc(aiTutors.updatedAt));
-  const subjectList = await db.select().from(subjects).where(and(eq(subjects.schoolId, schoolId), eq(subjects.status, "active"))).orderBy(subjects.name);
-  const supervisors = await db.select({ userId: schoolMemberships.userId, name: users.name, role: schoolMemberships.role }).from(schoolMemberships).innerJoin(users, eq(schoolMemberships.userId, users.id)).where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.status, "active"), or(eq(schoolMemberships.role, "owner"), eq(schoolMemberships.role, "admin"), eq(schoolMemberships.role, "teacher")))).orderBy(users.name);
-  const openEscalations = await db.select({ tutorId: aiTutorEscalations.tutorId, count: sql<number>`count(*)` }).from(aiTutorEscalations).where(and(eq(aiTutorEscalations.schoolId, schoolId), eq(aiTutorEscalations.status, "open"))).groupBy(aiTutorEscalations.tutorId);
-  const feedbackSummaries = await db.select({ tutorId: aiTutorFeedback.tutorId, total: sql<number>`count(*)`, helpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'helpful' then 1 else 0 end)`, partlyHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'partly_helpful' then 1 else 0 end)`, notHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'not_helpful' then 1 else 0 end)` }).from(aiTutorFeedback).where(eq(aiTutorFeedback.schoolId, schoolId)).groupBy(aiTutorFeedback.tutorId);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const rollingThirtyDayStart = new Date(today);
+  rollingThirtyDayStart.setUTCDate(rollingThirtyDayStart.getUTCDate() - 29);
+  const [tutors, subjectList, supervisors, openEscalations, feedbackSummaries, usageToday, usageThirtyDays] = await Promise.all([
+    db.select({ tutor: aiTutors, subjectName: subjects.name, subjectCode: subjects.code, supervisorName: users.name }).from(aiTutors).innerJoin(subjects, eq(aiTutors.subjectId, subjects.id)).leftJoin(users, eq(aiTutors.supervisorUserId, users.id)).where(eq(aiTutors.schoolId, schoolId)).orderBy(desc(aiTutors.updatedAt)),
+    db.select().from(subjects).where(and(eq(subjects.schoolId, schoolId), eq(subjects.status, "active"))).orderBy(subjects.name),
+    db.select({ userId: schoolMemberships.userId, name: users.name, role: schoolMemberships.role }).from(schoolMemberships).innerJoin(users, eq(schoolMemberships.userId, users.id)).where(and(eq(schoolMemberships.schoolId, schoolId), eq(schoolMemberships.status, "active"), or(eq(schoolMemberships.role, "owner"), eq(schoolMemberships.role, "admin"), eq(schoolMemberships.role, "teacher")))).orderBy(users.name),
+    db.select({ tutorId: aiTutorEscalations.tutorId, count: sql<number>`count(*)` }).from(aiTutorEscalations).where(and(eq(aiTutorEscalations.schoolId, schoolId), eq(aiTutorEscalations.status, "open"))).groupBy(aiTutorEscalations.tutorId),
+    db.select({ tutorId: aiTutorFeedback.tutorId, total: sql<number>`count(*)`, helpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'helpful' then 1 else 0 end)`, partlyHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'partly_helpful' then 1 else 0 end)`, notHelpful: sql<number>`sum(case when ${aiTutorFeedback.helpfulness} = 'not_helpful' then 1 else 0 end)` }).from(aiTutorFeedback).where(eq(aiTutorFeedback.schoolId, schoolId)).groupBy(aiTutorFeedback.tutorId),
+    db.select({ questions: sql<number>`coalesce(sum(${aiTutorSessionSummaries.questionCount}), 0)`, supportRequests: sql<number>`coalesce(sum(${aiTutorSessionSummaries.escalationCount}), 0)` }).from(aiTutorSessionSummaries).where(and(eq(aiTutorSessionSummaries.schoolId, schoolId), sql`${aiTutorSessionSummaries.sessionDate} >= ${today}`)),
+    db.select({ questions: sql<number>`coalesce(sum(${aiTutorSessionSummaries.questionCount}), 0)`, supportRequests: sql<number>`coalesce(sum(${aiTutorSessionSummaries.escalationCount}), 0)` }).from(aiTutorSessionSummaries).where(and(eq(aiTutorSessionSummaries.schoolId, schoolId), sql`${aiTutorSessionSummaries.sessionDate} >= ${rollingThirtyDayStart}`)),
+  ]);
   const escalationCounts = new Map(openEscalations.map(item => [item.tutorId, Number(item.count)]));
   const feedbackByTutor = new Map(feedbackSummaries.map(item => [item.tutorId, { total: Number(item.total), helpful: Number(item.helpful ?? 0), partlyHelpful: Number(item.partlyHelpful ?? 0), notHelpful: Number(item.notHelpful ?? 0) }]));
-  return { tutors: tutors.map(item => ({ ...item.tutor, subjectName: item.subjectName, subjectCode: item.subjectCode, supervisorName: item.supervisorName ?? "Assigned school supervisor", openEscalations: escalationCounts.get(item.tutor.id) ?? 0, feedback: feedbackByTutor.get(item.tutor.id) ?? { total: 0, helpful: 0, partlyHelpful: 0, notHelpful: 0 } })), subjects: subjectList, supervisors };
+  const activeTutors = tutors.filter(item => item.tutor.status === "active").map(item => item.tutor);
+  return { tutors: tutors.map(item => ({ ...item.tutor, subjectName: item.subjectName, subjectCode: item.subjectCode, supervisorName: item.supervisorName ?? "Assigned school supervisor", openEscalations: escalationCounts.get(item.tutor.id) ?? 0, feedback: feedbackByTutor.get(item.tutor.id) ?? { total: 0, helpful: 0, partlyHelpful: 0, notHelpful: 0 } })), subjects: subjectList, supervisors, usage: { questionsToday: Number(usageToday[0]?.questions ?? 0), questionsLast30Days: Number(usageThirtyDays[0]?.questions ?? 0), supportRequestsToday: Number(usageToday[0]?.supportRequests ?? 0), supportRequestsLast30Days: Number(usageThirtyDays[0]?.supportRequests ?? 0), activeTutorCount: activeTutors.length, configuredDailyQuestionLimits: activeTutors.map(tutor => ({ tutorId: tutor.id, limit: tutor.dailyQuestionLimit })), note: "This is a tenant aggregate usage envelope, not a token, provider invoice, or currency-cost estimate. Learner conversations are not retained." } };
 }
 
 export async function getTeacherAiTutorAnalytics(schoolId: number, userId: number) {
@@ -1744,6 +1753,65 @@ export async function getOperationsCommandCenter(schoolId: number) {
   };
 }
 
+export type AcademyLaunchReadinessStatus = "ready" | "warning" | "blocked";
+export type AcademyLaunchReadinessInput = {
+  profileConfigured: boolean;
+  programCount: number;
+  moduleCount: number;
+  materialCount: number;
+  activeTutorCount: number;
+  websitePublished: boolean;
+  admissionsEnabled: boolean;
+  paymentProviderReady: boolean;
+  emailSenderNeedsVerification: boolean;
+  emailFailedCount: number;
+  activeCertificationPolicyCount: number;
+};
+
+export function deriveAcademyLaunchReadiness(input: AcademyLaunchReadinessInput) {
+  const checks: Array<{ id: string; label: string; status: AcademyLaunchReadinessStatus; detail: string; destination: "learning" | "website" | "admissions" | "finance" | "communications" | "ai-tutors" | "institution-builder" }> = [
+    { id: "operating-profile", label: "Owner-approved academy direction", status: input.profileConfigured ? "ready" : "warning", detail: input.profileConfigured ? "Private mission and learner context are available for planning." : "Save the owner-approved mission, learners, and learning approach before relying on AI planning.", destination: "institution-builder" },
+    { id: "learning-foundation", label: "Internal learning foundation", status: input.programCount > 0 && input.moduleCount > 0 && input.materialCount > 0 ? "ready" : "blocked", detail: input.programCount > 0 && input.moduleCount > 0 && input.materialCount > 0 ? `${input.programCount} programme${input.programCount === 1 ? "" : "s"}, ${input.moduleCount} module${input.moduleCount === 1 ? "" : "s"}, and ${input.materialCount} internal material${input.materialCount === 1 ? "" : "s"} are available for owner review.` : "Prepare and review programme, module, and material drafts before treating the learning offer as ready.", destination: "learning" },
+    { id: "supervised-tutors", label: "Supervised AI Tutor coverage", status: input.activeTutorCount > 0 ? "ready" : "warning", detail: input.activeTutorCount > 0 ? `${input.activeTutorCount} active supervised AI tutor${input.activeTutorCount === 1 ? " is" : "s are"} configured within existing tutor boundaries.` : "No active AI tutor is configured. Tutor setup must remain supervised, scope-bound, and separate from assessment decisions.", destination: "ai-tutors" },
+    { id: "public-presence", label: "Public website and admissions decision", status: input.websitePublished && input.admissionsEnabled ? "ready" : "blocked", detail: input.websitePublished && input.admissionsEnabled ? "A published website with admissions enabled is visible through the existing protected publication controls." : "Review website content, public claims, publication, and admissions visibility separately. A private draft is not a public academy.", destination: "website" },
+    { id: "payment-readiness", label: "Verified payment-provider readiness", status: input.paymentProviderReady ? "ready" : "blocked", detail: input.paymentProviderReady ? "A payment provider is configured as ready; complete controlled merchant and payment-to-enrollment validation before accepting learners." : "A verified payment provider is required before any paid enrollment journey can be treated as available.", destination: "finance" },
+    { id: "email-readiness", label: "Transactional email readiness", status: input.emailSenderNeedsVerification ? "blocked" : input.emailFailedCount > 0 ? "warning" : "ready", detail: input.emailSenderNeedsVerification ? "A verified sender domain is still required; NSOS must not represent email delivery as launch-ready." : input.emailFailedCount > 0 ? `${input.emailFailedCount} recorded delivery failure${input.emailFailedCount === 1 ? " needs" : "s need"} review before relying on email.` : "No current sender-verification block or recorded email-delivery failure is present in this tenant aggregate.", destination: "communications" },
+    { id: "private-certificate-policy", label: "Private certificate-policy readiness", status: input.activeCertificationPolicyCount > 0 ? "warning" : "blocked", detail: input.activeCertificationPolicyCount > 0 ? "A private certificate policy is active. Issuance remains human-confirmed and public verification is not available." : "No active private certificate policy is configured. Define issuer and human-reviewed completion criteria before preparing any record.", destination: "learning" },
+    { id: "staging-and-recovery", label: "Staging, recovery, and capacity evidence", status: "blocked", detail: "An isolated synthetic staging run, restore rehearsal, and recorded progressive-load evidence are required before a capacity or broad-launch claim.", destination: "institution-builder" },
+  ];
+  const summary = checks.reduce((totals, check) => ({ ...totals, [check.status]: totals[check.status] + 1 }), { ready: 0, warning: 0, blocked: 0 });
+  return { checks, summary, status: summary.blocked > 0 ? "blocked" as const : summary.warning > 0 ? "warning" as const : "ready" as const, source: "deterministic-tenant-configuration-v1" as const };
+}
+
+export async function getAcademyLaunchReadiness(schoolId: number) {
+  const db = await database();
+  const [profile, programs, modules, materials, activeTutors, website, activePolicies, providers, email] = await Promise.all([
+    getInstitutionOperatingProfile(schoolId),
+    db.select({ value: sql<number>`count(*)` }).from(learningPrograms).where(eq(learningPrograms.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(programCurriculumModules).where(eq(programCurriculumModules.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(programCourseMaterials).where(eq(programCourseMaterials.schoolId, schoolId)),
+    db.select({ value: sql<number>`count(*)` }).from(aiTutors).where(and(eq(aiTutors.schoolId, schoolId), eq(aiTutors.status, "active"))),
+    db.select({ published: schoolWebsites.published, admissionsEnabled: schoolWebsites.admissionsEnabled }).from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1),
+    db.select({ value: sql<number>`count(*)` }).from(programCertificationPolicies).where(and(eq(programCertificationPolicies.schoolId, schoolId), eq(programCertificationPolicies.status, "active"))),
+    listProviderConfigurations(schoolId),
+    getEmailServiceReadiness(schoolId),
+  ]);
+  const payment = providers.find(provider => provider.channel === "payment");
+  return deriveAcademyLaunchReadiness({
+    profileConfigured: Boolean(profile?.mission && profile?.targetLearners),
+    programCount: Number(programs[0]?.value ?? 0),
+    moduleCount: Number(modules[0]?.value ?? 0),
+    materialCount: Number(materials[0]?.value ?? 0),
+    activeTutorCount: activeTutors.length,
+    websitePublished: Boolean(website[0]?.published),
+    admissionsEnabled: Boolean(website[0]?.admissionsEnabled),
+    paymentProviderReady: Boolean(payment?.status === "ready" && payment.hasCredentials),
+    emailSenderNeedsVerification: email.managedSenderNeedsVerification,
+    emailFailedCount: email.failedCount,
+    activeCertificationPolicyCount: Number(activePolicies[0]?.value ?? 0),
+  });
+}
+
 export async function refreshSchoolOperatorInsights(schoolId: number) {
   const db = await database();
   const [dashboard, onboarding, commandCenter, programs, activeEnrollments, completedEnrollments, certificates, failedJobs, submittedEvidence, returnedEvidence, website] = await Promise.all([
@@ -1793,8 +1861,8 @@ export async function dismissSchoolOperatorInsight(input: { schoolId: number; in
 }
 
 export async function getSchoolOperatorWorkspace(schoolId: number) {
-  const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights] = await Promise.all([getInstitutionOperatingProfile(schoolId), getSchoolOperatorWorkflowPreferences(schoolId), getDashboardSummary(schoolId), getTenantOnboardingStatus(schoolId), getOperationsCommandCenter(schoolId), listSchoolOperatorInsights(schoolId)]);
-  return { profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, source: "deterministic-v1" as const, limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."] };
+  const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness] = await Promise.all([getInstitutionOperatingProfile(schoolId), getSchoolOperatorWorkflowPreferences(schoolId), getDashboardSummary(schoolId), getTenantOnboardingStatus(schoolId), getOperationsCommandCenter(schoolId), listSchoolOperatorInsights(schoolId), getAcademyLaunchReadiness(schoolId)]);
+  return { profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness, source: "deterministic-v1" as const, limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."] };
 }
 
 export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: number; executedBy: number; sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean }) {

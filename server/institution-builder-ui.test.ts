@@ -22,6 +22,8 @@ describe("Institution Builder interface", () => {
     expect(builder).toContain("What do you want to build?");
     expect(builder).toContain("Build my institution");
     expect(builder).toContain("Start from a template");
+    expect(builder).toContain("OEA Academy");
+    expect(builder).toContain("Private AI academy reference foundation");
     expect(builder).toContain("AI Academy");
     expect(builder).toContain("Refine without replacing this version");
     expect(builder).toContain("Prepare new version");

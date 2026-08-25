@@ -348,3 +348,8 @@
 - [x] Prepare the verified Resend sender-domain handoff for NSOS and perform only an explicitly confirmed provider-side configuration change; keep the integration test as the release gate.
 - [ ] Prepare an isolated synthetic staging, recovery, and progressive-load validation environment without production records, live provider effects, or capacity claims.
 - [ ] Run the approved synthetic recovery and staged-load validation, record measured evidence, and update the readiness verdict only from those results.
+- [x] Audit the Autonomous AI Academy mission against current NSOS modules, database state, provider dependencies, safety constraints, and launch evidence; classify each requested capability as available, gap, external blocker, or explicitly out of scope.
+- [x] Define an approval-first OEA Academy reference-institution blueprint covering truthful identity, learning offer, policies, AI-role disclosures, curriculum scope, pricing/admissions readiness, protected handoffs, and a no-fabricated-claims rule.
+- [x] Implement the highest-value connected academy setup and owner-review gaps identified by the audit, reusing existing Institution Builder, Course Studio, File-to-School, AI Tutor, School Operator, and Command Centre workflows rather than creating mock surfaces.
+- [x] Strengthen the requested AI academy roles, tutoring, course-generation, student-success, AI-cost, and launch-readiness controls only where a safe owner-approved and tenant-isolated implementation gap is verified.
+- [ ] Validate the end-to-end reference-academy readiness path using no real people, payments, certificates, messages, or provider-side changes; publish a PASS/FAIL/BLOCKED launch scorecard, checkpoint, and synchronize GitHub.

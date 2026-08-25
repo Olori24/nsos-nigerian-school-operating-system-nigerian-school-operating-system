@@ -49,6 +49,15 @@ describe("School Operator interface", () => {
     expect(operator).toContain("Current limits");
   });
 
+  it("shows deterministic academy launch readiness without treating configuration evidence as a public launch decision", () => {
+    expect(operator).toContain("Academy Launch Readiness");
+    expect(operator).toContain("This deterministic checklist reads current tenant configuration evidence only.");
+    expect(operator).toContain("It does not publish, activate a course, send a message, charge, enroll, issue a credential, or approve a launch.");
+    expect(operator).toContain("A status of READY means only that the named configuration evidence is present.");
+    expect(db).toContain("deriveAcademyLaunchReadiness");
+    expect(db).toContain("staging-and-recovery");
+  });
+
   it("keeps learning-evidence intelligence aggregate-only and review-first", () => {
     expect(db).toContain("milestone-evidence-awaiting-review");
     expect(db).toContain("milestone-evidence-returned");
