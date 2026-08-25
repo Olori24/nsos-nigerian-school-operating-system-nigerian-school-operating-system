@@ -34,6 +34,14 @@ describe("Institution Builder interface", () => {
     expect(builder).toContain("Your full prompt is used to prepare this private blueprint and is not retained in the operational audit record.");
   });
 
+  it("keeps the OEA Academy starter within the protected builder request limit", () => {
+    const oeaTemplate = builder.match(/label: "OEA Academy", description: "Private AI academy reference foundation", prompt: "([^"]+)"/);
+    expect(oeaTemplate?.[1]).toBeTruthy();
+    expect(oeaTemplate?.[1].length).toBeLessThanOrEqual(700);
+    expect(builder).toContain("const institutionBuilderRequestMaxLength = 700;");
+    expect(builder).toContain("maxLength={institutionBuilderRequestMaxLength}");
+  });
+
   it("replaces a raw non-JSON parsing failure with a safe mobile recovery state", () => {
     expect(builder).toContain("formatInstitutionBuilderError");
     expect(builder).toContain('role="alert"');

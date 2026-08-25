@@ -49,13 +49,21 @@ Before NSOS may configure a reference academy, the owner must make one explicit 
 | Create a new institution | Use the authenticated institution-creation workflow, select `online_training_provider`, and provide only legitimate owner-approved identity/contact data. | The new tenant begins empty; no synthetic learners, money, credentials, or social proof is added. |
 | Defer tenant selection | Continue closing cross-tenant product capabilities and launch controls without creating a reference institution. | No tenant data is changed. |
 
+### Owner selection recorded
+
+On 2026-08-25, the authenticated owner explicitly selected the existing **OAE Online Academy** online-training-provider tenant as the reference institution for this mission. Its private Institution Builder currently showed no saved blueprints. The next permitted action is to prepare one reviewable private OEA Academy blueprint in that tenant. This does not authorize publication, people, learner enrollment, fees or payments, messaging, certificates, provider changes, domain changes, or any public launch step.
+
+The owner then selected the private **OEA Academy** template and submitted one blueprint-preparation request through the protected Institution Builder. The request was rejected by the existing 700-character server bound before planner or persistence work. The visible recovery state correctly confirmed that nothing was applied, published, or recorded. The starter was then shortened to remain within the unchanged protected request bound and covered by a focused UI regression. No applied programme, public content, financial record, message, provider setting, domain setting, learner, staff record, enrollment, or credential had been created.
+
+After the bounded-template repair, the authenticated workspace was refreshed for a retry but initially displayed only its loading shell. The retried protected request has not yet been represented as successful; the blueprint list remains the source of truth for that outcome.
+
 ## Current launch verdict
 
 | Verdict dimension | Status |
 | --- | --- |
 | Private academy planning and internal learning preparation | **PASS** |
 | Safe disclosed AI tutoring and operator recommendations | **PASS** |
-| Owner-selected reference institution | **BLOCKED** |
+| Owner-selected reference institution | **PASS — OAE Online Academy selected for private review** |
 | Public academy website/catalogue/admissions | **BLOCKED** |
 | Verified email delivery | **BLOCKED** |
 | Verified payment and payment-to-enrollment journey | **BLOCKED** |
