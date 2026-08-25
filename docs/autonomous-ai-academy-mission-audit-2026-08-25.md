@@ -55,7 +55,29 @@ On 2026-08-25, the authenticated owner explicitly selected the existing **OAE On
 
 The owner then selected the private **OEA Academy** template and submitted one blueprint-preparation request through the protected Institution Builder. The request was rejected by the existing 700-character server bound before planner or persistence work. The visible recovery state correctly confirmed that nothing was applied, published, or recorded. The starter was then shortened to remain within the unchanged protected request bound and covered by a focused UI regression. No applied programme, public content, financial record, message, provider setting, domain setting, learner, staff record, enrollment, or credential had been created.
 
-After the bounded-template repair, the authenticated workspace was refreshed for a retry but initially displayed only its loading shell. The retried protected request has not yet been represented as successful; the blueprint list remains the source of truth for that outcome.
+After the bounded-template repair, the authenticated workspace was refreshed for a retry and returned to the OAE Academy owner context. It still showed no saved private blueprints. The retried protected request has not yet been represented as successful; the blueprint list remains the source of truth for that outcome.
+
+At the first deployed-host verification, the authenticated workspace continued to render the prior long starter even after cache-bypassing and versioned-URL refreshes. To avoid repeating a known-rejected request from stale client code, no second blueprint request was submitted from that template. The protected blueprint list still contained zero records. The existing protected form also accepts a bounded owner-entered request, so any retry must use a request that conforms to the unchanged server limit.
+
+The owner-approved bounded request was then submitted through that protected form. The preparation result was pending at the time of submission; it was not an application of learning drafts or an authorization for public, financial, communication, provider, domain, enrollment, people, or credential actions.
+
+Two post-submission checks showed the planner still pending at 100% display progress and the private-blueprint list still at zero. This is a pending technical state, not a successful academy foundation. No further submission or retry was initiated while the protected request remained in flight.
+
+Read-only browser request metadata then showed the authenticated visible workspace was operating with `schoolId` 30001, whereas the owner-selected **OAE Online Academy** reference tenant is `schoolId` 150001. This context mismatch means no resulting blueprint may be treated as a foundation for the selected reference tenant. Further academy preparation is paused until the owner switches the protected workspace to the exact selected tenant and any pending request outcome is verified through the appropriate tenant-scoped workflow.
+
+The owner then switched through the protected institution selector. The visible authenticated workspace now identifies **OAE Online Academy**, short code **OOA**, as an **online training provider**, matching the selected reference tenant. Preparation may proceed only in this tenant and only as a private review blueprint.
+
+The selected tenant already contains one older, unapplied private coding-school blueprint. It is not the OEA Academy foundation and will remain unchanged. The visible tenant setup still has no learner or staff records; this state is not an invitation to create people, enrollments, fees, bank accounts, messages, or public content for the academy mission.
+
+Using the verified OAE Online Academy workspace, the owner-approved bounded OEA Academy request was submitted through the protected Builder as a distinct private review blueprint. The request was pending at submission. It does not apply learning drafts or authorize publication, people, enrollment, financial action, communication, credentials, provider configuration, or domain changes.
+
+Two subsequent protected-workspace checks still showed the request pending at the Builder’s display limit and did not show an additional OEA Academy blueprint. This is not a completed foundation and does not justify a duplicate submission, retry, application, or launch step.
+
+The bounded request then completed through the protected workflow. Read-only verification shows a new **prepared** private blueprint in the selected OAE Online Academy tenant (`schoolId` 150001, blueprint `210001`, created 2026-08-25 03:10:50 UTC) with no applied programme. This is the only completed academy foundation action in the selected tenant for this step. It did not create or modify people, enrollment, fees or payments, messages, credentials, public content, provider configuration, or domain configuration.
+
+The authenticated OAE Online Academy owner workspace visibly lists blueprint `210001` as **Private review ready**, alongside the existing earlier blueprint `120001`. The tenant still shows zero learners, zero staff, zero completed migrations, no live communication channels, and sender verification pending. Those facts keep the public academy launch verdict blocked.
+
+Reviewing blueprint `210001` confirms that it remains private and unapplied, but its displayed content is a safe guided fallback rather than a fully tailored OEA Academy design because the upstream planner experienced network retries. The owner must review, edit, or regenerate its recommendations before any separate application decision; this fallback is not evidence of an approved five-programme curriculum, a public offer, or a launch-ready academy.
 
 ## Current launch verdict
 
