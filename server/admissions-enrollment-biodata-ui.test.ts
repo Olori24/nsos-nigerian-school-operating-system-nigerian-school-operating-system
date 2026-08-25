@@ -12,6 +12,10 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain("Confirm enrollment");
     expect(enrollmentStation).toContain("confirmed: true");
     expect(enrollmentStation).toContain("does not collect or record payment");
+    expect(enrollmentStation).toContain("Enrollment complete");
+    expect(enrollmentStation).toContain("View student profile");
+    expect(enrollmentStation).toContain("View enrollment record");
+    expect(enrollmentStation).toContain("trpc.nsos.students.record.useQuery");
     expect(enrollmentStation).toContain("Accepted applicant to enrolled learner");
     expect(enrollmentStation).toContain("not_sent_no_guardian_email");
     expect(enrollmentStation).toContain("guardian record was created and linked");
@@ -26,5 +30,7 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(dbSource).toContain("eq(guardians.schoolId, input.schoolId)");
     expect(dbSource).toContain("await db.insert(studentGuardians).values({ studentId, guardianId, isPrimary: true })");
     expect(dbSource).toContain("relationship: \"Parent/Guardian\"");
+    expect(dbSource).toContain("getStudentEnrollmentRecord");
+    expect(dbSource).toContain("eq(studentProfiles.schoolId, schoolId)");
   });
 });

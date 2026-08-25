@@ -986,7 +986,7 @@ export const nsosRouter = router({
           }
         }
         await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_enrolled", targetType: "admissions_application", targetId: input.applicationId, metadata: { outcome: "student_created", biodataTransferred: enrollment.biodataTransferred, guardianLinked: enrollment.guardianLinked, guardianCreated: enrollment.guardianCreated, admissionLetterDelivery: letterDelivery, messageLogCreated: Boolean(messageLogId) } });
-        return { ...enrollment, letterDelivery };
+        return { ...enrollment, studentName: admissionLetter.studentName, admissionNo: admissionLetter.admissionNo, letterDelivery };
       }),
   }),
 
@@ -1005,6 +1005,7 @@ export const nsosRouter = router({
       }),
     migrationHistory: studentMigrationAdminProcedure.input(schoolInput).query(({ input }) => db.listStudentMigrationBatches(input.schoolId)),
     history: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive() })).query(({ input }) => db.getStudentAcademicHistory(input.schoolId, input.studentId)),
+    record: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive() })).query(({ input }) => db.getStudentEnrollmentRecord(input.schoolId, input.studentId)),
     create: managementProcedure("students.write")
       .input(schoolInput.extend({ admissionNo: z.string().min(2).max(64), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
       .mutation(({ input }) => { const origin = validatedNigerianOrigin(input); const { localGovernmentOfOrigin: _localGovernmentOfOrigin, ...student } = input; return db.createStudent({ ...student, stateOfOrigin: origin.stateOfOrigin, localGovernment: origin.localGovernmentOfOrigin }); }),

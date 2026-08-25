@@ -2396,9 +2396,10 @@ export async function enrolApplication(input: { schoolId: number; applicationId:
     guardianId = Number(guardian[0].insertId);
   }
   await db.insert(studentGuardians).values({ studentId, guardianId, isPrimary: true });
-  await db.insert(enrollments).values({ schoolId: input.schoolId, studentId, classId: input.classId, sessionId: input.sessionId, enrolledOn: asDate(input.admittedOn)! });
+  const createdEnrollment = await db.insert(enrollments).values({ schoolId: input.schoolId, studentId, classId: input.classId, sessionId: input.sessionId, enrolledOn: asDate(input.admittedOn)! });
+  const enrollmentId = Number(createdEnrollment[0].insertId);
   await db.update(admissionsApplications).set({ status: "enrolled" }).where(eq(admissionsApplications.id, input.applicationId));
-  return { studentId, biodataTransferred: true, guardianLinked: true, guardianCreated, admissionLetter: { guardianEmail: application.guardianEmail ?? null, guardianName: application.guardianName, studentName: [application.firstName, supplement.middleName?.trim(), application.lastName].filter(Boolean).join(" "), schoolName: school.name, schoolAddress: school.address ?? school.state, admissionNo: input.admissionNo, className: classRow.name, sessionName: session.name, admittedOn: input.admittedOn } };
+  return { studentId, enrollmentId, biodataTransferred: true, guardianLinked: true, guardianCreated, admissionLetter: { guardianEmail: application.guardianEmail ?? null, guardianName: application.guardianName, studentName: [application.firstName, supplement.middleName?.trim(), application.lastName].filter(Boolean).join(" "), schoolName: school.name, schoolAddress: school.address ?? school.state, admissionNo: input.admissionNo, className: classRow.name, sessionName: session.name, admittedOn: input.admittedOn } };
 }
 
 export async function listStudents(schoolId: number, search?: string, limit?: number) {
@@ -2544,6 +2545,17 @@ export async function listStudentMigrationBatches(schoolId: number) {
 export async function getStudentAcademicHistory(schoolId: number, studentId: number) {
   const db = await database();
   return db.select({ enrollment: enrollments, className: classes.name, sessionName: academicSessions.name }).from(enrollments).innerJoin(classes, eq(enrollments.classId, classes.id)).innerJoin(academicSessions, eq(enrollments.sessionId, academicSessions.id)).where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.studentId, studentId))).orderBy(desc(enrollments.enrolledOn));
+}
+
+export async function getStudentEnrollmentRecord(schoolId: number, studentId: number) {
+  const db = await database();
+  const student = (await db.select().from(studentProfiles).where(and(eq(studentProfiles.id, studentId), eq(studentProfiles.schoolId, schoolId))).limit(1))[0];
+  if (!student) return null;
+  const [guardianRows, enrollmentRows] = await Promise.all([
+    db.select({ guardian: guardians, isPrimary: studentGuardians.isPrimary }).from(studentGuardians).innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id)).where(and(eq(studentGuardians.studentId, studentId), eq(guardians.schoolId, schoolId))).orderBy(desc(studentGuardians.isPrimary)),
+    db.select({ enrollment: enrollments, className: classes.name, sessionName: academicSessions.name }).from(enrollments).innerJoin(classes, eq(enrollments.classId, classes.id)).innerJoin(academicSessions, eq(enrollments.sessionId, academicSessions.id)).where(and(eq(enrollments.schoolId, schoolId), eq(enrollments.studentId, studentId))).orderBy(desc(enrollments.enrolledOn)),
+  ]);
+  return { student, guardians: guardianRows.map(row => ({ ...row.guardian, isPrimary: row.isPrimary })), enrollments: enrollmentRows.map(row => ({ ...row.enrollment, className: row.className, sessionName: row.sessionName })) };
 }
 
 export async function createStudent(input: Record<string, unknown>) {
