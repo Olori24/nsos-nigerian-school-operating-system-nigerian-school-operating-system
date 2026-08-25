@@ -6,6 +6,7 @@ import { EnrollmentStation } from "@/components/EnrollmentStation";
 import { AdmissionDocumentReview, ResultApprovalControl } from "@/components/ReviewControls";
 import { PortalResults } from "@/components/PortalResults";
 import { ProviderConfigurationCenter } from "@/components/ProviderConfigurationCenter";
+import { PaymentEnrollmentReadiness } from "@/components/PaymentEnrollmentReadiness";
 import { PlatformRevenueConsole } from "@/components/PlatformRevenueConsole";
 import { SubscriptionStatusCard } from "@/components/SubscriptionStatusCard";
 import { AcademicHistoryStation } from "@/components/AcademicHistoryStation";
@@ -602,7 +603,7 @@ function Overview({ schoolId, role, summary, announcements, onRefresh, onNavigat
 }
 
 function BuilderFirstOwnerOverview({ schoolId, role, onNavigate }: { schoolId: number; role: "owner" | "admin"; onNavigate: (view: View) => void }) {
-  return <div className="grid gap-6"><PageHeader view="overview" action="Run operations" onAction={() => document.getElementById("institution-operations")?.scrollIntoView({ behavior: "smooth" })} /><InstitutionBuilder schoolId={schoolId} onNavigate={onNavigate} /><section id="institution-operations" className="grid gap-5"><div className="flex flex-col gap-2 border-t border-[#deebe2] pt-6"><p className="mono text-[10px] font-semibold uppercase tracking-[.16em] text-[#0f5c4f]">Run your institution</p><h2 className="text-xl font-bold tracking-[-.025em] text-[#19392d]">The details are ready when you need them.</h2><p className="max-w-2xl text-xs leading-5 text-[#6c7d74]">The builder prepares a private foundation. Use these established workspaces for any operational action that requires your review, data, or confirmation.</p></div><DashboardAppearanceSettings /><QuickStartDashboard role={role} onNavigate={onNavigate} /><OperationsCommandCenter schoolId={schoolId} onNavigate={onNavigate} /><TenantOnboardingTracker schoolId={schoolId} onNavigate={onNavigate} /></section></div>;
+  return <div className="grid gap-6"><PageHeader view="overview" action="Run operations" onAction={() => document.getElementById("institution-operations")?.scrollIntoView({ behavior: "smooth" })} /><InstitutionBuilder schoolId={schoolId} onNavigate={onNavigate} /><section id="institution-operations" className="grid gap-5"><div className="flex flex-col gap-2 border-t border-[#deebe2] pt-6"><p className="mono text-[10px] font-semibold uppercase tracking-[.16em] text-[#0f5c4f]">Run your institution</p><h2 className="text-xl font-bold tracking-[-.025em] text-[#19392d]">The details are ready when you need them.</h2><p className="max-w-2xl text-xs leading-5 text-[#6c7d74]">The builder prepares a private foundation. Use these established workspaces for any operational action that requires your review, data, or confirmation.</p></div><PaymentEnrollmentReadiness schoolId={schoolId} onNavigate={onNavigate} /><DashboardAppearanceSettings /><QuickStartDashboard role={role} onNavigate={onNavigate} /><OperationsCommandCenter schoolId={schoolId} onNavigate={onNavigate} /><TenantOnboardingTracker schoolId={schoolId} onNavigate={onNavigate} /></section></div>;
 }
 
 function QuickStartDashboard({ role, onNavigate }: { role: "owner" | "admin"; onNavigate: (view: View) => void }) {
