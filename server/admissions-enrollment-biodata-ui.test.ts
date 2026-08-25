@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const enrollmentStation = readFileSync(new URL("../client/src/components/EnrollmentStation.tsx", import.meta.url), "utf8");
 const dbSource = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
+const globalStyles = readFileSync(new URL("../client/src/index.css", import.meta.url), "utf8");
 
 describe("admissions enrollment biodata and letter wiring", () => {
   it("explains the confirmed-enrollment letter trigger to school staff", () => {
@@ -20,6 +21,11 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain('aria-busy="true"');
     expect(enrollmentStation).toContain("animate-pulse motion-reduce:animate-none");
     expect(enrollmentStation).toContain("Loading the protected");
+    expect(enrollmentStation).toContain("ResolvedRecordDetail");
+    expect(enrollmentStation).toContain("record-detail-fade-in");
+    expect(globalStyles).toContain(".record-detail-fade-in");
+    expect(globalStyles).toContain("record-detail-fade-in 180ms");
+    expect(globalStyles).toContain("@media (prefers-reduced-motion: no-preference)");
     expect(enrollmentStation).toContain("Accepted applicant to enrolled learner");
     expect(enrollmentStation).toContain("not_sent_no_guardian_email");
     expect(enrollmentStation).toContain("guardian record was created and linked");
