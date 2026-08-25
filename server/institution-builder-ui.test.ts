@@ -63,6 +63,14 @@ describe("Institution Builder interface", () => {
     expect(builder).toContain("apply.mutate({ schoolId, blueprintId: activeId, confirmed: true })");
   });
 
+  it("offers a separately confirmed deletion only for a prepared and unapplied private blueprint", () => {
+    expect(builder).toContain('blueprint?.status === "prepared" && !blueprint.appliedProgramId');
+    expect(builder).toContain("Delete this unused private blueprint");
+    expect(builder).toContain("I understand this permanently deletes this private, unapplied blueprint only.");
+    expect(builder).toContain("deleteBlueprint.mutate({ schoolId, blueprintId: activeId, confirmed: true })");
+    expect(builder).toContain("It cannot delete a programme, learner, payment, message, certificate, website, provider setting, or domain");
+  });
+
   it("keeps admissions, pricing, website, communications, and tutor work as direct protected handoffs rather than hidden autonomous actions", () => {
     expect(builder).toContain("Direct next steps—not hidden automation");
     expect(builder).toContain("onNavigate(handoff.destination)");

@@ -2136,6 +2136,16 @@ export async function getInstitutionBlueprint(input: { schoolId: number; bluepri
   return blueprint;
 }
 
+export async function deletePreparedInstitutionBlueprint(input: { schoolId: number; blueprintId: number }) {
+  const db = await database();
+  const current = await getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId });
+  if (current.status !== "prepared" || current.appliedProgramId) throw new Error("Only a private, unapplied institution blueprint can be deleted.");
+  const deleted = await db.delete(institutionBlueprints).where(and(eq(institutionBlueprints.id, input.blueprintId), eq(institutionBlueprints.schoolId, input.schoolId), eq(institutionBlueprints.status, "prepared"), isNull(institutionBlueprints.appliedProgramId)));
+  const affectedRows = Number((deleted as any)?.[0]?.affectedRows ?? (deleted as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This institution blueprint changed while it was being reviewed. Refresh before deleting it.");
+  return { id: current.id, deleted: true as const };
+}
+
 export async function updateInstitutionBlueprint(input: { schoolId: number; blueprintId: number; edits: InstitutionBlueprintEdits }) {
   const current = await getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId });
   if (current.status !== "prepared") throw new Error("Only a prepared institution blueprint can be edited. Create a new blueprint for further changes.");

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperatingType: vi.fn(), createInstitutionBlueprint: vi.fn(), listInstitutionBlueprints: vi.fn(), getInstitutionBlueprint: vi.fn(), updateInstitutionBlueprint: vi.fn(), applyInstitutionBlueprint: vi.fn(), saveInstitutionBlueprintWebsiteDraft: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
+const db = vi.hoisted(() => ({ getSchoolMembership: vi.fn(), consumeSharedRateLimit: vi.fn(), getLearningOperatingType: vi.fn(), createInstitutionBlueprint: vi.fn(), listInstitutionBlueprints: vi.fn(), getInstitutionBlueprint: vi.fn(), updateInstitutionBlueprint: vi.fn(), deletePreparedInstitutionBlueprint: vi.fn(), applyInstitutionBlueprint: vi.fn(), saveInstitutionBlueprintWebsiteDraft: vi.fn(), recordSecurityAuditEvent: vi.fn() }));
 const builder = vi.hoisted(() => ({ buildInstitutionBlueprint: vi.fn() }));
 
 vi.mock("./db", async importOriginal => ({ ...(await importOriginal<typeof import("./db")>()), ...db }));
@@ -36,6 +36,7 @@ describe("NSOS institution builder routes", () => {
     db.listInstitutionBlueprints.mockResolvedValue([record]);
     db.getInstitutionBlueprint.mockResolvedValue(record);
     db.updateInstitutionBlueprint.mockResolvedValue(record);
+    db.deletePreparedInstitutionBlueprint.mockResolvedValue({ id: 501, deleted: true });
     db.applyInstitutionBlueprint.mockResolvedValue({ blueprint: { ...record, status: "applied", appliedProgramId: 91 }, applied: true, program: { id: 91, moduleCount: 2, milestoneCount: 2, materialCount: 2 } });
     db.saveInstitutionBlueprintWebsiteDraft.mockResolvedValue({ blueprint: record, saved: true, headline: "Learn by building.", introduction: "An editable unpublished website starting point for an owner-reviewed practical learning offer.", published: false });
   });
@@ -57,6 +58,14 @@ describe("NSOS institution builder routes", () => {
     await expect(caller().nsos.institutionBuilder.update({ schoolId: 34, blueprintId: 501, edits, confirmed: true })).resolves.toMatchObject({ id: 501 });
     expect(db.updateInstitutionBlueprint).toHaveBeenCalledWith({ schoolId: 34, blueprintId: 501, edits });
     await expect(caller().nsos.institutionBuilder.update({ schoolId: 34, blueprintId: 501, edits, confirmed: false as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("deletes only a separately confirmed prepared private blueprint and records no application or external side effect", async () => {
+    await expect(caller().nsos.institutionBuilder.deleteBlueprint({ schoolId: 34, blueprintId: 501, confirmed: true })).resolves.toEqual({ id: 501, deleted: true });
+    expect(db.deletePreparedInstitutionBlueprint).toHaveBeenCalledWith({ schoolId: 34, blueprintId: 501 });
+    expect(db.applyInstitutionBlueprint).not.toHaveBeenCalled();
+    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "institution_blueprint_deleted", metadata: expect.objectContaining({ confirmationRequired: true, preparedOnly: true, appliedProgramme: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, providerChanged: false, domainChanged: false }) }));
+    await expect(caller().nsos.institutionBuilder.deleteBlueprint({ schoolId: 34, blueprintId: 501, confirmed: false as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("requires one explicit approval before it applies only the internal learning foundation and records no external or high-impact side effect", async () => {
