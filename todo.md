@@ -387,4 +387,7 @@
 - [ ] Import the NSOS code baseline into the isolated `NSOS Staging` project with fresh managed database/storage setup and no production data, secrets, custom domain, live provider, or workload configuration.
 - [x] Preserve the existing NSOS design system during staging import; the attached repository source was used and the generated-style path was bypassed.
 - [x] Attach the approved `Olori24/nsos-nigerian-school-operating-system-nigerian-school-operating-system` repository to the NSOS Staging import task before proceeding past its generated-style prompt.
+- [x] Run the owner-approved staging-only compatibility repair for the imported source and migrations, with providers disconnected and no live data, secrets, domain, publication, or workload action. TypeScript, build, and 423 tests passed with two live-provider tests intentionally skipped.
+- [x] Staging diagnostic and migration evidence: the reported diagnostics were repaired or formally documented; eight MySQL 8.4-incompatible statements in migrations `0002`, `0005`, and `0007` were repaired.
+- [ ] Obtain separate approval and a disposable MySQL 8.4 environment to execute the repaired full migration chain after journal/column preflight; do not connect to an existing or live schema.
 - [ ] Resolve or formally document the staging baseline’s reported 60 TypeScript diagnostics across 19 imported files and retained migrations `0041`–`0064 before any synthetic data setup, staging release decision, recovery rehearsal, or load probe.
