@@ -11,7 +11,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerSmsWebhookRoutes } from "../webhooks";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
-import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
+import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, unexpectedErrorObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -73,6 +73,7 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+  app.use(unexpectedErrorObservabilityMiddleware());
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);

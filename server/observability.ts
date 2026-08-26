@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Request, RequestHandler, Response } from "express";
+import type { ErrorRequestHandler, Request, RequestHandler, Response } from "express";
 
 const SLOW_REQUEST_MS = 2_000;
 const requestIdPattern = /^[A-Za-z0-9_-]{8,96}$/;
@@ -34,6 +34,29 @@ export function requestObservabilityMiddleware(options: { now?: () => number; lo
       log(level, "http_request_completed", { requestId, method: request.method, path: safeRequestPath(request), statusCode, durationMs, slow: durationMs >= SLOW_REQUEST_MS });
     });
     next();
+  };
+}
+
+function safeErrorType(error: unknown) {
+  const candidate = error instanceof Error ? error.name : "unknown_error";
+  return /^[A-Za-z0-9_.-]{1,64}$/.test(candidate) ? candidate : "unknown_error";
+}
+
+export function unexpectedErrorObservabilityMiddleware(options: { log?: typeof writeOperationalEvent } = {}): ErrorRequestHandler {
+  const log = options.log ?? writeOperationalEvent;
+  return (error, request, response, next) => {
+    const existingRequestId = response.getHeader("X-Request-ID");
+    const requestId = typeof existingRequestId === "string" ? requestIdFor(existingRequestId) : requestIdFor(request.get("x-request-id") ?? undefined);
+    response.set("X-Request-ID", requestId);
+    log("error", "http_request_unhandled", {
+      requestId,
+      method: request.method,
+      path: safeRequestPath(request),
+      statusCode: 500,
+      errorType: safeErrorType(error),
+    });
+    if (response.headersSent) return next(error);
+    response.status(500).json({ error: "internal_error", requestId });
   };
 }
 
