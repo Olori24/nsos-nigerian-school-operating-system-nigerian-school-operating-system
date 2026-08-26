@@ -150,3 +150,17 @@ With separate owner approval, a detached local worktree was created from NSOS ch
 | `0007_workable_xavin.sql` | Removes one unsupported conditional `ADD COLUMN` clause. |
 
 The artifact reverse-applied cleanly against its isolated worktree changes. With a deliberately unreachable `DATABASE_URL`, isolated `pnpm install --frozen-lockfile --ignore-scripts`, TypeScript, and production build all passed. No database command, migration execution, provider call, secret change, domain action, staging data operation, or publication occurred in this source-only review. This does **not** validate the migration chain; a future fresh disposable target still needs an explicit approval, preflight, and full-chain evidence run.
+
+### Fresh `-r2` full-chain success — pending mandatory teardown
+
+Under the separately approved fresh-rehearsal scope, a new MySQL `8.4.6` target was created with a new label, fresh data directory, socket-only networking, empty schema, absent migration journal, local-only restricted runner account, and a fresh temporary source workspace at compatible public commit `ccbfd6317332a4f14be05b74667390e1e33ab6b5`. The four-file artifact above was checksum-verified, passed `git apply --check`, and was applied only to that temporary workspace.
+
+The approved command `pnpm exec drizzle-kit migrate --config drizzle.config.ts` completed once through a short-lived loopback-only bridge. The resulting `__drizzle_migrations` journal contained 65 rows. A second execution completed as a no-op, with the journal remaining at 65 rows. The disposable schema contained 100 user tables and 1,138 user columns; targeted checks confirmed the repaired outcomes in migrations `0002`, `0003`, `0005`, and `0007`. The bridge was closed after validation.
+
+This is full-chain evidence for a fresh MySQL 8.4 target only. It does not demonstrate safety against an existing partial schema, recovery behaviour, staged-load capacity, provider behaviour, or production readiness. The new target and its temporary source workspace remain intact only until the approved teardown is verified; they must not be reused.
+
+### Fresh `-r2` teardown — verified
+
+The task’s final teardown report was independently reviewed. It confirms the `-r2` MySQL target, MySQL process, target Unix socket, PID file, data/run/log/configuration directories, bridge state, bridge process and listener, restricted runner and local-administration credentials, downloaded patch, temporary source workspace, and target-specific helper artifacts were all absent afterward. No non-disposable resource was accessed, changed, or deleted.
+
+> **Fresh-target migration verdict:** the reviewed four-file artifact executed successfully across the full retained chain on a newly empty MySQL 8.4.6 target, passed a no-op rerun, and the entire target was then removed. This remains fresh-target compatibility evidence only; existing-schema upgrade safety, recovery, staged load, provider behaviour, and production-readiness proof are separate unresolved gates.
