@@ -1,9 +1,11 @@
 # NSOS Isolated Staging Provisioning Handoff
 
 **Prepared:** 26 August 2026  
-**Status:** Preparation only — no staging environment, dataset, provider connection, DNS record, or load workload has been created.
+**Status:** An empty managed project named **NSOS Staging** has been created. It has no configured website, custom domain, connector, source, schedule, deployment, copied live record, or provider integration. No application environment, separate database/storage namespace, dataset, provider connection, DNS record, or load workload has been created.
 
 > **Purpose.** This handoff defines the minimum evidence required to provision a disposable NSOS staging environment for synthetic recovery and progressive-load validation. It does not authorise any deployment, test execution, external provider call, payment action, DNS change, or use of live institutional data.
+
+> **Current boundary.** The empty project is a management-plane container, not yet a testable application environment. It cannot be used for recovery or load evidence until its application, data, storage, secret, provider-stub, and test-identity isolation are separately reviewed.
 
 ## Scope and non-negotiable boundary
 
