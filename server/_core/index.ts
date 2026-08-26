@@ -11,7 +11,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerSmsWebhookRoutes } from "../webhooks";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
-import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, unexpectedErrorObservabilityMiddleware, writeOperationalEvent } from "../observability";
+import { livenessResponse, requiredProductionEnvironmentErrors, requestObservabilityMiddleware, unexpectedErrorObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -42,6 +42,10 @@ async function startServer() {
   app.disable("x-powered-by");
   app.use(requestObservabilityMiddleware());
   app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
+  app.get("/healthz", (_request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.status(200).json(livenessResponse());
+  });
   app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
   app.use("/api/trpc", requireSameOriginForMutations());

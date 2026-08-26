@@ -1,8 +1,12 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { requestIdFor, requestObservabilityMiddleware, requiredProductionEnvironmentErrors, safeRequestPath, unexpectedErrorObservabilityMiddleware } from "./observability";
+import { livenessResponse, requestIdFor, requestObservabilityMiddleware, requiredProductionEnvironmentErrors, safeRequestPath, unexpectedErrorObservabilityMiddleware } from "./observability";
 
 describe("production observability controls", () => {
+  it("returns a minimal liveness payload without configuration, tenant, or infrastructure data", () => {
+    expect(livenessResponse(() => new Date("2026-08-26T20:00:00.000Z"))).toEqual({ status: "ok", service: "nsos", timestamp: "2026-08-26T20:00:00.000Z" });
+  });
+
   it("uses a bounded correlation ID and never includes a query string in its request path", () => {
     expect(requestIdFor("safe_request-123")).toBe("safe_request-123");
     expect(requestIdFor("not safe?secret=1")).toMatch(/^[a-f0-9-]{36}$/);

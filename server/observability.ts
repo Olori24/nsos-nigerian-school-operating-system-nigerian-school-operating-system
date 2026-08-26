@@ -20,6 +20,10 @@ export function writeOperationalEvent(level: "info" | "warn" | "error", event: s
   else console.info(line);
 }
 
+export function livenessResponse(now: () => Date = () => new Date()) {
+  return { status: "ok" as const, service: "nsos" as const, timestamp: now().toISOString() };
+}
+
 export function requestObservabilityMiddleware(options: { now?: () => number; log?: typeof writeOperationalEvent } = {}): RequestHandler {
   const now = options.now ?? (() => Date.now());
   const log = options.log ?? writeOperationalEvent;
