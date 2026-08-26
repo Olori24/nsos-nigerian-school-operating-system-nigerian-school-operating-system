@@ -344,7 +344,7 @@
 - [x] Measure and improve verified database, API, and frontend bottlenecks, including collection bounds, expensive query paths, bundle composition, and mobile-sensitive delivery without inventing capacity metrics.
 - [ ] Add production-appropriate observability, correlation-safe error reporting, CI validation gates, recovery/backup evidence, and deployment controls within the managed stateless architecture.
 - [x] Define and run only safe, synthetic-data load-test prerequisites and staged benchmark methodology; the fail-closed target-safety regression and unapproved-probe check passed with no request sent. Do not claim 50K capacity without isolated staging infrastructure and recorded measurements.
-- [ ] Validate critical owner/admin/teacher/guardian/student and public-admission journeys, publish the factual CTO readiness report, checkpoint, release, and synchronize GitHub.
+- [x] Validate critical owner/admin/teacher/guardian/student and public-admission journeys through no-side-effect regression evidence, publish the factual readiness report, checkpoint, and release. The 40/40 targeted cluster passed; tenant-specific authenticated browser walkthrough remains explicitly UNKNOWN until schools use authorized internal test accounts.
 - [x] Prepare the verified Resend sender-domain handoff for NSOS and perform only an explicitly confirmed provider-side configuration change; keep the integration test as the release gate.
 - [ ] Prepare an isolated synthetic staging, recovery, and progressive-load validation environment without production records, live provider effects, or capacity claims.
 - [ ] Run the approved synthetic recovery and staged-load validation, record measured evidence, and update the readiness verdict only from those results.
