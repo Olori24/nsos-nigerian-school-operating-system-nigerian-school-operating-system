@@ -61,3 +61,17 @@ This rehearsal must not copy tenant records, learner records, guardian data, fin
 ## Final approval required
 
 Before step 1, the owner must separately confirm the exact disposable target label, the non-production operator role, the fact that the target is not an existing schema, and the teardown authority. Approval for staging source repair does not authorise a database connection or migration execution.
+
+## Uploaded repair-artifact provenance review
+
+On 26 August 2026, the owner uploaded `nsos-staging-source-repair.patch` directly to the NSOS project workspace. The attached file is **4,305 bytes** and has SHA-256 checksum `08b1e47fd013ca28d065a5b6d71f2a6005d0890b0f06a449e8bd6cc7de3ec5b4`.
+
+| Review dimension | Evidence | Result |
+|---|---|---|
+| Format | Textual Git diff containing ANSI colour escape sequences | **Not directly applicable.** It must be canonicalized and reviewed in a new disposable workspace before any `git apply`-style operation; it was not applied here. |
+| Migration scope | Six `ADD COLUMN IF NOT EXISTS` removals in `0002_little_shatterstar.sql`, plus one each in `0005_nebulous_warstar.sql` and `0007_workable_xavin.sql` | **Matches** the recorded eight-statement MySQL 8.4 compatibility repair. |
+| Provider-test scope | Makes the live sender-authorization test opt-in only when both `RESEND_API_KEY` and `AUTH_EMAIL_FROM` are present | **Matches** the recorded provider-dependent test gating; no live provider check was invoked. |
+| Staging test fixtures | Adds explicitly labelled placeholder values, including an `.invalid` sender address and provider URL | **Consistent with** non-secret staging fixtures. No supplied value was used as a credential. |
+| Current main-source comparison | Current NSOS source still contains all eight `IF NOT EXISTS` statements, an unconditional sender-authorization test, and no listed staging placeholders | **Confirms the artifact has not been applied** to live source. |
+
+The review verifies **only attachment identity and declared source scope**. It does not establish a full-chain migration pass, a valid disposable target, application compatibility, recovery readiness, provider behavior, or load capacity. Removing `IF NOT EXISTS` makes the relevant `ADD COLUMN` operations dependent on the mandatory fresh/partial-schema journal-and-column preflight; no database, runtime, source application, provider, or deployment action was taken during this review.
