@@ -13,13 +13,7 @@ import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
-
-const NSOS_PLATFORM_CUSTOM_DOMAINS = new Set(["nsos.top", "www.nsos.top"]);
-
-function isNsosPlatformHost(hostname: string) {
-  const host = hostname.toLowerCase();
-  return host === "localhost" || host === "127.0.0.1" || NSOS_PLATFORM_CUSTOM_DOMAINS.has(host) || host.endsWith(".manus.space") || host.endsWith(".manus.computer");
-}
+import { isNsosPlatformHost } from "./lib/platformHost";
 
 function Router() {
   if (typeof window !== "undefined" && !isNsosPlatformHost(window.location.hostname)) return <DomainSchoolWebsite />;

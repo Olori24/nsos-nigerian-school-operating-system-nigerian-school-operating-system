@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 const app = readFileSync(resolve(root, "client/src/App.tsx"), "utf8");
+const platformHost = readFileSync(resolve(root, "client/src/lib/platformHost.ts"), "utf8");
 const studio = readFileSync(resolve(root, "client/src/components/WebsiteStudio.tsx"), "utf8");
 const theme = readFileSync(resolve(root, "client/src/contexts/ThemeContext.tsx"), "utf8");
 const css = readFileSync(resolve(root, "client/src/index.css"), "utf8");
@@ -16,8 +17,9 @@ describe("school website publishing and theme presentation", () => {
   });
 
   it("keeps NSOS-owned custom domains in the product router instead of treating them as tenant school domains", () => {
-    expect(app).toContain('const NSOS_PLATFORM_CUSTOM_DOMAINS = new Set(["nsos.top", "www.nsos.top"])');
-    expect(app).toContain("NSOS_PLATFORM_CUSTOM_DOMAINS.has(host)");
+    expect(app).toContain('import { isNsosPlatformHost } from "./lib/platformHost"');
+    expect(platformHost).toContain('const NSOS_PLATFORM_CUSTOM_DOMAINS = new Set(["nsos.top", "www.nsos.top"])');
+    expect(platformHost).toContain("NSOS_PLATFORM_CUSTOM_DOMAINS.has(host)");
   });
 
   it("provides explicit publish and unpublish actions while keeping custom domains optional", () => {

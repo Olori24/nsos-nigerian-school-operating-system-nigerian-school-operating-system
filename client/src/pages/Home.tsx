@@ -29,6 +29,7 @@ import { InstitutionProfileSummary } from "@/components/InstitutionProfileSummar
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { isNsosPlatformHost } from "@/lib/platformHost";
 import { originLgaLoadPresentation } from "@/lib/originPresentation";
 import { useSessionDraft } from "@/hooks/useSessionDraft";
 import { LocalDraftNotice } from "@/components/LocalDraftNotice";
@@ -201,11 +202,6 @@ function currency(value: number) {
 
 function initials(name?: string | null) {
   return (name ?? "NS").split(" ").filter(Boolean).slice(0, 2).map(word => word[0]).join("").toUpperCase();
-}
-
-function isNsosPlatformHost() {
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1" || host.endsWith(".manus.computer") || host.endsWith(".manus.space");
 }
 
 function StatusPill({ children, tone = "sage" }: { children: React.ReactNode; tone?: "sage" | "gold" | "rose" | "sky" | "neutral" }) {
@@ -416,7 +412,7 @@ function consumeGoogleSignInNotice() {
 }
 
 export default function Home() {
-  if (!isNsosPlatformHost()) return <DomainSchoolWebsite />;
+  if (!isNsosPlatformHost(window.location.hostname)) return <DomainSchoolWebsite />;
   const { user, loading, logout } = useAuth();
   const schoolsQuery = trpc.nsos.schools.list.useQuery(undefined, { enabled: !!user });
   const [schoolId, setSchoolId] = useState<number | null>(null);
