@@ -7,6 +7,20 @@
 
 > **Current boundary.** The empty project is a management-plane container, not yet a testable application environment. It cannot be used for recovery or load evidence until its application, data, storage, secret, provider-stub, and test-identity isolation are separately reviewed.
 
+## 26 August readiness-plan review
+
+The separate **NSOS Staging Readiness and Environment Plan** task completed a bounded design record only. It confirmed that the staging URL is unassigned; no deployment identity, database, storage namespace, provider stub, test account, recovery authority assignment, recovery test, or load test has been created. The record names `NSOS_STG_RELEASE_OWNER` as the role that must be assigned before deployment and requires a segregated, redacted evidence location.
+
+This is useful planning evidence, but it is not an isolation pass and does not satisfy any provisioning, recovery, capacity, delivery, or launch-readiness gate. The six owner/operator inputs at the end of this handoff remain required before a new provisioning approval can be considered.
+
+## Boundary halt and task-local teardown
+
+After the non-secret `NSOS_STAGING_ENV=staging` marker was saved, the staging isolation guard detected that the available managed database boundary could not be independently distinguished from the production marker. It halted before any database connection, query, migration, storage inspection, provider configuration, account creation, recovery, or load action.
+
+The owner then authorised a task-local teardown. Independent review confirms that the staging-local process, listener, socket, source, build, cache, local configuration, provider-stub, and generated role-label artifacts were removed. The rejected database target was not inspected, connected to, queried, migrated, or deleted. The only retained task-local materials are redacted halt and teardown-verification records under the staging project’s evidence area; their planned retention is 30 days pending a separately authorised evidence purge.
+
+> **Current status:** staging remains blocked. No new staging provision or test may proceed until a separately verifiable non-production database boundary is available. The boundary control must not be bypassed, weakened, or suppressed.
+
 ## Scope and non-negotiable boundary
 
 The live NSOS application, database, storage, provider credentials, schools, users, learners, guardians, finance records, and custom-domain routing are out of scope. Staging must be a separately identified application deployment with a separate database, storage namespace, secret set, and test identities. A clone or export of production school data is prohibited; all records must be synthetic and visibly marked as such.
