@@ -195,7 +195,7 @@
 - [x] Add a user-controlled NSOS update prompt so installed web apps can refresh newly deployed icon and service-worker assets without removing and reinstalling the app.
 - [x] Keep the mobile NSOS account-security control on a single line without crowding the brand mark.
 - [x] Deliver a school-admin communication readiness center for WhatsApp, SMS, and email with provider setup, verified delivery status, and actionable failed-delivery recovery.
-- [ ] Define and implement the NSOS email-service operating model, including sender-domain verification, tenant-safe defaults, and an explicit launch path once nsos.ng is active.
+- [x] Define and implement the current NSOS outbound email-service operating model, including verified `nsos.top` sending, tenant-safe defaults, provider-submission boundaries, and an explicit separate-approval path for school senders, inbound mail, webhooks, and bulk delivery.
 - [x] Add secure passport-photograph and admission-fee receipt uploads to school admission forms, with storage-backed records, review visibility, validation, and no automatic payment approval.
 - [x] Add a supervised school-website setup agent that produces owner-reviewable website configuration proposals and applies them only after explicit authorization.
 - [x] Replace the static NSOS setup assistant with a tenant-aware AI onboarding agent that explains readiness, asks only for missing school-approved information, and proposes a sequenced setup plan.
@@ -297,8 +297,8 @@
 - [x] Add role, tenant-isolation, lifecycle, legacy-compatibility, and UI regressions; validate, document, checkpoint, publish, and push the expanded curriculum framework safely.
 - [x] Update the multi-institution profile regression for the intentional vocational-training-centre terminology and corporate-academy category, then rerun the full suite without bypassing the external sender-domain authorization check.
 - [x] Record and verify the user-evidenced zero-balance DomainKing invoice #DK1139403 for `nsos.top`, including whether the replacement registration is merely invoiced, pending, or active; do not place, pay, renew, or modify any order during verification.
-- [ ] Obtain explicit approval before any `nsos.top` registration finalization, DNS configuration, custom-domain activation, or Resend sender-domain change; keep the existing invitation-email 403 and sender authorization blockers separately visible until resolved.
-- [ ] Bind the active `nsos.top` domain to the published NSOS application and apply only the required DNS records after the account holder’s explicit approval; verify routing without changing the email sender, payments, renewals, or unrelated DomainKing settings.
+- [x] Obtain explicit owner approval before `nsos.top` DNS configuration, custom-domain activation, and Resend sender-domain change; the approved change set was completed with distinct DNS and provider confirmations.
+- [x] Bind the active `nsos.top` domain to the published NSOS application and apply only the required DNS records after the account holder’s explicit approval; `nsos.top` and `www.nsos.top` are available project domains, and sender configuration was changed separately.
 - [ ] Create and verify one user-authorized public TinyURL redirect to `https://nsos-system-uhkdscaf.manus.space` without changing `nsos.top`, DNS, hosting, or application settings.
 - [x] Define a tenant-scoped cross-provider learning-evidence model that lets a linked learner submit concise milestone evidence for review without automatic completion, grading, credentialing, public visibility, messages, payments, or cross-tenant access.
 - [x] Add protected learner submission and owner/admin/instructor review workflows for programme milestones, with explicit status, reason, audit, and evidence-access boundaries suitable for vocational practice and workplace-capability paths as well as existing learning operators.
