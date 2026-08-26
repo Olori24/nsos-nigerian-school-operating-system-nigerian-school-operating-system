@@ -172,7 +172,7 @@
 - [x] Add an administrator-facing guardian review panel to the student profile with controlled editing of linked guardian details.
 - [x] Add a confirmation-gated portal invitation action for a linked guardian from the administrator review panel.
 - [x] Add a guardian portal onboarding checklist that guides verified parents through essential first-use steps without creating or changing school data automatically.
-- [ ] Diagnose and repair the 403 rejection affecting confirmed school invitation email delivery, while retaining durable sent-or-failed records and safe administrator feedback.
+- [x] Diagnose and repair the 403 rejection affecting confirmed school invitation email delivery, while retaining durable sent-or-failed records and safe administrator feedback. The verified nsos.top sender accepted one owner-authorized controlled staff-invitation submission through the production helper; no recipient open/delivery telemetry was inspected.
 - [x] Research current availability and pricing for a short, credible NSOS custom domain that can support the website and a verified invitation-email sender.
 - [x] Compare Nigeria-based and international registration processes and yearly renewal fees for nsos.ng, including DNS and verified-email readiness.
 - [x] Verify NiRA and DomainKing registrant contact and identification requirements for nsos.ng, then prepare a confirmation-gated purchase handoff.
@@ -378,3 +378,4 @@
 - [x] Investigate and safely resolve the passwordless-email test’s unexpected 503 after the sender-domain configuration change, without weakening delivery acceptance checks or sending a real recipient email. The owner corrected the sender secret to the bare mailbox format; no-send passwordless and sender authorization tests pass.
 - [x] Align protected student-record email sender readiness with Resend’s documented sending-only `partially_verified` state only when sending is enabled and all required DKIM/SPF records are verified; keep receiving and real-delivery concerns separate.
 - [x] Correct the external Resend API-key test timeout so it retains a bounded live-provider check without failing at Vitest’s shorter default timeout. The 12-second request deadline and 20-second test budget passed against Resend.
+- [x] Submit one owner-authorized controlled staff-invitation email to the specified school-controlled test inbox, using a test-only identity and recording only provider submission evidence; do not use student, guardian, payment, or live operational data. The production helper returned successfully; no recipient, content, delivery, or open data was retained.
