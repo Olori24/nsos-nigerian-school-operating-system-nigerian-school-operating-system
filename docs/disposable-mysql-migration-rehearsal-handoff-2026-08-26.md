@@ -75,3 +75,35 @@ On 26 August 2026, the owner uploaded `nsos-staging-source-repair.patch` directl
 | Current main-source comparison | Current NSOS source still contains all eight `IF NOT EXISTS` statements, an unconditional sender-authorization test, and no listed staging placeholders | **Confirms the artifact has not been applied** to live source. |
 
 The review verifies **only attachment identity and declared source scope**. It does not establish a full-chain migration pass, a valid disposable target, application compatibility, recovery readiness, provider behavior, or load capacity. Removing `IF NOT EXISTS` makes the relevant `ADD COLUMN` operations dependent on the mandatory fresh/partial-schema journal-and-column preflight; no database, runtime, source application, provider, or deployment action was taken during this review.
+
+## Owner-approved fresh rehearsal boundary
+
+After reviewing the artifact checksum and scope, the owner explicitly approved a **fresh, empty, disposable MySQL 8.4 rehearsal**. This approval covers only an isolated target created solely for the reviewed artifact, its required preflight, sanitized full-chain and schema evidence, and final destruction. It does not permit reuse of live NSOS, NSOS Staging, the deleted prior scratch project, any existing schema, storage namespace, provider, domain, payment, or learner/tenant data.
+
+At the start of this approved phase, no new disposable database name, endpoint, connection string, migration account, runtime, or project had been created or selected. The authenticated workspace was opened only to locate a separate-resource creation path; its visible existing projects/tasks were not used or modified.
+
+## Fresh rehearsal project and target-provisioning status
+
+The owner then created a separate project, **NSOS Migration Rehearsal 2026-08-26**, at `https://manus.im/app/project/XJLa7rvmmyCv73rQXSjE2D`. A read-only authenticated inspection confirmed that it was newly created and had no project instructions, connectors, files/sources, website, scheduled tasks, source import, or existing task records. This establishes a separate project boundary only; it does not itself create a MySQL database or account.
+
+The owner-created task **How to Set Up a Disposable MySQL 8.4 Database** is associated with that project. Its initial environment check found no Docker installation, no running MySQL/MariaDB server, and only a local MySQL 8.0 client; that result was correctly rejected as insufficient. The completed task subsequently reported—and its recorded query output shows—the following isolated preflight:
+
+| Required check | Recorded result |
+| --- | --- |
+| Target label | `DISPOSABLE-MYSQL84-20260826` |
+| Server version | `SELECT VERSION()` returned `8.4.6` |
+| Transport | Dedicated Unix socket with `skip_networking` set to `ON` |
+| Database | Fresh `dsp_m84_20260826` schema with 0 user tables and 0 user columns |
+| Restricted account | `dsp_m84_runner_20260826@localhost`, granted `ALL PRIVILEGES` only on `dsp_m84_20260826`.* |
+| Journal/expected-column preflight | No matching migration-journal tables and no user columns present |
+| Recorded teardown | `/home/ubuntu/.disposable-mysql84-20260826/teardown.sh` in the separate rehearsal sandbox |
+
+No source patch had been applied and no migration had been run when that evidence was captured. The target is eligible only for the next reviewed-artifact canonicalization and migration-preflight instruction. A full-chain migration pass, application compatibility, recovery validation, provider behavior, and load/capacity evidence are still not established.
+
+## Canonical patch review on the disposable target
+
+The owner-approved rehearsal task preserved the uploaded artifact and re-verified its original SHA-256 as `08b1e47fd013ca28d065a5b6d71f2a6005d0890b0f06a449e8bd6cc7de3ec5b4`. It produced a separate ANSI-stripped canonical copy with SHA-256 `667d8553a8e12b2fa47f5232158f3de7cf1f38d238f900c57e2e0ffcadf3e8eb`; the original was not altered. `git apply --check` passed and `git diff --check` produced no whitespace issue in the temporary source workspace. The patch changed only `drizzle/0002_little_shatterstar.sql`, `drizzle/0005_nebulous_warstar.sql`, `drizzle/0007_workable_xavin.sql`, `server/email-sender-authorization.integration.test.ts`, and `vitest.config.ts`; no shell path, executable-mode change, or live credential was reported.
+
+The originally requested commit `55bd8333423a239acd9b5a53dba28d1250728fa2` was not retrievable from the public GitHub repository (`upload-pack: not our ref` and public commit URL 404). The rehearsal therefore selected the latest publicly retrievable compatible commit `ccbfd6317332a4f14be05b74667390e1e33ab6b5` after checking its history; the canonical patch applied there in the temporary rehearsal workspace only. This is **compatibility evidence for that public revision**, not proof that the unretrievable requested revision or NSOS Staging itself is migration-validated.
+
+No migration has run after this patch review. The target remains fresh with zero user tables, zero user columns, and no Drizzle migration journal. Before execution, the migration command must be shown to use only the target task’s socket-only restricted account; it must not infer that an arbitrary `DATABASE_URL` URI can carry a mysql2 `socketPath` without a verified runner configuration.
