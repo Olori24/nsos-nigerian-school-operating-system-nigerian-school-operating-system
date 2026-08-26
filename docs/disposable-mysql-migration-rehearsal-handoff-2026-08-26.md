@@ -117,3 +117,23 @@ The compatible source revision exposes its Drizzle configuration through a singl
 The rehearsal task created a temporary bridge at `127.0.0.1:60575` to its task-local Unix socket, with the listener observed only on `127.0.0.1` and MySQL reporting `skip_networking=1`. A restricted runner account connected through that bridge and reported MySQL `8.4.6`, the expected `dsp_m84_20260826` database, and its disposable runner identity. The read-only preflight again found zero user tables, zero columns, no `__drizzle_migrations` journal, and no other named migration-journal candidate. The bridge was explicitly closed after the query; no listener remained on the chosen port.
 
 The task sandbox then reported `stopped` before any migration instruction was issued. Consequently, the database/runtime state is now **unknown until the task is resumed and repeats its isolated-target, runner-account, bridge, and clean-schema preflight**. The prior evidence remains useful as a boundary check but is not authorization to assume the stopped target is still live, empty, or reachable. No migration ran.
+
+### Resumed-target recheck
+
+The task was resumed and independently rechecked. It reported a running task-local MySQL `8.4.6` server and a fresh loopback bridge at `127.0.0.1:64117`, bound only to loopback and connected only to its task-local Unix socket. The restricted `dsp_m84_runner_20260826@localhost` account again returned the expected disposable database identity, zero user tables, zero user columns, no Drizzle journal, and no other named migration journal candidate; `skip_networking=1` remained set. The bridge was closed after the read-only preflight. This evidence clears only the disposable target for the owner-approved full-chain command; it does not validate production, NSOS Staging, recovery, load, or capacity behavior.
+
+### Full-chain attempt — blocked
+
+The one owner-authorized full-chain command, `pnpm exec drizzle-kit migrate --config drizzle.config.ts`, was executed exactly once against the loopback-only disposable target. It failed at `drizzle/0003_outstanding_adam_destine.sql` on `CREATE INDEX IF NOT EXISTS staffDuty_school_idx ON staffDuties (schoolId)`, with MySQL `ER_PARSE_ERROR` / `1064`. This reveals an additional MySQL-incompatible index statement outside the uploaded patch’s authorized 0002/0005/0007 scope.
+
+The task stopped as instructed: it made no repair, retry, migration generation, `db:push` invocation, source-patch modification, or post-failure migration validation. It also closed the temporary bridge. The disposable schema may now contain changes from migrations prior to 0003, so it must be inspected read-only and then destroyed; it is not a valid retry target. The full migration chain remains **unvalidated**. Any repair of 0003 or other newly discovered statements requires a separate reviewed artifact and approval.
+
+### Post-failure read-only inventory
+
+The required read-only inventory found a partial disposable schema: `__drizzle_migrations` existed with three ordered journal rows, alongside 35 user tables and 359 user columns. The available tables are consistent with migrations having progressed through the earlier chain before the 0003 failure; this is not proof of any later migration. MySQL remained socket-only (`skip_networking=1`), the temporary bridge state file and listener were absent, and the task-local target process was still running. No repair, retry, source edit, database mutation, or migration command occurred during that inspection. This partial target is now ready only for approved destruction.
+
+### Partial-target teardown
+
+The task-local disposable MySQL target and its temporary patched source workspace were destroyed under the original approved rehearsal scope. The task reported and verified absence of the target root, data and log directories, Unix socket, PID file, bridge state, runner and administrator credentials, temporary patch copies, source workspace, task-specific helper files, target MySQL process, target `socat` process, and target Unix-socket listener. No live NSOS, NSOS Staging, shared project, domain, provider, storage, repository, or learner record was accessed or modified.
+
+> **Current factual verdict:** the isolated MySQL 8.4 full-chain migration rehearsal was attempted once and failed safely at migration 0003. It is not validated. A fresh disposable target, a newly reviewed source repair that covers 0003 and any other newly discovered incompatibilities, a repeat preflight, and a new owner approval are required before another full-chain attempt.
