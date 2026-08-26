@@ -6,6 +6,8 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+const INSTALL_PROMPT_DELAY_MS = 8_000;
+
 function isStandalone() {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
@@ -16,6 +18,7 @@ export function InstallNSOSPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(isStandalone);
   const [dismissed, setDismissed] = useState(() => localStorage.getItem("nsos:pwa-install-dismissed") === "true");
+  const [readyToOffer, setReadyToOffer] = useState(false);
 
   useEffect(() => {
     const onBeforeInstall = (event: Event) => {
@@ -34,7 +37,12 @@ export function InstallNSOSPrompt() {
     };
   }, [dismissed]);
 
-  if (isInstalled || dismissed || !deferredPrompt) return null;
+  useEffect(() => {
+    const delay = window.setTimeout(() => setReadyToOffer(true), INSTALL_PROMPT_DELAY_MS);
+    return () => window.clearTimeout(delay);
+  }, []);
+
+  if (isInstalled || dismissed || !deferredPrompt || !readyToOffer) return null;
 
   const install = async () => {
     await deferredPrompt.prompt();
