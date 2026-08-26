@@ -15,6 +15,11 @@ describe("school website publishing and theme presentation", () => {
     expect(app).toContain("return <DomainSchoolWebsite />");
   });
 
+  it("keeps NSOS-owned custom domains in the product router instead of treating them as tenant school domains", () => {
+    expect(app).toContain('const NSOS_PLATFORM_CUSTOM_DOMAINS = new Set(["nsos.top", "www.nsos.top"])');
+    expect(app).toContain("NSOS_PLATFORM_CUSTOM_DOMAINS.has(host)");
+  });
+
   it("provides explicit publish and unpublish actions while keeping custom domains optional", () => {
     expect(studio).toContain("Publish website");
     expect(studio).toContain("Unpublish website");
