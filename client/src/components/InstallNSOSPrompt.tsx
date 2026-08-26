@@ -6,7 +6,7 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
-const INSTALL_PROMPT_DELAY_MS = 8_000;
+const INSTALL_PROMPT_DELAY_MS = 15_000;
 
 function isStandalone() {
   if (typeof window === "undefined") return false;
