@@ -84,6 +84,12 @@ describe("external authentication policy", () => {
     expect(() => authRoutePolicies.normaliseAuthSender("NSOS <onboarding@resend.dev>\r\nBcc: attacker@example.com")).toThrow("not configured safely");
   });
 
+  it("accepts the configured transactional sender without attempting delivery", () => {
+    const sender = process.env.AUTH_EMAIL_FROM;
+    expect(sender, "AUTH_EMAIL_FROM is required for passwordless email delivery.").toBeTruthy();
+    expect(authRoutePolicies.normaliseAuthSender(sender!)).toBe(sender!.trim());
+  });
+
   it("rejects route starts that do not provide a safe application origin", async () => {
     await withAuthRouteServer(async origin => {
       const googleResponse = await fetch(`${origin}/api/auth/google/start`, { redirect: "manual" });

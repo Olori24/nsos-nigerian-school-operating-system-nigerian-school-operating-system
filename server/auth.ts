@@ -45,6 +45,26 @@ function normaliseAuthSender(value: string) {
   return sender;
 }
 
+type ResendDomainRecord = { record?: string; name?: string; type?: string; status?: string };
+type ResendDomainState = {
+  status?: string;
+  capabilities?: { sending?: string };
+  records?: ResendDomainRecord[];
+};
+
+const requiredResendSendingRecords = [
+  { record: "DKIM", name: "resend._domainkey", type: "TXT" },
+  { record: "SPF", name: "rsend", type: "MX" },
+  { record: "SPF", name: "rsend", type: "TXT" },
+];
+
+function hasVerifiedResendOutboundSending(domain: ResendDomainState) {
+  if (domain.capabilities?.sending !== "enabled") return false;
+  if (domain.status === "verified") return true;
+  if (domain.status !== "partially_verified") return false;
+  return requiredResendSendingRecords.every(required => domain.records?.some(record => record.record === required.record && record.name === required.name && record.type === required.type && record.status === "verified"));
+}
+
 function matchesState(expected: string | undefined, actual: string | undefined) {
   if (!expected || !actual || expected.length !== actual.length) return false;
   return timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
@@ -115,10 +135,17 @@ export async function getStudentRecordEmailSenderReadiness() {
   if (!senderDomain) return { ready: false, state: "not_configured" as const, message: "NSOS email sender is not configured safely." };
   try {
     const response = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${ENV.resendApiKey}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
-    const payload = await response.json().catch(() => ({})) as { data?: Array<{ name?: string; status?: string }> };
+    const payload = await response.json().catch(() => ({})) as { data?: Array<{ id?: string; name?: string } & ResendDomainState> };
     const domain = payload.data?.find(item => item.name?.toLowerCase() === senderDomain);
-    if (!response.ok || domain?.status !== "verified") return { ready: false, state: "unverified" as const, message: "Email sharing is blocked until the configured sender domain is verified." };
-    return { ready: true, state: "verified" as const, message: "Configured sender domain is verified. A final confirmation is still required before sharing." };
+    if (!response.ok || !domain) return { ready: false, state: "unverified" as const, message: "Email sharing is blocked until the configured sender domain is verified for outbound sending." };
+    if (hasVerifiedResendOutboundSending(domain)) return { ready: true, state: "verified" as const, message: "Configured sender domain is verified for outbound sending. A final confirmation is still required before sharing." };
+    if (domain.status === "partially_verified" && domain.capabilities?.sending === "enabled" && domain.id) {
+      const detailsResponse = await fetch(`https://api.resend.com/domains/${domain.id}`, { headers: { Authorization: `Bearer ${ENV.resendApiKey}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
+      const details = await detailsResponse.json().catch(() => ({})) as ResendDomainState;
+      if (!detailsResponse.ok) return { ready: false, state: "unavailable" as const, message: "NSOS could not confirm the configured sender domain right now. No email can be sent." };
+      if (hasVerifiedResendOutboundSending(details)) return { ready: true, state: "verified" as const, message: "Configured sender domain is verified for outbound sending. A final confirmation is still required before sharing." };
+    }
+    return { ready: false, state: "unverified" as const, message: "Email sharing is blocked until the configured sender domain is verified for outbound sending." };
   } catch {
     return { ready: false, state: "unavailable" as const, message: "NSOS could not verify the configured sender domain right now. No email can be sent." };
   }
@@ -242,4 +269,4 @@ export function registerEmailAuthRoutes(app: Express) {
   });
 }
 
-export const authRoutePolicies = { validOrigin, validMagicLinkToken, matchesState, normaliseAuthSender };
+export const authRoutePolicies = { validOrigin, validMagicLinkToken, matchesState, normaliseAuthSender, hasVerifiedResendOutboundSending };
