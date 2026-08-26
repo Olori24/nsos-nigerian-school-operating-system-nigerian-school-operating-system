@@ -52,6 +52,12 @@ Inbound mail should remain disabled until a mailbox provider, access model, supp
 
 The safe recommendation is to **check Zoho Mail free-plan eligibility first**, because the official offer covers one custom domain and up to five users in eligible data centres. If it is unavailable or insufficient, evaluate Migadu only for a low-volume human support inbox—not for NSOS passwordless or notification traffic. In every case, the provider will require mailbox-domain verification and MX changes; those changes must not be made until the current transactional sender’s DNS posture is reviewed and the owner explicitly approves the mailbox activation.
 
+## Sender-Health Support Inquiry Status
+
+The sender provider’s read-only domain check continues to report `nsos.top` as `partially_failed`, even though the listed TXT/MX verification records are reported as verified. A non-mutating verification request did not change that status. The owner approved a redacted provider-support inquiry. The public support form returned a generic processing error after its one submission attempt, with **no confirmation or case reference**. The inquiry must therefore be treated as **not successfully submitted**; it must not be retried through the same form without a separately identified, safe alternative or clear provider guidance.
+
+No DNS record, sender setting, mailbox, inbound setting, email recipient, or delivery workflow was changed while investigating this discrepancy.
+
 ## Current Limits
 
 This proposal does not claim inbox delivery, reply handling, mailbox availability, support staffing, a response-time commitment, tenant-school branded senders, inbound email processing, or additional email addresses. It does not create mailboxes or alter DNS. The existing sender provider’s authoritative status remains the source of truth for transactional email health.[1]
