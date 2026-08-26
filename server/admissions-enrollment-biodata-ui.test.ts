@@ -19,6 +19,14 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain("Download PDF");
     expect(enrollmentStation).toContain("Share via Email");
     expect(enrollmentStation).toContain("Confirm and send PDF");
+    expect(enrollmentStation).toContain("Email subject");
+    expect(enrollmentStation).toContain("Email message");
+    expect(enrollmentStation).toContain("{shareSubject.length}/180");
+    expect(enrollmentStation).toContain("{shareBody.length}/3000");
+    expect(enrollmentStation).toContain("maxLength={180}");
+    expect(enrollmentStation).toContain("maxLength={3000}");
+    expect(enrollmentStation).toContain("emailReadiness.data?.copy");
+    expect(enrollmentStation).toContain("const canSubmitShare");
     expect(enrollmentStation).toContain("recordEmailReadiness.useQuery");
     expect(enrollmentStation).toContain("shareRecordPdf.useMutation");
     expect(enrollmentStation).toContain("confirmed: true");

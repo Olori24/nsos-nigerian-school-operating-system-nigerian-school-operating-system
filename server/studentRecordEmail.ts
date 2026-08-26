@@ -7,9 +7,11 @@ type StudentRecord = {
 };
 
 export type StudentRecordEmailRecipient = { kind: "student" | "guardian"; guardianId?: number; label: string; maskedEmail: string };
+export const studentRecordEmailCopyBounds = { subjectMin: 3, subjectMax: 180, bodyMin: 10, bodyMax: 3000 } as const;
 
 const escapeHtml = (value: string) => value.replace(/[&<>"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character] ?? character);
 const safeValue = (value?: string | number | null, fallback = "Not recorded") => String(value ?? "").trim() || fallback;
+const stripUnsafeControls = (value: string, preserveLineBreaks: boolean) => value.replace(/\r\n?/g, preserveLineBreaks ? "\n" : "").replace(/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/g, "");
 
 export function maskStudentRecordEmail(email: string) {
   const [local, domain] = email.split("@");
@@ -83,8 +85,15 @@ export async function buildStudentRecordPdfAttachment(record: StudentRecord, enr
 }
 
 export function studentRecordEmailCopy(input: { studentName: string; admissionNo: string }) {
-  const title = `Student profile and enrollment record · ${input.admissionNo}`;
-  const text = `Hello,\n\nAttached is the NSOS student profile and enrollment record for ${input.studentName} (${input.admissionNo}).\n\nThis record was shared by an authorised school user. If you were not expecting it, please contact the school directly.\n\nNSOS`;
-  const html = `<p>Hello,</p><p>Attached is the NSOS student profile and enrollment record for <strong>${escapeHtml(input.studentName)}</strong> (${escapeHtml(input.admissionNo)}).</p><p>This record was shared by an authorised school user. If you were not expecting it, please contact the school directly.</p><p>NSOS</p>`;
-  return { subject: title, text, html };
+  return normaliseStudentRecordEmailCopy({
+    subject: `Student profile and enrollment record · ${input.admissionNo}`,
+    body: `Hello,\n\nAttached is the NSOS student profile and enrollment record for ${input.studentName} (${input.admissionNo}).\n\nThis record was shared by an authorised school user. If you were not expecting it, please contact the school directly.\n\nNSOS`,
+  });
+}
+
+export function normaliseStudentRecordEmailCopy(input: { subject: string; body: string }) {
+  const subject = stripUnsafeControls(input.subject, false).trim().slice(0, 255);
+  const text = stripUnsafeControls(input.body, true).trim().slice(0, studentRecordEmailCopyBounds.bodyMax);
+  const html = `<div>${text.split("\n").map(line => escapeHtml(line)).join("<br />")}</div>`;
+  return { subject, text, html };
 }

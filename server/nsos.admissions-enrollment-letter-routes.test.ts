@@ -70,14 +70,25 @@ describe("confirmed admission enrollment and letter delivery", () => {
 
   it("lists masked registered record recipients and submits a PDF only after a separate final confirmation", async () => {
     vi.mocked(db.getStudentEnrollmentRecord).mockResolvedValue({ student: { id: 44, schoolId: 7, email: "student@example.com" }, guardians: [{ id: 12, firstName: "Ngozi", lastName: "Okafor", email: "guardian@example.com", isPrimary: true }], enrollments: [{ id: 55 }] } as any);
-    await expect(caller().nsos.students.recordEmailReadiness({ schoolId: 7, studentId: 44, enrollmentId: 55 })).resolves.toMatchObject({ sender: { ready: true }, recipients: [expect.objectContaining({ kind: "student", maskedEmail: expect.any(String) }), expect.objectContaining({ kind: "guardian", guardianId: 12, maskedEmail: expect.any(String) })] });
-    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "guardian", guardianId: 12, confirmed: true })).resolves.toMatchObject({ deliveryState: "submitted", recipient: { kind: "guardian" } });
-    expect(sendStudentEnrollmentRecordEmail).toHaveBeenCalledWith(expect.objectContaining({ email: "guardian@example.com", enrollmentId: 55 }));
-    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ recipientKind: "guardian", confirmationRequired: true }) }));
+    const subject = "Amina's protected record";
+    const body = "Hello,\n\nPlease keep this protected PDF for your school records.";
+    await expect(caller().nsos.students.recordEmailReadiness({ schoolId: 7, studentId: 44, enrollmentId: 55 })).resolves.toMatchObject({ sender: { ready: true }, recipients: [expect.objectContaining({ kind: "student", maskedEmail: expect.any(String) }), expect.objectContaining({ kind: "guardian", guardianId: 12, maskedEmail: expect.any(String) })], copy: { subject: expect.any(String), body: expect.any(String) } });
+    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "guardian", guardianId: 12, subject, body, confirmed: true })).resolves.toMatchObject({ deliveryState: "submitted", recipient: { kind: "guardian" } });
+    expect(sendStudentEnrollmentRecordEmail).toHaveBeenCalledWith(expect.objectContaining({ email: "guardian@example.com", enrollmentId: 55, copy: { subject, body } }));
+    expect(db.createMessageLog).toHaveBeenCalledWith(expect.objectContaining({ subject: "Student record PDF delivery", body: "A protected student profile and enrollment record PDF was prepared for confirmed delivery." }));
+    const auditText = JSON.stringify(vi.mocked(db.recordSecurityAuditEvent).mock.calls);
+    expect(auditText).toContain("confirmationRequired");
+    expect(auditText).not.toContain(subject);
+    expect(auditText).not.toContain(body);
   });
 
   it("rejects a record PDF email request without the required final confirmation", async () => {
-    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "student", confirmed: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "student", subject: "Student record update", body: "This message is long enough for the protected workflow.", confirmed: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(sendStudentEnrollmentRecordEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejects newline-injected subjects before provider delivery", async () => {
+    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "student", subject: "Student record\nBcc: attacker@example.test", body: "This message is long enough for the protected workflow.", confirmed: true })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(sendStudentEnrollmentRecordEmail).not.toHaveBeenCalled();
   });
 

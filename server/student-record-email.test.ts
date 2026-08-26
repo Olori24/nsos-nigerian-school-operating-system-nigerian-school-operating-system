@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStudentRecordPdfAttachment, resolveStudentRecordEmailRecipient, studentRecordEmailRecipients } from "./studentRecordEmail";
+import { buildStudentRecordPdfAttachment, normaliseStudentRecordEmailCopy, resolveStudentRecordEmailRecipient, studentRecordEmailCopy, studentRecordEmailRecipients } from "./studentRecordEmail";
 
 describe("protected student record email recipients", () => {
   const record = {
@@ -24,5 +24,19 @@ describe("protected student record email recipients", () => {
     expect(attachment.filename).toBe("nsos-2026-014-student-enrollment-record.pdf");
     expect(Buffer.from(attachment.base64, "base64").subarray(0, 4).toString()).toBe("%PDF");
     expect(attachment.idempotencyKey).toContain("student-record-7-91-");
+  });
+
+  it("provides safe default copy and escapes customized body text into a fixed HTML wrapper", () => {
+    const defaults = studentRecordEmailCopy({ studentName: "Amina Okafor", admissionNo: "NSOS/2026/014" });
+    expect(defaults.subject).toContain("NSOS/2026/014");
+    const copy = normaliseStudentRecordEmailCopy({ subject: "Protected record update", body: "Hello <guardian>\nPlease review & keep this safe." });
+    expect(copy.subject).toBe("Protected record update");
+    expect(copy.text).toContain("Hello <guardian>");
+    expect(copy.html).toContain("Hello &lt;guardian&gt;<br />Please review &amp; keep this safe.");
+    expect(copy.html).not.toContain("<guardian>");
+  });
+
+  it("strips header controls from a subject before delivery helpers can use it", () => {
+    expect(normaliseStudentRecordEmailCopy({ subject: "Record update\r\nBcc: attacker@example.test", body: "This body is long enough for a safe custom message." }).subject).toBe("Record updateBcc: attacker@example.test");
   });
 });

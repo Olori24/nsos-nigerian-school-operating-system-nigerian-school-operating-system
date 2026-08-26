@@ -7,7 +7,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
-import { buildStudentRecordPdfAttachment, studentRecordEmailCopy } from "./studentRecordEmail";
+import { buildStudentRecordPdfAttachment, normaliseStudentRecordEmailCopy, studentRecordEmailCopy } from "./studentRecordEmail";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
@@ -151,10 +151,10 @@ export async function getStudentRecordEmailSenderReadiness() {
   }
 }
 
-export async function sendStudentEnrollmentRecordEmail(input: { email: string; record: Parameters<typeof buildStudentRecordPdfAttachment>[0]; enrollmentId: number }) {
+export async function sendStudentEnrollmentRecordEmail(input: { email: string; record: Parameters<typeof buildStudentRecordPdfAttachment>[0]; enrollmentId: number; copy?: { subject: string; body: string } }) {
   const email = db.normaliseAuthEmail(input.email);
   const attachment = await buildStudentRecordPdfAttachment(input.record, input.enrollmentId);
-  const copy = studentRecordEmailCopy(attachment);
+  const copy = input.copy ? normaliseStudentRecordEmailCopy(input.copy) : studentRecordEmailCopy(attachment);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json", "Idempotency-Key": attachment.idempotencyKey },

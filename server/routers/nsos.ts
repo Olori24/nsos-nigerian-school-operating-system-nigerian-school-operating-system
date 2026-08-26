@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { getStudentRecordEmailSenderReadiness, sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffSetupInvitationEmail, sendStudentEnrollmentRecordEmail } from "../auth";
-import { resolveStudentRecordEmailRecipient, studentRecordEmailRecipients } from "../studentRecordEmail";
+import { normaliseStudentRecordEmailCopy, resolveStudentRecordEmailRecipient, studentRecordEmailCopy, studentRecordEmailCopyBounds, studentRecordEmailRecipients } from "../studentRecordEmail";
 import { buildAdmissionLetter } from "../admissionLetter";
 import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
@@ -21,6 +21,10 @@ import { platformOwnerProcedure, protectedProcedure, publicProcedure, router } f
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
+const studentRecordEmailCopyInput = z.object({
+  subject: z.string().trim().min(studentRecordEmailCopyBounds.subjectMin).max(studentRecordEmailCopyBounds.subjectMax).refine(value => !/[\r\n]/.test(value), "Email subject cannot contain line breaks."),
+  body: z.string().trim().min(studentRecordEmailCopyBounds.bodyMin).max(studentRecordEmailCopyBounds.bodyMax),
+});
 
 function validatedNigerianOrigin(input: { stateOfOrigin?: string; localGovernmentOfOrigin?: string }) {
   try {
@@ -1010,10 +1014,12 @@ export const nsosRouter = router({
     recordEmailReadiness: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive(), enrollmentId: z.number().int().positive() })).query(async ({ input }) => {
       const record = await db.getStudentEnrollmentRecord(input.schoolId, input.studentId);
       if (!record || !record.enrollments.some(enrollment => enrollment.id === input.enrollmentId)) throw new TRPCError({ code: "NOT_FOUND", message: "Student enrollment record was not found in this school." });
-      return { sender: await getStudentRecordEmailSenderReadiness(), recipients: studentRecordEmailRecipients(record) };
+      const studentName = [record.student.firstName, record.student.middleName, record.student.lastName].filter(Boolean).join(" ");
+      const copy = studentRecordEmailCopy({ studentName, admissionNo: record.student.admissionNo });
+      return { sender: await getStudentRecordEmailSenderReadiness(), recipients: studentRecordEmailRecipients(record), copy: { subject: copy.subject, body: copy.text } };
     }),
     shareRecordPdf: managementProcedure("students.write")
-      .input(schoolInput.extend({ studentId: z.number().int().positive(), enrollmentId: z.number().int().positive(), recipientKind: z.enum(["student", "guardian"]), guardianId: z.number().int().positive().optional(), confirmed: z.literal(true) }).superRefine((value, ctx) => { if (value.recipientKind === "guardian" && !value.guardianId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianId"], message: "Select a guardian recipient." }); if (value.recipientKind === "student" && value.guardianId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianId"], message: "Student delivery cannot target a guardian record." }); }))
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), enrollmentId: z.number().int().positive(), recipientKind: z.enum(["student", "guardian"]), guardianId: z.number().int().positive().optional(), subject: studentRecordEmailCopyInput.shape.subject, body: studentRecordEmailCopyInput.shape.body, confirmed: z.literal(true) }).superRefine((value, ctx) => { if (value.recipientKind === "guardian" && !value.guardianId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianId"], message: "Select a guardian recipient." }); if (value.recipientKind === "student" && value.guardianId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianId"], message: "Student delivery cannot target a guardian record." }); }))
       .mutation(async ({ ctx, input }) => {
         const rate = await db.consumeSharedRateLimit({ namespace: "student-record-email", route: "share", clientKey: `${input.schoolId}:${ctx.user.id}:${input.studentId}`, limit: 3, windowMs: 10 * 60_000 });
         if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Record email sharing is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
@@ -1024,7 +1030,8 @@ export const nsosRouter = router({
         const resolvedRecipient = resolveStudentRecordEmailRecipient(record, { kind: input.recipientKind, guardianId: input.guardianId });
         const messageLog = await db.createMessageLog({ schoolId: input.schoolId, channel: "email", audience: input.recipientKind === "student" ? "students" : "guardians", subject: "Student record PDF delivery", body: "A protected student profile and enrollment record PDF was prepared for confirmed delivery.", recipientCount: 1, createdBy: ctx.user.id });
         try {
-          const providerMessageId = await sendStudentEnrollmentRecordEmail({ email: resolvedRecipient.email, record, enrollmentId: input.enrollmentId });
+          const copy = normaliseStudentRecordEmailCopy({ subject: input.subject, body: input.body });
+          const providerMessageId = await sendStudentEnrollmentRecordEmail({ email: resolvedRecipient.email, record, enrollmentId: input.enrollmentId, copy: { subject: copy.subject, body: copy.text } });
           await db.updateMessageLogDelivery({ schoolId: input.schoolId, messageId: messageLog.messageId, status: "sent", providerMessageId });
           await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_record_pdf_email_submitted", targetType: "student_profile", targetId: input.studentId, metadata: { enrollmentId: input.enrollmentId, recipientKind: input.recipientKind, attachment: "student_enrollment_pdf", confirmationRequired: true } });
           return { deliveryState: "submitted" as const, recipient: resolvedRecipient.recipient };
