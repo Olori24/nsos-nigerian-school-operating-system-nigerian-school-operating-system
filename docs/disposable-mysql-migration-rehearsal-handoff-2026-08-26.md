@@ -137,3 +137,16 @@ The required read-only inventory found a partial disposable schema: `__drizzle_m
 The task-local disposable MySQL target and its temporary patched source workspace were destroyed under the original approved rehearsal scope. The task reported and verified absence of the target root, data and log directories, Unix socket, PID file, bridge state, runner and administrator credentials, temporary patch copies, source workspace, task-specific helper files, target MySQL process, target `socat` process, and target Unix-socket listener. No live NSOS, NSOS Staging, shared project, domain, provider, storage, repository, or learner record was accessed or modified.
 
 > **Current factual verdict:** the isolated MySQL 8.4 full-chain migration rehearsal was attempted once and failed safely at migration 0003. It is not validated. A fresh disposable target, a newly reviewed source repair that covers 0003 and any other newly discovered incompatibilities, a repeat preflight, and a new owner approval are required before another full-chain attempt.
+
+### Source-only repair review — 26 August 2026
+
+With separate owner approval, a detached local worktree was created from NSOS checkpoint `90e93eaf06c8d01441871737dbab50880e3b680f`. A read-only scan found no remaining conditional `CREATE INDEX` or `DROP INDEX` statements after the repair. The new unified-diff artifact, `nsos-mysql84-source-repair.patch`, has SHA-256 `4104e083f3262d34de00e310ed74d47f13b772b0cff2b568d2bf2dc6464cb7d1` and changes exactly four migration files:
+
+| Migration | Source-only repair |
+| --- | --- |
+| `0002_little_shatterstar.sql` | Removes six unsupported conditional `ADD COLUMN` clauses from the already reviewed repair. |
+| `0003_outstanding_adam_destine.sql` | Removes the two unsupported conditional `CREATE INDEX` clauses that blocked the first rehearsal. |
+| `0005_nebulous_warstar.sql` | Removes one unsupported conditional `ADD COLUMN` clause. |
+| `0007_workable_xavin.sql` | Removes one unsupported conditional `ADD COLUMN` clause. |
+
+The artifact reverse-applied cleanly against its isolated worktree changes. With a deliberately unreachable `DATABASE_URL`, isolated `pnpm install --frozen-lockfile --ignore-scripts`, TypeScript, and production build all passed. No database command, migration execution, provider call, secret change, domain action, staging data operation, or publication occurred in this source-only review. This does **not** validate the migration chain; a future fresh disposable target still needs an explicit approval, preflight, and full-chain evidence run.
