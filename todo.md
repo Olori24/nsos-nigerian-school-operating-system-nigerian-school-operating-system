@@ -343,7 +343,7 @@
 - [x] Audit and remediate verified launch risks in data integrity, finance, File-to-School security, AI safeguards/cost controls, provider resilience, rate limits, privacy-safe logging, and error handling.
 - [x] Measure and improve verified database, API, and frontend bottlenecks, including collection bounds, expensive query paths, bundle composition, and mobile-sensitive delivery without inventing capacity metrics.
 - [ ] Add production-appropriate observability, correlation-safe error reporting, CI validation gates, recovery/backup evidence, and deployment controls within the managed stateless architecture.
-- [ ] Define and run only safe, synthetic-data load-test prerequisites and staged benchmark methodology; do not claim 50K capacity without isolated staging infrastructure and recorded measurements.
+- [x] Define and run only safe, synthetic-data load-test prerequisites and staged benchmark methodology; the fail-closed target-safety regression and unapproved-probe check passed with no request sent. Do not claim 50K capacity without isolated staging infrastructure and recorded measurements.
 - [ ] Validate critical owner/admin/teacher/guardian/student and public-admission journeys, publish the factual CTO readiness report, checkpoint, release, and synchronize GitHub.
 - [x] Prepare the verified Resend sender-domain handoff for NSOS and perform only an explicitly confirmed provider-side configuration change; keep the integration test as the release gate.
 - [ ] Prepare an isolated synthetic staging, recovery, and progressive-load validation environment without production records, live provider effects, or capacity claims.
