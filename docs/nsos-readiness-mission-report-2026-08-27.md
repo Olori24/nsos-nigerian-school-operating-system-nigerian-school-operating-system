@@ -10,7 +10,7 @@ This mission reconciled the currently open production-readiness controls, ran th
 | --- | --- | --- | --- |
 | Deterministic application validation | **Passed** | Formatting, lint, TypeScript, 132 Vitest files / 480 tests (one intentional live-provider skip), and production build completed. | This is source-level evidence, not recovery, scale, delivery, or real-user-journey evidence. |
 | Internal affiliate pilot | **Recorded** | One internal-review configuration with the approved 20% first-payment model and one `defaults_confirmed` audit event were verified by aggregate-only query. | No affiliate, referral, outreach, tracking, provider, payout, contract, or public programme is active. |
-| Resend sender health | **Pending provider guidance** | The redacted in-account support inquiry was sent and an automated acknowledgement was received. `nsos.top` remains `partially_failed` in the recorded read-only checks. | No cause has been established. Do not change DNS, sender, mailbox, inbound settings, delivery configuration, or test expectations before a substantive provider response. |
+| Resend sender health | **Provider-status reconciliation required** | Resend Support stated that `nsos.top` is verified and ready to send; an immediate independent read-only API check still returned `partially_failed` with sending enabled and receiving disabled. | The Support statement and API state conflict. Do not change DNS, sender, mailbox, inbound settings, delivery configuration, or test expectations before Resend reconciles the API state or provides remediation. |
 | Branded operational inboxes | **Design only** | The `notifications@nsos.top` technical-sender boundary and proposed human-owned address model are documented. | No `support@`, `security@`, `billing@`, `admissions@`, `hello@`, or `privacy@` mailbox/alias exists. |
 | Staging, recovery, and capacity | **Paused / unproven** | The ambiguous Aiven service was disposed and the staging secret was removed without reading its value. Fresh disposable migration compatibility passed separately. | There is no independently verifiable staging database, recovery rehearsal, provider-stub environment, or measured staged-load evidence. |
 | Package-manager warning | **Open toolchain compatibility issue** | Current pnpm package metadata still relies on a configuration form the installed package manager warns is ignored; prior workspace migration did not retain the Wouter patch. | Do not remove the existing locked patch metadata until a validated pnpm upgrade path proves frozen installs preserve the patch and lockfile graph. |
@@ -23,9 +23,9 @@ The recorded configuration is an **internal policy record**, not a public affili
 
 ## Outstanding Approval Packets
 
-### 1. Substantive Resend Response and Sender Remediation
+### 1. Resend API-State Reconciliation and Sender Remediation
 
-**Trigger:** A non-automated Resend reply identifies the remaining domain fault or asks for a concrete action.
+**Trigger:** Resend reconciles its Support statement with the `partially_failed` API state, identifies the remaining domain fault, or asks for a concrete action.
 
 **Required evidence before approval:** the provider’s case/reference, exact non-secret remediation instruction, confirmation that it applies to `nsos.top`, a rollback/abort route, and a record of whether the proposed action affects DNS, sending, receiving, inbound mail, or recipient delivery.
 

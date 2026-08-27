@@ -1,6 +1,6 @@
 # NSOS Communication Reliability and Email-Service Plan
 
-**Status:** Updated operating model. The NSOS managed outbound sender is now `notifications@nsos.top`; its Resend outbound-sending records are verified and one owner-authorized controlled invitation was accepted by the provider. This establishes provider submission only, not inbox delivery, open tracking, inbound mail, bulk campaigns, or school-branded technical sender capability.
+**Status:** Updated operating model. The NSOS managed outbound sender is `notifications@nsos.top`, and one owner-authorized controlled invitation was previously accepted by the provider. On 27 August, Resend Support stated that `nsos.top` is verified and ready to send, but an immediate independent read-only API check still returned `partially_failed` with sending enabled and receiving disabled. This is an unresolved provider-status contradiction, so no new sender-health or delivery-readiness claim is made. It does not establish inbox delivery, open tracking, inbound mail, bulk campaigns, or school-branded technical sender capability.
 
 ## 1. Problem Statement
 
@@ -37,13 +37,13 @@ Retries will be explicit and idempotent. A retry creates a fresh attempt linked 
 
 ## 4. NSOS Email-Service Operating Model
 
-NSOS now operates a **single managed outbound transactional sender**. The technical `From` configuration is the verified bare mailbox `notifications@nsos.top`; application copy and transactional templates identify NSOS and, where appropriate, the originating school. The bare mailbox is intentional: it avoids unsafe display-name parsing at the environment boundary. Resend permits sending only from an account-owned, verified domain.[1]
+NSOS is configured with a **single managed outbound transactional sender**. The technical `From` configuration is the bare mailbox `notifications@nsos.top`; application copy and transactional templates identify NSOS and, where appropriate, the originating school. The bare mailbox is intentional: it avoids unsafe display-name parsing at the environment boundary. The provider’s Support statement and read-only API state currently conflict, so this configuration remains subject to sender-health reconciliation rather than being declared healthy. Resend permits sending only from an account-owned, verified domain.[1]
 
 | Capability | Current state | Controls and evidence | Explicit limit |
 |---|---|---|---|
-| Passwordless sign-in links | Ready for explicitly requested use | Normalized recipient, short-lived token, origin validation, provider-acceptance or fail-closed status | Provider acceptance is not inbox delivery |
-| Staff and guardian invitations | Ready for owner/admin-confirmed use | Tenant scope, linked-recipient checks, confirmation gates, sent/failed records, one controlled provider-accepted test | No autonomous invitation sending |
-| Admission letters and protected student-record PDFs | Ready only through existing protected workflows | Tenant/record linkage, explicit confirmation where required, sender readiness, rate limits, audit-safe metadata | No bulk delivery or recipient-data leakage |
+| Passwordless sign-in links | Existing protected workflow; current sender-health reconciliation pending | Normalized recipient, short-lived token, origin validation, provider-acceptance or fail-closed status | Provider acceptance is not inbox delivery; do not assert current send readiness until the provider state agrees |
+| Staff and guardian invitations | Existing protected workflow; current sender-health reconciliation pending | Tenant scope, linked-recipient checks, confirmation gates, sent/failed records, one controlled provider-accepted test | No autonomous invitation sending or new sender-health claim |
+| Admission letters and protected student-record PDFs | Existing protected workflow; current sender-health reconciliation pending | Tenant/record linkage, explicit confirmation where required, sender readiness, rate limits, audit-safe metadata | No bulk delivery or recipient-data leakage |
 | School-branded technical sender | Not enabled | Requires a separately verified school domain and approved sender policy | NSOS does not impersonate an unverified school domain |
 | Inbound mailboxes, replies, and helpdesk processing | Not configured | None | `mail`, `pop`, and `smtp` DNS defaults do not establish a usable NSOS mailbox |
 | Bulk campaigns, open tracking, and delivery webhooks | Not enabled | Future explicit provider/webhook approval required | Provider submission must not be presented as delivered or opened |
