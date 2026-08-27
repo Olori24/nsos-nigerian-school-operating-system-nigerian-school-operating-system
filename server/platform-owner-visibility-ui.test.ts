@@ -17,7 +17,7 @@ describe("platform owner control visibility", () => {
   });
 
   it("provides a labelled mobile affiliate entry instead of hiding every platform control below the small breakpoint", () => {
-    expect(home).toContain('bg-[#fff9ea] px-5 py-2 sm:hidden');
+    expect(home).toContain('fixed inset-x-0 bottom-4 z-30 px-5 sm:hidden');
     expect(home).toContain('aria-label="Open Affiliate pilot"');
   });
 
