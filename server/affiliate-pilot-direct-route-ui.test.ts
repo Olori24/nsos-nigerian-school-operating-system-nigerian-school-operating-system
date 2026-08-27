@@ -3,16 +3,17 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const app = readFileSync(resolve(process.cwd(), "client/src/App.tsx"), "utf8");
-describe("affiliate pilot direct owner route", () => {
-  it("registers an authenticated direct route with a protected owner-access check", () => {
-    expect(app).toContain('path="/platform/affiliate-pilot"');
-    expect(app).toContain("trpc.nsos.platform.ownerAccess.useQuery");
-    expect(app).toContain("Platform owner access required");
-    expect(app).toContain("<AffiliatePilotConsole open");
+const home = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
+
+describe("affiliate pilot stable dashboard entry", () => {
+  it("does not register a deep route that the deployed host cannot serve", () => {
+    expect(app).not.toContain('path="/platform/affiliate-pilot"');
   });
 
-  it("keeps the route inside the NSOS platform-host router rather than the tenant-domain resolver", () => {
-    expect(app).toContain("if (typeof window !== \"undefined\" && !isNsosPlatformHost(window.location.hostname)) return <DomainSchoolWebsite />;");
-    expect(app).toContain('<Route path="/platform/affiliate-pilot" component={AffiliatePilotRoute} />');
+  it("opens the existing owner-only console from the stable root dashboard query", () => {
+    expect(home).toContain('url.searchParams.get("open") !== "affiliate-pilot"');
+    expect(home).toContain('href="/?open=affiliate-pilot"');
+    expect(home).toContain("if (!platformAdmin || typeof window === \"undefined\") return;");
+    expect(home).toContain("<AffiliatePilotConsole open={affiliatePilotOpen}");
   });
 });
