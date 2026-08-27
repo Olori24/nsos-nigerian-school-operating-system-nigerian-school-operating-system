@@ -200,6 +200,13 @@ export const nsosRouter = router({
     schoolSubscription: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolSubscription(input.schoolId)),
   }),
 
+  affiliatePilot: router({
+    overview: platformOwnerProcedure.query(() => db.getInternalAffiliatePilotOverview()),
+    confirmInternalDefaults: platformOwnerProcedure
+      .input(z.object({ confirmed: z.literal(true) }))
+      .mutation(({ ctx }) => db.confirmInternalAffiliatePilotDefaults({ confirmedBy: ctx.user.id })),
+  }),
+
   website: router({
     config: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolWebsite(input.schoolId)),
     media: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.listSchoolWebsiteMedia(input.schoolId)),

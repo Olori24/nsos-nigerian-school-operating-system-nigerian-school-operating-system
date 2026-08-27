@@ -705,6 +705,40 @@ export const platformBillingRecords = mysqlTable(
   table => ({ invoiceNoUnique: uniqueIndex("platformBilling_invoice_no_unique").on(table.invoiceNo), schoolIndex: index("platformBilling_school_idx").on(table.schoolId), statusIndex: index("platformBilling_status_idx").on(table.status) }),
 );
 
+export const affiliatePilotConfigurations = mysqlTable(
+  "affiliatePilotConfigurations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    programmeKey: varchar("programmeKey", { length: 48 }).notNull().default("nsos-internal-pilot"),
+    status: mysqlEnum("status", ["internal_review", "activation_blocked"]).notNull().default("internal_review"),
+    attributionWindowDays: int("attributionWindowDays").notNull().default(30),
+    refundHoldDays: int("refundHoldDays").notNull().default(30),
+    minimumPayout: decimal("minimumPayout", { precision: 12, scale: 2 }).notNull().default("10000.00"),
+    payoutFrequency: mysqlEnum("payoutFrequency", ["monthly_manual"]).notNull().default("monthly_manual"),
+    eligiblePlanPolicy: mysqlEnum("eligiblePlanPolicy", ["standard_paid_subscriptions_only"]).notNull().default("standard_paid_subscriptions_only"),
+    commissionRateBasisPoints: int("commissionRateBasisPoints").notNull().default(2000),
+    termsStatus: mysqlEnum("termsStatus", ["legal_review_required"]).notNull().default("legal_review_required"),
+    confirmedBy: int("confirmedBy").notNull(),
+    confirmedAt: timestamp("confirmedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ programmeKeyUnique: uniqueIndex("affiliatePilot_programme_key_unique").on(table.programmeKey), statusIndex: index("affiliatePilot_status_idx").on(table.status) }),
+);
+
+export const affiliatePilotEvents = mysqlTable(
+  "affiliatePilotEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    configurationId: int("configurationId").notNull(),
+    actorUserId: int("actorUserId").notNull(),
+    eventType: mysqlEnum("eventType", ["defaults_confirmed"]).notNull(),
+    metadata: json("metadata").$type<{ attributionWindowDays: number; refundHoldDays: number; minimumPayout: string; payoutFrequency: "monthly_manual"; eligiblePlanPolicy: "standard_paid_subscriptions_only"; commissionRateBasisPoints: number }>().notNull(),
+    occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+  },
+  table => ({ configurationOccurred: index("affiliatePilotEvent_configuration_occurred_idx").on(table.configurationId, table.occurredAt), actorOccurred: index("affiliatePilotEvent_actor_occurred_idx").on(table.actorUserId, table.occurredAt) }),
+);
+
 export const schoolWebsites = mysqlTable(
   "schoolWebsites",
   {

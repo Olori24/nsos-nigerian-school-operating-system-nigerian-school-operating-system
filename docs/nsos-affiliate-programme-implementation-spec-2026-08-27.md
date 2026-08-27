@@ -1,6 +1,14 @@
 # NSOS Affiliate Programme Implementation Specification
 
-**Status:** Source-only design. No database schema, screen, endpoint, referral route, affiliate, attribution event, payout, outreach, public promotion, or payment-provider integration is created by this specification.
+**Status:** The internal-only configuration layer is implemented. It creates no affiliate, referral, attribution event, payout, outreach, public promotion, referral link, provider integration, or payment action. Recording the approved defaults remains an explicit platform-owner confirmation inside NSOS.
+
+## Implementation Record
+
+The released internal workspace contains platform-owner-only overview and confirmation procedures, an `affiliatePilotConfigurations` record, and an audit-safe `affiliatePilotEvents` record. The reviewed additive migration created both tables and their indexes. At post-migration verification, both tables contained **zero records**; no affiliate, school referral, or commission data was created.
+
+The owner console presents the approved defaults—30-day attribution, 30-day refund/chargeback hold, ₦10,000 minimum payout, monthly manual review, standard paid-plan eligibility, and 20% first-payment basis—and requires a plain-language confirmation before recording them. It visibly states that partner enrolment, referral-link activation, publication, outreach, tracking, provider calls, and payouts are unavailable. The console is mounted only behind the existing platform-owner dashboard control and its server procedures use the established platform-owner guard.
+
+Validation passed TypeScript, all **129** test files / **468** tests with one intentional live-provider skip, and the production build. Automated screenshot capture was unavailable because the managed preview endpoint had no preview URL; the restricted owner-only console therefore has source-level and route regression coverage rather than a browser-rendered capture.
 
 ## 1. Objective and Scope
 

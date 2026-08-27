@@ -7,6 +7,8 @@ import {
   academicMigrationBatches,
   academicSessions,
   academicTerms,
+  affiliatePilotConfigurations,
+  affiliatePilotEvents,
   automationJobEvents,
   automationJobs,
   advertisingCampaigns,
@@ -613,6 +615,17 @@ export async function createSchool(input: { name: string; shortCode: string; ope
 
 type PlatformSubscriptionStatus = "trial" | "active" | "payment_due" | "suspended" | "cancelled";
 type PlatformBillingCycle = "monthly" | "annual" | "manual";
+const INTERNAL_AFFILIATE_PILOT_KEY = "nsos-internal-pilot";
+const INTERNAL_AFFILIATE_PILOT_DEFAULTS = {
+  status: "internal_review" as const,
+  attributionWindowDays: 30,
+  refundHoldDays: 30,
+  minimumPayout: "10000.00",
+  payoutFrequency: "monthly_manual" as const,
+  eligiblePlanPolicy: "standard_paid_subscriptions_only" as const,
+  commissionRateBasisPoints: 2000,
+  termsStatus: "legal_review_required" as const,
+};
 
 export async function getPlatformRevenueOverview() {
   const db = await database();
@@ -694,6 +707,42 @@ export async function recordPlatformBillingPayment(input: { billingRecordId: num
   if (record.status !== "issued") throw new Error("Only an issued platform billing record can be marked as paid.");
   await db.update(platformBillingRecords).set({ status: "paid", paidAt: asDate(input.paidAt) ?? new Date(), paymentMethod: input.paymentMethod, providerReference: input.providerReference?.trim() || null, settledBy: input.settledBy }).where(and(eq(platformBillingRecords.id, input.billingRecordId), eq(platformBillingRecords.status, "issued")));
   return { schoolId: record.schoolId, billingRecordId: record.id };
+}
+
+export async function getInternalAffiliatePilotOverview() {
+  const db = await database();
+  const configuration = (await db.select().from(affiliatePilotConfigurations).where(eq(affiliatePilotConfigurations.programmeKey, INTERNAL_AFFILIATE_PILOT_KEY)).limit(1))[0] ?? null;
+  const events = configuration
+    ? await db.select({ id: affiliatePilotEvents.id, eventType: affiliatePilotEvents.eventType, actorUserId: affiliatePilotEvents.actorUserId, occurredAt: affiliatePilotEvents.occurredAt }).from(affiliatePilotEvents).where(eq(affiliatePilotEvents.configurationId, configuration.id)).orderBy(desc(affiliatePilotEvents.occurredAt)).limit(12)
+    : [];
+  return {
+    configuration: configuration ?? { programmeKey: INTERNAL_AFFILIATE_PILOT_KEY, ...INTERNAL_AFFILIATE_PILOT_DEFAULTS, confirmedBy: null, confirmedAt: null, createdAt: null, updatedAt: null },
+    defaultsRecorded: Boolean(configuration),
+    events,
+    activationBlockers: ["Nigeria-qualified legal and tax review", "Published privacy notice and retention decision", "Named finance reviewer and reconciliation process", "Separate approval for partner onboarding, referral links, public terms, marketing, and payouts"],
+  };
+}
+
+export async function confirmInternalAffiliatePilotDefaults(input: { confirmedBy: number }) {
+  const db = await database();
+  const values = { programmeKey: INTERNAL_AFFILIATE_PILOT_KEY, ...INTERNAL_AFFILIATE_PILOT_DEFAULTS, confirmedBy: input.confirmedBy, confirmedAt: new Date() };
+  await db.insert(affiliatePilotConfigurations).values(values).onDuplicateKeyUpdate({ set: { ...INTERNAL_AFFILIATE_PILOT_DEFAULTS, confirmedBy: input.confirmedBy, confirmedAt: new Date() } });
+  const configuration = (await db.select().from(affiliatePilotConfigurations).where(eq(affiliatePilotConfigurations.programmeKey, INTERNAL_AFFILIATE_PILOT_KEY)).limit(1))[0];
+  if (!configuration) throw new Error("Affiliate pilot configuration could not be recorded.");
+  await db.insert(affiliatePilotEvents).values({
+    configurationId: configuration.id,
+    actorUserId: input.confirmedBy,
+    eventType: "defaults_confirmed",
+    metadata: {
+      attributionWindowDays: INTERNAL_AFFILIATE_PILOT_DEFAULTS.attributionWindowDays,
+      refundHoldDays: INTERNAL_AFFILIATE_PILOT_DEFAULTS.refundHoldDays,
+      minimumPayout: INTERNAL_AFFILIATE_PILOT_DEFAULTS.minimumPayout,
+      payoutFrequency: INTERNAL_AFFILIATE_PILOT_DEFAULTS.payoutFrequency,
+      eligiblePlanPolicy: INTERNAL_AFFILIATE_PILOT_DEFAULTS.eligiblePlanPolicy,
+      commissionRateBasisPoints: INTERNAL_AFFILIATE_PILOT_DEFAULTS.commissionRateBasisPoints,
+    },
+  });
+  return getInternalAffiliatePilotOverview();
 }
 
 export async function listProviderConfigurations(schoolId: number) {
