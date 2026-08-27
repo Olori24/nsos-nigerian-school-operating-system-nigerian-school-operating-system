@@ -50,6 +50,7 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(enrollmentStation).toContain('aria-pressed={recordView === "profile"}');
     expect(enrollmentStation).toContain("completedEnrollment.studentName");
     expect(dialogSource).toContain("z-[90]");
+    expect(dialogSource).toContain('fixed inset-0 z-[90] bg-black/50');
     expect(dialogSource).toContain("max-h-[calc(100dvh-2rem)]");
     expect(dialogSource).toContain("overflow-y-auto overscroll-contain");
     expect(alertDialogSource).toContain("z-[90]");
