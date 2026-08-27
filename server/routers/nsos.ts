@@ -17,7 +17,7 @@ import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
 import { listNigerianLgas, listNigerianOriginStates, normaliseNigerianOrigin } from "../nigerianOrigin";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
-import { platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { isConfiguredPlatformOwner, platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
@@ -152,6 +152,10 @@ const staffMigrationRowInput = z.object({ sourceRow: z.number().int().positive()
 const academicMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), kind: z.string().max(16), name: z.string().max(160), code: z.string().max(32).optional(), level: z.string().max(64).optional(), arm: z.string().max(32).optional(), capacity: z.union([z.string().max(8), z.number().int().positive()]).optional(), description: z.string().max(5000).optional() });
 
 export const nsosRouter = router({
+  platform: router({
+    ownerAccess: protectedProcedure.query(({ ctx }) => ({ isPlatformOwner: isConfiguredPlatformOwner(ctx.user.openId) })),
+  }),
+
   schools: router({
     list: protectedProcedure.query(({ ctx }) => db.listUserSchools(ctx.user.id)),
     create: protectedProcedure

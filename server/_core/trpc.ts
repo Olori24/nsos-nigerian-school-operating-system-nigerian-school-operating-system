@@ -45,11 +45,15 @@ export const adminProcedure = t.procedure.use(
   }),
 );
 
+export function isConfiguredPlatformOwner(openId: string | undefined) {
+  return Boolean(ENV.ownerOpenId && openId === ENV.ownerOpenId);
+}
+
 export const platformOwnerProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
     if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-    if (!ENV.ownerOpenId || ctx.user.openId !== ENV.ownerOpenId) {
+    if (!isConfiguredPlatformOwner(ctx.user.openId)) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Only the configured NSOS platform owner can manage platform subscriptions and billing." });
     }
     return next({ ctx: { ...ctx, user: ctx.user } });

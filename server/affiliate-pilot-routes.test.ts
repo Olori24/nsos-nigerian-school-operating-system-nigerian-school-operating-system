@@ -27,6 +27,12 @@ describe("NSOS internal affiliate pilot routes", () => {
     await expect(callerFor("admin").nsos.affiliatePilot.overview()).resolves.toMatchObject({ defaultsRecorded: false });
   });
 
+  it("reports platform-control visibility only to the current user without treating a global admin as the platform owner", async () => {
+    await expect(callerFor("admin").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: true });
+    await expect(callerFor("admin", "another-global-admin").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: false });
+    await expect(callerFor("user", "regular-user").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: false });
+  });
+
   it("requires explicit confirmation and records only server-owned approved defaults", async () => {
     vi.mocked(db.confirmInternalAffiliatePilotDefaults).mockResolvedValue({ defaultsRecorded: true } as any);
     const caller = callerFor("admin");

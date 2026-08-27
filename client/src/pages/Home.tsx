@@ -492,6 +492,7 @@ export default function Home() {
   const announcementsQuery = trpc.nsos.communications.list.useQuery({ schoolId: schoolId ?? 0 }, { enabled: !!schoolId && communicationsAccess });
   const guardianPortalQuery = trpc.nsos.portal.guardian.useQuery({ schoolId: schoolId ?? 0 }, { enabled: !!schoolId && role === "parent" });
   const studentPortalQuery = trpc.nsos.portal.student.useQuery({ schoolId: schoolId ?? 0 }, { enabled: !!schoolId && role === "student" });
+  const platformOwnerQuery = trpc.nsos.platform.ownerAccess.useQuery(undefined, { enabled: !!user });
 
   const refresh = () => {
     if (!schoolId) return;
@@ -524,7 +525,7 @@ export default function Home() {
   if (contextQuery.error || !contextQuery.data) return <ErrorState error={contextQuery.error?.message ?? "This school workspace is unavailable."} />;
 
   const school = contextQuery.data.school;
-  const platformAdmin = user.role === "admin";
+  const platformAdmin = platformOwnerQuery.data?.isPlatformOwner === true;
   const selectView = (view: View) => { setActiveView(view); setMobileNav(false); };
   return (
     <div className="min-h-screen bg-[#f5f6f1] text-[#15201c]">
