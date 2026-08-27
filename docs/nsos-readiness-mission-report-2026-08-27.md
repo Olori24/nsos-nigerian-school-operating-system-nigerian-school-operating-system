@@ -81,6 +81,7 @@ NSOS has completed its internal affiliate-pilot configuration and its current de
 ## Internal Evidence References
 
 - [Affiliate pilot charter](./nsos-affiliate-partner-pilot-charter-2026-08-27.md)
+- [Approval-first affiliate activation plan](./nsos-affiliate-activation-plan-2026-08-27.md)
 - [Affiliate programme terms draft](./nsos-affiliate-programme-terms-draft-2026-08-27.md)
 - [Affiliate implementation specification](./nsos-affiliate-programme-implementation-spec-2026-08-27.md)
 - [Branded operational email identity proposal](./nsos-branded-email-identity-proposal-2026-08-26.md)
