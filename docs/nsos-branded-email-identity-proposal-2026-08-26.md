@@ -1,6 +1,6 @@
 # NSOS Branded Email Identity Proposal
 
-**Status:** Design only. No inbox, alias, DNS record, sender, reply route, provider configuration, or email delivery behaviour has been changed by this proposal.
+**Status:** Design proposal plus factual sender-health reconciliation record. No inbox, alias, sender, reply route, inbound setting, or email delivery behaviour has been changed. One owner-approved DNS CNAME was added while resolving sender health, but its target was malformed by the DNS panel and is awaiting a provider correction described below.
 
 ## Purpose
 
@@ -58,15 +58,19 @@ The sender provider’s read-only domain check continues to report `nsos.top` as
 
 On 27 August, Resend Support replied that it had checked the account, confirmed the domain is now verified, and stated that sending can begin. Immediately after that message, the existing project credential performed an independent **read-only** domain-list check. It still returned `status: partially_failed`, with sending enabled and receiving disabled. No verification-record values, recipient data, delivery/open telemetry, secrets, or configuration were retrieved or changed. The support statement and API state therefore conflict; sender health remains an open provider-status reconciliation item until Resend confirms the API state or supplies remediation.
 
-With explicit owner approval, one redacted follow-up was submitted through the authenticated Resend in-account support channel at High priority. It asks only that Support reconcile the verified statement with the authenticated read-only `partially_failed` API response or provide non-secret remediation. The channel confirmed **“Your message was sent”** and did not provide a case reference or immediate guidance. No provider, sender, DNS, mailbox, inbound, or delivery configuration changed.
+With explicit owner approval, one redacted follow-up was submitted through the authenticated Resend in-account support channel at High priority. It asks only that Support reconcile the verified statement with the authenticated read-only `partially_failed` API response or provide non-secret remediation. The channel confirmed **“Your message was sent”** and did not provide a case reference or immediate guidance. No provider, sender, DNS, mailbox, inbound, or delivery configuration changed at that time.
+
+Later on 27 August, Resend Support supplied the missing-record remediation: add a sending-only CNAME for `send.nsos.top` pointing exactly to `send.forge.rmta.net`, leave the already verified `rsend.nsos.top` record unchanged, and keep inbound receiving disabled because the domain is configured for sending only. The owner explicitly approved that single DNS change. In the owner’s DomainKing DNS panel, the CNAME was added as `Send`, but the panel saved its target as `send.forge.rmta.net.nsos.top.` by treating the external hostname as relative to the `nsos.top` zone. An independent public DNS-over-HTTPS response confirmed that malformed target. The immediate read-only Resend list check still returned `partially_failed` with sending enabled and receiving disabled.
+
+The owner then explicitly approved one DomainKing Support request asking only for correction of that record to the exact external target `send.forge.rmta.net.` and prohibiting any other DNS, MX, nameserver, mailbox, or email-setting change. The owner-supplied confirmation email shows that this request was accepted and remains open. No further DNS action, mail send, recipient action, inbound-mail enablement, or mailbox change has occurred. Public DNS and Resend status must be rechecked only after DomainKing confirms the correction.
 
 The fresh full NSOS Vitest suite completed **460 passing tests across 125 passing test files**, with one failing live sender-authorization check. That check failed solely because the provider reported `partially_failed`, which is intentionally outside the accepted sending states (`verified` and `partially_verified`). The result is validation evidence, not a reason to weaken the sender gate or alter its expected status.
 
-No DNS record, sender setting, mailbox, inbound setting, email recipient, or delivery workflow was changed while investigating this discrepancy.
+Except for the owner-approved but malformed `Send` CNAME above, no DNS record, sender setting, mailbox, inbound setting, email recipient, or delivery workflow was changed while investigating this discrepancy.
 
 ## Current Limits
 
-This proposal does not claim inbox delivery, reply handling, mailbox availability, support staffing, a response-time commitment, tenant-school branded senders, inbound email processing, or additional email addresses. It does not create mailboxes or alter DNS. The existing sender provider’s authoritative status remains the source of truth for transactional email health.[1]
+This proposal does not claim inbox delivery, reply handling, mailbox availability, support staffing, a response-time commitment, tenant-school branded senders, inbound email processing, or additional email addresses. It does not create mailboxes. The existing sender provider’s authoritative status remains the source of truth for transactional email health.[1] The pending DNS support correction does not authorize any email sending or inbound activation.
 
 ## Reference
 
