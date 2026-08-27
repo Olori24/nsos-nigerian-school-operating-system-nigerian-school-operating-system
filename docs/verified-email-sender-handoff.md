@@ -1,6 +1,6 @@
 # NSOS Verified Email Sender Handoff
 
-**Current status:** Blocked externally. The unchanged integration test reports that the configured `AUTH_EMAIL_FROM` sender uses `resend.dev`, which is not present as a verified domain in the connected Resend account.
+**Current status:** Provider-status reconciliation required. The current `AUTH_EMAIL_FROM` value is `notifications@nsos.top`. On 27 August, Resend Support stated that `nsos.top` is verified and ready to send, but an immediate independent read-only API check still returned `partially_failed` with sending enabled and receiving disabled. Historical evidence below records prior state transitions; it must not be read as current sender-health clearance.
 
 > **No DNS record, sender domain, email address, invitation, passwordless email, or Resend setting is changed by this document.** The account holder must explicitly approve every provider-side step.
 
@@ -52,3 +52,9 @@ Subsequent Resend checks report `partially_verified`: its sending capability is 
 The protected student-record sharing dialog now pre-fills editable server-provided copy for the authorized record and requires a subject of 3–180 characters plus a body of 10–3000 characters before its existing recipient-selection and final-confirmation gate can submit. The server rejects subject line breaks, strips unsafe controls, retains only plain-text line breaks, escapes the body into a fixed HTML wrapper, and continues to omit raw copy, recipient address, and attachment bytes from message/audit metadata. Focused helper, route, and UI-bound tests cover default copy, HTML escaping, header-injection rejection, custom-copy delivery integration, confirmation retention, and audit privacy; the complete suite subsequently passed with 122 files and 449 tests. No actual recipient email was sent for this validation.
 
 After explicit owner approval, one staff-invitation email with a clearly labelled test identity was submitted through the real NSOS invitation helper to a school-controlled inbox. The helper completed without the historical Resend 403 rejection, confirming provider acceptance for the verified sender. No student, guardian, payment, or live operational record was used; recipient details, message contents, delivery telemetry, and open telemetry were neither retained nor inspected. This establishes provider submission—not inbox delivery or user action—as the boundary of the controlled test.
+
+## 2026-08-27 Current Reconciliation
+
+Resend Support later replied that it had checked the account, confirmed `nsos.top` is now verified, and stated that sending can begin. An immediately subsequent authenticated **read-only** domain API check still returned `partially_failed`, with sending enabled and receiving disabled. With explicit owner approval, one redacted High-priority follow-up was submitted through the authenticated in-account support channel asking Resend to reconcile that API state or provide non-secret remediation; the channel confirmed **“Your message was sent.”** No case reference or immediate guidance was returned.
+
+No DNS record, sender setting, mailbox, inbound processing, delivery configuration, test expectation, recipient, or credential changed during this reconciliation. Treat the sender-health gate as unresolved until Support reconciles the API status or gives a specific approved remediation.
