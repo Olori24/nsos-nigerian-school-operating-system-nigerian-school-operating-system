@@ -17,9 +17,9 @@ describe("platform owner control visibility", () => {
   });
 
   it("provides a labelled mobile affiliate entry instead of hiding every platform control below the small breakpoint", () => {
-    expect(home).toContain('fixed inset-x-0 bottom-4 z-30 px-5 sm:hidden');
+    expect(home).toContain('fixed inset-x-0 bottom-24 z-30 px-5 sm:hidden');
     expect(home).toContain('aria-label="Open Affiliate pilot"');
-    expect(home).toContain('href="/?open=affiliate-pilot"');
+    expect(home).toContain('onClick={() => setAffiliatePilotOpen(true)}');
   });
 
   it("offers a clear, confirmation-gated recovery control only when the protected route reports verified claim eligibility", () => {

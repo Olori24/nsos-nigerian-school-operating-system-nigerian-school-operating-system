@@ -12,7 +12,7 @@ describe("affiliate pilot stable dashboard entry", () => {
 
   it("opens the existing owner-only console from the stable root dashboard query", () => {
     expect(home).toContain('url.searchParams.get("open") !== "affiliate-pilot"');
-    expect(home).toContain('href="/?open=affiliate-pilot"');
+    expect(home).toContain('onClick={() => setAffiliatePilotOpen(true)}');
     expect(home).toContain("if (!platformAdmin || typeof window === \"undefined\") return;");
     expect(home).toContain("<AffiliatePilotConsole open={affiliatePilotOpen}");
   });
