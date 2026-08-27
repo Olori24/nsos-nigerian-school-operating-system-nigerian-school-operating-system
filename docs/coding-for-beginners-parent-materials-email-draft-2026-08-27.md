@@ -51,6 +51,12 @@ Kind regards,
 | 5. Confirm delivery | The designated owner reviews the named recipient and explicitly confirms the send. | One message only; no automated or recurring delivery. |
 | 6. Record outcome | Review the provider-managed delivery status in the communication record. | Do not treat submission as proof of delivery. |
 
+## Protected NSOS Review Surface
+
+NSOS now provides a protected owner/admin **Parent materials email draft** panel in Learning operations. The panel first requires selection of an active learner and a subject that is actually assigned to that learner’s current class. It derives the displayed timetable only from the tenant-scoped academic record and requires a permitted parent or guardian recipient choice from the existing protected, masked recipient list.
+
+The subject and message remain read-only in this release. The panel displays the current sender-health result and a separate future-delivery acknowledgement, but its delivery control is deliberately disabled. It contains **no delivery mutation, schedule, message-log creation, invitation, contact export, or contact-record change**. The parent materials message therefore remains a private review artifact until Resend independently reports an accepted sender state and an authorised owner separately reviews the precise recipient, final copy, and one-time send action.
+
 ## Deferred Items
 
-The following are intentionally not configured in this draft: learner credentials, public course publication, automatic reminders, recurring email, SMS delivery, parent mailing lists, recipient export, payment demands, and online-platform credentials.
+The following are intentionally not configured in this draft: learner credentials, public course publication, automatic reminders, recurring email, SMS delivery, parent mailing lists, recipient export, payment demands, online-platform credentials, and an active email-delivery action.
