@@ -33,4 +33,14 @@ describe("public NSOS entry presentation", () => {
     expect(appSource).toContain("<InstallNSOSPrompt />");
     expect(appSource).toContain("<BiodataThemeToggle />");
   });
+
+  it("lazy-loads independent public routes behind an accessible fallback", () => {
+    expect(appSource).toContain('const Home = lazy(() => import("./pages/Home"));');
+    expect(appSource).toContain('const PublicAdmissions = lazy(() => import("./pages/PublicAdmissions"));');
+    expect(appSource).toContain('const SchoolWebsite = lazy(() => import("./pages/SchoolWebsite"));');
+    expect(appSource).toContain('const DomainSchoolWebsite = lazy(() => import("./pages/DomainSchoolWebsite"));');
+    expect(appSource).toContain("function RouteLoading()");
+    expect(appSource).toContain('aria-live="polite"');
+    expect(appSource).toContain("<Suspense fallback={<RouteLoading />}>" );
+  });
 });

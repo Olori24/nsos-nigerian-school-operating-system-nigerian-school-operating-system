@@ -24,7 +24,7 @@
 | Public health workload A | 50 requests, 10 concurrent, 0 errors, 5.22 requests/sec, p50 674.60 ms, p95 6,167.79 ms, p99 6,479.51 ms | **MEASURED** | Read-only health route only; likely includes a cold or proxy path. Not representative of authenticated business operations. |
 | Public health workload B | 50 requests, 10 concurrent, 0 errors, 7.36 requests/sec, p50 665.50 ms, p95 3,429.42 ms, p99 3,483.14 ms | **MEASURED** | Immediate repeat improved the tail but remained slow for a minimal endpoint. |
 | Automated regression suite | 48 files, 177 tests passed | **MEASURED** | Broad application policy coverage; not capacity proof. |
-| Typecheck and production build | Passed | **MEASURED** | Build generated a main client bundle of approximately 2.1 MB before gzip; bundling warning remains. |
+| Typecheck and production build | Passed | **MEASURED** | The pre-splitting primary Vite entry was 2,247.69 kB (517.95 kB gzip). After route-level lazy loading, the primary entry was 662.02 kB (196.80 kB gzip); the build warning still remains for chunks above 500 kB. |
 
 ## Security and journey evidence
 
@@ -39,6 +39,7 @@ Live responses exposed `Strict-Transport-Security`, enforced CSP, `X-Frame-Optio
 | External authentication | Added a 10-second deadline to Resend email, Google token, and Google userinfo requests. Timeout failures return controlled errors rather than holding a request indefinitely. | Timeout regression tests passed. |
 | AI provider resilience | Added a fresh 30-second abort deadline for every AI-provider retry attempt. | LLM resilience test passed. |
 | Autoscaled database access | Replaced implicit database-client creation with a bounded per-pod MySQL pool: five connections, five idle maximum, keepalive, and a queue capped at 20. | Database-pool resilience test and TypeScript validation passed. |
+| Public route delivery | Lazily loaded the dashboard, public-admissions, school-website, domain-school-website, and not-found pages behind an accessible route fallback. | The primary Vite entry reduced from 2,247.69 kB to 662.02 kB (70.5%); gzip reduced from 517.95 kB to 196.80 kB (62.0%). |
 
 ## Verified scale risks and remaining blockers
 
@@ -47,7 +48,7 @@ Live responses exposed `Strict-Transport-Security`, enforced CSP, `X-Frame-Optio
 3. **Observability is incomplete.** NSOS now emits correlation-safe request-completion and unexpected-error events with an opaque request ID, method, query-free path, status, bounded outcome category (`success`, `redirect`, `client_error`, or `server_error`), duration, and error type only. Current evidence still does not include production CPU, memory, database connection saturation, query latency, queue depth, worker utilisation, distributed traces, alert routing, or a measured service-level baseline.
 4. **Latency needs investigation.** The two bounded health measurements had p95 values of 6,167.79 ms and 3,429.42 ms. They are insufficient to diagnose the cause, but they do not support a low-latency 100K conclusion.
 5. **Customer journey coverage is partial.** Public sign-in choice and invalid-input handling were exercised. A complete fresh-user journey through an actual email inbox or Google identity, school creation, onboarding, persisted operational action, logout, and return login was not safely completed during this audit because it would require authorised test identities and real provider delivery.
-6. **Frontend delivery needs optimisation.** The production build warns that the main JavaScript bundle exceeds 500 kB after minification. Route-level lazy loading and bundle analysis should precede acquisition campaigns.
+6. **Frontend delivery still needs optimisation.** Route-level lazy loading reduced the measured primary Vite entry substantially, but it remains 662.02 kB before gzip, and the production build also emits a separate 1,462.31 kB Mermaid chunk. The build warning therefore remains. Route-level loading is improved, but bundle analysis, further feature-level splitting, and representative mobile-network measurement should precede acquisition campaigns.
 7. **Cost model is unknown.** No current provider bills, negotiated database limits, delivery-provider unit costs, traffic profile, retention policy, or AI-usage envelope were available. A 1K/10K/50K/100K operating-cost estimate would be speculative and is therefore not included.
 
 ## Required path to a verified 100K target

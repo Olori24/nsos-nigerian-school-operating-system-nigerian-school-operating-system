@@ -11,9 +11,9 @@ const css = readFileSync(resolve(root, "client/src/index.css"), "utf8");
 
 describe("school website publishing and theme presentation", () => {
   it("routes verified custom-domain visitors through the public domain resolver", () => {
-    expect(app).toContain('import DomainSchoolWebsite from "./pages/DomainSchoolWebsite"');
+    expect(app).toContain('const DomainSchoolWebsite = lazy(() => import("./pages/DomainSchoolWebsite"));');
     expect(app).toContain("isNsosPlatformHost");
-    expect(app).toContain("return <DomainSchoolWebsite />");
+    expect(app).toContain("return <Suspense fallback={<RouteLoading />}><DomainSchoolWebsite /></Suspense>;");
   });
 
   it("keeps NSOS-owned custom domains in the product router instead of treating them as tenant school domains", () => {

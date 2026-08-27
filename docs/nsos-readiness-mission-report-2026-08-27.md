@@ -8,11 +8,12 @@ This mission reconciled the currently open production-readiness controls, ran th
 
 | Area | Result | Evidence | Current boundary |
 | --- | --- | --- | --- |
-| Deterministic application validation | **Passed** | Formatting, lint, TypeScript, 132 Vitest files / 480 tests (one intentional live-provider skip), and production build completed. | This is source-level evidence, not recovery, scale, delivery, or real-user-journey evidence. |
+| Deterministic application validation | **Passed** | Formatting, lint, TypeScript, 132 Vitest files / 483 tests (one intentional live-provider skip), and production build completed. | This is source-level evidence, not recovery, scale, delivery, or real-user-journey evidence. |
 | Internal affiliate pilot | **Recorded** | One internal-review configuration with the approved 20% first-payment model and one `defaults_confirmed` audit event were verified by aggregate-only query. | No affiliate, referral, outreach, tracking, provider, payout, contract, or public programme is active. |
 | Resend sender health | **Provider-status reconciliation required** | Resend Support stated that `nsos.top` is verified and ready to send; an immediate independent read-only API check still returned `partially_failed` with sending enabled and receiving disabled. One owner-approved redacted High-priority clarification was then submitted through the authenticated support channel and confirmed sent. | The Support statement and API state conflict. Do not change DNS, sender, mailbox, inbound settings, delivery configuration, or test expectations before Resend reconciles the API state or provides remediation. |
 | Branded operational inboxes | **Design only** | The `notifications@nsos.top` technical-sender boundary and proposed human-owned address model are documented. | No `support@`, `security@`, `billing@`, `admissions@`, `hello@`, or `privacy@` mailbox/alias exists. |
 | Source-level observability | **Improved, not a monitoring pass** | Request-completion events now include a bounded outcome category alongside the existing opaque request ID, method, query-free path, status, and duration. Six focused observability regressions passed within the full deterministic suite. | No external telemetry, alert routing, CPU/memory or database-saturation monitoring, distributed tracing, recovery proof, or capacity claim was added. |
+| Frontend delivery | **Improved, not fully optimized** | Route-level lazy loading reduced the primary Vite entry from 2,247.69 kB to 662.02 kB (70.5%), or from 517.95 kB to 196.80 kB gzip (62.0%), with an accessible route fallback and route regressions. | The primary entry remains above the 500 kB warning threshold and a separate 1,462.31 kB Mermaid chunk remains. No Core Web Vitals, representative mobile-network, or user-journey performance measurement was added. |
 | Staging, recovery, and capacity | **Paused / unproven** | The ambiguous Aiven service was disposed and the staging secret was removed without reading its value. The later accidental AWS RDS instance and matching retained automated backup were also deleted after owner confirmation. Fresh disposable migration compatibility passed separately. | There is no independently verifiable staging database, recovery rehearsal, provider-stub environment, or measured staged-load evidence. |
 | Package-manager configuration | **Resolved and validated** | Overrides and the Wouter patch declaration now live in `pnpm-workspace.yaml`; the project is pinned to its already locked local pnpm 10.18.0 toolchain. An offline frozen install preserved the lockfile and patch, and lint, TypeScript, the full 132-file/481-test suite (one intentional provider skip), and the production build passed. | Application dependency versions, provider settings, staging state, and runtime behavior were not changed. Continue to require a frozen install in CI. |
 
@@ -66,13 +67,7 @@ The recorded configuration is an **internal policy record**, not a public affili
 
 ### 5. Package-Manager Configuration Migration
 
-**Trigger:** A trusted pnpm release path is available that can be validated against the current lockfile.
-
-**Required evidence before approval:** the exact pnpm version and integrity source, proof that workspace configuration retains the current Wouter patch and overrides, successful frozen install, unchanged resolved dependency graph except expected settings metadata, full deterministic validation, and a rollback checkpoint.
-
-**Approval statement to use:**
-
-> I approve a source-only package-manager configuration migration using the presented pnpm version and validation plan. No dependency-version upgrade is approved unless it is separately shown and confirmed.
+**Status:** **Completed.** The project now uses the already locked local pnpm 10.18.0 toolchain, and its overrides plus Wouter patch declaration live in `pnpm-workspace.yaml`. An offline frozen install preserved the lockfile and patch. No application dependency version, provider setting, staging state, or runtime behaviour was changed.
 
 ## Readiness Verdict
 
