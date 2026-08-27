@@ -1,7 +1,7 @@
 # NSOS Isolated Staging Provisioning Handoff
 
 **Prepared:** 26 August 2026  
-**Status:** An empty managed project named **NSOS Staging** has been created. It has no configured website, custom domain, connector, source, schedule, deployment, copied live record, or provider integration. A separately labelled external Aiven service now exists and its URI is retained only in a staging-namespaced secure variable; no application environment, staging runtime, storage namespace, dataset, provider connection, DNS record, database operation, or load workload has been created.
+**Status:** An empty managed project named **NSOS Staging** exists with no configured website, custom domain, connector, source, schedule, deployment, copied live record, or provider integration. The separately labelled Aiven service was terminated and the staging-namespaced database secret was removed without reading its value; the Application secrets list was then confirmed empty. No replacement provider resource has been created. No application environment, staging runtime, storage namespace, dataset, provider connection, DNS record, database operation, or load workload exists.
 
 > **Purpose.** This handoff defines the minimum evidence required to provision a disposable NSOS staging environment for synthetic recovery and progressive-load validation. It does not authorise any deployment, test execution, external provider call, payment action, DNS change, or use of live institutional data.
 
@@ -21,13 +21,13 @@ The owner then authorised a task-local teardown. Independent review confirms tha
 
 > **Current status:** staging remains blocked. No new staging provision or test may proceed until a separately verifiable non-production database boundary is available. The boundary control must not be bypassed, weakened, or suppressed.
 
-## Separate staging database reference — presence verified only
+## Historical separate staging database reference — securely removed
 
-Following owner-approved secure transfer, the isolated **NSOS Staging** project confirms only that a non-empty `NSOS_STAGING_DATABASE_URL` secret is present. The associated non-secret provider identity is Aiven project `nsos-staging-db`, service `nsos-staging-mysql`. The connection value itself was not retained in this repository, documentation, chat, logs, or source code.
+Following owner-approved secure transfer, the isolated **NSOS Staging** project had confirmed only that a non-empty `NSOS_STAGING_DATABASE_URL` secret was present. The associated non-secret provider identity was Aiven project `nsos-staging-db`, service `nsos-staging-mysql`. The connection value was not retained in this repository, documentation, chat, logs, or source code. After service termination, the secret was removed through the protected staging interface without opening it, and the Application secrets list was confirmed empty.
 
 No test has interpreted, parsed, connected to, queried, migrated, deployed against, seeded, or otherwise used that secret. Consequently, the provider/service label is not yet independent proof of the URI target, account grants, network route, replication/restore lineage, empty state, or isolation from every production resource. All of those remain required before the staging runtime can be created.
 
-> **Current authorization boundary:** the secure secret may remain stored in NSOS Staging, but no database or provider operation may start until a separate boundary-verification decision is approved. Live NSOS remains completely out of scope.
+> **Current authorization boundary:** no staging database secret or provider service is available for use. Live NSOS remains completely out of scope. A new provider path requires separate approval and fresh boundary verification from the beginning.
 
 ## Final dedicated-user grant verification — halted
 
@@ -35,13 +35,13 @@ The owner approved creation of `nsos_staging` and `nsos_staging_runtime`, follow
 
 No application connection, table inspection, data access, migration, seed, deployment, storage action, provider action, domain action, or live-resource access followed. The URI, hostname, password, raw grant statements, and raw grant results were not retained here.
 
-> **Current staging database verdict:** the Aiven service, the broad staging reference, and `nsos_staging_runtime` are **not approved for runtime, catalog, recovery, or load use**. A provider-supported restricted-principal proof or owner-authorized disposal of this service is required before staging can resume.
+> **Historical staging database verdict:** the Aiven service, the broad staging reference, and `nsos_staging_runtime` were **not approved for runtime, catalog, recovery, or load use**. The owner then selected disposal, which completed as recorded below.
 
 ## Owner-authorized Aiven service disposal
 
 The owner selected disposal rather than further provider-side privilege troubleshooting. The Aiven console confirmed termination of the isolated `nsos-staging-mysql` service; the staging project’s service list subsequently showed only the provider’s “Create new service” choices and no active service. The service had no application runtime, production connection, imported data, provider integration, deployment, migration, synthetic fixture, recovery rehearsal, or load activity.
 
-The staging-namespaced database reference must now be removed from the NSOS Staging secret interface without reading or reproducing its value. Until a future provider can supply independently verifiable non-production identity and least-privilege evidence, staging recovery, staged load, capacity, and existing-schema upgrade validation remain blocked.
+The staging-namespaced database reference was removed from the NSOS Staging secret interface without reading or reproducing its value; the empty secret list was confirmed. Until a future provider can supply independently verifiable non-production identity and least-privilege evidence, staging recovery, staged load, capacity, and existing-schema upgrade validation remain blocked.
 
 ## Scope and non-negotiable boundary
 

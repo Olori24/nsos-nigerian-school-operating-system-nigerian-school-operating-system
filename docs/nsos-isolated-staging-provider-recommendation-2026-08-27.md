@@ -1,19 +1,19 @@
 # NSOS Isolated Staging Provider Recommendation — 27 August 2026
 
-**Recommendation:** Use **DigitalOcean Managed MySQL** in a newly created, staging-only DigitalOcean team/project as the preferred next staging database path for NSOS. Start with one single-node MySQL cluster strictly for non-production validation, then delete it after the approved recovery and progressive-load evidence is captured. Do not use the previously disposed Aiven service or any prior staging credential.
+**Replacement recommendation:** Use **Amazon RDS for MySQL** in a new, staging-only AWS account or a clearly isolated staging boundary as the next path for NSOS. Start with one Single-AZ MySQL DB instance strictly for non-production validation, then delete it and any snapshots after the approved recovery and progressive-load evidence is captured. Do not use the previously disposed Aiven service, any prior staging credential, or the DigitalOcean route that returned an access block.
 
-> This is a recommendation and approval packet only. No DigitalOcean account, team, project, database, user, secret, DNS record, storage namespace, provider integration, workload, recovery test, or load test was created by this document.
+> This is a replacement recommendation and approval packet only. No AWS account, organization/account boundary, DB instance, database, user, secret, DNS record, storage namespace, provider integration, workload, recovery test, or load test was created by this document.
 
-## Why This Is the Best Current Fit
+## Why AWS RDS Is the Current Fit
 
-NSOS needs a managed **MySQL-compatible** staging target that is separately identifiable, can be emptied and disposed, permits a target-only application principal, supports encrypted connection, and has a documented backup/recovery capability for a later rehearsal. DigitalOcean documents managed MySQL support, end-to-end SSL encryption, metrics, VPC placement, daily point-in-time backups, and automated failover capabilities. Its entry single-node MySQL cluster is explicitly positioned for preliminary development/testing and starts at $15 per month; it is not highly available, which is appropriate for a time-bounded staging evidence exercise rather than production. [1] [2]
+NSOS needs a managed **MySQL-compatible** staging target that is separately identifiable, can be emptied and disposed, permits a target-only application principal, supports encrypted connection, and has a documented backup/recovery capability for a later rehearsal. Amazon RDS for MySQL supports managed MySQL instances, standard MySQL clients, account management for additional application users, automated backups, snapshots, and point-in-time restore. [1] [2]
 
-Critically, DigitalOcean documents that new MySQL users initially inherit broad `doadmin` access but can be restricted with SQL `REVOKE` and database-specific `GRANT` statements. It also documents `SHOW GRANTS` for later evidence collection. This makes it possible to insist on proof that the NSOS runtime identity has only `nsos_staging.*` privileges before any application, recovery, or load work begins. [3] [4]
+The RDS master user is intended for administrative work, including creating additional database accounts, while the application should use a separate least-privilege MySQL user. This enables NSOS to require `SHOW GRANTS` evidence that its runtime identity has only `nsos_staging.*` privileges before any application, recovery, or load work begins. The master account must never be stored in NSOS Staging. [1] [3]
 
 | Candidate | Fit for NSOS isolated staging | Reason for decision |
 | --- | --- | --- |
-| **DigitalOcean Managed MySQL — recommended** | Strong | Managed MySQL, TLS, daily PITR/metrics, documented user creation/restriction/revocation, clear single-node testing starting point, and service/user deletion controls. [1] [2] [3] |
-| Amazon RDS for MySQL | Strong but more operational overhead | RDS supports account-management statements and recommends application-specific minimum-privilege users, with automated backups and point-in-time recovery. Its free/credit terms may help a new account, but the product is less suitable as the simplest first path for this owner-managed, time-bounded staging mission. [5] [6] [7] |
+| **Amazon RDS for MySQL — replacement recommendation** | Strong | Managed MySQL, additional application-user support, automated backups, snapshots, point-in-time restore, explicit deletion controls, and no long-term commitment for on-demand testing. Exact region/instance/storage cost must be reviewed at checkout. [1] [2] [4] |
+| DigitalOcean Managed MySQL | Unavailable in the current owner browser | The provider displayed an explicit access block during the approved sign-in attempt. NSOS will not retry or bypass that control. |
 | Google Cloud SQL MySQL trial | Not recommended for the required recovery proof | The 30-day trial provides a large trial instance but explicitly does not support backup/restore; it also assigns powerful default roles unless the owner further configures custom-role access. That does not meet NSOS’s recovery-evidence and least-privilege needs as cleanly. [8] [9] |
 | Previous Aiven service | Rejected / do not reuse | The already documented NSOS staging attempt could not prove a target-only least-privilege boundary and was disposed. Reopening it would violate the containment decision. |
 
@@ -23,8 +23,8 @@ The following structure must be shown before NSOS connects to any staging databa
 
 | Layer | Required state | Explicitly prohibited |
 | --- | --- | --- |
-| Provider account/project | A new or empty staging-only DigitalOcean project, labelled `nsos-staging`; no production database in the project. | Reusing a live NSOS database, the disposed Aiven target, or an ambiguous shared target. |
-| Database cluster | One new MySQL cluster labelled `nsos-staging-mysql`, in a chosen region, initially empty apart from provider defaults. | Importing/copying production learner, guardian, staff, finance, admission, file, or provider data. |
+| Provider account/project | A new staging-only AWS account, or a separately documented isolated AWS staging boundary labelled `nsos-staging`; no production database in the boundary. | Reusing a live NSOS database, the disposed Aiven target, or an ambiguous shared target. |
+| Database instance | One new Single-AZ RDS for MySQL instance labelled `nsos-staging-mysql`, in a chosen region, initially empty apart from provider defaults. | Importing/copying production learner, guardian, staff, finance, admission, file, or provider data. |
 | Application database | A fresh `nsos_staging` database only. | Connecting the NSOS staging app to `defaultdb` or a database shared with another app. |
 | Runtime user | A new `nsos_staging_runtime` identity with the minimum application privileges on `nsos_staging.*` only, verified via `SHOW GRANTS`. | Using `doadmin`, a provider-default admin identity, a user with global privileges, or a user with `GRANT OPTION`. |
 | Administrative user | Provider default admin may create/revoke the database user and perform approved backup/recovery administration, but its connection details must never be placed in the staging app. | Storing administrative credentials in NSOS Staging. |
@@ -46,26 +46,23 @@ The provider-side operator must present sanitized evidence of the following sequ
 
 ## Cost and Operating Guardrails
 
-The recommended entry node is documented by DigitalOcean as beginning at **$15/month** for 1 GiB RAM and 10–30 GiB storage; additional storage is listed at $0.21/GiB/month. Actual cost, tax, region availability, and billing terms must be confirmed by the account holder at checkout. [2]
+Amazon RDS pricing is usage-based and depends on the selected region, instance class, storage, backup storage, and data transfer. AWS recommends using its Pricing Calculator for the current estimate. Newer AWS Free Tier accounts may have credits, but eligibility is account-specific and must not be assumed. [4]
 
-The project should use a fixed stop rule: create no high-availability node, replica, migration, backup-retention extension, network add-on, or long-lived environment until the owner reviews the current checkout estimate. The environment should be deleted after the agreed evidence set is complete unless the owner separately approves ongoing staging retention and budget.
+The project should use a fixed stop rule: create no Multi-AZ deployment, replica, migration, backup-retention extension, network add-on, public access exception, or long-lived environment until the owner reviews the current checkout estimate. Before any NSOS application connection, validate that the managed runtime can reach the intended RDS endpoint over TLS without widening access beyond an agreed staging boundary. The environment and any retained snapshots should be deleted after the agreed evidence set is complete unless the owner separately approves retention and budget.
 
 ## Approval Required Before Provisioning
 
 The owner must explicitly confirm all of the following in one approval before any provider service is created:
 
-> I approve a new staging-only DigitalOcean project and one single-node Managed MySQL cluster for NSOS, limited to a temporary synthetic-data validation purpose. I approve an initial estimated provider spend only after I see the current checkout total. The database must be a fresh `nsos_staging` target with a separate least-privilege `nsos_staging_runtime` user and TLS-only application connection. No production data, live provider action, custom domain, real recipient, or public traffic is permitted. The environment must be deleted after the approved evidence collection unless I separately approve retention.
+> I approve a new isolated AWS staging boundary and one Single-AZ RDS for MySQL instance for NSOS, limited to a temporary synthetic-data validation purpose. I approve an initial estimated provider spend only after I see the current checkout total. The database must be a fresh `nsos_staging` target with a separate least-privilege `nsos_staging_runtime` user and TLS-only application connection. No production data, live provider action, custom domain, real recipient, or public traffic is permitted. The environment and retained snapshots must be deleted after the approved evidence collection unless I separately approve retention.
 
 After that approval, NSOS must still stop and request a final confirmation before: (a) placing the staging TLS reference into protected secrets; (b) running the first migration; (c) conducting a synthetic restore rehearsal; and (d) initiating any progressive-load run.
 
 ## References
 
-[1]: https://docs.digitalocean.com/products/databases/ "DigitalOcean Managed Databases documentation"
-[2]: https://docs.digitalocean.com/products/databases/mysql/details/pricing/ "DigitalOcean Managed MySQL pricing"
-[3]: https://docs.digitalocean.com/products/databases/mysql/how-to/manage-users-and-databases/ "DigitalOcean: manage MySQL users and databases"
-[4]: https://docs.digitalocean.com/products/databases/mysql/how-to/modify-user-privileges/ "DigitalOcean: modify MySQL user privileges"
-[5]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Appendix.MySQL.CommonDBATasks.privilege-model.html "AWS RDS for MySQL privilege model"
-[6]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.html "AWS RDS automated backups"
-[7]: https://aws.amazon.com/rds/free/ "AWS RDS Free Tier"
+[1]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html "AWS: Amazon RDS for MySQL"
+[2]: https://aws.amazon.com/rds/features/backup/ "AWS: Amazon RDS backup and point-in-time restore"
+[3]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Appendix.MySQL.CommonDBATasks.privilege-model.html "AWS RDS for MySQL privilege model"
+[4]: https://aws.amazon.com/rds/pricing/ "AWS RDS pricing and Free Tier"
 [8]: https://docs.cloud.google.com/sql/docs/mysql/free-trial-instance "Google Cloud SQL for MySQL free trial"
 [9]: https://docs.cloud.google.com/sql/docs/mysql/users "Google Cloud SQL MySQL user accounts"
