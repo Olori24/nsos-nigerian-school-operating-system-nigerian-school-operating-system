@@ -77,7 +77,7 @@ button, input, select, textarea { font: inherit; }
 .dark input::placeholder, .dark textarea::placeholder { color: #a7b8ae; }
 .dark .text-\[\#15201c\], .dark .text-\[\#20342c\], .dark .text-\[\#243b31\], .dark .text-\[\#29473a\], .dark .text-\[\#43534c\], .dark .text-\[\#45584f\], .dark .text-\[\#486057\], .dark .text-\[\#542c28\] { color: #edf5ef !important; }
 .dark .text-\[\#6c7972\], .dark .text-\[\#6b7b73\], .dark .text-\[\#68776f\], .dark .text-\[\#708077\], .dark .text-\[\#735d59\], .dark .text-\[\#557168\] { color: #b8c8bf !important; }
-.dark .text-\[\#0f5c4f\], .dark .biodata-field-feedback { color: #8cd3a6 !important; }
+.dark .text-\[\#0f5c4f\], .dark .text-\[\#176145\], .dark .biodata-field-feedback { color: #8cd3a6 !important; }
 .dark .text-\[\#19392d\], .dark .text-\[\#254b3b\], .dark .text-\[\#294d3d\], .dark .text-\[\#315746\], .dark .text-\[\#315946\], .dark .text-\[\#315b47\], .dark .text-\[\#365948\], .dark .text-\[\#43534c\], .dark .text-\[\#476456\], .dark .text-\[\#4e6a5d\] { color: #edf5ef !important; }
 .dark .text-\[\#6c7d74\], .dark .text-\[\#6d8276\], .dark .text-\[\#6e8177\], .dark .text-\[\#718179\], .dark .text-\[\#73847b\] { color: #b8c8bf !important; }
 .dark .border-\[\#dce9e0\], .dark .border-\[\#deebe2\], .dark .border-\[\#e2ece5\] { border-color: #3d5147 !important; }
@@ -91,6 +91,12 @@ button, input, select, textarea { font: inherit; }
 .dark .biodata-clear-confirmation { background: #241c1b !important; border-color: #634946 !important; color: #f5e9e7 !important; }
 .dark .biodata-clear-confirmation .text-\[\#542c28\] { color: #ffd5cf !important; }
 .dark .biodata-clear-confirmation .text-\[\#735d59\] { color: #dec2bd !important; }
+.dark .enrollment-completion-dialog { background: #18231f !important; border-color: #40574c !important; color: #edf5ef !important; }
+.dark .enrollment-completion-dialog .bg-\[\#fbfdfb\], .dark .enrollment-completion-dialog .bg-\[\#f8fbf8\], .dark .enrollment-completion-dialog .bg-\[\#f7fcf8\], .dark .enrollment-completion-dialog .bg-\[\#f4f8f4\] { background-color: #1d2b24 !important; }
+.dark .enrollment-completion-dialog .text-\[\#234238\], .dark .enrollment-completion-dialog .text-\[\#264338\], .dark .enrollment-completion-dialog .text-\[\#29483c\], .dark .enrollment-completion-dialog .text-\[\#315243\], .dark .enrollment-completion-dialog .text-\[\#40574b\] { color: #edf5ef !important; }
+.dark .enrollment-completion-dialog .text-\[\#5d7568\], .dark .enrollment-completion-dialog .text-\[\#5f7469\], .dark .enrollment-completion-dialog .text-\[\#63796e\], .dark .enrollment-completion-dialog .text-\[\#6d8276\], .dark .enrollment-completion-dialog .text-\[\#718178\] { color: #c4d4ca !important; }
+.dark .enrollment-completion-dialog .text-\[\#884b42\] { color: #ffb9b0 !important; }
+.dark .enrollment-completion-dialog .border-\[\#cfe0d4\], .dark .enrollment-completion-dialog .border-\[\#dce7df\], .dark .enrollment-completion-dialog .border-\[\#dce8df\], .dark .enrollment-completion-dialog .border-\[\#ead6cd\] { border-color: #40574c !important; }
 .dark .school-website-studio .bg-\[\#f8faf7\], .dark .school-website-studio .bg-\[\#f1f4f0\], .dark .school-website-studio .bg-\[\#edf3ed\], .dark .school-website-studio .bg-\[\#f6faf6\] { background-color: #1d2b24 !important; }
 .dark .school-website-studio .text-\[\#2d4439\], .dark .school-website-studio .text-\[\#37564b\], .dark .school-website-studio .text-\[\#406056\], .dark .school-website-studio .text-\[\#536159\] { color: #e5f1e9 !important; }
 .dark .school-website-studio .text-\[\#758079\], .dark .school-website-studio .text-\[\#7a847e\] { color: #b8c8bf !important; }

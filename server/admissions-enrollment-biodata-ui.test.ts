@@ -55,6 +55,12 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(dialogSource).toContain("overflow-y-auto overscroll-contain");
     expect(alertDialogSource).toContain("z-[90]");
     expect(alertDialogSource).toContain("max-h-[calc(100dvh-2rem)]");
+    expect(globalStyles).toContain(".dark .enrollment-completion-dialog");
+    expect(globalStyles).toContain(".dark .text-\\[\\#0f5c4f\\], .dark .text-\\[\\#176145\\]");
+    expect(globalStyles).toContain(".dark .enrollment-completion-dialog .bg-\\[\\#fbfdfb\\]");
+    expect(globalStyles).toContain(".dark .enrollment-completion-dialog .text-\\[\\#264338\\]");
+    expect(globalStyles).toContain(".dark .enrollment-completion-dialog .text-\\[\\#5f7469\\]");
+    expect(globalStyles).toContain(".dark .enrollment-completion-dialog .text-\\[\\#884b42\\]");
     expect(enrollmentStation).toContain("not_sent_no_guardian_email");
     expect(enrollmentStation).toContain("guardian record was created and linked");
   });
