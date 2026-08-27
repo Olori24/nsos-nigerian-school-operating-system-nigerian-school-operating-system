@@ -5,7 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
-import { BiodataDocumentAutofill, type BiodataAutofillProposal } from "./components/BiodataDocumentAutofill";
+import type { BiodataAutofillProposal } from "./components/BiodataDocumentAutofill";
 import { InstallNSOSPrompt } from "./components/InstallNSOSPrompt";
 import { NSOSUpdatePrompt } from "./components/NSOSUpdatePrompt";
 import { lazy, Suspense, useEffect, useState } from "react";
@@ -17,6 +17,7 @@ const PublicAdmissions = lazy(() => import("./pages/PublicAdmissions"));
 const SchoolWebsite = lazy(() => import("./pages/SchoolWebsite"));
 const DomainSchoolWebsite = lazy(() => import("./pages/DomainSchoolWebsite"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const BiodataDocumentAutofill = lazy(() => import("./components/BiodataDocumentAutofill").then(module => ({ default: module.BiodataDocumentAutofill })));
 
 function RouteLoading() {
   return <main aria-live="polite" className="grid min-h-screen place-items-center bg-[#f5f6f1] px-6 text-center text-[#294238]"><div><Spinner className="mx-auto size-5 text-[#0f5c4f]" /><p className="mt-3 text-sm font-semibold">Loading NSOS</p><p className="mt-1 text-xs text-[#52675d]">Preparing the selected workspace securely.</p></div></main>;
@@ -48,7 +49,7 @@ function InternalBiodataAutofillLauncher() {
   }, []);
   if (!target) return null;
   const allowedKeys = (target === "admission" ? ["firstName", "lastName", "guardianName", "guardianPhone", "guardianEmail", "stateOfOrigin", "localGovernmentOfOrigin"] : ["firstName", "lastName", "stateOfOrigin", "localGovernmentOfOrigin"]) as Array<keyof BiodataAutofillProposal>;
-  return <div className="fixed bottom-5 left-5 z-[70] w-[min(28rem,calc(100vw-2.5rem))] shadow-[0_16px_40px_rgba(14,39,29,0.18)]"><BiodataDocumentAutofill allowedKeys={allowedKeys} onApply={values => window.dispatchEvent(new CustomEvent("nsos:biodata-autofill-apply", { detail: { target, values } }))} /></div>;
+  return <div className="fixed bottom-5 left-5 z-[70] w-[min(28rem,calc(100vw-2.5rem))] shadow-[0_16px_40px_rgba(14,39,29,0.18)]"><Suspense fallback={<div role="status" aria-live="polite" className="rounded-xl border border-[#d6e5da] bg-[#f7fbf7] p-4 text-sm font-semibold text-[#1d563d]">Loading document autofill…</div>}><BiodataDocumentAutofill allowedKeys={allowedKeys} onApply={values => window.dispatchEvent(new CustomEvent("nsos:biodata-autofill-apply", { detail: { target, values } }))} /></Suspense></div>;
 }
 
 function EntryOverlayLayer() {
