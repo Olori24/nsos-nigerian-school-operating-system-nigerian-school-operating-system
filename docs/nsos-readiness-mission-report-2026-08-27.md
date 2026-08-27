@@ -17,6 +17,10 @@ This mission reconciled the currently open production-readiness controls, ran th
 | Staging, recovery, and capacity | **Paused / unproven** | The ambiguous Aiven service was disposed and the staging secret was removed without reading its value. The later accidental AWS RDS instance and matching retained automated backup were also deleted after owner confirmation. Fresh disposable migration compatibility passed separately. | There is no independently verifiable staging database, recovery rehearsal, provider-stub environment, or measured staged-load evidence. |
 | Package-manager configuration | **Resolved and validated** | Overrides and the Wouter patch declaration now live in `pnpm-workspace.yaml`; the project is pinned to its already locked local pnpm 10.18.0 toolchain. An offline frozen install preserved the lockfile and patch, and lint, TypeScript, the full 132-file/481-test suite (one intentional provider skip), and the production build passed. | Application dependency versions, provider settings, staging state, and runtime behavior were not changed. Continue to require a frozen install in CI. |
 
+### Post-checkpoint public-route verification
+
+On 27 August 2026, a non-mutating production browser check first displayed the accessible lazy-route loading state and then rendered the NSOS public entry at `https://nsos.top`. The Google and passwordless-email sign-in choices, the empty-workspace first-use guidance, and the multi-institution scope statement were visible. No sign-in, email delivery, form submission, provider operation, data access, or settings change was attempted during this check.
+
 ## What the Internal Affiliate Configuration Means
 
 The recorded configuration is an **internal policy record**, not a public affiliate programme. It fixes the proposed commercial defaults at a 20% commission basis on a referred institution’s first verified net payment, a 30-day attribution window, a 30-day refund/chargeback hold, a ₦10,000 minimum payout, monthly manual review, standard paid subscription eligibility, and a legal-review-required terms state.
