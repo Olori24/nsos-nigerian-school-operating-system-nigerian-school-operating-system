@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
@@ -14,7 +14,23 @@ import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
+import { AffiliatePilotConsole } from "./components/AffiliatePilotConsole";
 import { isNsosPlatformHost } from "./lib/platformHost";
+import { trpc } from "./lib/trpc";
+
+function AffiliatePilotRoute() {
+  const { user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+  const ownerAccess = trpc.nsos.platform.ownerAccess.useQuery(undefined, { enabled: Boolean(user) });
+
+  useEffect(() => {
+    if (!loading && !user) setLocation("/");
+  }, [loading, setLocation, user]);
+
+  if (loading || !user || ownerAccess.isLoading) return <div className="grid min-h-screen place-items-center bg-[#f5f6f1] p-6 text-sm text-[#627168]">Checking protected platform access…</div>;
+  if (!ownerAccess.data?.isPlatformOwner) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1] p-6"><section className="max-w-md rounded-2xl border border-[#e0e5df] bg-white p-6 text-center shadow-sm"><p className="text-sm font-semibold text-[#263e33]">Platform owner access required</p><p className="mt-2 text-sm leading-6 text-[#68736d]">This internal workspace is available only to the configured NSOS platform owner.</p><button type="button" onClick={() => setLocation("/")} className="mt-5 rounded-lg bg-[#0f5c4f] px-4 py-2 text-sm font-semibold text-white">Return to dashboard</button></section></main>;
+  return <AffiliatePilotConsole open onClose={() => setLocation("/")} />;
+}
 
 function Router() {
   if (typeof window !== "undefined" && !isNsosPlatformHost(window.location.hostname)) return <DomainSchoolWebsite />;
@@ -23,6 +39,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/apply/:shortCode" component={PublicAdmissions} />
       <Route path="/school/:shortCode" component={SchoolWebsite} />
+      <Route path="/platform/affiliate-pilot" component={AffiliatePilotRoute} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
