@@ -20,4 +20,11 @@ describe("platform owner control visibility", () => {
     expect(home).toContain('bg-[#fff9ea] px-5 py-2 sm:hidden');
     expect(home).toContain('aria-label="Open Affiliate pilot"');
   });
+
+  it("offers a clear, confirmation-gated recovery control only when the protected route reports verified claim eligibility", () => {
+    expect(home).toContain("const canClaimOwnerAccess = platformOwnerQuery.data?.canClaimOwnerAccess === true;");
+    expect(home).toContain("{canClaimOwnerAccess && <section");
+    expect(home).toContain("Restore platform-owner access for this verified Google sign-in?");
+    expect(home).toContain("claimOwnerAccess.mutate({ confirmed: true })");
+  });
 });

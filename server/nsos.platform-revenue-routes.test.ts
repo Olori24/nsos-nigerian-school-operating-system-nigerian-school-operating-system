@@ -11,6 +11,7 @@ vi.mock("./db", () => ({
   getSchoolSubscription: vi.fn(),
   getSchoolMembership: vi.fn(),
   recordSecurityAuditEvent: vi.fn(),
+  hasActivePlatformOwnerIdentityLink: vi.fn(),
 }));
 
 import * as db from "./db";

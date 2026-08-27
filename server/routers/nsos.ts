@@ -17,7 +17,7 @@ import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
 import { listNigerianLgas, listNigerianOriginStates, normaliseNigerianOrigin } from "../nigerianOrigin";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
-import { isConfiguredPlatformOwner, platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { hasPlatformOwnerAccess, platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
@@ -153,7 +153,15 @@ const academicMigrationRowInput = z.object({ sourceRow: z.number().int().positiv
 
 export const nsosRouter = router({
   platform: router({
-    ownerAccess: protectedProcedure.query(({ ctx }) => ({ isPlatformOwner: isConfiguredPlatformOwner(ctx.user.openId) })),
+    ownerAccess: protectedProcedure.query(async ({ ctx }) => {
+      const isPlatformOwner = await hasPlatformOwnerAccess(ctx.user);
+      return { isPlatformOwner, canClaimOwnerAccess: !isPlatformOwner && await db.canClaimVerifiedGooglePlatformOwnerLink(ctx.user.id) };
+    }),
+    claimOwnerAccess: protectedProcedure.input(z.object({ confirmed: z.literal(true) })).mutation(async ({ ctx }) => {
+      await db.claimVerifiedGooglePlatformOwnerLink({ userId: ctx.user.id });
+      return { isPlatformOwner: await hasPlatformOwnerAccess(ctx.user) };
+    }),
+    revokeLinkedOwnerAccess: platformOwnerProcedure.input(z.object({ confirmed: z.literal(true) })).mutation(async ({ ctx }) => ({ revoked: await db.revokePlatformOwnerIdentityLink(ctx.user.id) })),
   }),
 
   schools: router({

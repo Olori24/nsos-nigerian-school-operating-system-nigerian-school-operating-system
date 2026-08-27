@@ -4,6 +4,10 @@ vi.mock("./_core/env", () => ({ ENV: { ownerOpenId: "platform-owner" } }));
 vi.mock("./db", () => ({
   getInternalAffiliatePilotOverview: vi.fn(),
   confirmInternalAffiliatePilotDefaults: vi.fn(),
+  hasActivePlatformOwnerIdentityLink: vi.fn(),
+  canClaimVerifiedGooglePlatformOwnerLink: vi.fn(),
+  claimVerifiedGooglePlatformOwnerLink: vi.fn(),
+  revokePlatformOwnerIdentityLink: vi.fn(),
   getSchoolMembership: vi.fn(),
 }));
 
@@ -28,9 +32,27 @@ describe("NSOS internal affiliate pilot routes", () => {
   });
 
   it("reports platform-control visibility only to the current user without treating a global admin as the platform owner", async () => {
-    await expect(callerFor("admin").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: true });
-    await expect(callerFor("admin", "another-global-admin").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: false });
-    await expect(callerFor("user", "regular-user").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: false });
+    vi.mocked(db.hasActivePlatformOwnerIdentityLink).mockResolvedValue(false);
+    vi.mocked(db.canClaimVerifiedGooglePlatformOwnerLink).mockResolvedValue(false);
+    await expect(callerFor("admin").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: true, canClaimOwnerAccess: false });
+    await expect(callerFor("admin", "another-global-admin").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: false, canClaimOwnerAccess: false });
+    await expect(callerFor("user", "regular-user").nsos.platform.ownerAccess()).resolves.toEqual({ isPlatformOwner: false, canClaimOwnerAccess: false });
+  });
+
+  it("allows only a verified eligible Google identity to explicitly claim a revocable owner link", async () => {
+    vi.mocked(db.hasActivePlatformOwnerIdentityLink).mockResolvedValue(true);
+    vi.mocked(db.canClaimVerifiedGooglePlatformOwnerLink).mockResolvedValue(true);
+    vi.mocked(db.claimVerifiedGooglePlatformOwnerLink).mockResolvedValue(true);
+    await expect(callerFor("user", "verified-google-owner").nsos.platform.claimOwnerAccess({ confirmed: true })).resolves.toEqual({ isPlatformOwner: true });
+    expect(db.claimVerifiedGooglePlatformOwnerLink).toHaveBeenCalledWith({ userId: 8 });
+    await expect(callerFor("user", "verified-google-owner").nsos.platform.claimOwnerAccess({ confirmed: false } as any)).rejects.toBeDefined();
+  });
+
+  it("allows a linked owner to revoke only their own recovered access", async () => {
+    vi.mocked(db.hasActivePlatformOwnerIdentityLink).mockResolvedValue(true);
+    vi.mocked(db.revokePlatformOwnerIdentityLink).mockResolvedValue(true);
+    await expect(callerFor("user", "linked-google-owner").nsos.platform.revokeLinkedOwnerAccess({ confirmed: true })).resolves.toEqual({ revoked: true });
+    expect(db.revokePlatformOwnerIdentityLink).toHaveBeenCalledWith(8);
   });
 
   it("requires explicit confirmation and records only server-owned approved defaults", async () => {

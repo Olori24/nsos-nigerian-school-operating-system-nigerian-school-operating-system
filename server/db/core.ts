@@ -55,6 +55,7 @@ import {
   paymentEvidence,
   paymentPromises,
   platformBillingRecords,
+  platformOwnerIdentityLinks,
   learningPrograms,
   learningEvidenceSources,
   learningExperienceProfiles,
@@ -721,6 +722,35 @@ export async function getInternalAffiliatePilotOverview() {
     events,
     activationBlockers: ["Nigeria-qualified legal and tax review", "Published privacy notice and retention decision", "Named finance reviewer and reconciliation process", "Separate approval for partner onboarding, referral links, public terms, marketing, and payouts"],
   };
+}
+
+export async function hasActivePlatformOwnerIdentityLink(userId: number) {
+  const link = (await (await database()).select({ id: platformOwnerIdentityLinks.id }).from(platformOwnerIdentityLinks).where(and(eq(platformOwnerIdentityLinks.userId, userId), eq(platformOwnerIdentityLinks.status, "active"))).limit(1))[0];
+  return Boolean(link);
+}
+
+export async function canClaimVerifiedGooglePlatformOwnerLink(userId: number) {
+  const db = await database();
+  const configuredOwner = (await db.select({ email: users.email }).from(users).where(eq(users.openId, ENV.ownerOpenId)).limit(1))[0];
+  const googleIdentity = (await db.select({ email: authIdentities.email }).from(authIdentities).where(and(eq(authIdentities.userId, userId), eq(authIdentities.provider, "google"))).limit(1))[0];
+  const ownerEmail = configuredOwner?.email?.trim().toLowerCase();
+  const verifiedGoogleEmail = googleIdentity?.email?.trim().toLowerCase();
+  return Boolean(ownerEmail && verifiedGoogleEmail && ownerEmail === verifiedGoogleEmail);
+}
+
+export async function claimVerifiedGooglePlatformOwnerLink(input: { userId: number }) {
+  if (!await canClaimVerifiedGooglePlatformOwnerLink(input.userId)) throw new Error("This verified Google identity cannot recover NSOS platform-owner access.");
+  const db = await database();
+  await db.insert(platformOwnerIdentityLinks).values({ userId: input.userId, status: "active", linkedAt: new Date(), revokedAt: null }).onDuplicateKeyUpdate({ set: { status: "active", linkedAt: new Date(), revokedAt: null } });
+  await db.insert(userSecurityActivity).values({ userId: input.userId, eventType: "platform_owner_linked", deviceLabel: "Owner access", source: "owner_identity_link", occurredAt: new Date() });
+  return true;
+}
+
+export async function revokePlatformOwnerIdentityLink(userId: number) {
+  const result = await (await database()).update(platformOwnerIdentityLinks).set({ status: "revoked", revokedAt: new Date() }).where(and(eq(platformOwnerIdentityLinks.userId, userId), eq(platformOwnerIdentityLinks.status, "active")));
+  const revoked = Number((result as any)?.[0]?.affectedRows ?? (result as any)?.affectedRows ?? 0) > 0;
+  if (revoked) await (await database()).insert(userSecurityActivity).values({ userId, eventType: "platform_owner_link_revoked", deviceLabel: "Owner access", source: "owner_identity_link", occurredAt: new Date() });
+  return revoked;
 }
 
 export async function confirmInternalAffiliatePilotDefaults(input: { confirmedBy: number }) {

@@ -44,6 +44,18 @@ export const authIdentities = mysqlTable(
   }),
 );
 
+export const platformOwnerIdentityLinks = mysqlTable(
+  "platformOwnerIdentityLinks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().unique(),
+    status: mysqlEnum("status", ["active", "revoked"]).notNull().default("active"),
+    linkedAt: timestamp("linkedAt").defaultNow().notNull(),
+    revokedAt: timestamp("revokedAt"),
+  },
+  table => ({ statusIndex: index("platformOwnerIdentityLink_status_idx").on(table.status) }),
+);
+
 export const authMagicLinks = mysqlTable(
   "authMagicLinks",
   {
