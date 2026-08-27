@@ -8,8 +8,8 @@ This mission reconciled the currently open production-readiness controls, ran th
 
 | Area | Result | Evidence | Current boundary |
 | --- | --- | --- | --- |
-| Deterministic application validation | **Passed** | Formatting, lint, TypeScript, 133 Vitest files / 485 tests (one intentional live-provider skip), and production build completed. | This is source-level evidence, not recovery, scale, delivery, or real-user-journey evidence. |
-| Internal affiliate pilot | **Recorded** | One internal-review configuration with the approved 20% first-payment model and one `defaults_confirmed` audit event were verified by aggregate-only query. | No affiliate, referral, outreach, tracking, provider, payout, contract, or public programme is active. |
+| Deterministic application validation | **Passed** | Formatting, lint, TypeScript, 133 Vitest files / 486 tests (one intentional live-provider skip), and production build completed. | This is source-level evidence, not recovery, scale, delivery, or real-user-journey evidence. |
+| Internal affiliate pilot | **Foundation complete, external activity inactive** | Owner-approved defaults are recorded and aggregate verified. The owner-only Affiliate Pilot console now shows the review gates, and the complete review pack covers legal/tax review, privacy, disclosure, partner review, fraud/revocation, and manual payout procedures. | No partner, referral, tracking, link, outreach, public terms, provider, payment, or payout record exists. Nigeria-qualified legal/tax review and Packet A remain required before any external activity. |
 | Resend sender health | **DNS remediation verified; provider-status reconciliation remains** | Resend identified a missing CNAME. The owner-approved DomainKing support correction now makes `send.nsos.top` resolve publicly to the exact required target, `send.forge.rmta.net.` Immediate authenticated Resend list/detail checks nevertheless still returned `partially_failed`, with sending enabled and receiving disabled. | Do not send email, enable inbound receiving, add mailboxes, alter recipients, or make another DNS change unless Resend supplies a new non-secret instruction. |
 | Branded operational inboxes | **Design only** | The `notifications@nsos.top` technical-sender boundary and proposed human-owned address model are documented. | No `support@`, `security@`, `billing@`, `admissions@`, `hello@`, or `privacy@` mailbox/alias exists. |
 | Source-level observability | **Improved, not a monitoring pass** | Request-completion events now include a bounded outcome category alongside the existing opaque request ID, method, query-free path, status, and duration. Six focused observability regressions passed within the full deterministic suite. | No external telemetry, alert routing, CPU/memory or database-saturation monitoring, distributed tracing, recovery proof, or capacity claim was added. |
@@ -83,6 +83,7 @@ NSOS has completed its internal affiliate-pilot configuration and its current de
 
 - [Affiliate pilot charter](./nsos-affiliate-partner-pilot-charter-2026-08-27.md)
 - [Approval-first affiliate activation plan](./nsos-affiliate-activation-plan-2026-08-27.md)
+- [Affiliate launch review pack](./nsos-affiliate-launch-review-pack-2026-08-27.md)
 - [Affiliate programme terms draft](./nsos-affiliate-programme-terms-draft-2026-08-27.md)
 - [Affiliate implementation specification](./nsos-affiliate-programme-implementation-spec-2026-08-27.md)
 - [Branded operational email identity proposal](./nsos-branded-email-identity-proposal-2026-08-26.md)

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const component = readFileSync(resolve(process.cwd(), "client/src/components/AffiliatePilotConsole.tsx"), "utf8");
+const readinessBoard = readFileSync(resolve(process.cwd(), "client/src/components/AffiliateLaunchReadinessBoard.tsx"), "utf8");
 const home = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
 
 describe("affiliate pilot internal-review UI", () => {
@@ -21,6 +22,16 @@ describe("affiliate pilot internal-review UI", () => {
     expect(component).not.toContain("Create affiliate");
     expect(component).not.toContain("Issue referral link");
     expect(component).not.toContain("Pay commission");
+  });
+
+  it("shows an owner-only readiness path without an activation action", () => {
+    expect(component).toContain("AffiliateLaunchReadinessBoard");
+    expect(readinessBoard).toContain("Approval-first launch path");
+    expect(readinessBoard).toContain("External activity remains inactive");
+    expect(readinessBoard).toContain("Owner decision required");
+    expect(readinessBoard).not.toContain("Activate partner");
+    expect(readinessBoard).not.toContain("Create referral link");
+    expect(readinessBoard).not.toContain("Pay affiliate");
   });
 
   it("mounts the console only within the existing platform-admin dashboard boundary", () => {
