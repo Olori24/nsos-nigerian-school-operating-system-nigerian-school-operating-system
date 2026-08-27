@@ -7,12 +7,20 @@ const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const builder = readFileSync(resolve(root, "client/src/components/InstitutionBuilder.tsx"), "utf8");
 
 describe("Institution Builder interface", () => {
-  it("mounts the School Builder as the primary owner/admin overview while retaining the protected Automation Desk", () => {
+  it("places role-protected daily school actions before the private builder while retaining the protected Automation Desk", () => {
+    const ownerOverview = home.slice(home.indexOf("function BuilderFirstOwnerOverview"), home.indexOf("function QuickStartDashboard"));
+
     expect(home).toContain('id: "institution-builder", label: "Create with AI"');
     expect(home).toContain('view === "institution-builder"');
     expect(home).toContain('<InstitutionBuilder schoolId={schoolId} onNavigate={onNavigate} />');
     expect(home).toContain("BuilderFirstOwnerOverview");
-    expect(home).toContain("Run your institution");
+    expect(home).toContain("Start with daily school work");
+    expect(home).toContain("Choose the next action; NSOS keeps the controls in context.");
+    expect(ownerOverview.indexOf("<QuickStartDashboard role={role} onNavigate={onNavigate} />")).toBeLessThan(ownerOverview.indexOf("<InstitutionBuilder schoolId={schoolId} onNavigate={onNavigate} />"));
+    expect(home).toContain('label: "Issue a learner invoice"');
+    expect(home).toContain('useState<"fee" | "invoice" | "payment">("invoice")');
+    expect(home).toContain("An invoice records what is due");
+    expect(home).toContain("Issue learner invoice");
     expect(home).toContain('roles: ["owner", "admin"]');
     expect(home).toContain('id: "automation", label: "Automation Desk"');
   });
