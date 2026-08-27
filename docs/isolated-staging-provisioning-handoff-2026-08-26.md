@@ -1,7 +1,7 @@
 # NSOS Isolated Staging Provisioning Handoff
 
 **Prepared:** 26 August 2026  
-**Status:** An empty managed project named **NSOS Staging** exists with no configured website, custom domain, connector, source, schedule, deployment, copied live record, or provider integration. The separately labelled Aiven service was terminated and the staging-namespaced database secret was removed without reading its value; the Application secrets list was then confirmed empty. On 27 August, the owner created a separate AWS RDS MySQL instance before the configuration review completed; it is contained but **not approved for NSOS connection**. No application environment, staging runtime, storage namespace, dataset, provider connection, DNS record, database operation, or load workload exists.
+**Status:** An empty managed project named **NSOS Staging** exists with no configured website, custom domain, connector, source, schedule, deployment, copied live record, or provider integration. The separately labelled Aiven service was terminated and the staging-namespaced database secret was removed without reading its value; the Application secrets list was then confirmed empty. On 27 August, the owner-created AWS RDS MySQL instance was reviewed only from non-secret evidence and then deleted with its matching retained automated backup after final owner confirmation. No application environment, staging runtime, storage namespace, dataset, provider connection, DNS record, database operation, or load workload exists.
 
 > **Purpose.** This handoff defines the minimum evidence required to provision a disposable NSOS staging environment for synthetic recovery and progressive-load validation. It does not authorise any deployment, test execution, external provider call, payment action, DNS change, or use of live institutional data.
 
@@ -27,7 +27,7 @@ Following owner-approved secure transfer, the isolated **NSOS Staging** project 
 
 No test has interpreted, parsed, connected to, queried, migrated, deployed against, seeded, or otherwise used that secret. Consequently, the provider/service label is not yet independent proof of the URI target, account grants, network route, replication/restore lineage, empty state, or isolation from every production resource. All of those remain required before the staging runtime can be created.
 
-> **Current authorization boundary:** no staging database secret or approved provider connection is available for use. The owner-created AWS RDS instance is subject to the separate containment review and must not be connected, credentialed, migrated, recovered, or load-tested. Live NSOS remains completely out of scope.
+> **Current authorization boundary:** no staging database secret or approved provider connection is available for use. The owner-created AWS RDS instance and its retained automated backup were deleted after final owner confirmation; no credential, connection, migration, recovery, or load action was performed. Live NSOS remains completely out of scope.
 
 ## Final dedicated-user grant verification — halted
 
@@ -111,4 +111,4 @@ Until all six inputs are complete, NSOS must remain at preparation status. No ca
 
 Following owner-authorized disposal of the unusable Aiven service, the NSOS Staging project’s **Application secrets** panel was opened in the owner’s authenticated workspace. It displayed an empty list and only the “Add Secret” action; `NSOS_STAGING_DATABASE_URL` was absent. No value was opened, copied, or retained. The deleted provider service and absent staging reference mean there is no approved staging database connection.
 
-> **Current state:** the managed staging project has no connected database, runtime, synthetic data, recovery rehearsal, or staged-load activity. The owner-created AWS RDS instance is available but contained pending an explicit retain-or-delete decision and a separately approved private connectivity architecture. Future work requires fresh boundary verification and owner approval.
+> **Current state:** the managed staging project has no connected database, runtime, synthetic data, recovery rehearsal, or staged-load activity. The owner-created AWS RDS instance is disposed: the owner-supplied RDS list showed zero databases, and the final retained-automated-backups list showed zero retained backups. This does not prove recovery or capacity and authorizes no new staging activity. Future work requires a fresh independently verifiable boundary review and separate owner approval.
