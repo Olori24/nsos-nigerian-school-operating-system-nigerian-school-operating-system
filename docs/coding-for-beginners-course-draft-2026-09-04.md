@@ -55,27 +55,7 @@ The existing class subject is suitable for course visibility. The following rema
 
 ## Draft Parent/Guardian Materials Message
 
-**Status:** Draft only. Do not send while the sender provider reports `partially_failed` or until the school selects a verified delivery channel and gives final approval.
-
-> **Subject:** Preparing for Coding for Beginners — starts 4 September
->
-> Dear Parent or Guardian,
->
-> Your child is scheduled to begin **Coding for Beginners** on **4 September 2026**. The course runs for eight weeks and introduces practical digital and web-development foundations through guided activities and a small project.
->
-> To prepare, please arrange the following before the first learning session:
->
-> 1. A reliable laptop or desktop computer for practical coding activities, with its charger available. A smartphone can support announcements, but a computer is the main working device for the course.
-> 2. Reasonably stable internet access for the online learning sessions and course workspace.
-> 3. A current web browser such as Chrome, Firefox, or Edge.
-> 4. A notebook and pen for planning, key terms, and reflection activities.
-> 5. A quiet place for scheduled online learning where possible.
->
-> The school will share the approved learning-access instructions separately after the course workspace and contact route have been confirmed. Please do not send account passwords or payment details by reply.
->
-> Kind regards,
->
-> **NSOS Learning Team**
+The maintained private email draft and its protected staff review procedure are in the [Coding for Beginners parent materials email draft](./coding-for-beginners-parent-materials-email-draft-2026-08-27.md). The draft is not scheduled and must not be sent while the sender provider reports `partially_failed` or until the school selects a verified delivery channel and gives final approval.
 
 ## Review Boundary
 
