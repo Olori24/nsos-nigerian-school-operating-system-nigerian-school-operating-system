@@ -16,11 +16,13 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, typecheck, migration, test, and build
+    name: Lint, typecheck, migration, deterministic test, and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       DATABASE_URL: mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos
+      # Live sender health remains a separately approved provider check.
+      RUN_LIVE_PROVIDER_TESTS: "false"
     services:
       mysql:
         image: mysql:8.4

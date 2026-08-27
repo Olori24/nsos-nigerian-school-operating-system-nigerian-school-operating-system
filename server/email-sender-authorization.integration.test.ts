@@ -7,12 +7,14 @@ function senderDomain(value: string) {
   return domain;
 }
 
+const liveProviderTest = process.env.RUN_LIVE_PROVIDER_TESTS === "true" ? it : it.skip;
+
 describe("configured email sender authorization", () => {
   it("extracts the email domain from standard display-name sender syntax", () => {
     expect(senderDomain("NSOS <notifications@nsos.top>")).toBe("nsos.top");
   });
 
-  it("uses a verified Resend sender domain", async () => {
+  liveProviderTest("uses a verified Resend sender domain", async () => {
     const apiKey = process.env.RESEND_API_KEY;
     const sender = process.env.AUTH_EMAIL_FROM;
     expect(apiKey, "RESEND_API_KEY is required for email delivery.").toBeTruthy();
