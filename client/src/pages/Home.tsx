@@ -87,7 +87,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { FormEvent, lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const KnowledgeBusinessEngine = lazy(() => import("@/components/KnowledgeBusinessEngine").then(module => ({ default: module.KnowledgeBusinessEngine })));
@@ -339,6 +339,16 @@ function LoginScreen() {
   const [email, setEmail] = useState("");
   const [emailState, setEmailState] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [sendingLink, setSendingLink] = useState(false);
+  const [startingGoogle, setStartingGoogle] = useState(false);
+  const [googleState, setGoogleState] = useState<{ tone: "error"; message: string } | null>(null);
+  const googleStartRef = useRef(false);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("signIn") !== "google_verification_failed") return;
+    setGoogleState({ tone: "error", message: "We could not verify that Google sign-in attempt. Please use Continue with Google once more in this tab." });
+    window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+  }, []);
 
   const requestEmailLink = async (event: FormEvent) => {
     event.preventDefault();
@@ -362,6 +372,9 @@ function LoginScreen() {
   };
 
   const startGoogleLogin = () => {
+    if (googleStartRef.current) return;
+    googleStartRef.current = true;
+    setStartingGoogle(true);
     window.location.assign(`/api/auth/google/start?origin=${encodeURIComponent(window.location.origin)}`);
   };
 
@@ -379,10 +392,11 @@ function LoginScreen() {
                 <div><p className="text-sm font-semibold text-white">Sign in to your NSOS workspace.</p><p className="mt-1 text-xs leading-5 text-white/56">Use Google or your email address. If you are new, you can create a secure, empty workspace after signing in.</p></div>
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#dcefe1]/12 text-[#c6ebcf]"><ShieldCheck className="h-4 w-4" aria-hidden="true" /></span>
               </div>
-              <button type="button" onClick={startGoogleLogin} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-[#183329] transition duration-150 hover:bg-[#eaf4ed] active:scale-[0.97]"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#0f5c4f] text-[11px] font-extrabold text-white">G</span>Continue with Google</button>
+              <button type="button" onClick={startGoogleLogin} disabled={startingGoogle} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-[#183329] transition duration-150 hover:bg-[#eaf4ed] disabled:cursor-wait disabled:opacity-70 active:scale-[0.97]">{startingGoogle ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="grid h-5 w-5 place-items-center rounded-full bg-[#0f5c4f] text-[11px] font-extrabold text-white">G</span>}{startingGoogle ? "Opening Google…" : "Continue with Google"}</button>
               <div className="my-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35"><span className="h-px flex-1 bg-white/10" />or use email<span className="h-px flex-1 bg-white/10" /></div>
               <form onSubmit={requestEmailLink} className="grid gap-2"><label className="sr-only" htmlFor="login-email">Email address</label><input id="login-email" value={email} onChange={event => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="you@school.edu.ng" required className="h-12 w-full rounded-xl border border-white/12 bg-white/[0.08] px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#b8e3c1] focus:ring-2 focus:ring-[#b8e3c1]/20" /><button type="submit" disabled={sendingLink} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#b7dfc0]/30 bg-[#dcefe1]/12 px-4 text-sm font-bold text-[#dcefe1] transition duration-150 hover:bg-[#dcefe1]/18 disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.97]">{sendingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}{sendingLink ? "Sending secure link…" : "Email me a sign-in link"}</button></form>
               {emailState && <p role="status" className={cn("mt-3 rounded-lg px-3 py-2 text-xs leading-5", emailState.tone === "success" ? "bg-[#c9ebd2]/15 text-[#c7efd1]" : "bg-[#f6c7c3]/12 text-[#ffd0cb]")}>{emailState.message}</p>}
+              {googleState && <p role="status" className="mt-3 rounded-lg bg-[#f6c7c3]/12 px-3 py-2 text-xs leading-5 text-[#ffd0cb]">{googleState.message}</p>}
             </div>
           </div>
           <div className="soft-enter relative mx-auto w-full max-w-md [animation-delay:120ms]">

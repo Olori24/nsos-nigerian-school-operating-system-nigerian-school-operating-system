@@ -12,6 +12,7 @@ import { buildStudentRecordPdfAttachment, normaliseStudentRecordEmailCopy, stude
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
 const STATE_TTL_MS = 10 * 60_000;
+const MAX_PENDING_GOOGLE_STATES = 3;
 const MAGIC_LINK_TTL_LABEL = "15 minutes";
 const EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS = 10_000;
 
@@ -70,20 +71,43 @@ function matchesState(expected: string | undefined, actual: string | undefined) 
   return timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
 }
 
-function readGoogleLoginState(req: Request) {
+type GoogleLoginState = { state: string; origin: string; issuedAt: number };
+
+function readGoogleLoginStates(req: Request): GoogleLoginState[] {
   const raw = parseCookieHeader(req.headers.cookie ?? "")[GOOGLE_STATE_COOKIE];
-  if (!raw) return undefined;
+  if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown };
-    const origin = validOrigin(parsed.origin);
-    return typeof parsed.state === "string" && origin ? { state: parsed.state, origin } : undefined;
+    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown; issuedAt?: unknown; entries?: unknown };
+    const entries = Array.isArray(parsed.entries) ? parsed.entries : [parsed];
+    const cutoff = Date.now() - STATE_TTL_MS;
+    return entries.flatMap(entry => {
+      if (!entry || typeof entry !== "object") return [];
+      const candidate = entry as { state?: unknown; origin?: unknown; issuedAt?: unknown };
+      const origin = validOrigin(candidate.origin);
+      const issuedAt = typeof candidate.issuedAt === "number" ? candidate.issuedAt : Date.now();
+      return typeof candidate.state === "string" && origin && issuedAt >= cutoff ? [{ state: candidate.state, origin, issuedAt }] : [];
+    }).slice(-MAX_PENDING_GOOGLE_STATES);
   } catch {
-    return undefined;
+    return [];
   }
 }
 
-function clearGoogleStateCookie(req: Request, res: Response) {
-  res.clearCookie(GOOGLE_STATE_COOKIE, { path: "/", secure: true, sameSite: "lax", httpOnly: true });
+function setGoogleLoginStates(res: Response, entries: GoogleLoginState[]) {
+  if (!entries.length) {
+    res.clearCookie(GOOGLE_STATE_COOKIE, { path: "/", secure: true, sameSite: "lax", httpOnly: true });
+    return;
+  }
+  res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ entries: entries.slice(-MAX_PENDING_GOOGLE_STATES) }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+}
+
+function consumeGoogleLoginState(req: Request, res: Response, state: string | undefined) {
+  if (!state) return undefined;
+  const states = readGoogleLoginStates(req);
+  const matchIndex = states.findIndex(candidate => matchesState(candidate.state, state));
+  if (matchIndex < 0) return undefined;
+  const [matched] = states.splice(matchIndex, 1);
+  setGoogleLoginStates(res, states);
+  return matched;
 }
 
 function setGoogleSignInNotice(res: Response) {
@@ -195,7 +219,8 @@ export function registerGoogleAuthRoutes(app: Express) {
     if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
     if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
     const state = randomBytes(32).toString("base64url");
-    res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state, origin }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+    const states = [...readGoogleLoginStates(req), { state, origin, issuedAt: Date.now() }];
+    setGoogleLoginStates(res, states);
     const redirectUri = `${origin}/api/auth/google/callback`;
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.search = new URLSearchParams({ client_id: ENV.googleClientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, prompt: "select_account" }).toString();
@@ -205,9 +230,11 @@ export function registerGoogleAuthRoutes(app: Express) {
   app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
     const code = getStringQuery(req, "code");
     const state = getStringQuery(req, "state");
-    const loginState = readGoogleLoginState(req);
-    clearGoogleStateCookie(req, res);
-    if (!code || !loginState || !matchesState(loginState.state, state)) return res.status(403).json({ error: "Google sign-in could not be verified. Please start again." });
+    const loginState = code ? consumeGoogleLoginState(req, res, state) : undefined;
+    if (!code || !loginState) {
+      writeOperationalEvent("warn", "auth_google_callback_rejected", { category: "state_verification" });
+      return res.redirect(302, "/?signIn=google_verification_failed");
+    }
 
     try {
       const redirectUri = `${loginState.origin}/api/auth/google/callback`;

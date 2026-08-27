@@ -36,10 +36,15 @@ async function requestRoute(url: string, input: { method?: string; headers?: Rec
 }
 
 function getGoogleState(setCookie: string | string[] | undefined) {
+  return getGoogleStates(setCookie)[0];
+}
+
+function getGoogleStates(setCookie: string | string[] | undefined) {
   const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
   const encodedState = cookie?.match(/__Host-google_oauth_state=([^;]+)/)?.[1];
   if (!encodedState) throw new Error("Google state cookie was not set.");
-  return JSON.parse(decodeURIComponent(encodedState)) as { state: string; origin: string };
+  const parsed = JSON.parse(decodeURIComponent(encodedState)) as { state?: string; origin?: string; entries?: Array<{ state: string; origin: string }> };
+  return parsed.entries ?? (parsed.state && parsed.origin ? [{ state: parsed.state, origin: parsed.origin }] : []);
 }
 
 function headerText(value: string | string[] | undefined) {
@@ -112,8 +117,23 @@ describe("external authentication policy", () => {
     await withAuthRouteServer(async origin => {
       const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos-system-uhkdscaf.manus.space")}`);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=fake-code&state=wrong-state`, { headers: { cookie: String(start.headers["set-cookie"]) } });
-      expect(callback.status).toBe(403);
-      expect(callback.body).toContain("could not be verified");
+      expect(callback.status).toBe(302);
+      expect(callback.headers.location).toBe("/?signIn=google_verification_failed");
+      expect(headerText(callback.headers["set-cookie"])).not.toContain("__Host-google_oauth_state=;");
+    });
+  });
+
+  it("keeps a bounded set of separate pending Google states so one completed attempt does not invalidate another", async () => {
+    const providerFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }));
+    vi.stubGlobal("fetch", providerFetch);
+    await withAuthRouteServer(async origin => {
+      const first = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
+      const second = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`, { headers: { cookie: String(first.headers["set-cookie"]) } });
+      const states = getGoogleStates(second.headers["set-cookie"]);
+      expect(states).toHaveLength(2);
+      const callback = await requestRoute(`${origin}/api/auth/google/callback?code=fake-code&state=${encodeURIComponent(states[1].state)}`, { headers: { cookie: String(second.headers["set-cookie"]) } });
+      expect(callback.status).toBe(502);
+      expect(getGoogleStates(callback.headers["set-cookie"])[0].state).toBe(states[0].state);
     });
   });
 
