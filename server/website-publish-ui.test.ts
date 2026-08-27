@@ -22,6 +22,17 @@ describe("school website publishing and theme presentation", () => {
     expect(platformHost).toContain("NSOS_PLATFORM_CUSTOM_DOMAINS.has(host)");
   });
 
+  it("shows an NSOS-branded school route instead of the managed deployment host and preserves active custom domains", () => {
+    expect(platformHost).toContain('const NSOS_PLATFORM_PUBLIC_ORIGIN = "https://nsos.top"');
+    expect(platformHost).toContain("export function nsosSchoolPublicUrl(shortCode: string)");
+    expect(studio).toContain('import { nsosSchoolPublicUrl } from "@/lib/platformHost"');
+    expect(studio).toContain('return nsosSchoolPublicUrl(school.shortCode)');
+    expect(studio).toContain('website.customDomain && website.domainStatus === "active"');
+    expect(studio).toContain("NSOS public link");
+    expect(studio).toContain('href={publicPath}');
+    expect(studio).not.toContain("window.location.origin}/school/");
+  });
+
   it("provides explicit publish and unpublish actions while keeping custom domains optional", () => {
     expect(studio).toContain("Publish website");
     expect(studio).toContain("Unpublish website");
