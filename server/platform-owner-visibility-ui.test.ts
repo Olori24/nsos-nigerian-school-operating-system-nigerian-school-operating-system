@@ -15,4 +15,9 @@ describe("platform owner control visibility", () => {
     expect(home).toContain("{platformAdmin && <><button onClick={() => setAffiliatePilotOpen(true)}");
     expect(home).toContain("{platformAdmin && <AffiliatePilotConsole");
   });
+
+  it("provides a labelled mobile affiliate entry instead of hiding every platform control below the small breakpoint", () => {
+    expect(home).toContain('bg-[#fff9ea] px-5 py-2 sm:hidden');
+    expect(home).toContain('aria-label="Open Affiliate pilot"');
+  });
 });
