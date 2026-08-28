@@ -1,6 +1,6 @@
 # NSOS Branded Email Identity Proposal
 
-**Status:** Design proposal plus factual sender-health reconciliation record. No inbox, alias, sender, reply route, inbound setting, or email delivery behaviour has been changed. One owner-approved DNS CNAME was added and corrected to its required public target, but the provider API status remains unresolved as described below.
+**Status:** Design proposal plus factual sender-health reconciliation record. No inbox, alias, sender, reply route, inbound setting, or email delivery behaviour has been changed. One owner-approved DNS CNAME was added and corrected to its required public target. Resend Support now says the domain is verified and ready to send, but the provider API status remains unresolved as described below.
 
 ## Purpose
 
@@ -56,7 +56,7 @@ The safe recommendation is to **check Zoho Mail free-plan eligibility first**, b
 
 The sender provider’s read-only domain check continues to report `nsos.top` as `partially_failed`, even though the listed TXT/MX verification records are reported as verified. A non-mutating verification request did not change that status. The owner approved a redacted provider-support inquiry. The public support form returned a generic processing error after its one submission attempt, with **no confirmation or case reference**. The owner then authenticated in the existing Resend account, and the distinct in-account Contact us channel confirmed **“Your message was sent.”** The inquiry was classified as **High — Blocked, but sending still works**. A subsequent automated acknowledgement confirmed receipt.
 
-On 27 August, Resend Support replied that it had checked the account, confirmed the domain is now verified, and stated that sending can begin. Immediately after that message, the existing project credential performed an independent **read-only** domain-list check. It still returned `status: partially_failed`, with sending enabled and receiving disabled. No verification-record values, recipient data, delivery/open telemetry, secrets, or configuration were retrieved or changed. The support statement and API state therefore conflict; sender health remains an open provider-status reconciliation item until Resend confirms the API state or supplies remediation.
+On 27 August, Resend Support replied that it had checked the account, confirmed the domain is now verified, and stated that sending can begin. Immediately after that message, the existing project credential performed an independent **read-only** domain-list check. It still returned `status: partially_failed`, with sending enabled and receiving disabled. No verification-record values, recipient data, delivery/open telemetry, secrets, or configuration were retrieved or changed. On 28 August, the owner supplied a further Resend Support reply stating that the domain is verified and ready to start sending. A subsequent sanitized authenticated read-only API check returned HTTP 200 but still reported `partially_failed`, sending enabled, receiving disabled, and no record details in the list payload. The support statement and API state therefore remain inconsistent; sender health is not treated as independently reconciled.
 
 With explicit owner approval, one redacted follow-up was submitted through the authenticated Resend in-account support channel at High priority. It asks only that Support reconcile the verified statement with the authenticated read-only `partially_failed` API response or provide non-secret remediation. The channel confirmed **“Your message was sent”** and did not provide a case reference or immediate guidance. No provider, sender, DNS, mailbox, inbound, or delivery configuration changed at that time.
 
@@ -74,7 +74,7 @@ Except for the one owner-approved and subsequently corrected `Send` CNAME, no DN
 
 ## Current Limits
 
-This proposal does not claim inbox delivery, reply handling, mailbox availability, support staffing, a response-time commitment, tenant-school branded senders, inbound email processing, or additional email addresses. It does not create mailboxes. The existing sender provider’s authoritative status remains the source of truth for transactional email health.[1] The unresolved provider status does not authorize email sending or inbound activation.
+This proposal does not claim inbox delivery, reply handling, mailbox availability, support staffing, a response-time commitment, tenant-school branded senders, inbound email processing, or additional email addresses. It does not create mailboxes. The existing sender provider’s authoritative status remains the source of truth for transactional email health.[1] The provider’s written confirmation is useful evidence but does not by itself reconcile the conflicting API state. Until the API state converges or Resend explains the discrepancy, NSOS does not authorize email sending or inbound activation.
 
 ## Reference
 
