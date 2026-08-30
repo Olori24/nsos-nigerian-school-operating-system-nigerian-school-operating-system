@@ -24,6 +24,7 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  emailVerifiedAt: timestamp("emailVerifiedAt"),
 });
 
 export const authIdentities = mysqlTable(
@@ -71,6 +72,24 @@ export const authMagicLinks = mysqlTable(
     tokenUnique: uniqueIndex("authMagicLink_token_unique").on(table.tokenHash),
     emailCreated: index("authMagicLink_email_created_idx").on(table.email, table.createdAt),
     expiryIndex: index("authMagicLink_expiry_idx").on(table.expiresAt),
+  }),
+);
+
+export const emailVerificationTokens = mysqlTable(
+  "emailVerificationTokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    tokenHash: varchar("tokenHash", { length: 128 }).notNull(),
+    redirectOrigin: varchar("redirectOrigin", { length: 512 }).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    usedAt: timestamp("usedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    tokenUnique: uniqueIndex("emailVerificationToken_hash_unique").on(table.tokenHash),
+    userIndex: index("emailVerificationToken_user_idx").on(table.userId, table.createdAt),
+    expiryIndex: index("emailVerificationToken_expiry_idx").on(table.expiresAt),
   }),
 );
 

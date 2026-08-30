@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  createEmailVerificationToken: vi.fn(),
   enqueueWelcomeEmailDelivery: vi.fn(),
   claimWelcomeEmailDelivery: vi.fn(),
   markWelcomeEmailSent: vi.fn(),
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./db", () => ({
+  createEmailVerificationToken: mocks.createEmailVerificationToken,
   enqueueWelcomeEmailDelivery: mocks.enqueueWelcomeEmailDelivery,
   claimWelcomeEmailDelivery: mocks.claimWelcomeEmailDelivery,
   markWelcomeEmailSent: mocks.markWelcomeEmailSent,
@@ -31,6 +33,7 @@ afterEach(() => {
 
 describe("welcome email delivery", () => {
   it("sends once with privacy-safe copy after claiming a queued delivery", async () => {
+    mocks.createEmailVerificationToken.mockResolvedValue("v".repeat(43));
     mocks.enqueueWelcomeEmailDelivery.mockResolvedValue({
       id: 41,
       status: "queued",
@@ -79,6 +82,13 @@ describe("welcome email delivery", () => {
     expect(String(body.html)).toContain("#0f5c4f");
     expect(String(body.html)).toContain('alt="NSOS logo"');
     expect(String(body.html)).toContain("Getting started");
+    expect(String(body.html)).toContain("Verify email address");
+    expect(String(body.html)).toContain(
+      "https://nsos.top/api/auth/email/verify-address?token="
+    );
+    expect(String(body.text)).toContain(
+      "Verify your email address: https://nsos.top/api/auth/email/verify-address?token="
+    );
     expect(String(body.html)).toContain(
       'href="https://nsos.top/?view=overview"'
     );
@@ -98,6 +108,10 @@ describe("welcome email delivery", () => {
     expect(String(body.text)).toContain(
       "Overview: https://nsos.top/?view=overview"
     );
+    expect(mocks.createEmailVerificationToken).toHaveBeenCalledWith({
+      userId: 41,
+      redirectOrigin: "https://nsos.top",
+    });
     expect(mocks.markWelcomeEmailSent).toHaveBeenCalledWith({
       deliveryId: 41,
       providerMessageId: "re_accepted_41",
@@ -211,5 +225,22 @@ describe("welcome email delivery", () => {
     expect(() =>
       welcomeEmailPolicies.safeWelcomeOrigin("https://nsos.top/unsafe")
     ).toThrow("not configured safely");
+    const token = "v".repeat(43);
+    const validUrl = `https://nsos.top/api/auth/email/verify-address?token=${token}`;
+    expect(
+      welcomeEmailPolicies.safeVerificationUrl(validUrl, "https://nsos.top")
+    ).toBe(validUrl);
+    expect(
+      welcomeEmailPolicies.safeVerificationUrl(
+        `https://attacker.example/api/auth/email/verify-address?token=${token}`,
+        "https://nsos.top"
+      )
+    ).toBeUndefined();
+    expect(
+      welcomeEmailPolicies.safeVerificationUrl(
+        `${validUrl}&next=https://attacker.example`,
+        "https://nsos.top"
+      )
+    ).toBeUndefined();
   });
 });

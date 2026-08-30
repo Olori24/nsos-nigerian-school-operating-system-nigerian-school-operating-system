@@ -47,6 +47,10 @@ function validMagicLinkToken(value: string) {
   return /^[A-Za-z0-9_-]{43}$/.test(value);
 }
 
+function validEmailVerificationToken(value: string) {
+  return /^[A-Za-z0-9_-]{43}$/.test(value);
+}
+
 function normaliseAuthSender(value: string) {
   const sender = value.trim();
   if (!sender || /[\r\n]/.test(sender))
@@ -586,11 +590,9 @@ export function registerGoogleAuthRoutes(app: Express) {
       writeOperationalEvent("warn", "auth_google_callback_failed", {
         category: "provider_or_identity_failure",
       });
-      res
-        .status(502)
-        .json({
-          error: "Google sign-in could not be completed. Please try again.",
-        });
+      res.status(502).json({
+        error: "Google sign-in could not be completed. Please try again.",
+      });
     }
   });
 }
@@ -613,13 +615,11 @@ export function registerEmailAuthRoutes(app: Express) {
         email,
         link: `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`,
       });
-      res
-        .status(202)
-        .json({
-          success: true,
-          message:
-            "If this email can receive NSOS sign-in links, one is on its way.",
-        });
+      res.status(202).json({
+        success: true,
+        message:
+          "If this email can receive NSOS sign-in links, one is on its way.",
+      });
     } catch (error) {
       if (
         error instanceof Error &&
@@ -629,14 +629,66 @@ export function registerEmailAuthRoutes(app: Express) {
       writeOperationalEvent("warn", "auth_passwordless_request_failed", {
         category: "provider_or_configuration_failure",
       });
-      res
-        .status(503)
-        .json({
-          error:
-            "We could not send a sign-in link right now. Please try again shortly.",
-        });
+      res.status(503).json({
+        error:
+          "We could not send a sign-in link right now. Please try again shortly.",
+      });
     }
   });
+
+  app.get(
+    "/api/auth/email/verify-address",
+    async (req: Request, res: Response) => {
+      const token = getStringQuery(req, "token");
+      if (!token || !validEmailVerificationToken(token))
+        return res
+          .status(400)
+          .send("This email verification link is invalid or has expired.");
+      try {
+        const result = await db.consumeEmailVerificationToken(token);
+        const origin = validOrigin(result.redirectOrigin);
+        if (!origin)
+          throw new Error(
+            "The verification link does not have a valid destination."
+          );
+        res.redirect(302, `${origin}/?email_verified=1`);
+      } catch {
+        writeOperationalEvent("warn", "auth_email_verification_failed", {
+          category: "invalid_or_expired_token",
+        });
+        res
+          .status(400)
+          .send("This email verification link is invalid or has expired.");
+      }
+    }
+  );
+
+  app.get(
+    "/api/auth/email/verify-address",
+    async (req: Request, res: Response) => {
+      const token = getStringQuery(req, "token");
+      if (!token || !validEmailVerificationToken(token))
+        return res
+          .status(400)
+          .send("This email verification link is invalid or has expired.");
+      try {
+        const result = await db.consumeEmailVerificationToken(token);
+        const origin = validOrigin(result.redirectOrigin);
+        if (!origin)
+          throw new Error(
+            "The verification link does not have a valid destination."
+          );
+        res.redirect(302, `${origin}/?email_verified=1`);
+      } catch {
+        writeOperationalEvent("warn", "auth_email_verification_failed", {
+          category: "invalid_or_expired_token",
+        });
+        res
+          .status(400)
+          .send("This email verification link is invalid or has expired.");
+      }
+    }
+  );
 
   app.get("/api/auth/email/verify", async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
@@ -675,11 +727,9 @@ export function registerEmailAuthRoutes(app: Express) {
       writeOperationalEvent("warn", "auth_passwordless_verification_failed", {
         category: "invalid_or_expired_link",
       });
-      res
-        .status(400)
-        .json({
-          error: "This sign-in link is invalid, expired, or already used.",
-        });
+      res.status(400).json({
+        error: "This sign-in link is invalid, expired, or already used.",
+      });
     }
   });
 }
@@ -687,6 +737,7 @@ export function registerEmailAuthRoutes(app: Express) {
 export const authRoutePolicies = {
   validOrigin,
   validMagicLinkToken,
+  validEmailVerificationToken,
   matchesState,
   normaliseAuthSender,
   hasVerifiedResendOutboundSending,

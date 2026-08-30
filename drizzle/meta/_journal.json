@@ -477,6 +477,20 @@
       "when": 1788057568445,
       "tag": "0067_motionless_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1788131115283,
+      "tag": "0068_adorable_boomerang",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "5",
+      "when": 1788131172890,
+      "tag": "0069_harsh_swarm",
+      "breakpoints": true
     }
   ]
 }

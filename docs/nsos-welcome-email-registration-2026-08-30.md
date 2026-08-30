@@ -44,3 +44,19 @@ The welcome email now addresses the account holder using the first token of the 
 The change does not include email addresses, credentials, learner records, tenant data, or provider secrets. It does not alter the durable delivery record, provider idempotency key, registration success behavior, or failure isolation.
 
 Validation for this enhancement passed with **134 test files and 496 tests passed, with one intentional skip**, plus lint, TypeScript, diff checks, and the production build.
+
+## Secure Verify Email
+
+New-account welcome emails now include a **Verify email address** button when the registration flow has issued a verification token. Each token is generated with cryptographically random material, stored only as a SHA-256 hash, expires after 24 hours, and is consumed atomically so replayed or expired links are rejected. The token record stores only the user reference, safe redirect origin, timestamps, and hash; it does not store the raw token, password, credential, learner data, or message body.
+
+The callback accepts only the expected token shape, verifies the stored origin against the existing safe-origin policy, marks the user’s email as verified, and redirects to the NSOS application without putting the token in the resulting URL. It is separate from the passwordless sign-in token and does not create a session. If welcome-email delivery fails, account creation remains successful and the verification token is not presented as delivered.
+
+The additive migrations create the verification-token table, add the nullable user verification timestamp, and add the trusted redirect-origin field. Focused authentication and email tests passed with **2 files / 27 tests**. Full validation passed with **134 test files / 498 tests passed and one intentional skip**, plus lint, TypeScript, diff checks, and the production build.
+
+## Verify Email Button
+
+The branded welcome email now includes a **Verify email address** button when a new account has a verification token. The token is generated with cryptographically random material, stored only as a SHA-256 hash, expires after 24 hours, and is consumed atomically. Replayed, malformed, or expired tokens are rejected. The stored redirect origin is validated against the existing safe-origin policy, and the callback redirects to NSOS with a small verification-success flag without retaining the token in the resulting URL.
+
+Verification tokens are separate from passwordless sign-in tokens and do not create a session. The email contains no password, credential, learner data, or raw token outside the intended verification link. Token issuance occurs only after a new welcome-delivery record is queued and claimed, so already-sent or duplicate welcome records do not create unused tokens. If provider delivery fails, account creation remains successful and the failure is recorded through the existing durable delivery boundary.
+
+Focused authentication and welcome-email tests passed with **2 files / 27 tests**. Full validation passed with **134 test files / 498 tests passed and one intentional skip**, plus diff checks, lint, TypeScript, and the production build. No live verification email was sent as part of this feature validation.

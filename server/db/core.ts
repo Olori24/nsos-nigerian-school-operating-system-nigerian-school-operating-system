@@ -23,6 +23,7 @@ import {
   announcements,
   authIdentities,
   authMagicLinks,
+  emailVerificationTokens,
   assessments,
   attendanceRecords,
   cashAssuranceCaseInvoices,
@@ -497,6 +498,28 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   if (!linkedUser) throw new Error("External identity is not linked to an NSOS account.");
   await upsertUser({ openId: linkedUser.openId, lastSignedIn: new Date() });
   return { ...linkedUser, isNewUser };
+}
+
+export async function createEmailVerificationToken(input: { userId: number; redirectOrigin: string }) {
+  const db = await database();
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const now = new Date();
+  await db.delete(emailVerificationTokens).where(and(eq(emailVerificationTokens.userId, input.userId), isNull(emailVerificationTokens.usedAt)));
+  await db.insert(emailVerificationTokens).values({ userId: input.userId, tokenHash, redirectOrigin: input.redirectOrigin, expiresAt: new Date(now.getTime() + 24 * 60 * 60_000) });
+  return token;
+}
+
+export async function consumeEmailVerificationToken(token: string) {
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const db = await database();
+  const record = (await db.select().from(emailVerificationTokens).where(eq(emailVerificationTokens.tokenHash, tokenHash)).limit(1))[0];
+  if (!record) throw new Error("This verification link is invalid or has expired.");
+  const updated = await db.update(emailVerificationTokens).set({ usedAt: new Date() }).where(and(eq(emailVerificationTokens.id, record.id), isNull(emailVerificationTokens.usedAt), gt(emailVerificationTokens.expiresAt, new Date())));
+  const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This verification link has already been used or has expired.");
+  await db.update(users).set({ emailVerifiedAt: new Date() }).where(and(eq(users.id, record.userId), isNull(users.emailVerifiedAt)));
+  return { userId: record.userId, redirectOrigin: record.redirectOrigin };
 }
 
 export async function createAuthMagicLink(input: { email: string; redirectOrigin: string }) {
