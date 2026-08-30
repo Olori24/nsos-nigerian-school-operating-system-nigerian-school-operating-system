@@ -107,6 +107,7 @@ import {
   userSecurityActivity,
   userSessions,
   users,
+  welcomeEmailDeliveries,
 } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { invokeLLM } from "../_core/llm";
@@ -430,6 +431,30 @@ function externalOpenId(provider: ExternalAuthProvider) {
   return `external:${provider}:${crypto.randomUUID()}`;
 }
 
+export async function enqueueWelcomeEmailDelivery(input: { userId: number; recipientEmail: string }) {
+  const db = await database();
+  const recipientEmail = normaliseAuthEmail(input.recipientEmail);
+  await db.insert(welcomeEmailDeliveries).values({ userId: input.userId, recipientEmail }).onDuplicateKeyUpdate({ set: { userId: sql`${welcomeEmailDeliveries.userId}` } });
+  return (await db.select().from(welcomeEmailDeliveries).where(eq(welcomeEmailDeliveries.userId, input.userId)).limit(1))[0];
+}
+
+export async function claimWelcomeEmailDelivery(deliveryId: number) {
+  const db = await database();
+  await db.update(welcomeEmailDeliveries).set({ status: "sending", attemptCount: sql`${welcomeEmailDeliveries.attemptCount} + 1` }).where(and(eq(welcomeEmailDeliveries.id, deliveryId), eq(welcomeEmailDeliveries.status, "queued")));
+  return (await db.select().from(welcomeEmailDeliveries).where(eq(welcomeEmailDeliveries.id, deliveryId)).limit(1))[0];
+}
+
+export async function markWelcomeEmailSent(input: { deliveryId: number; providerMessageId?: string }) {
+  const db = await database();
+  await db.update(welcomeEmailDeliveries).set({ status: "sent", providerMessageId: input.providerMessageId?.slice(0, 255) ?? null, lastError: null, sentAt: new Date() }).where(and(eq(welcomeEmailDeliveries.id, input.deliveryId), eq(welcomeEmailDeliveries.status, "sending")));
+}
+
+export async function markWelcomeEmailFailed(input: { deliveryId: number; error: unknown }) {
+  const db = await database();
+  const message = input.error instanceof Error ? input.error.message : "Welcome email delivery failed.";
+  await db.update(welcomeEmailDeliveries).set({ status: "failed", lastError: message.replace(/[\r\n]/g, " ").slice(0, 255) }).where(and(eq(welcomeEmailDeliveries.id, input.deliveryId), eq(welcomeEmailDeliveries.status, "sending")));
+}
+
 export async function resolveExternalAuthIdentity(input: { provider: ExternalAuthProvider; providerSubject: string; email: string; name?: string | null; avatarUrl?: string | null }) {
   const db = await database();
   const providerSubject = input.providerSubject.trim();
@@ -446,7 +471,7 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
       existingUser.avatarUrl = avatarUrl;
     }
     await upsertUser({ openId: existingUser.openId, lastSignedIn: new Date() });
-    return existingUser;
+    return { ...existingUser, isNewUser: false };
   }
 
   // A matching email alone must not attach a newly verified external provider
@@ -454,8 +479,10 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   // External providers may share their own local account; linking a legacy
   // Manus account requires a separate explicit reauthentication flow.
   let user = (await db.select().from(users).where(and(eq(users.email, email), like(users.openId, "external:%"))).limit(1))[0];
+  let isNewUser = false;
   if (!user) {
     const created = await db.insert(users).values({ openId: externalOpenId(input.provider), name: input.name?.trim().slice(0, 255) || null, email, avatarUrl, loginMethod: input.provider, lastSignedIn: new Date() });
+    isNewUser = true;
     user = (await db.select().from(users).where(eq(users.id, Number(created[0].insertId))).limit(1))[0];
   }
   if (!user) throw new Error("Unable to create an NSOS account.");
@@ -469,7 +496,7 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   const linkedUser = (await db.select().from(users).where(eq(users.id, identity.userId)).limit(1))[0];
   if (!linkedUser) throw new Error("External identity is not linked to an NSOS account.");
   await upsertUser({ openId: linkedUser.openId, lastSignedIn: new Date() });
-  return linkedUser;
+  return { ...linkedUser, isNewUser };
 }
 
 export async function createAuthMagicLink(input: { email: string; redirectOrigin: string }) {

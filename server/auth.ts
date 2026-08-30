@@ -7,6 +7,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
+import { dispatchWelcomeEmailForNewAccount } from "./welcomeEmail";
 import { buildStudentRecordPdfAttachment, normaliseStudentRecordEmailCopy, studentRecordEmailCopy } from "./studentRecordEmail";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
@@ -250,6 +251,7 @@ export function registerGoogleAuthRoutes(app: Express) {
       const profile = await profileResponse.json().catch(() => ({})) as { sub?: unknown; email?: unknown; email_verified?: unknown; name?: unknown; picture?: unknown };
       if (!profileResponse.ok || typeof profile.sub !== "string" || typeof profile.email !== "string" || profile.email_verified !== true) throw new Error("Google account does not provide a verified email address.");
       const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.picture === "string" ? profile.picture : null });
+      if (user.isNewUser) await dispatchWelcomeEmailForNewAccount({ userId: user.id, email: user.email ?? profile.email, origin: loginState.origin });
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
       res.redirect(302, `${loginState.origin}/`);
@@ -285,6 +287,7 @@ export function registerEmailAuthRoutes(app: Express) {
       const origin = validOrigin(link.redirectOrigin);
       if (!origin) throw new Error("The sign-in link does not have a valid destination.");
       const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
+      if (user.isNewUser) await dispatchWelcomeEmailForNewAccount({ userId: user.id, email: user.email ?? link.email, origin });
       await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);

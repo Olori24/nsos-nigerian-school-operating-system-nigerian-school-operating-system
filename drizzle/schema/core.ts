@@ -74,6 +74,23 @@ export const authMagicLinks = mysqlTable(
   }),
 );
 
+export const welcomeEmailDeliveries = mysqlTable(
+  "welcomeEmailDeliveries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().unique(),
+    recipientEmail: varchar("recipientEmail", { length: 320 }).notNull(),
+    status: mysqlEnum("status", ["queued", "sending", "sent", "failed"]).notNull().default("queued"),
+    attemptCount: int("attemptCount").notNull().default(0),
+    providerMessageId: varchar("providerMessageId", { length: 255 }),
+    lastError: varchar("lastError", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    sentAt: timestamp("sentAt"),
+  },
+  table => ({ statusIndex: index("welcomeEmailDelivery_status_idx").on(table.status, table.updatedAt) }),
+);
+
 export const userSessions = mysqlTable(
   "userSessions",
   {

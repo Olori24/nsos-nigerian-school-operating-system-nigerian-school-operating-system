@@ -1,0 +1,26 @@
+# NSOS Registration Welcome Email
+
+**Status:** Implemented with durable, idempotent dispatch for newly created Google and passwordless-email accounts.
+
+## Behaviour
+
+After a verified Google callback or a consumed passwordless sign-in link creates a new external NSOS account, NSOS creates one durable `welcomeEmailDeliveries` record keyed uniquely to that user. The record stores only the normalised recipient address, lifecycle status, attempt count, provider message identifier, bounded failure text, and UTC timestamps. It does not store credentials, authentication tokens, learner records, or the email body.
+
+The dispatcher claims only a queued record, sends one privacy-safe “Welcome to NSOS” message from the configured `notifications@nsos.top` sender, and supplies a stable provider idempotency key derived from the NSOS user identifier. A previously sent record is not sent again. Provider acceptance is recorded as `sent`; a rejected or timed-out request is recorded as `failed` without preventing account creation or session establishment.
+
+## Boundaries
+
+| Area | Implemented rule |
+| --- | --- |
+| Google sign-in | Welcome dispatch occurs only when the external identity resolver reports a newly created account. Existing Google identities do not receive a new welcome message on sign-in. |
+| Passwordless email | The sign-in link continues to be sent before account verification. The welcome message is considered only after the link is consumed and a new account is created. |
+| Duplicate prevention | A unique user delivery record, queued-to-sending claim, and stable provider idempotency key prevent repeat sends from repeated callbacks or retries. |
+| Provider failure | The new account and session flow remain successful when the welcome provider is unavailable; the delivery record is marked failed and the privacy-safe operational event contains no recipient or credential data. |
+| Content | The message contains only account-ready guidance and the NSOS sign-in destination. It does not contain passwords, one-time tokens, learner data, school data, or unverified claims. |
+| Operations | No schedule, background loop, bulk send, parent message, learner invitation, inbound receiving, mailbox, or DNS change was added. |
+
+## Validation
+
+Focused tests cover successful dispatch, already-sent duplicate prevention, provider failure isolation, unsafe sender/origin rejection, and callback integration for newly created Google and passwordless accounts. TypeScript, lint, the focused authentication and welcome-email tests, and the production build passed. The repository-wide formatter check remains unsuitable as a gate because the pre-existing codebase contains legacy formatting outside this change; only the changed files were kept scope-limited.
+
+The sender and domain were previously validated separately through one owner-approved operational test that Resend recorded as delivered. That evidence does not imply that every future message will be delivered; application records and provider events remain the source of truth for each message.

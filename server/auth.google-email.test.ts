@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { authRoutePolicies, registerEmailAuthRoutes, registerGoogleAuthRoutes } from "./auth";
 import * as database from "./db";
 import { normaliseAuthEmail } from "./db";
+import * as welcomeEmails from "./welcomeEmail";
 
 async function withAuthRouteServer<T>(run: (origin: string) => Promise<T>) {
   const app = express();
@@ -165,6 +166,36 @@ describe("external authentication policy", () => {
       expect(headerText(callback.headers["set-cookie"])).toContain("__Host-google_signin_notice=google_success");
       expect(headerText(callback.headers["set-cookie"])).toContain("Max-Age=60");
       expect(resolveIdentity).toHaveBeenCalledWith(expect.objectContaining({ avatarUrl: "https://lh3.googleusercontent.com/a/verified-profile" }));
+    });
+  });
+
+  it("dispatches one welcome email for a newly created Google account before redirecting", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sub: "new-google-subject", email: "new.google@example.ng", email_verified: true, name: "New Google User" }), { status: 200 })));
+    vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 201, openId: "external:google:201", name: "New Google User", email: "new.google@example.ng", loginMethod: "google", isNewUser: true } as any);
+    vi.spyOn(database, "createUserSession").mockResolvedValue("google-new-session");
+    const dispatch = vi.spyOn(welcomeEmails, "dispatchWelcomeEmailForNewAccount").mockResolvedValue({ status: "sent" });
+    await withAuthRouteServer(async origin => {
+      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos-system-uhkdscaf.manus.space")}`);
+      const state = getGoogleState(start.headers["set-cookie"]);
+      const callback = await requestRoute(`${origin}/api/auth/google/callback?code=new-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
+      expect(callback.status).toBe(302);
+      expect(dispatch).toHaveBeenCalledWith({ userId: 201, email: "new.google@example.ng", origin: "https://nsos-system-uhkdscaf.manus.space" });
+    });
+  });
+
+  it("dispatches one welcome email for a newly created passwordless account before redirecting", async () => {
+    vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "new.email@example.ng", redirectOrigin: "https://nsos-system-uhkdscaf.manus.space" } as any);
+    vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 202, openId: "external:email:202", name: null, email: "new.email@example.ng", isNewUser: true } as any);
+    vi.spyOn(database, "acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
+    vi.spyOn(database, "acceptGuardianPortalInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
+    vi.spyOn(database, "createUserSession").mockResolvedValue("email-new-session");
+    const dispatch = vi.spyOn(welcomeEmails, "dispatchWelcomeEmailForNewAccount").mockResolvedValue({ status: "sent" });
+    await withAuthRouteServer(async origin => {
+      const response = await requestRoute(`${origin}/api/auth/email/verify?token=${"b".repeat(43)}`);
+      expect(response.status).toBe(302);
+      expect(dispatch).toHaveBeenCalledWith({ userId: 202, email: "new.email@example.ng", origin: "https://nsos-system-uhkdscaf.manus.space" });
     });
   });
 
