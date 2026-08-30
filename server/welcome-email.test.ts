@@ -78,6 +78,26 @@ describe("welcome email delivery", () => {
     expect(String(body.html)).toContain("Welcome to NSOS");
     expect(String(body.html)).toContain("#0f5c4f");
     expect(String(body.html)).toContain('alt="NSOS logo"');
+    expect(String(body.html)).toContain("Getting started");
+    expect(String(body.html)).toContain(
+      'href="https://nsos.top/?view=overview"'
+    );
+    expect(String(body.html)).toContain(
+      'href="https://nsos.top/?view=admissions"'
+    );
+    expect(String(body.html)).toContain(
+      'href="https://nsos.top/?view=students"'
+    );
+    expect(String(body.html)).toContain(
+      'href="https://nsos.top/?view=finance"'
+    );
+    expect(String(body.html)).toContain(
+      'href="https://nsos.top/?view=communications"'
+    );
+    expect(String(body.text)).toContain("Getting started");
+    expect(String(body.text)).toContain(
+      "Overview: https://nsos.top/?view=overview"
+    );
     expect(mocks.markWelcomeEmailSent).toHaveBeenCalledWith({
       deliveryId: 41,
       providerMessageId: "re_accepted_41",
@@ -150,6 +170,12 @@ describe("welcome email delivery", () => {
     expect(branded.html).toContain("#123b31");
     expect(branded.html).toContain("Open NSOS");
     expect(branded.text).toContain("https://nsos.top/");
+    expect(branded.text).toContain(
+      "Admissions: https://nsos.top/?view=admissions"
+    );
+    expect(branded.text).toContain(
+      "Communications: https://nsos.top/?view=communications"
+    );
 
     const fallback = welcomeEmailPolicies.buildWelcomeEmailContent({
       origin: "https://nsos.top",

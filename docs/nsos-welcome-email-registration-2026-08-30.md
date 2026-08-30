@@ -30,3 +30,9 @@ The sender and domain were previously validated separately through one owner-app
 The welcome message now includes an email-client-safe, table-based HTML layout using the NSOS pine and deep-pine palette, a compact wordmark header, a clear account-ready hierarchy, a high-contrast call-to-action, and a visible fallback URL. The existing public HTTPS logo is included only when it passes safe-URL validation; otherwise the template renders an accessible text wordmark. The plain-text alternative remains available and contains the same sign-in destination without credentials, tokens, learner data, or school data.
 
 The branding change does not alter the durable queue, stable idempotency key, provider-failure isolation, Google/passwordless registration boundaries, or the rule that provider acceptance is not itself a delivery guarantee.
+
+## Getting Started quick links
+
+The welcome email now includes a concise **Getting started** section in both HTML and plain text. It links to the existing Overview, Admissions, Student records, Fees & finance, and Communications views using same-origin `/?view=` destinations. After sign-in, NSOS accepts a requested view only when the active role is permitted to access it; otherwise the existing role-aware fallback remains in effect. The query parameter is removed after it is consumed, and no new route or permission is created by the email.
+
+These links are navigation aids only. They do not disclose tenant records, expose contacts, publish content, change fees, create invitations, or trigger delivery actions.

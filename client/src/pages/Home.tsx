@@ -544,6 +544,15 @@ export default function Home() {
 
   const accessibleViews = useMemo(() => new Set(navGroups.flatMap(group => group.items.filter(item => !role || item.roles.includes(role)).map(item => item.id))), [role]);
   useEffect(() => { if (role && !accessibleViews.has(activeView)) setActiveView(role === "parent" || role === "student" ? "portal" : "overview"); }, [activeView, accessibleViews, role]);
+  useEffect(() => {
+    if (!user || !role || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const requestedView = url.searchParams.get("view") as View | null;
+    if (!requestedView || !accessibleViews.has(requestedView)) return;
+    setActiveView(requestedView);
+    url.searchParams.delete("view");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [accessibleViews, role, user?.id]);
 
   if (loading || schoolsQuery.isLoading) return <div className="grid min-h-screen place-items-center bg-[#f5f6f1]"><Loader2 className="h-6 w-6 animate-spin text-[#0f5c4f]" /></div>;
   if (!user) return <LoginScreen />;
