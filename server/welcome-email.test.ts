@@ -162,6 +162,7 @@ describe("welcome email delivery", () => {
     const branded = welcomeEmailPolicies.buildWelcomeEmailContent({
       origin: "https://nsos.top",
       logoUrl: "https://cdn.example.ng/nsos-logo.png",
+      firstName: "Ada Lovelace",
     });
     expect(branded.html).toContain(
       'src="https://cdn.example.ng/nsos-logo.png"'
@@ -169,6 +170,8 @@ describe("welcome email delivery", () => {
     expect(branded.html).toContain('alt="NSOS logo"');
     expect(branded.html).toContain("#123b31");
     expect(branded.html).toContain("Open NSOS");
+    expect(branded.html).toContain("Hi Ada, welcome to NSOS");
+    expect(branded.text).toContain("Hi Ada,");
     expect(branded.text).toContain("https://nsos.top/");
     expect(branded.text).toContain(
       "Admissions: https://nsos.top/?view=admissions"
@@ -180,8 +183,13 @@ describe("welcome email delivery", () => {
     const fallback = welcomeEmailPolicies.buildWelcomeEmailContent({
       origin: "https://nsos.top",
       logoUrl: "data:image/png;base64,not-a-public-asset",
+      firstName: "<script>alert(1)</script>",
     });
     expect(fallback.html).toContain('aria-label="NSOS"');
+    expect(fallback.html).toContain("Hi there, welcome to NSOS");
+    expect(fallback.text).toContain("Hi there,");
+    expect(fallback.html).not.toContain("<script");
+    expect(fallback.html).not.toContain("alert(1)");
     expect(fallback.html).not.toContain("data:image");
     expect(
       welcomeEmailPolicies.safePublicImageUrl("http://cdn.example.ng/logo.png")

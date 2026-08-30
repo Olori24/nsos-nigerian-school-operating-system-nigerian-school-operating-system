@@ -181,7 +181,7 @@ describe("external authentication policy", () => {
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=new-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(302);
-      expect(dispatch).toHaveBeenCalledWith({ userId: 201, email: "new.google@example.ng", origin: "https://nsos-system-uhkdscaf.manus.space" });
+      expect(dispatch).toHaveBeenCalledWith({ userId: 201, email: "new.google@example.ng", firstName: "New Google User", origin: "https://nsos-system-uhkdscaf.manus.space" });
     });
   });
 
@@ -195,7 +195,7 @@ describe("external authentication policy", () => {
     await withAuthRouteServer(async origin => {
       const response = await requestRoute(`${origin}/api/auth/email/verify?token=${"b".repeat(43)}`);
       expect(response.status).toBe(302);
-      expect(dispatch).toHaveBeenCalledWith({ userId: 202, email: "new.email@example.ng", origin: "https://nsos-system-uhkdscaf.manus.space" });
+      expect(dispatch).toHaveBeenCalledWith({ userId: 202, email: "new.email@example.ng", firstName: null, origin: "https://nsos-system-uhkdscaf.manus.space" });
     });
   });
 

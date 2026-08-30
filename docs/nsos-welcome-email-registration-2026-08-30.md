@@ -36,3 +36,11 @@ The branding change does not alter the durable queue, stable idempotency key, pr
 The welcome email now includes a concise **Getting started** section in both HTML and plain text. It links to the existing Overview, Admissions, Student records, Fees & finance, and Communications views using same-origin `/?view=` destinations. After sign-in, NSOS accepts a requested view only when the active role is permitted to access it; otherwise the existing role-aware fallback remains in effect. The query parameter is removed after it is consumed, and no new route or permission is created by the email.
 
 These links are navigation aids only. They do not disclose tenant records, expose contacts, publish content, change fees, create invitations, or trigger delivery actions.
+
+## Personalized greeting
+
+The welcome email now addresses the account holder using the first token of the existing account display name. The value is HTML-escaped and restricted to a safe name pattern; accounts without a usable name receive the neutral greeting **“Hi there”**. Google registration passes the verified profile name when available, while passwordless registration uses the resolved account name and otherwise falls back neutrally.
+
+The change does not include email addresses, credentials, learner records, tenant data, or provider secrets. It does not alter the durable delivery record, provider idempotency key, registration success behavior, or failure isolation.
+
+Validation for this enhancement passed with **134 test files and 496 tests passed, with one intentional skip**, plus lint, TypeScript, diff checks, and the production build.

@@ -8,7 +8,11 @@ import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
 import { dispatchWelcomeEmailForNewAccount } from "./welcomeEmail";
-import { buildStudentRecordPdfAttachment, normaliseStudentRecordEmailCopy, studentRecordEmailCopy } from "./studentRecordEmail";
+import {
+  buildStudentRecordPdfAttachment,
+  normaliseStudentRecordEmailCopy,
+  studentRecordEmailCopy,
+} from "./studentRecordEmail";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
@@ -26,8 +30,13 @@ function validOrigin(value: unknown) {
   if (typeof value !== "string" || value.length > 512) return undefined;
   try {
     const url = new URL(value);
-    if (url.origin !== value || !["https:", "http:"].includes(url.protocol)) return undefined;
-    if (url.protocol === "http:" && !["localhost", "127.0.0.1"].includes(url.hostname)) return undefined;
+    if (url.origin !== value || !["https:", "http:"].includes(url.protocol))
+      return undefined;
+    if (
+      url.protocol === "http:" &&
+      !["localhost", "127.0.0.1"].includes(url.hostname)
+    )
+      return undefined;
     return url.origin;
   } catch {
     return undefined;
@@ -40,14 +49,23 @@ function validMagicLinkToken(value: string) {
 
 function normaliseAuthSender(value: string) {
   const sender = value.trim();
-  if (!sender || /[\r\n]/.test(sender)) throw new Error("The passwordless-email sender is not configured safely.");
-  const emailMatch = sender.match(/^(?:[^<>\r\n]+\s+<)?([^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>?$/);
-  if (!emailMatch) throw new Error("The passwordless-email sender is not configured safely.");
+  if (!sender || /[\r\n]/.test(sender))
+    throw new Error("The passwordless-email sender is not configured safely.");
+  const emailMatch = sender.match(
+    /^(?:[^<>\r\n]+\s+<)?([^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>?$/
+  );
+  if (!emailMatch)
+    throw new Error("The passwordless-email sender is not configured safely.");
   db.normaliseAuthEmail(emailMatch[1]);
   return sender;
 }
 
-type ResendDomainRecord = { record?: string; name?: string; type?: string; status?: string };
+type ResendDomainRecord = {
+  record?: string;
+  name?: string;
+  type?: string;
+  status?: string;
+};
 type ResendDomainState = {
   status?: string;
   capabilities?: { sending?: string };
@@ -64,10 +82,21 @@ function hasVerifiedResendOutboundSending(domain: ResendDomainState) {
   if (domain.capabilities?.sending !== "enabled") return false;
   if (domain.status === "verified") return true;
   if (domain.status !== "partially_verified") return false;
-  return requiredResendSendingRecords.every(required => domain.records?.some(record => record.record === required.record && record.name === required.name && record.type === required.type && record.status === "verified"));
+  return requiredResendSendingRecords.every(required =>
+    domain.records?.some(
+      record =>
+        record.record === required.record &&
+        record.name === required.name &&
+        record.type === required.type &&
+        record.status === "verified"
+    )
+  );
 }
 
-function matchesState(expected: string | undefined, actual: string | undefined) {
+function matchesState(
+  expected: string | undefined,
+  actual: string | undefined
+) {
   if (!expected || !actual || expected.length !== actual.length) return false;
   return timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
 }
@@ -78,16 +107,34 @@ function readGoogleLoginStates(req: Request): GoogleLoginState[] {
   const raw = parseCookieHeader(req.headers.cookie ?? "")[GOOGLE_STATE_COOKIE];
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown; issuedAt?: unknown; entries?: unknown };
+    const parsed = JSON.parse(raw) as {
+      state?: unknown;
+      origin?: unknown;
+      issuedAt?: unknown;
+      entries?: unknown;
+    };
     const entries = Array.isArray(parsed.entries) ? parsed.entries : [parsed];
     const cutoff = Date.now() - STATE_TTL_MS;
-    return entries.flatMap(entry => {
-      if (!entry || typeof entry !== "object") return [];
-      const candidate = entry as { state?: unknown; origin?: unknown; issuedAt?: unknown };
-      const origin = validOrigin(candidate.origin);
-      const issuedAt = typeof candidate.issuedAt === "number" ? candidate.issuedAt : Date.now();
-      return typeof candidate.state === "string" && origin && issuedAt >= cutoff ? [{ state: candidate.state, origin, issuedAt }] : [];
-    }).slice(-MAX_PENDING_GOOGLE_STATES);
+    return entries
+      .flatMap(entry => {
+        if (!entry || typeof entry !== "object") return [];
+        const candidate = entry as {
+          state?: unknown;
+          origin?: unknown;
+          issuedAt?: unknown;
+        };
+        const origin = validOrigin(candidate.origin);
+        const issuedAt =
+          typeof candidate.issuedAt === "number"
+            ? candidate.issuedAt
+            : Date.now();
+        return typeof candidate.state === "string" &&
+          origin &&
+          issuedAt >= cutoff
+          ? [{ state: candidate.state, origin, issuedAt }]
+          : [];
+      })
+      .slice(-MAX_PENDING_GOOGLE_STATES);
   } catch {
     return [];
   }
@@ -95,16 +142,37 @@ function readGoogleLoginStates(req: Request): GoogleLoginState[] {
 
 function setGoogleLoginStates(res: Response, entries: GoogleLoginState[]) {
   if (!entries.length) {
-    res.clearCookie(GOOGLE_STATE_COOKIE, { path: "/", secure: true, sameSite: "lax", httpOnly: true });
+    res.clearCookie(GOOGLE_STATE_COOKIE, {
+      path: "/",
+      secure: true,
+      sameSite: "lax",
+      httpOnly: true,
+    });
     return;
   }
-  res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ entries: entries.slice(-MAX_PENDING_GOOGLE_STATES) }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+  res.cookie(
+    GOOGLE_STATE_COOKIE,
+    JSON.stringify({ entries: entries.slice(-MAX_PENDING_GOOGLE_STATES) }),
+    {
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: STATE_TTL_MS,
+    }
+  );
 }
 
-function consumeGoogleLoginState(req: Request, res: Response, state: string | undefined) {
+function consumeGoogleLoginState(
+  req: Request,
+  res: Response,
+  state: string | undefined
+) {
   if (!state) return undefined;
   const states = readGoogleLoginStates(req);
-  const matchIndex = states.findIndex(candidate => matchesState(candidate.state, state));
+  const matchIndex = states.findIndex(candidate =>
+    matchesState(candidate.state, state)
+  );
   if (matchIndex < 0) return undefined;
   const [matched] = states.splice(matchIndex, 1);
   setGoogleLoginStates(res, states);
@@ -112,128 +180,344 @@ function consumeGoogleLoginState(req: Request, res: Response, state: string | un
 }
 
 function setGoogleSignInNotice(res: Response) {
-  res.cookie(GOOGLE_SIGNIN_NOTICE_COOKIE, "google_success", { path: "/", secure: true, sameSite: "lax", httpOnly: false, maxAge: 60_000 });
+  res.cookie(GOOGLE_SIGNIN_NOTICE_COOKIE, "google_success", {
+    path: "/",
+    secure: true,
+    sameSite: "lax",
+    httpOnly: false,
+    maxAge: 60_000,
+  });
 }
 
-async function createSession(req: Request, res: Response, user: { id: number; openId: string; name: string | null; email: string | null; loginMethod: string | null }, fallbackName: string) {
+async function createSession(
+  req: Request,
+  res: Response,
+  user: {
+    id: number;
+    openId: string;
+    name: string | null;
+    email: string | null;
+    loginMethod: string | null;
+  },
+  fallbackName: string
+) {
   const expiresAt = new Date(Date.now() + ONE_YEAR_MS);
-  const sessionId = await db.createUserSession({ userId: user.id, source: user.loginMethod ?? "external", userAgent: req.get("user-agent") ?? undefined, expiresAt });
-  const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name?.trim() || fallbackName, sessionId, expiresInMs: ONE_YEAR_MS });
-  res.cookie(COOKIE_NAME, sessionToken, { ...getSessionCookieOptions(req), maxAge: ONE_YEAR_MS });
+  const sessionId = await db.createUserSession({
+    userId: user.id,
+    source: user.loginMethod ?? "external",
+    userAgent: req.get("user-agent") ?? undefined,
+    expiresAt,
+  });
+  const sessionToken = await sdk.createSessionToken(user.openId, {
+    name: user.name?.trim() || fallbackName,
+    sessionId,
+    expiresInMs: ONE_YEAR_MS,
+  });
+  res.cookie(COOKIE_NAME, sessionToken, {
+    ...getSessionCookieOptions(req),
+    maxAge: ONE_YEAR_MS,
+  });
 }
 
-async function sendMagicLinkEmail(input: { email: string; link: string; subject?: string; text?: string; html?: string }) {
+async function sendMagicLinkEmail(input: {
+  email: string;
+  link: string;
+  subject?: string;
+  text?: string;
+  html?: string;
+}) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${ENV.resendApiKey}`,
+      "Content-Type": "application/json",
+    },
     signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
     body: JSON.stringify({
       from: normaliseAuthSender(ENV.authEmailFrom),
       to: input.email,
       subject: input.subject ?? "Your NSOS sign-in link",
-      text: input.text ?? `Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}: ${input.link}`,
-      html: input.html ?? `<p>Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}.</p><p><a href="${input.link}">Sign in to NSOS</a></p><p>If you did not request this, you can safely ignore this email.</p>`,
+      text:
+        input.text ??
+        `Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}: ${input.link}`,
+      html:
+        input.html ??
+        `<p>Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}.</p><p><a href="${input.link}">Sign in to NSOS</a></p><p>If you did not request this, you can safely ignore this email.</p>`,
     }),
   });
-  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-  if (!response.ok) throw new Error(`Resend rejected email delivery with status ${response.status}`);
+  const payload = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  if (!response.ok)
+    throw new Error(
+      `Resend rejected email delivery with status ${response.status}`
+    );
   return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
 }
 
-export async function sendAdmissionLetterEmail(input: { email: string; subject: string; text: string; html: string }) {
+export async function sendAdmissionLetterEmail(input: {
+  email: string;
+  subject: string;
+  text: string;
+  html: string;
+}) {
   const email = db.normaliseAuthEmail(input.email);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${ENV.resendApiKey}`,
+      "Content-Type": "application/json",
+    },
     signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
-    body: JSON.stringify({ from: normaliseAuthSender(ENV.authEmailFrom), to: email, subject: input.subject.slice(0, 255), text: input.text, html: input.html }),
+    body: JSON.stringify({
+      from: normaliseAuthSender(ENV.authEmailFrom),
+      to: email,
+      subject: input.subject.slice(0, 255),
+      text: input.text,
+      html: input.html,
+    }),
   });
-  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-  if (!response.ok) throw new Error(`Resend rejected admission-letter delivery with status ${response.status}`);
+  const payload = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  if (!response.ok)
+    throw new Error(
+      `Resend rejected admission-letter delivery with status ${response.status}`
+    );
   return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
 }
 
 export async function getStudentRecordEmailSenderReadiness() {
-  if (!ENV.resendApiKey || !ENV.authEmailFrom) return { ready: false, state: "not_configured" as const, message: "NSOS email delivery is not configured." };
+  if (!ENV.resendApiKey || !ENV.authEmailFrom)
+    return {
+      ready: false,
+      state: "not_configured" as const,
+      message: "NSOS email delivery is not configured.",
+    };
   const sender = normaliseAuthSender(ENV.authEmailFrom);
   const senderDomain = sender.match(/@([^>\s]+)/)?.[1]?.toLowerCase();
-  if (!senderDomain) return { ready: false, state: "not_configured" as const, message: "NSOS email sender is not configured safely." };
+  if (!senderDomain)
+    return {
+      ready: false,
+      state: "not_configured" as const,
+      message: "NSOS email sender is not configured safely.",
+    };
   try {
-    const response = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${ENV.resendApiKey}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
-    const payload = await response.json().catch(() => ({})) as { data?: Array<{ id?: string; name?: string } & ResendDomainState> };
-    const domain = payload.data?.find(item => item.name?.toLowerCase() === senderDomain);
-    if (!response.ok || !domain) return { ready: false, state: "unverified" as const, message: "Email sharing is blocked until the configured sender domain is verified for outbound sending." };
-    if (hasVerifiedResendOutboundSending(domain)) return { ready: true, state: "verified" as const, message: "Configured sender domain is verified for outbound sending. A final confirmation is still required before sharing." };
-    if (domain.status === "partially_verified" && domain.capabilities?.sending === "enabled" && domain.id) {
-      const detailsResponse = await fetch(`https://api.resend.com/domains/${domain.id}`, { headers: { Authorization: `Bearer ${ENV.resendApiKey}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
-      const details = await detailsResponse.json().catch(() => ({})) as ResendDomainState;
-      if (!detailsResponse.ok) return { ready: false, state: "unavailable" as const, message: "NSOS could not confirm the configured sender domain right now. No email can be sent." };
-      if (hasVerifiedResendOutboundSending(details)) return { ready: true, state: "verified" as const, message: "Configured sender domain is verified for outbound sending. A final confirmation is still required before sharing." };
+    const response = await fetch("https://api.resend.com/domains", {
+      headers: { Authorization: `Bearer ${ENV.resendApiKey}` },
+      signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      data?: Array<{ id?: string; name?: string } & ResendDomainState>;
+    };
+    const domain = payload.data?.find(
+      item => item.name?.toLowerCase() === senderDomain
+    );
+    if (!response.ok || !domain)
+      return {
+        ready: false,
+        state: "unverified" as const,
+        message:
+          "Email sharing is blocked until the configured sender domain is verified for outbound sending.",
+      };
+    if (hasVerifiedResendOutboundSending(domain))
+      return {
+        ready: true,
+        state: "verified" as const,
+        message:
+          "Configured sender domain is verified for outbound sending. A final confirmation is still required before sharing.",
+      };
+    if (
+      domain.status === "partially_verified" &&
+      domain.capabilities?.sending === "enabled" &&
+      domain.id
+    ) {
+      const detailsResponse = await fetch(
+        `https://api.resend.com/domains/${domain.id}`,
+        {
+          headers: { Authorization: `Bearer ${ENV.resendApiKey}` },
+          signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
+        }
+      );
+      const details = (await detailsResponse
+        .json()
+        .catch(() => ({}))) as ResendDomainState;
+      if (!detailsResponse.ok)
+        return {
+          ready: false,
+          state: "unavailable" as const,
+          message:
+            "NSOS could not confirm the configured sender domain right now. No email can be sent.",
+        };
+      if (hasVerifiedResendOutboundSending(details))
+        return {
+          ready: true,
+          state: "verified" as const,
+          message:
+            "Configured sender domain is verified for outbound sending. A final confirmation is still required before sharing.",
+        };
     }
-    return { ready: false, state: "unverified" as const, message: "Email sharing is blocked until the configured sender domain is verified for outbound sending." };
+    return {
+      ready: false,
+      state: "unverified" as const,
+      message:
+        "Email sharing is blocked until the configured sender domain is verified for outbound sending.",
+    };
   } catch {
-    return { ready: false, state: "unavailable" as const, message: "NSOS could not verify the configured sender domain right now. No email can be sent." };
+    return {
+      ready: false,
+      state: "unavailable" as const,
+      message:
+        "NSOS could not verify the configured sender domain right now. No email can be sent.",
+    };
   }
 }
 
-export async function sendStudentEnrollmentRecordEmail(input: { email: string; record: Parameters<typeof buildStudentRecordPdfAttachment>[0]; enrollmentId: number; copy?: { subject: string; body: string } }) {
+export async function sendStudentEnrollmentRecordEmail(input: {
+  email: string;
+  record: Parameters<typeof buildStudentRecordPdfAttachment>[0];
+  enrollmentId: number;
+  copy?: { subject: string; body: string };
+}) {
   const email = db.normaliseAuthEmail(input.email);
-  const attachment = await buildStudentRecordPdfAttachment(input.record, input.enrollmentId);
-  const copy = input.copy ? normaliseStudentRecordEmailCopy(input.copy) : studentRecordEmailCopy(attachment);
+  const attachment = await buildStudentRecordPdfAttachment(
+    input.record,
+    input.enrollmentId
+  );
+  const copy = input.copy
+    ? normaliseStudentRecordEmailCopy(input.copy)
+    : studentRecordEmailCopy(attachment);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json", "Idempotency-Key": attachment.idempotencyKey },
+    headers: {
+      Authorization: `Bearer ${ENV.resendApiKey}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": attachment.idempotencyKey,
+    },
     signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
-    body: JSON.stringify({ from: normaliseAuthSender(ENV.authEmailFrom), to: email, subject: copy.subject, text: copy.text, html: copy.html, attachments: [{ filename: attachment.filename, content: attachment.base64, content_type: "application/pdf" }] }),
+    body: JSON.stringify({
+      from: normaliseAuthSender(ENV.authEmailFrom),
+      to: email,
+      subject: copy.subject,
+      text: copy.text,
+      html: copy.html,
+      attachments: [
+        {
+          filename: attachment.filename,
+          content: attachment.base64,
+          content_type: "application/pdf",
+        },
+      ],
+    }),
   });
-  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-  if (!response.ok) throw new Error(`Resend rejected protected record delivery with status ${response.status}`);
+  const payload = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  if (!response.ok)
+    throw new Error(
+      `Resend rejected protected record delivery with status ${response.status}`
+    );
   return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
 }
 
-export async function sendStaffSetupInvitationEmail(input: { email: string; schoolName: string; role: "admin" | "staff" | "teacher" | "finance"; jobTitle: string; origin: string }) {
+export async function sendStaffSetupInvitationEmail(input: {
+  email: string;
+  schoolName: string;
+  role: "admin" | "staff" | "teacher" | "finance";
+  jobTitle: string;
+  origin: string;
+}) {
   const origin = validOrigin(input.origin);
-  if (!origin) throw new Error("Use a valid NSOS application address before sending the invitation.");
+  if (!origin)
+    throw new Error(
+      "Use a valid NSOS application address before sending the invitation."
+    );
   const email = db.normaliseAuthEmail(input.email);
   const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
   const link = `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`;
   const schoolName = input.schoolName.replace(/[<>]/g, "").trim().slice(0, 255);
   const jobTitle = input.jobTitle.replace(/[<>]/g, "").trim().slice(0, 120);
   const roleLabel = input.role === "admin" ? "administrator" : input.role;
-  await sendMagicLinkEmail({ email, link, subject: `You are invited to ${schoolName} on NSOS`, text: `${schoolName} invited you to join NSOS as ${roleLabel} (${jobTitle}). Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>${schoolName} invited you to join NSOS as <strong>${roleLabel}</strong> (${jobTitle}).</p><p><a href="${link}">Accept invitation and sign in</a></p><p>This link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
+  await sendMagicLinkEmail({
+    email,
+    link,
+    subject: `You are invited to ${schoolName} on NSOS`,
+    text: `${schoolName} invited you to join NSOS as ${roleLabel} (${jobTitle}). Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`,
+    html: `<p>${schoolName} invited you to join NSOS as <strong>${roleLabel}</strong> (${jobTitle}).</p><p><a href="${link}">Accept invitation and sign in</a></p><p>This link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>`,
+  });
 }
 
-export async function sendGuardianPortalInvitationEmail(input: { email: string; schoolName: string; guardianName: string; origin: string }) {
+export async function sendGuardianPortalInvitationEmail(input: {
+  email: string;
+  schoolName: string;
+  guardianName: string;
+  origin: string;
+}) {
   const origin = validOrigin(input.origin);
-  if (!origin) throw new Error("Use a valid NSOS application address before sending the guardian portal invitation.");
+  if (!origin)
+    throw new Error(
+      "Use a valid NSOS application address before sending the guardian portal invitation."
+    );
   const email = db.normaliseAuthEmail(input.email);
   const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
   const link = `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`;
   const schoolName = input.schoolName.replace(/[<>]/g, "").trim().slice(0, 255);
-  const guardianName = input.guardianName.replace(/[<>]/g, "").trim().slice(0, 255);
-  await sendMagicLinkEmail({ email, link, subject: `Your ${schoolName} family portal invitation`, text: `Hello ${guardianName}, ${schoolName} has invited you to access the NSOS family portal. Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>Hello ${guardianName},</p><p>${schoolName} has invited you to access the NSOS family portal.</p><p><a href="${link}">Access family portal</a></p><p>This secure sign-in link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
+  const guardianName = input.guardianName
+    .replace(/[<>]/g, "")
+    .trim()
+    .slice(0, 255);
+  await sendMagicLinkEmail({
+    email,
+    link,
+    subject: `Your ${schoolName} family portal invitation`,
+    text: `Hello ${guardianName}, ${schoolName} has invited you to access the NSOS family portal. Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`,
+    html: `<p>Hello ${guardianName},</p><p>${schoolName} has invited you to access the NSOS family portal.</p><p><a href="${link}">Access family portal</a></p><p>This secure sign-in link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>`,
+  });
 }
 
 export function registerGoogleAuthRoutes(app: Express) {
   app.get("/api/auth/google/start", (req: Request, res: Response) => {
     const origin = validOrigin(getStringQuery(req, "origin"));
-    if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
-    if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
+    if (!origin)
+      return res
+        .status(400)
+        .json({ error: "A valid application origin is required." });
+    if (!ENV.googleClientId || !ENV.googleClientSecret)
+      return res
+        .status(503)
+        .json({ error: "Google sign-in is not configured." });
     const state = randomBytes(32).toString("base64url");
-    const states = [...readGoogleLoginStates(req), { state, origin, issuedAt: Date.now() }];
+    const states = [
+      ...readGoogleLoginStates(req),
+      { state, origin, issuedAt: Date.now() },
+    ];
     setGoogleLoginStates(res, states);
     const redirectUri = `${origin}/api/auth/google/callback`;
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    url.search = new URLSearchParams({ client_id: ENV.googleClientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, prompt: "select_account" }).toString();
+    url.search = new URLSearchParams({
+      client_id: ENV.googleClientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "openid email profile",
+      state,
+      prompt: "select_account",
+    }).toString();
     res.redirect(302, url.toString());
   });
 
   app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
     const code = getStringQuery(req, "code");
     const state = getStringQuery(req, "state");
-    const loginState = code ? consumeGoogleLoginState(req, res, state) : undefined;
+    const loginState = code
+      ? consumeGoogleLoginState(req, res, state)
+      : undefined;
     if (!code || !loginState) {
-      writeOperationalEvent("warn", "auth_google_callback_rejected", { category: "state_verification" });
+      writeOperationalEvent("warn", "auth_google_callback_rejected", {
+        category: "state_verification",
+      });
       return res.redirect(302, "/?signIn=google_verification_failed");
     }
 
@@ -243,21 +527,70 @@ export function registerGoogleAuthRoutes(app: Express) {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
-        body: new URLSearchParams({ code, client_id: ENV.googleClientId, client_secret: ENV.googleClientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }),
+        body: new URLSearchParams({
+          code,
+          client_id: ENV.googleClientId,
+          client_secret: ENV.googleClientSecret,
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }),
       });
-      const tokenPayload = await tokenResponse.json().catch(() => ({})) as { access_token?: unknown };
-      if (!tokenResponse.ok || typeof tokenPayload.access_token !== "string") throw new Error("Google token exchange failed.");
-      const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${tokenPayload.access_token}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
-      const profile = await profileResponse.json().catch(() => ({})) as { sub?: unknown; email?: unknown; email_verified?: unknown; name?: unknown; picture?: unknown };
-      if (!profileResponse.ok || typeof profile.sub !== "string" || typeof profile.email !== "string" || profile.email_verified !== true) throw new Error("Google account does not provide a verified email address.");
-      const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.picture === "string" ? profile.picture : null });
-      if (user.isNewUser) await dispatchWelcomeEmailForNewAccount({ userId: user.id, email: user.email ?? profile.email, origin: loginState.origin });
+      const tokenPayload = (await tokenResponse.json().catch(() => ({}))) as {
+        access_token?: unknown;
+      };
+      if (!tokenResponse.ok || typeof tokenPayload.access_token !== "string")
+        throw new Error("Google token exchange failed.");
+      const profileResponse = await fetch(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        {
+          headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
+          signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
+        }
+      );
+      const profile = (await profileResponse.json().catch(() => ({}))) as {
+        sub?: unknown;
+        email?: unknown;
+        email_verified?: unknown;
+        name?: unknown;
+        picture?: unknown;
+      };
+      if (
+        !profileResponse.ok ||
+        typeof profile.sub !== "string" ||
+        typeof profile.email !== "string" ||
+        profile.email_verified !== true
+      )
+        throw new Error(
+          "Google account does not provide a verified email address."
+        );
+      const user = await db.resolveExternalAuthIdentity({
+        provider: "google",
+        providerSubject: profile.sub,
+        email: profile.email,
+        name: typeof profile.name === "string" ? profile.name : null,
+        avatarUrl: typeof profile.picture === "string" ? profile.picture : null,
+      });
+      if (user.isNewUser)
+        await dispatchWelcomeEmailForNewAccount({
+          userId: user.id,
+          email: user.email ?? profile.email,
+          firstName:
+            user.name ??
+            (typeof profile.name === "string" ? profile.name : null),
+          origin: loginState.origin,
+        });
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
       res.redirect(302, `${loginState.origin}/`);
     } catch {
-      writeOperationalEvent("warn", "auth_google_callback_failed", { category: "provider_or_identity_failure" });
-      res.status(502).json({ error: "Google sign-in could not be completed. Please try again." });
+      writeOperationalEvent("warn", "auth_google_callback_failed", {
+        category: "provider_or_identity_failure",
+      });
+      res
+        .status(502)
+        .json({
+          error: "Google sign-in could not be completed. Please try again.",
+        });
     }
   });
 }
@@ -266,37 +599,95 @@ export function registerEmailAuthRoutes(app: Express) {
   app.post("/api/auth/email/request", async (req: Request, res: Response) => {
     const origin = validOrigin(req.body?.origin);
     const headerOrigin = validOrigin(req.get("origin"));
-    if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
+    if (!origin || !headerOrigin || origin !== headerOrigin)
+      return res
+        .status(400)
+        .json({ error: "A valid application origin is required." });
     try {
       const email = db.normaliseAuthEmail(req.body?.email ?? "");
-      const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
-      await sendMagicLinkEmail({ email, link: `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}` });
-      res.status(202).json({ success: true, message: "If this email can receive NSOS sign-in links, one is on its way." });
+      const token = await db.createAuthMagicLink({
+        email,
+        redirectOrigin: origin,
+      });
+      await sendMagicLinkEmail({
+        email,
+        link: `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`,
+      });
+      res
+        .status(202)
+        .json({
+          success: true,
+          message:
+            "If this email can receive NSOS sign-in links, one is on its way.",
+        });
     } catch (error) {
-      if (error instanceof Error && error.message === "Enter a valid email address.") return res.status(400).json({ error: error.message });
-      writeOperationalEvent("warn", "auth_passwordless_request_failed", { category: "provider_or_configuration_failure" });
-      res.status(503).json({ error: "We could not send a sign-in link right now. Please try again shortly." });
+      if (
+        error instanceof Error &&
+        error.message === "Enter a valid email address."
+      )
+        return res.status(400).json({ error: error.message });
+      writeOperationalEvent("warn", "auth_passwordless_request_failed", {
+        category: "provider_or_configuration_failure",
+      });
+      res
+        .status(503)
+        .json({
+          error:
+            "We could not send a sign-in link right now. Please try again shortly.",
+        });
     }
   });
 
   app.get("/api/auth/email/verify", async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
-    if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
+    if (!token || !validMagicLinkToken(token))
+      return res
+        .status(400)
+        .json({ error: "This sign-in link is invalid or has expired." });
     try {
       const link = await db.consumeAuthMagicLink(token);
       const origin = validOrigin(link.redirectOrigin);
-      if (!origin) throw new Error("The sign-in link does not have a valid destination.");
-      const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
-      if (user.isNewUser) await dispatchWelcomeEmailForNewAccount({ userId: user.id, email: user.email ?? link.email, origin });
-      await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
-      await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
+      if (!origin)
+        throw new Error("The sign-in link does not have a valid destination.");
+      const user = await db.resolveExternalAuthIdentity({
+        provider: "email",
+        providerSubject: link.email,
+        email: link.email,
+      });
+      if (user.isNewUser)
+        await dispatchWelcomeEmailForNewAccount({
+          userId: user.id,
+          email: user.email ?? link.email,
+          firstName: user.name,
+          origin,
+        });
+      await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({
+        email: link.email,
+        userId: user.id,
+      });
+      await db.acceptGuardianPortalInvitationsForVerifiedEmail({
+        email: link.email,
+        userId: user.id,
+      });
       await createSession(req, res, user, link.email);
       res.redirect(302, `${origin}/`);
     } catch {
-      writeOperationalEvent("warn", "auth_passwordless_verification_failed", { category: "invalid_or_expired_link" });
-      res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });
+      writeOperationalEvent("warn", "auth_passwordless_verification_failed", {
+        category: "invalid_or_expired_link",
+      });
+      res
+        .status(400)
+        .json({
+          error: "This sign-in link is invalid, expired, or already used.",
+        });
     }
   });
 }
 
-export const authRoutePolicies = { validOrigin, validMagicLinkToken, matchesState, normaliseAuthSender, hasVerifiedResendOutboundSending };
+export const authRoutePolicies = {
+  validOrigin,
+  validMagicLinkToken,
+  matchesState,
+  normaliseAuthSender,
+  hasVerifiedResendOutboundSending,
+};
