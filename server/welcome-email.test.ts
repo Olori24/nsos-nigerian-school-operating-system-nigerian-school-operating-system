@@ -75,6 +75,9 @@ describe("welcome email delivery", () => {
     );
     expect(String(body.text)).not.toContain("password");
     expect(String(body.text)).not.toContain("credential");
+    expect(String(body.html)).toContain("Welcome to NSOS");
+    expect(String(body.html)).toContain("#0f5c4f");
+    expect(String(body.html)).toContain('alt="NSOS logo"');
     expect(mocks.markWelcomeEmailSent).toHaveBeenCalledWith({
       deliveryId: 41,
       providerMessageId: "re_accepted_41",
@@ -133,6 +136,30 @@ describe("welcome email delivery", () => {
       deliveryId: 42,
       error: expect.any(Error),
     });
+  });
+
+  it("renders a branded template with a safe public logo and a text fallback", () => {
+    const branded = welcomeEmailPolicies.buildWelcomeEmailContent({
+      origin: "https://nsos.top",
+      logoUrl: "https://cdn.example.ng/nsos-logo.png",
+    });
+    expect(branded.html).toContain(
+      'src="https://cdn.example.ng/nsos-logo.png"'
+    );
+    expect(branded.html).toContain('alt="NSOS logo"');
+    expect(branded.html).toContain("#123b31");
+    expect(branded.html).toContain("Open NSOS");
+    expect(branded.text).toContain("https://nsos.top/");
+
+    const fallback = welcomeEmailPolicies.buildWelcomeEmailContent({
+      origin: "https://nsos.top",
+      logoUrl: "data:image/png;base64,not-a-public-asset",
+    });
+    expect(fallback.html).toContain('aria-label="NSOS"');
+    expect(fallback.html).not.toContain("data:image");
+    expect(
+      welcomeEmailPolicies.safePublicImageUrl("http://cdn.example.ng/logo.png")
+    ).toBeUndefined();
   });
 
   it("rejects unsafe sender and welcome destinations", () => {

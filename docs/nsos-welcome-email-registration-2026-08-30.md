@@ -24,3 +24,9 @@ The dispatcher claims only a queued record, sends one privacy-safe “Welcome to
 Focused tests cover successful dispatch, already-sent duplicate prevention, provider failure isolation, unsafe sender/origin rejection, and callback integration for newly created Google and passwordless accounts. TypeScript, lint, the focused authentication and welcome-email tests, and the production build passed. The repository-wide formatter check remains unsuitable as a gate because the pre-existing codebase contains legacy formatting outside this change; only the changed files were kept scope-limited.
 
 The sender and domain were previously validated separately through one owner-approved operational test that Resend recorded as delivered. That evidence does not imply that every future message will be delivered; application records and provider events remain the source of truth for each message.
+
+## Branded HTML template
+
+The welcome message now includes an email-client-safe, table-based HTML layout using the NSOS pine and deep-pine palette, a compact wordmark header, a clear account-ready hierarchy, a high-contrast call-to-action, and a visible fallback URL. The existing public HTTPS logo is included only when it passes safe-URL validation; otherwise the template renders an accessible text wordmark. The plain-text alternative remains available and contains the same sign-in destination without credentials, tokens, learner data, or school data.
+
+The branding change does not alter the durable queue, stable idempotency key, provider-failure isolation, Google/passwordless registration boundaries, or the rule that provider acceptance is not itself a delivery guarantee.
