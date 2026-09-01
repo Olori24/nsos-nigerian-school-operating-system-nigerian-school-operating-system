@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool, type Pool } from "mysql2";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
@@ -109,6 +109,10 @@ import {
   userSessions,
   users,
   welcomeEmailDeliveries,
+  marketingSubscriptions,
+  marketingConsentEvents,
+  marketingCampaigns,
+  marketingCampaignDeliveries,
 } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { invokeLLM } from "../_core/llm";
@@ -4219,4 +4223,62 @@ export async function listReviewableProgramMilestoneEvidence(input: { schoolId: 
     const learner = enrollment ? learnerById.get(enrollment.studentId) : null;
     return { ...item, learnerName: learner ? `${learner.firstName} ${learner.lastName}` : "Unavailable learner", programTitle: enrollment ? programById.get(enrollment.programId)?.title ?? "Unavailable programme" : "Unavailable programme", milestoneTitle: milestoneById.get(item.milestoneId)?.title ?? "Unavailable milestone" };
   });
+}
+
+
+export async function getMarketingSubscription(userId: number) {
+  const rows = await (await database()).select().from(marketingSubscriptions).where(eq(marketingSubscriptions.userId, userId)).limit(1);
+  return rows[0] ?? { status: "unsubscribed" as const };
+}
+
+export async function setMarketingSubscription(input: { userId: number; subscribed: boolean; source: string }) {
+  const now = new Date();
+  const status = input.subscribed ? "subscribed" : "unsubscribed";
+  const db = await database();
+  await db.insert(marketingSubscriptions).values({ userId: input.userId, status, consentSource: input.source, consentedAt: input.subscribed ? now : null, unsubscribedAt: input.subscribed ? null : now }).onDuplicateKeyUpdate({ set: { status, consentSource: input.source, consentedAt: input.subscribed ? now : null, unsubscribedAt: input.subscribed ? null : now } });
+  await db.insert(marketingConsentEvents).values({ userId: input.userId, action: status, source: input.source, occurredAt: now });
+  return { status };
+}
+
+export async function listSubscribedMarketingUsers() {
+  return (await database()).select({ userId: users.id, email: users.email, name: users.name }).from(marketingSubscriptions).innerJoin(users, eq(marketingSubscriptions.userId, users.id)).where(and(eq(marketingSubscriptions.status, "subscribed"), isNotNull(users.email)));
+}
+
+export async function createMarketingCampaign(input: { title: string; subject: string; body: string; createdBy: number }) {
+  const result = await (await database()).insert(marketingCampaigns).values({ title: input.title.trim(), subject: input.subject.trim(), body: input.body.trim(), createdBy: input.createdBy, status: "draft" });
+  return { campaignId: Number(result[0].insertId) };
+}
+
+export async function listMarketingCampaigns() {
+  return (await database()).select().from(marketingCampaigns).orderBy(desc(marketingCampaigns.createdAt));
+}
+
+export async function approveMarketingCampaign(input: { campaignId: number; approvedBy: number }) {
+  const now = new Date();
+  await (await database()).update(marketingCampaigns).set({ status: "approved", approvedBy: input.approvedBy, approvedAt: now }).where(and(eq(marketingCampaigns.id, input.campaignId), eq(marketingCampaigns.status, "draft")));
+  return { success: true };
+}
+
+export async function getMarketingCampaign(campaignId: number) {
+  const rows = await (await database()).select().from(marketingCampaigns).where(eq(marketingCampaigns.id, campaignId)).limit(1);
+  return rows[0];
+}
+
+export async function queueMarketingCampaignDelivery(input: { campaignId: number; userId: number }) {
+  const db = await database();
+  await db.insert(marketingCampaignDeliveries).values({ campaignId: input.campaignId, userId: input.userId, status: "queued" }).onDuplicateKeyUpdate({ set: { campaignId: input.campaignId, userId: input.userId } });
+  const rows = await db.select().from(marketingCampaignDeliveries).where(and(eq(marketingCampaignDeliveries.campaignId, input.campaignId), eq(marketingCampaignDeliveries.userId, input.userId))).limit(1);
+  return rows[0];
+}
+
+export async function markMarketingDeliverySent(input: { deliveryId: number; providerMessageId?: string }) {
+  await (await database()).update(marketingCampaignDeliveries).set({ status: "sent", providerMessageId: input.providerMessageId ?? null, sentAt: new Date() }).where(eq(marketingCampaignDeliveries.id, input.deliveryId));
+}
+
+export async function markMarketingDeliveryFailed(input: { deliveryId: number; error: unknown }) {
+  await (await database()).update(marketingCampaignDeliveries).set({ status: "failed", lastError: "Provider delivery failed" }).where(eq(marketingCampaignDeliveries.id, input.deliveryId));
+}
+
+export async function finishMarketingCampaign(campaignId: number, status: "sent" | "failed") {
+  await (await database()).update(marketingCampaigns).set({ status, sentAt: status === "sent" ? new Date() : null }).where(eq(marketingCampaigns.id, campaignId));
 }

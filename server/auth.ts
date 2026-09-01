@@ -8,6 +8,7 @@ import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
 import { dispatchWelcomeEmailForNewAccount } from "./welcomeEmail";
+import { verifyMarketingUnsubscribeToken } from "./marketingEmail";
 import {
   buildStudentRecordPdfAttachment,
   normaliseStudentRecordEmailCopy,
@@ -689,6 +690,34 @@ export function registerEmailAuthRoutes(app: Express) {
       }
     }
   );
+
+  app.get("/api/marketing/unsubscribe", async (req: Request, res: Response) => {
+    const token = getStringQuery(req, "token");
+    const userId = token ? verifyMarketingUnsubscribeToken(token) : undefined;
+    if (!userId)
+      return res
+        .status(400)
+        .send("This unsubscribe link is invalid or has expired.");
+    try {
+      await db.setMarketingSubscription({
+        userId,
+        subscribed: false,
+        source: "unsubscribe_link",
+      });
+      res
+        .status(200)
+        .send("You have been unsubscribed from NSOS product updates.");
+    } catch {
+      writeOperationalEvent("warn", "marketing_unsubscribe_failed", {
+        category: "database_failure",
+      });
+      res
+        .status(503)
+        .send(
+          "We could not update your preference right now. Please try again later."
+        );
+    }
+  });
 
   app.get("/api/auth/email/verify", async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");

@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { getStudentRecordEmailSenderReadiness, sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffSetupInvitationEmail, sendStudentEnrollmentRecordEmail } from "../auth";
+import { sendMarketingUpdateEmail } from "../marketingEmail";
 import { normaliseStudentRecordEmailCopy, resolveStudentRecordEmailRecipient, studentRecordEmailCopy, studentRecordEmailCopyBounds, studentRecordEmailRecipients } from "../studentRecordEmail";
 import { buildAdmissionLetter } from "../admissionLetter";
 import { buildAiSetupPlan } from "../aiOnboardingAgent";
@@ -162,6 +163,31 @@ export const nsosRouter = router({
       return { isPlatformOwner: await hasPlatformOwnerAccess(ctx.user) };
     }),
     revokeLinkedOwnerAccess: platformOwnerProcedure.input(z.object({ confirmed: z.literal(true) })).mutation(async ({ ctx }) => ({ revoked: await db.revokePlatformOwnerIdentityLink(ctx.user.id) })),
+  }),
+
+  marketing: router({
+    preference: protectedProcedure.query(({ ctx }) => db.getMarketingSubscription(ctx.user.id)),
+    setPreference: protectedProcedure.input(z.object({ subscribed: z.boolean(), source: z.enum(["account_settings", "registration", "unsubscribe_link"]) })).mutation(async ({ ctx, input }) => { const result = await db.setMarketingSubscription({ userId: ctx.user.id, subscribed: input.subscribed, source: input.source }); return { status: result.status, subscribed: result.status === "subscribed" }; }),
+    campaigns: platformOwnerProcedure.query(() => db.listMarketingCampaigns()),
+    createCampaign: platformOwnerProcedure.input(z.object({ title: z.string().trim().min(3).max(160), subject: z.string().trim().min(3).max(255), body: z.string().trim().min(10).max(10000) })).mutation(({ ctx, input }) => db.createMarketingCampaign({ ...input, createdBy: ctx.user.id })),
+    approveCampaign: platformOwnerProcedure.input(z.object({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(({ ctx, input }) => db.approveMarketingCampaign({ campaignId: input.campaignId, approvedBy: ctx.user.id })),
+    sendCampaign: platformOwnerProcedure.input(z.object({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ input }) => {
+      const campaign = await db.getMarketingCampaign(input.campaignId);
+      if (!campaign || campaign.status !== "approved") throw new TRPCError({ code: "BAD_REQUEST", message: "Only an approved campaign can be sent." });
+      const recipients = await db.listSubscribedMarketingUsers();
+      let sent = 0; let failed = 0;
+      for (const recipient of recipients) {
+        if (!recipient.email) continue;
+        const delivery = await db.queueMarketingCampaignDelivery({ campaignId: campaign.id, userId: recipient.userId });
+        if (!delivery || delivery.status === "sent" || delivery.status === "suppressed") continue;
+        try {
+          const providerMessageId = await sendMarketingUpdateEmail({ userId: recipient.userId, email: recipient.email, name: recipient.name, subject: campaign.subject, body: campaign.body, idempotencyKey: `nsos-marketing-${campaign.id}-${recipient.userId}` });
+          await db.markMarketingDeliverySent({ deliveryId: delivery.id, providerMessageId }); sent += 1;
+        } catch (error) { await db.markMarketingDeliveryFailed({ deliveryId: delivery.id, error }); failed += 1; }
+      }
+      await db.finishMarketingCampaign(campaign.id, failed ? "failed" : "sent");
+      return { sent, failed, eligibleRecipients: recipients.length };
+    }),
   }),
 
   schools: router({

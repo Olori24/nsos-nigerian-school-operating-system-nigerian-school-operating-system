@@ -1999,3 +1999,64 @@ export const rateLimitBuckets = mysqlTable(
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+
+export const marketingSubscriptions = mysqlTable(
+  "marketingSubscriptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    status: mysqlEnum("status", ["subscribed", "unsubscribed"]).notNull().default("unsubscribed"),
+    consentSource: varchar("consentSource", { length: 64 }),
+    consentedAt: timestamp("consentedAt"),
+    unsubscribedAt: timestamp("unsubscribedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ userUnique: uniqueIndex("marketingSubscription_user_unique").on(table.userId), statusIndex: index("marketingSubscription_status_idx").on(table.status) }),
+);
+
+export const marketingConsentEvents = mysqlTable(
+  "marketingConsentEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    action: mysqlEnum("action", ["subscribed", "unsubscribed"]).notNull(),
+    source: varchar("source", { length: 64 }).notNull(),
+    occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+  },
+  table => ({ userOccurred: index("marketingConsentEvent_user_occurred_idx").on(table.userId, table.occurredAt) }),
+);
+
+export const marketingCampaigns = mysqlTable(
+  "marketingCampaigns",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    title: varchar("title", { length: 160 }).notNull(),
+    subject: varchar("subject", { length: 255 }).notNull(),
+    body: text("body").notNull(),
+    status: mysqlEnum("status", ["draft", "approved", "sending", "sent", "failed", "cancelled"]).notNull().default("draft"),
+    createdBy: int("createdBy").notNull(),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    sentAt: timestamp("sentAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ statusIndex: index("marketingCampaign_status_idx").on(table.status), creatorIndex: index("marketingCampaign_creator_idx").on(table.createdBy) }),
+);
+
+export const marketingCampaignDeliveries = mysqlTable(
+  "marketingCampaignDeliveries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    campaignId: int("campaignId").notNull(),
+    userId: int("userId").notNull(),
+    status: mysqlEnum("status", ["queued", "sent", "failed", "suppressed"]).notNull().default("queued"),
+    providerMessageId: varchar("providerMessageId", { length: 255 }),
+    lastError: varchar("lastError", { length: 500 }),
+    queuedAt: timestamp("queuedAt").defaultNow().notNull(),
+    sentAt: timestamp("sentAt"),
+  },
+  table => ({ campaignUserUnique: uniqueIndex("marketingCampaignDelivery_campaign_user_unique").on(table.campaignId, table.userId), campaignStatus: index("marketingCampaignDelivery_campaign_status_idx").on(table.campaignId, table.status), userIndex: index("marketingCampaignDelivery_user_idx").on(table.userId) }),
+);
