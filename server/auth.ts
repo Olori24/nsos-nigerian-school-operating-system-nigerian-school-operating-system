@@ -664,33 +664,6 @@ export function registerEmailAuthRoutes(app: Express) {
     }
   );
 
-  app.get(
-    "/api/auth/email/verify-address",
-    async (req: Request, res: Response) => {
-      const token = getStringQuery(req, "token");
-      if (!token || !validEmailVerificationToken(token))
-        return res
-          .status(400)
-          .send("This email verification link is invalid or has expired.");
-      try {
-        const result = await db.consumeEmailVerificationToken(token);
-        const origin = validOrigin(result.redirectOrigin);
-        if (!origin)
-          throw new Error(
-            "The verification link does not have a valid destination."
-          );
-        res.redirect(302, `${origin}/?email_verified=1`);
-      } catch {
-        writeOperationalEvent("warn", "auth_email_verification_failed", {
-          category: "invalid_or_expired_token",
-        });
-        res
-          .status(400)
-          .send("This email verification link is invalid or has expired.");
-      }
-    }
-  );
-
   app.get("/api/marketing/unsubscribe", async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
     const userId = token ? verifyMarketingUnsubscribeToken(token) : undefined;

@@ -12,6 +12,7 @@
     "format:check": "prettier --check package.json .github/workflows/ci.yml vitest.config.ts",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:harness:registration": "vitest run server/welcome-registration-harness.test.ts",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
