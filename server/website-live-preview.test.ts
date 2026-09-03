@@ -51,6 +51,12 @@ describe("school website live preview", () => {
       "Course access and invitations are confirmed"
     );
     expect(codingSpotlight).toContain("separately by the");
+    expect(codingSpotlight).toContain("tabIndex={0}");
+    expect(codingSpotlight).toContain("group-hover:max-h-24");
+    expect(codingSpotlight).toContain("group-focus-within:max-h-24");
+    expect(codingSpotlight).toContain("focus-visible:ring-2");
+    expect(codingSpotlight).toContain("motion-reduce:transition-none");
+    expect(codingSpotlight).toContain("Practical progression");
     expect(codingSpotlight).not.toContain("Send invitation");
     expect(codingSpotlight).not.toContain("payment received");
   });

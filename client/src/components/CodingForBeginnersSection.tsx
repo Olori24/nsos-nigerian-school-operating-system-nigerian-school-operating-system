@@ -17,23 +17,31 @@ const weeks = [
     label: "01",
     title: "Digital foundations",
     detail: "Workspaces, safe online participation, and confident setup.",
+    progression:
+      "Set up a simple workspace, practise file organisation, and explain how to participate safely online.",
   },
   {
     label: "02–03",
     title: "Build for the web",
     detail: "HTML structure, meaningful content, media, and accessible forms.",
+    progression:
+      "Turn a short idea into a structured page with headings, links, images, and a form that people can use.",
   },
   {
     label: "04–05",
     title: "Design for every screen",
     detail:
       "Readable CSS, visual hierarchy, flexible layout, and responsive thinking.",
+    progression:
+      "Style the page for clarity, then check how its spacing, contrast, and layout behave on smaller screens.",
   },
   {
     label: "06–08",
     title: "Make, test, improve",
     detail:
       "JavaScript foundations, a guided mini-project, and a final review.",
+    progression:
+      "Add one useful interaction, test it with sample content, and present what you would improve next.",
   },
 ];
 
@@ -105,7 +113,9 @@ export function CodingForBeginnersSection({
           {weeks.map(week => (
             <article
               key={week.label}
-              className="rounded-2xl border border-white/10 bg-white/[.06] p-4 transition-colors duration-200 hover:bg-white/[.1]"
+              tabIndex={0}
+              className="group rounded-2xl border border-white/10 bg-white/[.06] p-4 outline-none transition-colors duration-200 hover:bg-white/[.1] focus-visible:ring-2 focus-visible:ring-[#b8dfc3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#123b31]"
+              aria-label={`Week ${week.label}: ${week.title}. Focus or hover to reveal the practical progression.`}
             >
               <span className="text-[10px] font-bold tracking-[.14em] text-[#b8dfc3]">
                 WEEK {week.label}
@@ -116,6 +126,14 @@ export function CodingForBeginnersSection({
               <p className="mt-2 text-sm leading-6 text-white/60">
                 {week.detail}
               </p>
+              <div className="max-h-0 overflow-hidden opacity-0 transition-[max-height,opacity] duration-200 motion-reduce:transition-none group-hover:max-h-24 group-hover:opacity-100 group-focus-within:max-h-24 group-focus-within:opacity-100">
+                <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-[#d8f0dc]">
+                  <span className="font-bold uppercase tracking-[.1em] text-[#b8dfc3]">
+                    Practical progression ·{" "}
+                  </span>
+                  {week.progression}
+                </p>
+              </div>
             </article>
           ))}
         </div>
