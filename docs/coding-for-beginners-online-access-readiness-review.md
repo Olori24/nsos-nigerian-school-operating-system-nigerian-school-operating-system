@@ -23,3 +23,7 @@ The course-materials workspace still needs facilitator review of its materials a
 The next safe action is a read-only staff review of the learner, class assignment, course materials, and permitted recipient path. If any required contact or sender-health evidence is missing, the process must stop. No invitation, parent notification, credential creation, public publication, recurring reminder, or payment operation is authorised by this document.
 
 > The course and timetable being configured does not prove that the learner has online access, that credentials have been issued, that the invoice has been paid, or that a parent message has been delivered.
+
+## Landing-page preview boundary
+
+A polished Coding for Beginners spotlight is now available inside the NSOS Website Studio draft preview. It presents the confirmed dates, timetable, practical learning themes, and a clear note that course access and invitations are confirmed separately by the school. The spotlight is intentionally omitted from live public rendering until the school separately approves a public course page and verified copy.
