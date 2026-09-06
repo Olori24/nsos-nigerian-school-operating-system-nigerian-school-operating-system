@@ -4,15 +4,15 @@
 
 ## Proposed commercial shape
 
-The owner’s clarified proposal is a **20% recurring commission on every eligible verified payment received from a school referred by an approved Affiliate**. This includes more than the original first-payment proposal and is a draft commercial direction, not an activated commitment. The proposed attribution window is 30 days, the proposed refund and chargeback hold is 30 days after each verified payment, the proposed minimum payout threshold is ₦10,000, and the proposed payment cycle is monthly manual review.
+The owner’s corrected proposal is a **one-time 20% commission on a referred school’s first eligible verified payment** for an eligible paid NSOS plan. This is a draft commercial direction, not an activated commitment. The proposed attribution window is 30 days, the proposed refund and chargeback hold is 30 days after the verified first payment, the proposed minimum payout threshold is ₦10,000, and the proposed payment cycle is monthly manual review.
 
-Before activation, the final terms must state whether the 20% is calculated from gross receipts or net receipts after listed exclusions; whether it applies to renewals, upgrades, add-ons, taxes, credits, refunds, reversals, chargebacks, and payment-processing costs; and how long the recurring entitlement lasts. These unresolved choices materially affect commercial exposure, financial reporting, tax treatment, reconciliation, and partner communications.
+Before activation, the final terms must state whether the 20% is calculated from gross receipts or net receipts after listed exclusions; which payment events qualify as the school’s first payment; and how taxes, credits, refunds, reversals, chargebacks, and payment-processing costs are treated. These unresolved choices materially affect commercial exposure, financial reporting, tax treatment, reconciliation, and partner communications.
 
 ## Activation-control matrix
 
 | Gate | Required evidence before activation | Current status |
 |---|---|---|
-| Commercial | Final recurring commission basis, duration, qualifying school payments, gross-or-net treatment, exclusions, attribution window, threshold, cycle, currency, and owner decision record | Draft only |
+| Commercial | Final one-time first-payment commission basis, qualifying plan and payment event, gross-or-net treatment, exclusions, attribution window, threshold, cycle, currency, and owner decision record | Draft only |
 | Legal | Nigeria-qualified review of terms, disclosures, consumer protections, disputes, termination, and governing-law language | Not completed |
 | Tax | Review of withholding, invoicing, documentation, reporting, and affiliate tax responsibilities | Not completed |
 | Privacy | Referral notice, lawful basis, retention, data-subject process, minimum-data design, and analytics access controls | Draft safeguards present; formal review pending |
@@ -22,7 +22,7 @@ Before activation, the final terms must state whether the 20% is calculated from
 
 ## Non-negotiable safeguards
 
-Attribution must use an opaque referral identifier and must not use fingerprinting, cross-site tracking, learner or guardian data, private school records, payment credentials, uploaded documents, or message content. An affiliate may see only the minimum lifecycle state needed for reconciliation. Qualification for each recurring commission event requires independent verification of an eligible payment, duplicate and self-referral checks, fraud review, refund/chargeback hold, manual finance review, and owner approval.
+Attribution must use an opaque referral identifier and must not use fingerprinting, cross-site tracking, learner or guardian data, private school records, payment credentials, uploaded documents, or message content. An affiliate may see only the minimum lifecycle state needed for reconciliation. Qualification for the one-time commission event requires independent verification of the eligible first payment, duplicate and self-referral checks, fraud review, refund/chargeback hold, manual finance review, and owner approval.
 
 No public growth claim, earnings claim, guaranteed outcome, accreditation claim, school endorsement, or capacity claim may be used unless separately evidenced and approved. Public terms must remain clearly marked draft until legal, tax, privacy, finance, commercial, and communications review is complete.
 
@@ -36,4 +36,4 @@ A distinct activation confirmation must name the final terms version, approved p
 
 ## Clarified owner instruction
 
-The owner has clarified that an approved Affiliate should receive **20% of whatever eligible money is paid by a school the Affiliate referred**. This has been captured as the recurring-payment proposal above. It does not activate the programme and does not resolve the remaining duration, gross-or-net, exclusion, refund, tax, privacy, finance, and public-communications decisions. No partner, referral, tracking record, commission, public terms, payment, or payout has been created.
+The owner has corrected the commercial basis: an approved Affiliate should receive **20% of the referred school’s first eligible verified payment only**. This replaces the earlier recurring-payment interpretation. It does not activate the programme and does not resolve the remaining gross-or-net, exclusion, refund, tax, privacy, finance, and public-communications decisions. No partner, referral, tracking record, commission, public terms, payment, or payout has been created.
