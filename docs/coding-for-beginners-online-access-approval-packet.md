@@ -38,3 +38,13 @@ A distinct final confirmation must identify the verified learner record, class/c
 ## Current decision
 
 **Review prepared; online access remains pending.** The next safe action is the read-only tenant review and sender-health reconciliation described above. Any missing evidence stops the process.
+
+## Latest owner instruction
+
+The owner has requested that the learner(s) be given access. This is recorded as an action request, not as evidence that the prerequisites are complete. Before execution, staff must identify the exact tenant-scoped learner record, confirm the course and materials access settings, verify the authorised recipient, reconcile sender health, review the final copy, and present the one-time access or invitation action for final confirmation. Until those checks are evidenced, no credential, workspace, invitation, parent message, or payment state is created or changed.
+
+## Read-only readiness findings
+
+A tenant-scoped read-only check found one active learner record for admission number `OOA/26/001` in an active class and session. The active class has the Coding for Beginners subject assigned and three matching timetable entries. The learner does not have a student portal account or a student email on file. There is one primary guardian with an email address, but no linked guardian portal account; existing guardian invitation records are already in `sent` status.
+
+The same review found no active Coding for Beginners programme enrolment, no named learning-program record for that course, and no approved or delivered lesson-plan record for the relevant class and subject. These findings mean that a duplicate invitation or a new credential should not be created yet. The next safe step is for staff to reconcile the existing sent guardian invitation, confirm the intended learner-access model, and complete the materials/access review before any separate one-time delivery or credential action is proposed.

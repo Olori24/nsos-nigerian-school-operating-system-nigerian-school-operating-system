@@ -10,13 +10,13 @@ The NSOS Affiliate Programme is a proposed platform-level programme for approved
 
 NSOS may accept, reject, suspend, or terminate an application at its discretion, subject to applicable law and any final dispute process approved for the programme. No applicant may represent that they are an approved Affiliate until NSOS has issued written approval through the designated programme process.
 
-## 2. Approved commercial proposal
+## 2. Proposed recurring commercial model
 
-The proposed commission is **20% of the referred organisation’s first verified net payment** for an eligible paid NSOS plan. This is a proposed basis only and becomes operative only when the programme is legally reviewed, commercially approved, and explicitly activated by NSOS.
+The owner’s proposed commission is **20% of every eligible verified payment received from a school referred by an approved Affiliate**. This is a recurring-commission proposal, not an activated entitlement, and becomes operative only after the programme is commercially approved, professionally reviewed, and explicitly activated by NSOS.
 
-For this draft, **Net First Payment** means the first payment that NSOS independently verifies as actually collected for an eligible paid plan, less taxes or government charges, refunds, reversals, chargebacks, credits, uncollected amounts, excluded promotions, payment costs where the final programme rules specify them, and any other exclusion stated in the final terms. The commission is not based on a registration, application, trial, invoice, promise to pay, or gross contract value.
+The final terms must define **Eligible Payment** before any programme launch. In particular, the final decision must state whether the 20% is calculated from gross receipts or net receipts after explicitly listed exclusions; whether it covers renewals, upgrades, add-ons, taxes, credits, refunds, reversals, chargebacks, payment-processing costs, and promotional discounts; and how long an Affiliate remains entitled to a recurring commission for a referred school. A registration, application, trial, invoice, promise to pay, or gross contract value is not itself a commission event.
 
-The proposed attribution window is **30 days** from the eligible referral event. The proposed refund and chargeback review hold is **30 days** after the verified payment. The proposed minimum payout threshold is **₦10,000**, with a proposed **monthly manual review and payment cycle**. These values remain subject to final owner, legal, tax, finance, and payout decisions.
+The proposed attribution window is **30 days** from the eligible referral event. The proposed refund and chargeback review hold is **30 days** after each verified payment. The proposed minimum payout threshold is **₦10,000**, with a proposed **monthly manual review and payment cycle**. These values remain subject to final owner, legal, tax, finance, privacy, communications, and payout decisions.
 
 ## 3. Attribution and privacy
 
@@ -32,7 +32,7 @@ An Affiliate must not make unapproved claims about accreditation, certification,
 
 ## 5. Qualified referral and commission review
 
-A referral is potentially qualified only when it is attributable to an approved Affiliate through the approved referral surface, is not a duplicate or self-referral, is not fraudulent or prohibited traffic, and results in an eligible organisation making a first verified net payment within the final attribution window. Qualification is not automatic.
+A referral is potentially qualified only when it is attributable to an approved Affiliate through the approved referral surface, is not a duplicate or self-referral, is not fraudulent or prohibited traffic, and results in an eligible organisation making an Eligible Payment within the final attribution window. Qualification is not automatic.
 
 NSOS may create a reviewable commission case after independently verifying the payment and applying the final exclusions. A commission remains subject to manual finance review, owner approval, the refund and chargeback hold, fraud review, and the final payment process. NSOS may correct or reject a case where later evidence shows that the referral or payment was not eligible. No commission is payable merely because an Affiliate reports a lead or because an organisation creates an account.
 
@@ -58,7 +58,7 @@ NSOS may prepare revised terms, but a material change must receive a new version
 
 | Decision gate | Required before activation |
 |---|---|
-| Commercial | Final commission basis, eligible plans, attribution window, exclusions, threshold, cycle, and currency |
+| Commercial | Final recurring commission basis, duration, eligible payments, gross-or-net treatment, attribution window, exclusions, threshold, cycle, and currency |
 | Legal and tax | Nigeria-qualified review, final agreement language, disclosure, tax and withholding treatment |
 | Privacy | Referral notice, lawful basis, retention, data-subject process, and analytics access control |
 | Finance | Named reviewer, payment evidence standard, reconciliation, fraud escalation, and manual payout control |
