@@ -39,10 +39,12 @@ export const authIdentities = mysqlTable(
     lastUsedAt: timestamp("lastUsedAt").defaultNow().notNull(),
   },
   table => ({
-    providerSubjectUnique: uniqueIndex("authIdentity_provider_subject_unique").on(table.provider, table.providerSubject),
+    providerSubjectUnique: uniqueIndex(
+      "authIdentity_provider_subject_unique"
+    ).on(table.provider, table.providerSubject),
     userIndex: index("authIdentity_user_idx").on(table.userId),
     emailIndex: index("authIdentity_email_idx").on(table.email),
-  }),
+  })
 );
 
 export const platformOwnerIdentityLinks = mysqlTable(
@@ -50,11 +52,15 @@ export const platformOwnerIdentityLinks = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     userId: int("userId").notNull().unique(),
-    status: mysqlEnum("status", ["active", "revoked"]).notNull().default("active"),
+    status: mysqlEnum("status", ["active", "revoked"])
+      .notNull()
+      .default("active"),
     linkedAt: timestamp("linkedAt").defaultNow().notNull(),
     revokedAt: timestamp("revokedAt"),
   },
-  table => ({ statusIndex: index("platformOwnerIdentityLink_status_idx").on(table.status) }),
+  table => ({
+    statusIndex: index("platformOwnerIdentityLink_status_idx").on(table.status),
+  })
 );
 
 export const authMagicLinks = mysqlTable(
@@ -70,9 +76,12 @@ export const authMagicLinks = mysqlTable(
   },
   table => ({
     tokenUnique: uniqueIndex("authMagicLink_token_unique").on(table.tokenHash),
-    emailCreated: index("authMagicLink_email_created_idx").on(table.email, table.createdAt),
+    emailCreated: index("authMagicLink_email_created_idx").on(
+      table.email,
+      table.createdAt
+    ),
     expiryIndex: index("authMagicLink_expiry_idx").on(table.expiresAt),
-  }),
+  })
 );
 
 export const emailVerificationTokens = mysqlTable(
@@ -87,10 +96,15 @@ export const emailVerificationTokens = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    tokenUnique: uniqueIndex("emailVerificationToken_hash_unique").on(table.tokenHash),
-    userIndex: index("emailVerificationToken_user_idx").on(table.userId, table.createdAt),
+    tokenUnique: uniqueIndex("emailVerificationToken_hash_unique").on(
+      table.tokenHash
+    ),
+    userIndex: index("emailVerificationToken_user_idx").on(
+      table.userId,
+      table.createdAt
+    ),
     expiryIndex: index("emailVerificationToken_expiry_idx").on(table.expiresAt),
-  }),
+  })
 );
 
 export const welcomeEmailDeliveries = mysqlTable(
@@ -99,7 +113,9 @@ export const welcomeEmailDeliveries = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     userId: int("userId").notNull().unique(),
     recipientEmail: varchar("recipientEmail", { length: 320 }).notNull(),
-    status: mysqlEnum("status", ["queued", "sending", "sent", "failed"]).notNull().default("queued"),
+    status: mysqlEnum("status", ["queued", "sending", "sent", "failed"])
+      .notNull()
+      .default("queued"),
     attemptCount: int("attemptCount").notNull().default(0),
     providerMessageId: varchar("providerMessageId", { length: 255 }),
     lastError: varchar("lastError", { length: 255 }),
@@ -107,7 +123,12 @@ export const welcomeEmailDeliveries = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
     sentAt: timestamp("sentAt"),
   },
-  table => ({ statusIndex: index("welcomeEmailDelivery_status_idx").on(table.status, table.updatedAt) }),
+  table => ({
+    statusIndex: index("welcomeEmailDelivery_status_idx").on(
+      table.status,
+      table.updatedAt
+    ),
+  })
 );
 
 export const userSessions = mysqlTable(
@@ -126,9 +147,13 @@ export const userSessions = mysqlTable(
     revokedReason: varchar("revokedReason", { length: 96 }),
   },
   table => ({
-    userActive: index("userSession_user_active_idx").on(table.userId, table.revokedAt, table.lastSeenAt),
+    userActive: index("userSession_user_active_idx").on(
+      table.userId,
+      table.revokedAt,
+      table.lastSeenAt
+    ),
     expiry: index("userSession_expiry_idx").on(table.expiresAt),
-  }),
+  })
 );
 
 export const userSecurityActivity = mysqlTable(
@@ -143,8 +168,11 @@ export const userSecurityActivity = mysqlTable(
     occurredAt: timestamp("occurredAt").defaultNow().notNull(),
   },
   table => ({
-    userOccurred: index("userSecurityActivity_user_occurred_idx").on(table.userId, table.occurredAt),
-  }),
+    userOccurred: index("userSecurityActivity_user_occurred_idx").on(
+      table.userId,
+      table.occurredAt
+    ),
+  })
 );
 
 export const copilotRecentSearches = mysqlTable(
@@ -158,9 +186,15 @@ export const copilotRecentSearches = mysqlTable(
     searchedAt: timestamp("searchedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    userSchoolQuery: uniqueIndex("copilotRecentSearch_user_school_query_unique").on(table.userId, table.schoolId, table.query),
-    userSchoolRecent: index("copilotRecentSearch_user_school_recent_idx").on(table.userId, table.schoolId, table.searchedAt),
-  }),
+    userSchoolQuery: uniqueIndex(
+      "copilotRecentSearch_user_school_query_unique"
+    ).on(table.userId, table.schoolId, table.query),
+    userSchoolRecent: index("copilotRecentSearch_user_school_recent_idx").on(
+      table.userId,
+      table.schoolId,
+      table.searchedAt
+    ),
+  })
 );
 
 export const automationJobs = mysqlTable(
@@ -169,12 +203,44 @@ export const automationJobs = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     createdBy: int("createdBy").notNull(),
-    jobType: mysqlEnum("jobType", ["academic_foundation", "online_school_launch", "course_draft", "website_draft", "staff_invitation_draft", "finance_draft", "manual_review"]).notNull(),
-    status: mysqlEnum("status", ["needs_input", "ready_for_review", "approved", "running", "completed", "blocked", "failed", "cancelled"]).notNull().default("needs_input"),
+    jobType: mysqlEnum("jobType", [
+      "academic_foundation",
+      "online_school_launch",
+      "course_draft",
+      "website_draft",
+      "staff_invitation_draft",
+      "finance_draft",
+      "manual_review",
+    ]).notNull(),
+    status: mysqlEnum("status", [
+      "needs_input",
+      "ready_for_review",
+      "approved",
+      "running",
+      "completed",
+      "blocked",
+      "failed",
+      "cancelled",
+    ])
+      .notNull()
+      .default("needs_input"),
     requestSummary: varchar("requestSummary", { length: 280 }).notNull(),
-    plan: json("plan").$type<{ title: string; summary: string; steps: string[]; missingFields: string[]; limitations: string[]; source: "ai" | "guided" }>().notNull(),
+    plan: json("plan")
+      .$type<{
+        title: string;
+        summary: string;
+        steps: string[];
+        missingFields: string[];
+        limitations: string[];
+        source: "ai" | "guided";
+      }>()
+      .notNull(),
     input: json("input").$type<Record<string, unknown>>(),
-    result: json("result").$type<{ label: string; destination: string; references: Array<{ type: string; id: number }> }>(),
+    result: json("result").$type<{
+      label: string;
+      destination: string;
+      references: Array<{ type: string; id: number }>;
+    }>(),
     idempotencyKey: varchar("idempotencyKey", { length: 96 }).notNull(),
     approvedBy: int("approvedBy"),
     approvedAt: timestamp("approvedAt"),
@@ -185,10 +251,20 @@ export const automationJobs = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolCreated: index("automation_job_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolStatus: index("automation_job_school_status_idx").on(table.schoolId, table.status),
-    schoolActorKey: uniqueIndex("automation_job_school_actor_key_unique").on(table.schoolId, table.createdBy, table.idempotencyKey),
-  }),
+    schoolCreated: index("automation_job_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    schoolStatus: index("automation_job_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    schoolActorKey: uniqueIndex("automation_job_school_actor_key_unique").on(
+      table.schoolId,
+      table.createdBy,
+      table.idempotencyKey
+    ),
+  })
 );
 
 export const automationJobEvents = mysqlTable(
@@ -198,14 +274,31 @@ export const automationJobEvents = mysqlTable(
     schoolId: int("schoolId").notNull(),
     jobId: int("jobId").notNull(),
     actorUserId: int("actorUserId"),
-    eventType: mysqlEnum("eventType", ["created", "input_saved", "approved", "started", "completed", "blocked", "failed", "cancelled"]).notNull(),
+    eventType: mysqlEnum("eventType", [
+      "created",
+      "input_saved",
+      "approved",
+      "started",
+      "completed",
+      "blocked",
+      "failed",
+      "cancelled",
+    ]).notNull(),
     label: varchar("label", { length: 240 }).notNull(),
-    details: json("details").$type<{ destination?: string; referenceCount?: number; retryable?: boolean }>(),
+    details: json("details").$type<{
+      destination?: string;
+      referenceCount?: number;
+      retryable?: boolean;
+    }>(),
     occurredAt: timestamp("occurredAt").defaultNow().notNull(),
   },
   table => ({
-    schoolJobOccurred: index("automation_job_event_school_job_occurred_idx").on(table.schoolId, table.jobId, table.occurredAt),
-  }),
+    schoolJobOccurred: index("automation_job_event_school_job_occurred_idx").on(
+      table.schoolId,
+      table.jobId,
+      table.occurredAt
+    ),
+  })
 );
 
 export const institutionBlueprints = mysqlTable(
@@ -214,8 +307,12 @@ export const institutionBlueprints = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     createdBy: int("createdBy").notNull(),
-    status: mysqlEnum("status", ["prepared", "applying", "applied"]).notNull().default("prepared"),
-    blueprint: json("blueprint").$type<import("../../server/institutionBuilder").InstitutionBlueprint>().notNull(),
+    status: mysqlEnum("status", ["prepared", "applying", "applied"])
+      .notNull()
+      .default("prepared"),
+    blueprint: json("blueprint")
+      .$type<import("../../server/institutionBuilder").InstitutionBlueprint>()
+      .notNull(),
     idempotencyKey: varchar("idempotencyKey", { length: 96 }).notNull(),
     appliedProgramId: int("appliedProgramId"),
     appliedBy: int("appliedBy"),
@@ -224,10 +321,18 @@ export const institutionBlueprints = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolCreated: index("institution_blueprint_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolStatus: index("institution_blueprint_school_status_idx").on(table.schoolId, table.status),
-    schoolActorKey: uniqueIndex("institution_blueprint_school_actor_key_unique").on(table.schoolId, table.createdBy, table.idempotencyKey),
-  }),
+    schoolCreated: index("institution_blueprint_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    schoolStatus: index("institution_blueprint_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    schoolActorKey: uniqueIndex(
+      "institution_blueprint_school_actor_key_unique"
+    ).on(table.schoolId, table.createdBy, table.idempotencyKey),
+  })
 );
 
 export const institutionKnowledgeSources = mysqlTable(
@@ -236,8 +341,22 @@ export const institutionKnowledgeSources = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     createdBy: int("createdBy").notNull(),
-    sourceType: mysqlEnum("sourceType", ["description", "expertise_notes", "structured_notes", "course_material", "transcript"]).notNull(),
-    sourceFormat: mysqlEnum("sourceFormat", ["pasted_text", "txt", "markdown", "csv", "transcript_text"]).notNull().default("pasted_text"),
+    sourceType: mysqlEnum("sourceType", [
+      "description",
+      "expertise_notes",
+      "structured_notes",
+      "course_material",
+      "transcript",
+    ]).notNull(),
+    sourceFormat: mysqlEnum("sourceFormat", [
+      "pasted_text",
+      "txt",
+      "markdown",
+      "csv",
+      "transcript_text",
+    ])
+      .notNull()
+      .default("pasted_text"),
     title: varchar("title", { length: 180 }).notNull(),
     sourceText: text("sourceText").notNull(),
     originalFileName: varchar("originalFileName", { length: 255 }),
@@ -245,16 +364,28 @@ export const institutionKnowledgeSources = mysqlTable(
     storageKey: varchar("storageKey", { length: 512 }),
     byteSize: int("byteSize"),
     sourceRevision: int("sourceRevision").notNull().default(1),
-    sourceFingerprint: varchar("sourceFingerprint", { length: 64 }).notNull().default(""),
-    status: mysqlEnum("status", ["ready", "archived"]).notNull().default("ready"),
+    sourceFingerprint: varchar("sourceFingerprint", { length: 64 })
+      .notNull()
+      .default(""),
+    status: mysqlEnum("status", ["ready", "archived"])
+      .notNull()
+      .default("ready"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolCreated: index("institution_knowledge_source_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolStatus: index("institution_knowledge_source_school_status_idx").on(table.schoolId, table.status),
-    schoolRevision: index("institution_knowledge_source_school_revision_idx").on(table.schoolId, table.sourceRevision),
-  }),
+    schoolCreated: index("institution_knowledge_source_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    schoolStatus: index("institution_knowledge_source_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    schoolRevision: index(
+      "institution_knowledge_source_school_revision_idx"
+    ).on(table.schoolId, table.sourceRevision),
+  })
 );
 
 export const institutionKnowledgeSourceRevisions = mysqlTable(
@@ -267,7 +398,13 @@ export const institutionKnowledgeSourceRevisions = mysqlTable(
     revision: int("revision").notNull(),
     title: varchar("title", { length: 180 }).notNull(),
     sourceText: text("sourceText").notNull(),
-    sourceFormat: mysqlEnum("sourceFormat", ["pasted_text", "txt", "markdown", "csv", "transcript_text"]).notNull(),
+    sourceFormat: mysqlEnum("sourceFormat", [
+      "pasted_text",
+      "txt",
+      "markdown",
+      "csv",
+      "transcript_text",
+    ]).notNull(),
     originalFileName: varchar("originalFileName", { length: 255 }),
     mimeType: varchar("mimeType", { length: 120 }),
     storageKey: varchar("storageKey", { length: 512 }),
@@ -276,9 +413,13 @@ export const institutionKnowledgeSourceRevisions = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    schoolSourceRevision: uniqueIndex("institution_knowledge_revision_school_source_revision_unique").on(table.schoolId, table.sourceId, table.revision),
-    schoolSourceCreated: index("institution_knowledge_revision_school_source_created_idx").on(table.schoolId, table.sourceId, table.createdAt),
-  }),
+    schoolSourceRevision: uniqueIndex(
+      "institution_knowledge_revision_school_source_revision_unique"
+    ).on(table.schoolId, table.sourceId, table.revision),
+    schoolSourceCreated: index(
+      "institution_knowledge_revision_school_source_created_idx"
+    ).on(table.schoolId, table.sourceId, table.createdAt),
+  })
 );
 
 export const institutionKnowledgeAnalyses = mysqlTable(
@@ -288,18 +429,41 @@ export const institutionKnowledgeAnalyses = mysqlTable(
     schoolId: int("schoolId").notNull(),
     sourceId: int("sourceId").notNull(),
     createdBy: int("createdBy").notNull(),
-    analysis: json("analysis").$type<import("../../server/knowledgeBusinessEngine").KnowledgeBusinessAnalysis>().notNull(),
-    sourceVersion: varchar("sourceVersion", { length: 48 }).notNull().default("knowledge-business-v1"),
+    analysis: json("analysis")
+      .$type<
+        import("../../server/knowledgeBusinessEngine").KnowledgeBusinessAnalysis
+      >()
+      .notNull(),
+    sourceVersion: varchar("sourceVersion", { length: 48 })
+      .notNull()
+      .default("knowledge-business-v1"),
     sourceRevision: int("sourceRevision").notNull().default(1),
-    provenance: json("provenance").$type<{ sourceFormat: "pasted_text" | "txt" | "markdown" | "csv" | "transcript_text"; sourceRevision: number; labels: Array<"source_based" | "ai_expanded" | "ai_suggested">; externalResearchIncluded: false }>(),
+    provenance: json("provenance").$type<{
+      sourceFormat:
+        | "pasted_text"
+        | "txt"
+        | "markdown"
+        | "csv"
+        | "transcript_text";
+      sourceRevision: number;
+      labels: Array<"source_based" | "ai_expanded" | "ai_suggested">;
+      externalResearchIncluded: false;
+    }>(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolCreated: index("institution_knowledge_analysis_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolSource: index("institution_knowledge_analysis_school_source_idx").on(table.schoolId, table.sourceId),
-    schoolSourceRevision: index("institution_knowledge_analysis_school_source_revision_idx").on(table.schoolId, table.sourceId, table.sourceRevision),
-  }),
+    schoolCreated: index(
+      "institution_knowledge_analysis_school_created_idx"
+    ).on(table.schoolId, table.createdAt),
+    schoolSource: index("institution_knowledge_analysis_school_source_idx").on(
+      table.schoolId,
+      table.sourceId
+    ),
+    schoolSourceRevision: index(
+      "institution_knowledge_analysis_school_source_revision_idx"
+    ).on(table.schoolId, table.sourceId, table.sourceRevision),
+  })
 );
 
 export const institutionOperatingProfiles = mysqlTable(
@@ -319,7 +483,11 @@ export const institutionOperatingProfiles = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolUnique: uniqueIndex("institution_operating_profile_school_unique").on(table.schoolId) }),
+  table => ({
+    schoolUnique: uniqueIndex("institution_operating_profile_school_unique").on(
+      table.schoolId
+    ),
+  })
 );
 
 export const schoolOperatorWorkflowPreferences = mysqlTable(
@@ -327,15 +495,33 @@ export const schoolOperatorWorkflowPreferences = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
-    reviewFocus: mysqlEnum("reviewFocus", ["balanced", "learning", "admissions", "revenue", "operational_readiness"]).notNull().default("balanced"),
-    reviewCadence: mysqlEnum("reviewCadence", ["daily", "weekly", "monthly"]).notNull().default("weekly"),
-    evidenceDetail: mysqlEnum("evidenceDetail", ["concise", "standard"]).notNull().default("standard"),
-    showDismissedInsights: boolean("showDismissedInsights").notNull().default(false),
+    reviewFocus: mysqlEnum("reviewFocus", [
+      "balanced",
+      "learning",
+      "admissions",
+      "revenue",
+      "operational_readiness",
+    ])
+      .notNull()
+      .default("balanced"),
+    reviewCadence: mysqlEnum("reviewCadence", ["daily", "weekly", "monthly"])
+      .notNull()
+      .default("weekly"),
+    evidenceDetail: mysqlEnum("evidenceDetail", ["concise", "standard"])
+      .notNull()
+      .default("standard"),
+    showDismissedInsights: boolean("showDismissedInsights")
+      .notNull()
+      .default(false),
     updatedBy: int("updatedBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolUnique: uniqueIndex("school_operator_workflow_preference_school_unique").on(table.schoolId) }),
+  table => ({
+    schoolUnique: uniqueIndex(
+      "school_operator_workflow_preference_school_unique"
+    ).on(table.schoolId),
+  })
 );
 
 export const schoolOperatorInsights = mysqlTable(
@@ -343,36 +529,80 @@ export const schoolOperatorInsights = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
-    insightType: mysqlEnum("insightType", ["readiness", "learning", "admissions", "revenue", "lifecycle", "health", "certificate"]).notNull(),
-    severity: mysqlEnum("severity", ["info", "attention", "review"]).notNull().default("info"),
-    status: mysqlEnum("status", ["open", "dismissed"]).notNull().default("open"),
+    insightType: mysqlEnum("insightType", [
+      "readiness",
+      "learning",
+      "admissions",
+      "revenue",
+      "lifecycle",
+      "health",
+      "certificate",
+    ]).notNull(),
+    severity: mysqlEnum("severity", ["info", "attention", "review"])
+      .notNull()
+      .default("info"),
+    status: mysqlEnum("status", ["open", "dismissed"])
+      .notNull()
+      .default("open"),
     dedupeKey: varchar("dedupeKey", { length: 128 }).notNull(),
     title: varchar("title", { length: 180 }).notNull(),
     detail: varchar("detail", { length: 900 }).notNull(),
-    evidence: json("evidence").$type<{ metric: string; value: number; comparison?: string; source: string }>().notNull(),
+    evidence: json("evidence")
+      .$type<{
+        metric: string;
+        value: number;
+        comparison?: string;
+        source: string;
+      }>()
+      .notNull(),
     actionDestination: varchar("actionDestination", { length: 48 }),
-    sourceVersion: varchar("sourceVersion", { length: 32 }).notNull().default("deterministic-v1"),
+    sourceVersion: varchar("sourceVersion", { length: 32 })
+      .notNull()
+      .default("deterministic-v1"),
     generatedAt: timestamp("generatedAt").defaultNow().notNull(),
     dismissedBy: int("dismissedBy"),
     dismissedAt: timestamp("dismissedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolGenerated: index("school_operator_insight_school_generated_idx").on(table.schoolId, table.generatedAt), schoolStatus: index("school_operator_insight_school_status_idx").on(table.schoolId, table.status), schoolDedupe: uniqueIndex("school_operator_insight_school_dedupe_unique").on(table.schoolId, table.dedupeKey) }),
+  table => ({
+    schoolGenerated: index("school_operator_insight_school_generated_idx").on(
+      table.schoolId,
+      table.generatedAt
+    ),
+    schoolStatus: index("school_operator_insight_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    schoolDedupe: uniqueIndex(
+      "school_operator_insight_school_dedupe_unique"
+    ).on(table.schoolId, table.dedupeKey),
+  })
 );
 
 export const schools = mysqlTable("schools", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   shortCode: varchar("shortCode", { length: 32 }).notNull().unique(),
-  operatingType: mysqlEnum("operatingType", ["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider", "corporate_academy"]).notNull().default("school"),
+  operatingType: mysqlEnum("operatingType", [
+    "school",
+    "vocational_institute",
+    "coaching_centre",
+    "online_training_provider",
+    "hybrid_learning_provider",
+    "corporate_academy",
+  ])
+    .notNull()
+    .default("school"),
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 48 }),
   address: text("address"),
   state: varchar("state", { length: 100 }),
   logoUrl: text("logoUrl"),
   currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
-  timezone: varchar("timezone", { length: 64 }).notNull().default("Africa/Lagos"),
+  timezone: varchar("timezone", { length: 64 })
+    .notNull()
+    .default("Africa/Lagos"),
   createdBy: int("createdBy").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -386,16 +616,34 @@ export const learningPrograms = mysqlTable(
     title: varchar("title", { length: 180 }).notNull(),
     code: varchar("code", { length: 48 }),
     description: text("description"),
-    deliveryMode: mysqlEnum("deliveryMode", ["in_person", "live_online", "self_paced", "blended"]).notNull().default("in_person"),
+    deliveryMode: mysqlEnum("deliveryMode", [
+      "in_person",
+      "live_online",
+      "self_paced",
+      "blended",
+    ])
+      .notNull()
+      .default("in_person"),
     durationLabel: varchar("durationLabel", { length: 120 }),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     activatedBy: int("activatedBy"),
     activatedAt: timestamp("activatedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolTitle: uniqueIndex("learning_program_school_title_unique").on(table.schoolId, table.title), schoolStatus: index("learning_program_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    schoolTitle: uniqueIndex("learning_program_school_title_unique").on(
+      table.schoolId,
+      table.title
+    ),
+    schoolStatus: index("learning_program_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const programCohorts = mysqlTable(
@@ -408,12 +656,22 @@ export const programCohorts = mysqlTable(
     startsOn: date("startsOn"),
     endsOn: date("endsOn"),
     deliveryReference: varchar("deliveryReference", { length: 255 }),
-    status: mysqlEnum("status", ["planning", "active", "closed", "cancelled"]).notNull().default("planning"),
+    status: mysqlEnum("status", ["planning", "active", "closed", "cancelled"])
+      .notNull()
+      .default("planning"),
     createdBy: int("createdBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgramName: uniqueIndex("program_cohort_school_program_name_unique").on(table.schoolId, table.programId, table.name), schoolProgram: index("program_cohort_school_program_idx").on(table.schoolId, table.programId) }),
+  table => ({
+    schoolProgramName: uniqueIndex(
+      "program_cohort_school_program_name_unique"
+    ).on(table.schoolId, table.programId, table.name),
+    schoolProgram: index("program_cohort_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+  })
 );
 
 export const programInstructorAssignments = mysqlTable(
@@ -424,13 +682,26 @@ export const programInstructorAssignments = mysqlTable(
     programId: int("programId").notNull(),
     cohortId: int("cohortId"),
     staffId: int("staffId").notNull(),
-    assignmentRole: mysqlEnum("assignmentRole", ["lead", "assistant"]).notNull().default("lead"),
-    status: mysqlEnum("status", ["active", "ended"]).notNull().default("active"),
+    assignmentRole: mysqlEnum("assignmentRole", ["lead", "assistant"])
+      .notNull()
+      .default("lead"),
+    status: mysqlEnum("status", ["active", "ended"])
+      .notNull()
+      .default("active"),
     assignedBy: int("assignedBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgram: index("program_instructor_school_program_idx").on(table.schoolId, table.programId), schoolStaff: index("program_instructor_school_staff_idx").on(table.schoolId, table.staffId) }),
+  table => ({
+    schoolProgram: index("program_instructor_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+    schoolStaff: index("program_instructor_school_staff_idx").on(
+      table.schoolId,
+      table.staffId
+    ),
+  })
 );
 
 export const programEnrollments = mysqlTable(
@@ -441,7 +712,9 @@ export const programEnrollments = mysqlTable(
     programId: int("programId").notNull(),
     cohortId: int("cohortId"),
     studentId: int("studentId").notNull(),
-    status: mysqlEnum("status", ["pending", "active", "completed", "withdrawn"]).notNull().default("pending"),
+    status: mysqlEnum("status", ["pending", "active", "completed", "withdrawn"])
+      .notNull()
+      .default("pending"),
     enrolledOn: date("enrolledOn").notNull(),
     completionConfirmedBy: int("completionConfirmedBy"),
     completionConfirmedAt: timestamp("completionConfirmedAt"),
@@ -450,7 +723,20 @@ export const programEnrollments = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgram: index("program_enrolment_school_program_idx").on(table.schoolId, table.programId), schoolStudent: index("program_enrolment_school_student_idx").on(table.schoolId, table.studentId), schoolCohort: index("program_enrolment_school_cohort_idx").on(table.schoolId, table.cohortId) }),
+  table => ({
+    schoolProgram: index("program_enrolment_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+    schoolStudent: index("program_enrolment_school_student_idx").on(
+      table.schoolId,
+      table.studentId
+    ),
+    schoolCohort: index("program_enrolment_school_cohort_idx").on(
+      table.schoolId,
+      table.cohortId
+    ),
+  })
 );
 
 export const programAttendanceRecords = mysqlTable(
@@ -460,12 +746,26 @@ export const programAttendanceRecords = mysqlTable(
     schoolId: int("schoolId").notNull(),
     enrollmentId: int("enrollmentId").notNull(),
     attendanceDate: date("attendanceDate").notNull(),
-    status: mysqlEnum("status", ["present", "late", "absent", "excused"]).notNull(),
+    status: mysqlEnum("status", [
+      "present",
+      "late",
+      "absent",
+      "excused",
+    ]).notNull(),
     note: varchar("note", { length: 500 }),
     recordedBy: int("recordedBy").notNull(),
     recordedAt: timestamp("recordedAt").defaultNow().notNull(),
   },
-  table => ({ enrolmentDate: uniqueIndex("program_attendance_enrolment_date_unique").on(table.enrollmentId, table.attendanceDate), schoolDate: index("program_attendance_school_date_idx").on(table.schoolId, table.attendanceDate) }),
+  table => ({
+    enrolmentDate: uniqueIndex("program_attendance_enrolment_date_unique").on(
+      table.enrollmentId,
+      table.attendanceDate
+    ),
+    schoolDate: index("program_attendance_school_date_idx").on(
+      table.schoolId,
+      table.attendanceDate
+    ),
+  })
 );
 
 export const programFeeStructures = mysqlTable(
@@ -479,14 +779,25 @@ export const programFeeStructures = mysqlTable(
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
     mandatory: boolean("mandatory").notNull().default(true),
     dueOn: date("dueOn"),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     activatedBy: int("activatedBy"),
     activatedAt: timestamp("activatedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgram: index("program_fee_school_program_idx").on(table.schoolId, table.programId), schoolCohort: index("program_fee_school_cohort_idx").on(table.schoolId, table.cohortId) }),
+  table => ({
+    schoolProgram: index("program_fee_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+    schoolCohort: index("program_fee_school_cohort_idx").on(
+      table.schoolId,
+      table.cohortId
+    ),
+  })
 );
 
 export const programCurriculumPathways = mysqlTable(
@@ -495,20 +806,42 @@ export const programCurriculumPathways = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     programId: int("programId").notNull(),
-    pathwayType: mysqlEnum("pathwayType", ["school_learning_sequence", "vocational_competency", "coaching_plan", "online_learning_path", "hybrid_learning_path", "workplace_capability_path", "custom_learning_path"]).notNull(),
+    pathwayType: mysqlEnum("pathwayType", [
+      "school_learning_sequence",
+      "vocational_competency",
+      "coaching_plan",
+      "online_learning_path",
+      "hybrid_learning_path",
+      "workplace_capability_path",
+      "custom_learning_path",
+    ]).notNull(),
     title: varchar("title", { length: 180 }).notNull(),
     description: text("description"),
     targetLevel: varchar("targetLevel", { length: 160 }),
     deliveryGuidance: varchar("deliveryGuidance", { length: 500 }),
     sortOrder: int("sortOrder").notNull().default(1),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     activatedBy: int("activatedBy"),
     activatedAt: timestamp("activatedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgramOrder: uniqueIndex("program_curriculum_pathway_school_program_order_unique").on(table.schoolId, table.programId, table.sortOrder), schoolProgram: index("program_curriculum_pathway_school_program_idx").on(table.schoolId, table.programId), schoolStatus: index("program_curriculum_pathway_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    schoolProgramOrder: uniqueIndex(
+      "program_curriculum_pathway_school_program_order_unique"
+    ).on(table.schoolId, table.programId, table.sortOrder),
+    schoolProgram: index("program_curriculum_pathway_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+    schoolStatus: index("program_curriculum_pathway_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const programCurriculumModules = mysqlTable(
@@ -521,16 +854,42 @@ export const programCurriculumModules = mysqlTable(
     title: varchar("title", { length: 180 }).notNull(),
     code: varchar("code", { length: 48 }),
     description: text("description"),
-    learningType: mysqlEnum("learningType", ["topic", "practical", "project", "practice", "resource"]).notNull().default("topic"),
+    learningType: mysqlEnum("learningType", [
+      "topic",
+      "practical",
+      "project",
+      "practice",
+      "resource",
+    ])
+      .notNull()
+      .default("topic"),
     sortOrder: int("sortOrder").notNull().default(1),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     activatedBy: int("activatedBy"),
     activatedAt: timestamp("activatedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgramOrder: uniqueIndex("program_curriculum_module_school_program_order_unique").on(table.schoolId, table.programId, table.sortOrder), schoolProgram: index("program_curriculum_module_school_program_idx").on(table.schoolId, table.programId), schoolPathway: index("program_curriculum_module_school_pathway_idx").on(table.schoolId, table.pathwayId), schoolStatus: index("program_curriculum_module_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    schoolProgramOrder: uniqueIndex(
+      "program_curriculum_module_school_program_order_unique"
+    ).on(table.schoolId, table.programId, table.sortOrder),
+    schoolProgram: index("program_curriculum_module_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+    schoolPathway: index("program_curriculum_module_school_pathway_idx").on(
+      table.schoolId,
+      table.pathwayId
+    ),
+    schoolStatus: index("program_curriculum_module_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const programCurriculumMilestones = mysqlTable(
@@ -543,14 +902,28 @@ export const programCurriculumMilestones = mysqlTable(
     title: varchar("title", { length: 180 }).notNull(),
     description: text("description"),
     sortOrder: int("sortOrder").notNull().default(1),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     activatedBy: int("activatedBy"),
     activatedAt: timestamp("activatedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolModuleOrder: uniqueIndex("program_curriculum_milestone_school_module_order_unique").on(table.schoolId, table.moduleId, table.sortOrder), schoolProgram: index("program_curriculum_milestone_school_program_idx").on(table.schoolId, table.programId), schoolModule: index("program_curriculum_milestone_school_module_idx").on(table.schoolId, table.moduleId) }),
+  table => ({
+    schoolModuleOrder: uniqueIndex(
+      "program_curriculum_milestone_school_module_order_unique"
+    ).on(table.schoolId, table.moduleId, table.sortOrder),
+    schoolProgram: index("program_curriculum_milestone_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+    schoolModule: index("program_curriculum_milestone_school_module_idx").on(
+      table.schoolId,
+      table.moduleId
+    ),
+  })
 );
 
 export const programCourseMaterials = mysqlTable(
@@ -561,16 +934,41 @@ export const programCourseMaterials = mysqlTable(
     programId: int("programId").notNull(),
     moduleId: int("moduleId"),
     title: varchar("title", { length: 180 }).notNull(),
-    materialType: mysqlEnum("materialType", ["facilitator_guide", "lesson_guide", "practice_activity", "knowledge_check", "project_brief", "discussion_prompt", "reflection_prompt", "revision_sheet", "resource_checklist"]).notNull(),
+    materialType: mysqlEnum("materialType", [
+      "facilitator_guide",
+      "lesson_guide",
+      "practice_activity",
+      "knowledge_check",
+      "project_brief",
+      "discussion_prompt",
+      "reflection_prompt",
+      "revision_sheet",
+      "resource_checklist",
+    ]).notNull(),
     content: text("content").notNull(),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     activatedBy: int("activatedBy"),
     activatedAt: timestamp("activatedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgram: index("program_course_material_school_program_idx").on(table.schoolId, table.programId), schoolModule: index("program_course_material_school_module_idx").on(table.schoolId, table.moduleId), schoolStatus: index("program_course_material_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    schoolProgram: index("program_course_material_school_program_idx").on(
+      table.schoolId,
+      table.programId
+    ),
+    schoolModule: index("program_course_material_school_module_idx").on(
+      table.schoolId,
+      table.moduleId
+    ),
+    schoolStatus: index("program_course_material_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const programMilestoneProgress = mysqlTable(
@@ -580,7 +978,13 @@ export const programMilestoneProgress = mysqlTable(
     schoolId: int("schoolId").notNull(),
     enrollmentId: int("enrollmentId").notNull(),
     milestoneId: int("milestoneId").notNull(),
-    status: mysqlEnum("status", ["not_started", "in_progress", "reviewed_complete"]).notNull().default("not_started"),
+    status: mysqlEnum("status", [
+      "not_started",
+      "in_progress",
+      "reviewed_complete",
+    ])
+      .notNull()
+      .default("not_started"),
     note: varchar("note", { length: 500 }),
     updatedBy: int("updatedBy").notNull(),
     reviewedBy: int("reviewedBy"),
@@ -588,7 +992,17 @@ export const programMilestoneProgress = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolEnrollmentMilestone: uniqueIndex("program_milestone_progress_school_enrollment_milestone_unique").on(table.schoolId, table.enrollmentId, table.milestoneId), schoolEnrollment: index("program_milestone_progress_school_enrollment_idx").on(table.schoolId, table.enrollmentId), schoolMilestone: index("program_milestone_progress_school_milestone_idx").on(table.schoolId, table.milestoneId) }),
+  table => ({
+    schoolEnrollmentMilestone: uniqueIndex(
+      "program_milestone_progress_school_enrollment_milestone_unique"
+    ).on(table.schoolId, table.enrollmentId, table.milestoneId),
+    schoolEnrollment: index(
+      "program_milestone_progress_school_enrollment_idx"
+    ).on(table.schoolId, table.enrollmentId),
+    schoolMilestone: index(
+      "program_milestone_progress_school_milestone_idx"
+    ).on(table.schoolId, table.milestoneId),
+  })
 );
 
 export const programMilestoneEvidenceSubmissions = mysqlTable(
@@ -599,7 +1013,13 @@ export const programMilestoneEvidenceSubmissions = mysqlTable(
     enrollmentId: int("enrollmentId").notNull(),
     milestoneId: int("milestoneId").notNull(),
     evidenceNote: varchar("evidenceNote", { length: 1500 }).notNull(),
-    status: mysqlEnum("status", ["submitted", "reviewed_accepted", "reviewed_returned"]).notNull().default("submitted"),
+    status: mysqlEnum("status", [
+      "submitted",
+      "reviewed_accepted",
+      "reviewed_returned",
+    ])
+      .notNull()
+      .default("submitted"),
     reviewNote: varchar("reviewNote", { length: 700 }),
     submittedBy: int("submittedBy").notNull(),
     submittedAt: timestamp("submittedAt").defaultNow().notNull(),
@@ -608,7 +1028,17 @@ export const programMilestoneEvidenceSubmissions = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolEnrollmentMilestone: uniqueIndex("program_milestone_evidence_school_enrollment_milestone_unique").on(table.schoolId, table.enrollmentId, table.milestoneId), schoolEnrollment: index("program_milestone_evidence_school_enrollment_idx").on(table.schoolId, table.enrollmentId), schoolMilestoneStatus: index("program_milestone_evidence_school_milestone_status_idx").on(table.schoolId, table.milestoneId, table.status) }),
+  table => ({
+    schoolEnrollmentMilestone: uniqueIndex(
+      "program_milestone_evidence_school_enrollment_milestone_unique"
+    ).on(table.schoolId, table.enrollmentId, table.milestoneId),
+    schoolEnrollment: index(
+      "program_milestone_evidence_school_enrollment_idx"
+    ).on(table.schoolId, table.enrollmentId),
+    schoolMilestoneStatus: index(
+      "program_milestone_evidence_school_milestone_status_idx"
+    ).on(table.schoolId, table.milestoneId, table.status),
+  })
 );
 
 export const learningEvidenceSources = mysqlTable(
@@ -619,16 +1049,33 @@ export const learningEvidenceSources = mysqlTable(
     title: varchar("title", { length: 180 }).notNull(),
     organisation: varchar("organisation", { length: 180 }).notNull(),
     sourceUrl: varchar("sourceUrl", { length: 2048 }).notNull(),
-    category: mysqlEnum("category", ["institution_approved", "professional_body", "learning_resource"]).notNull().default("institution_approved"),
+    category: mysqlEnum("category", [
+      "institution_approved",
+      "professional_body",
+      "learning_resource",
+    ])
+      .notNull()
+      .default("institution_approved"),
     allowedUse: varchar("allowedUse", { length: 500 }).notNull(),
-    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    status: mysqlEnum("status", ["active", "archived"])
+      .notNull()
+      .default("active"),
     createdBy: int("createdBy").notNull(),
     approvedBy: int("approvedBy").notNull(),
     approvedAt: timestamp("approvedAt").defaultNow().notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolTitle: uniqueIndex("learning_evidence_source_school_title_unique").on(table.schoolId, table.title), schoolStatus: index("learning_evidence_source_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    schoolTitle: uniqueIndex("learning_evidence_source_school_title_unique").on(
+      table.schoolId,
+      table.title
+    ),
+    schoolStatus: index("learning_evidence_source_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const learningExperienceProfiles = mysqlTable(
@@ -638,17 +1085,42 @@ export const learningExperienceProfiles = mysqlTable(
     schoolId: int("schoolId").notNull(),
     programId: int("programId").notNull(),
     sourceReferences: json("sourceReferences").notNull(),
-    learningPace: mysqlEnum("learningPace", ["guided", "flexible", "intensive"]).notNull().default("guided"),
-    supportStyle: mysqlEnum("supportStyle", ["balanced", "step_by_step", "worked_examples", "concise_review"]).notNull().default("balanced"),
-    practiceMode: mysqlEnum("practiceMode", ["reflection", "guided_practice", "project_based"]).notNull().default("guided_practice"),
+    learningPace: mysqlEnum("learningPace", ["guided", "flexible", "intensive"])
+      .notNull()
+      .default("guided"),
+    supportStyle: mysqlEnum("supportStyle", [
+      "balanced",
+      "step_by_step",
+      "worked_examples",
+      "concise_review",
+    ])
+      .notNull()
+      .default("balanced"),
+    practiceMode: mysqlEnum("practiceMode", [
+      "reflection",
+      "guided_practice",
+      "project_based",
+    ])
+      .notNull()
+      .default("guided_practice"),
     accessibilityNote: varchar("accessibilityNote", { length: 500 }),
     tutorScope: varchar("tutorScope", { length: 700 }),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgram: uniqueIndex("learning_experience_profile_school_program_unique").on(table.schoolId, table.programId), schoolStatus: index("learning_experience_profile_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    schoolProgram: uniqueIndex(
+      "learning_experience_profile_school_program_unique"
+    ).on(table.schoolId, table.programId),
+    schoolStatus: index("learning_experience_profile_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const programCertificationPolicies = mysqlTable(
@@ -659,15 +1131,27 @@ export const programCertificationPolicies = mysqlTable(
     programId: int("programId").notNull(),
     issuerName: varchar("issuerName", { length: 180 }).notNull(),
     credentialTitle: varchar("credentialTitle", { length: 180 }).notNull(),
-    completionCriteria: varchar("completionCriteria", { length: 1200 }).notNull(),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    completionCriteria: varchar("completionCriteria", {
+      length: 1200,
+    }).notNull(),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     activatedBy: int("activatedBy"),
     activatedAt: timestamp("activatedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProgram: uniqueIndex("program_certification_policy_school_program_unique").on(table.schoolId, table.programId), schoolStatus: index("program_certification_policy_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    schoolProgram: uniqueIndex(
+      "program_certification_policy_school_program_unique"
+    ).on(table.schoolId, table.programId),
+    schoolStatus: index("program_certification_policy_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const programCertificates = mysqlTable(
@@ -677,9 +1161,13 @@ export const programCertificates = mysqlTable(
     schoolId: int("schoolId").notNull(),
     policyId: int("policyId").notNull(),
     enrollmentId: int("enrollmentId").notNull(),
-    certificateReference: varchar("certificateReference", { length: 80 }).notNull(),
+    certificateReference: varchar("certificateReference", {
+      length: 80,
+    }).notNull(),
     evidenceSummary: varchar("evidenceSummary", { length: 1200 }).notNull(),
-    status: mysqlEnum("status", ["issued", "revoked"]).notNull().default("issued"),
+    status: mysqlEnum("status", ["issued", "revoked"])
+      .notNull()
+      .default("issued"),
     issuedBy: int("issuedBy").notNull(),
     issuedAt: timestamp("issuedAt").defaultNow().notNull(),
     revokedBy: int("revokedBy"),
@@ -688,7 +1176,18 @@ export const programCertificates = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ certificateReference: uniqueIndex("program_certificate_reference_unique").on(table.certificateReference), schoolEnrollment: uniqueIndex("program_certificate_school_enrollment_unique").on(table.schoolId, table.enrollmentId), schoolPolicy: index("program_certificate_school_policy_idx").on(table.schoolId, table.policyId) }),
+  table => ({
+    certificateReference: uniqueIndex(
+      "program_certificate_reference_unique"
+    ).on(table.certificateReference),
+    schoolEnrollment: uniqueIndex(
+      "program_certificate_school_enrollment_unique"
+    ).on(table.schoolId, table.enrollmentId),
+    schoolPolicy: index("program_certificate_school_policy_idx").on(
+      table.schoolId,
+      table.policyId
+    ),
+  })
 );
 
 export const subscriptionPlans = mysqlTable(
@@ -698,16 +1197,24 @@ export const subscriptionPlans = mysqlTable(
     code: varchar("code", { length: 48 }).notNull(),
     name: varchar("name", { length: 120 }).notNull(),
     description: text("description"),
-    monthlyAmount: decimal("monthlyAmount", { precision: 12, scale: 2 }).notNull().default("0.00"),
-    annualAmount: decimal("annualAmount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    monthlyAmount: decimal("monthlyAmount", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    annualAmount: decimal("annualAmount", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0.00"),
     currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
     studentLimit: int("studentLimit"),
-    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    status: mysqlEnum("status", ["active", "archived"])
+      .notNull()
+      .default("active"),
     createdBy: int("createdBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ codeUnique: uniqueIndex("subscriptionPlan_code_unique").on(table.code) }),
+  table => ({
+    codeUnique: uniqueIndex("subscriptionPlan_code_unique").on(table.code),
+  })
 );
 
 export const schoolSubscriptions = mysqlTable(
@@ -716,8 +1223,18 @@ export const schoolSubscriptions = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     planId: int("planId"),
-    status: mysqlEnum("status", ["trial", "active", "payment_due", "suspended", "cancelled"]).notNull().default("trial"),
-    billingCycle: mysqlEnum("billingCycle", ["monthly", "annual", "manual"]).notNull().default("manual"),
+    status: mysqlEnum("status", [
+      "trial",
+      "active",
+      "payment_due",
+      "suspended",
+      "cancelled",
+    ])
+      .notNull()
+      .default("trial"),
+    billingCycle: mysqlEnum("billingCycle", ["monthly", "annual", "manual"])
+      .notNull()
+      .default("manual"),
     startsAt: timestamp("startsAt").defaultNow().notNull(),
     endsAt: timestamp("endsAt"),
     assignedBy: int("assignedBy"),
@@ -725,7 +1242,12 @@ export const schoolSubscriptions = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolUnique: uniqueIndex("schoolSubscription_school_unique").on(table.schoolId), statusIndex: index("schoolSubscription_status_idx").on(table.status) }),
+  table => ({
+    schoolUnique: uniqueIndex("schoolSubscription_school_unique").on(
+      table.schoolId
+    ),
+    statusIndex: index("schoolSubscription_status_idx").on(table.status),
+  })
 );
 
 export const platformBillingRecords = mysqlTable(
@@ -738,11 +1260,19 @@ export const platformBillingRecords = mysqlTable(
     invoiceNo: varchar("invoiceNo", { length: 64 }).notNull(),
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
-    status: mysqlEnum("status", ["draft", "issued", "paid", "void"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "issued", "paid", "void"])
+      .notNull()
+      .default("draft"),
     issueDate: date("issueDate").notNull(),
     dueDate: date("dueDate"),
     paidAt: timestamp("paidAt"),
-    paymentMethod: mysqlEnum("paymentMethod", ["bank_transfer", "card", "manual"]).notNull().default("manual"),
+    paymentMethod: mysqlEnum("paymentMethod", [
+      "bank_transfer",
+      "card",
+      "manual",
+    ])
+      .notNull()
+      .default("manual"),
     providerReference: varchar("providerReference", { length: 160 }),
     note: text("note"),
     createdBy: int("createdBy").notNull(),
@@ -750,28 +1280,55 @@ export const platformBillingRecords = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ invoiceNoUnique: uniqueIndex("platformBilling_invoice_no_unique").on(table.invoiceNo), schoolIndex: index("platformBilling_school_idx").on(table.schoolId), statusIndex: index("platformBilling_status_idx").on(table.status) }),
+  table => ({
+    invoiceNoUnique: uniqueIndex("platformBilling_invoice_no_unique").on(
+      table.invoiceNo
+    ),
+    schoolIndex: index("platformBilling_school_idx").on(table.schoolId),
+    statusIndex: index("platformBilling_status_idx").on(table.status),
+  })
 );
 
 export const affiliatePilotConfigurations = mysqlTable(
   "affiliatePilotConfigurations",
   {
     id: int("id").autoincrement().primaryKey(),
-    programmeKey: varchar("programmeKey", { length: 48 }).notNull().default("nsos-internal-pilot"),
-    status: mysqlEnum("status", ["internal_review", "activation_blocked"]).notNull().default("internal_review"),
+    programmeKey: varchar("programmeKey", { length: 48 })
+      .notNull()
+      .default("nsos-internal-pilot"),
+    status: mysqlEnum("status", ["internal_review", "activation_blocked"])
+      .notNull()
+      .default("internal_review"),
     attributionWindowDays: int("attributionWindowDays").notNull().default(30),
     refundHoldDays: int("refundHoldDays").notNull().default(30),
-    minimumPayout: decimal("minimumPayout", { precision: 12, scale: 2 }).notNull().default("10000.00"),
-    payoutFrequency: mysqlEnum("payoutFrequency", ["monthly_manual"]).notNull().default("monthly_manual"),
-    eligiblePlanPolicy: mysqlEnum("eligiblePlanPolicy", ["standard_paid_subscriptions_only"]).notNull().default("standard_paid_subscriptions_only"),
-    commissionRateBasisPoints: int("commissionRateBasisPoints").notNull().default(2000),
-    termsStatus: mysqlEnum("termsStatus", ["legal_review_required"]).notNull().default("legal_review_required"),
+    minimumPayout: decimal("minimumPayout", { precision: 12, scale: 2 })
+      .notNull()
+      .default("10000.00"),
+    payoutFrequency: mysqlEnum("payoutFrequency", ["monthly_manual"])
+      .notNull()
+      .default("monthly_manual"),
+    eligiblePlanPolicy: mysqlEnum("eligiblePlanPolicy", [
+      "standard_paid_subscriptions_only",
+    ])
+      .notNull()
+      .default("standard_paid_subscriptions_only"),
+    commissionRateBasisPoints: int("commissionRateBasisPoints")
+      .notNull()
+      .default(2000),
+    termsStatus: mysqlEnum("termsStatus", ["legal_review_required"])
+      .notNull()
+      .default("legal_review_required"),
     confirmedBy: int("confirmedBy").notNull(),
     confirmedAt: timestamp("confirmedAt").defaultNow().notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ programmeKeyUnique: uniqueIndex("affiliatePilot_programme_key_unique").on(table.programmeKey), statusIndex: index("affiliatePilot_status_idx").on(table.status) }),
+  table => ({
+    programmeKeyUnique: uniqueIndex("affiliatePilot_programme_key_unique").on(
+      table.programmeKey
+    ),
+    statusIndex: index("affiliatePilot_status_idx").on(table.status),
+  })
 );
 
 export const affiliatePilotEvents = mysqlTable(
@@ -781,10 +1338,27 @@ export const affiliatePilotEvents = mysqlTable(
     configurationId: int("configurationId").notNull(),
     actorUserId: int("actorUserId").notNull(),
     eventType: mysqlEnum("eventType", ["defaults_confirmed"]).notNull(),
-    metadata: json("metadata").$type<{ attributionWindowDays: number; refundHoldDays: number; minimumPayout: string; payoutFrequency: "monthly_manual"; eligiblePlanPolicy: "standard_paid_subscriptions_only"; commissionRateBasisPoints: number }>().notNull(),
+    metadata: json("metadata")
+      .$type<{
+        attributionWindowDays: number;
+        refundHoldDays: number;
+        minimumPayout: string;
+        payoutFrequency: "monthly_manual";
+        eligiblePlanPolicy: "standard_paid_subscriptions_only";
+        commissionRateBasisPoints: number;
+      }>()
+      .notNull(),
     occurredAt: timestamp("occurredAt").defaultNow().notNull(),
   },
-  table => ({ configurationOccurred: index("affiliatePilotEvent_configuration_occurred_idx").on(table.configurationId, table.occurredAt), actorOccurred: index("affiliatePilotEvent_actor_occurred_idx").on(table.actorUserId, table.occurredAt) }),
+  table => ({
+    configurationOccurred: index(
+      "affiliatePilotEvent_configuration_occurred_idx"
+    ).on(table.configurationId, table.occurredAt),
+    actorOccurred: index("affiliatePilotEvent_actor_occurred_idx").on(
+      table.actorUserId,
+      table.occurredAt
+    ),
+  })
 );
 
 export const schoolWebsites = mysqlTable(
@@ -794,21 +1368,36 @@ export const schoolWebsites = mysqlTable(
     schoolId: int("schoolId").notNull(),
     headline: varchar("headline", { length: 255 }),
     introduction: text("introduction"),
-    primaryColor: varchar("primaryColor", { length: 16 }).notNull().default("#0f5c4f"),
+    primaryColor: varchar("primaryColor", { length: 16 })
+      .notNull()
+      .default("#0f5c4f"),
     contactEmail: varchar("contactEmail", { length: 320 }),
     contactPhone: varchar("contactPhone", { length: 48 }),
     campusLocation: varchar("campusLocation", { length: 255 }),
     customDomain: varchar("customDomain", { length: 255 }),
     domainVerificationToken: varchar("domainVerificationToken", { length: 96 }),
-    domainStatus: mysqlEnum("domainStatus", ["not_configured", "pending", "active"]).notNull().default("not_configured"),
+    domainStatus: mysqlEnum("domainStatus", [
+      "not_configured",
+      "pending",
+      "active",
+    ])
+      .notNull()
+      .default("not_configured"),
     admissionsEnabled: boolean("admissionsEnabled").notNull().default(true),
     logoMediaId: int("logoMediaId"),
     heroMediaId: int("heroMediaId"),
-    visualTheme: mysqlEnum("visualTheme", ["modern", "academic", "community"]).notNull().default("modern"),
+    visualTheme: mysqlEnum("visualTheme", ["modern", "academic", "community"])
+      .notNull()
+      .default("modern"),
     published: boolean("published").notNull().default(false),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolUnique: uniqueIndex("schoolWebsite_school_unique").on(table.schoolId), domainUnique: uniqueIndex("schoolWebsite_domain_unique").on(table.customDomain) }),
+  table => ({
+    schoolUnique: uniqueIndex("schoolWebsite_school_unique").on(table.schoolId),
+    domainUnique: uniqueIndex("schoolWebsite_domain_unique").on(
+      table.customDomain
+    ),
+  })
 );
 
 export const schoolWebsiteMedia = mysqlTable(
@@ -828,9 +1417,15 @@ export const schoolWebsiteMedia = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    schoolCreated: index("website_media_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolHash: uniqueIndex("website_media_school_hash_unique").on(table.schoolId, table.sha256),
-  }),
+    schoolCreated: index("website_media_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    schoolHash: uniqueIndex("website_media_school_hash_unique").on(
+      table.schoolId,
+      table.sha256
+    ),
+  })
 );
 
 export const schoolDocumentTemplates = mysqlTable(
@@ -838,7 +1433,9 @@ export const schoolDocumentTemplates = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
-    admissionTitle: varchar("admissionTitle", { length: 160 }).notNull().default("School admission form"),
+    admissionTitle: varchar("admissionTitle", { length: 160 })
+      .notNull()
+      .default("School admission form"),
     headerTagline: varchar("headerTagline", { length: 255 }),
     headerLogoUrl: varchar("headerLogoUrl", { length: 2048 }),
     headerAddressLine: varchar("headerAddressLine", { length: 500 }),
@@ -846,14 +1443,26 @@ export const schoolDocumentTemplates = mysqlTable(
     admissionFields: json("admissionFields").$type<string[]>().notNull(),
     declarationText: text("declarationText"),
     requireDeclaration: boolean("requireDeclaration").notNull().default(true),
-    requirePassportPhoto: boolean("requirePassportPhoto").notNull().default(false),
-    requireAdmissionFeeReceipt: boolean("requireAdmissionFeeReceipt").notNull().default(false),
-    termlyFeeTitle: varchar("termlyFeeTitle", { length: 160 }).notNull().default("Termly fee guide"),
-    feeSchedule: json("feeSchedule").$type<Array<{ category: string; tuitionFee: number }>>().notNull(),
+    requirePassportPhoto: boolean("requirePassportPhoto")
+      .notNull()
+      .default(false),
+    requireAdmissionFeeReceipt: boolean("requireAdmissionFeeReceipt")
+      .notNull()
+      .default(false),
+    termlyFeeTitle: varchar("termlyFeeTitle", { length: 160 })
+      .notNull()
+      .default("Termly fee guide"),
+    feeSchedule: json("feeSchedule")
+      .$type<Array<{ category: string; tuitionFee: number }>>()
+      .notNull(),
     updatedBy: int("updatedBy"),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolUnique: uniqueIndex("schoolDocumentTemplate_school_unique").on(table.schoolId) }),
+  table => ({
+    schoolUnique: uniqueIndex("schoolDocumentTemplate_school_unique").on(
+      table.schoolId
+    ),
+  })
 );
 
 export const schoolMemberships = mysqlTable(
@@ -862,17 +1471,30 @@ export const schoolMemberships = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     userId: int("userId").notNull(),
-    role: mysqlEnum("role", ["owner", "admin", "staff", "teacher", "finance", "parent", "student"])
+    role: mysqlEnum("role", [
+      "owner",
+      "admin",
+      "staff",
+      "teacher",
+      "finance",
+      "parent",
+      "student",
+    ])
       .notNull()
       .default("staff"),
-    status: mysqlEnum("status", ["active", "invited", "suspended"]).notNull().default("active"),
+    status: mysqlEnum("status", ["active", "invited", "suspended"])
+      .notNull()
+      .default("active"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolUser: uniqueIndex("schoolMembership_school_user_unique").on(table.schoolId, table.userId),
+    schoolUser: uniqueIndex("schoolMembership_school_user_unique").on(
+      table.schoolId,
+      table.userId
+    ),
     schoolIndex: index("schoolMembership_school_idx").on(table.schoolId),
-  }),
+  })
 );
 
 export const academicSessions = mysqlTable(
@@ -884,10 +1506,14 @@ export const academicSessions = mysqlTable(
     startsOn: date("startsOn").notNull(),
     endsOn: date("endsOn").notNull(),
     isCurrent: boolean("isCurrent").notNull().default(false),
-    status: mysqlEnum("status", ["planning", "active", "closed"]).notNull().default("planning"),
+    status: mysqlEnum("status", ["planning", "active", "closed"])
+      .notNull()
+      .default("planning"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("academicSession_school_idx").on(table.schoolId) }),
+  table => ({
+    schoolIndex: index("academicSession_school_idx").on(table.schoolId),
+  })
 );
 
 export const academicTerms = mysqlTable(
@@ -900,10 +1526,14 @@ export const academicTerms = mysqlTable(
     startsOn: date("startsOn").notNull(),
     endsOn: date("endsOn").notNull(),
     isCurrent: boolean("isCurrent").notNull().default(false),
-    status: mysqlEnum("status", ["planning", "active", "closed"]).notNull().default("planning"),
+    status: mysqlEnum("status", ["planning", "active", "closed"])
+      .notNull()
+      .default("planning"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("academicTerm_school_idx").on(table.schoolId) }),
+  table => ({
+    schoolIndex: index("academicTerm_school_idx").on(table.schoolId),
+  })
 );
 
 export const departments = mysqlTable(
@@ -916,7 +1546,12 @@ export const departments = mysqlTable(
     headStaffId: int("headStaffId"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolName: uniqueIndex("department_school_name_unique").on(table.schoolId, table.name) }),
+  table => ({
+    schoolName: uniqueIndex("department_school_name_unique").on(
+      table.schoolId,
+      table.name
+    ),
+  })
 );
 
 export const staffProfiles = mysqlTable(
@@ -932,8 +1567,22 @@ export const staffProfiles = mysqlTable(
     phone: varchar("phone", { length: 48 }),
     departmentId: int("departmentId"),
     jobTitle: varchar("jobTitle", { length: 120 }).notNull(),
-    employmentType: mysqlEnum("employmentType", ["full_time", "part_time", "contract", "temporary"]).notNull().default("full_time"),
-    employmentStatus: mysqlEnum("employmentStatus", ["active", "on_leave", "suspended", "exited"]).notNull().default("active"),
+    employmentType: mysqlEnum("employmentType", [
+      "full_time",
+      "part_time",
+      "contract",
+      "temporary",
+    ])
+      .notNull()
+      .default("full_time"),
+    employmentStatus: mysqlEnum("employmentStatus", [
+      "active",
+      "on_leave",
+      "suspended",
+      "exited",
+    ])
+      .notNull()
+      .default("active"),
     joinedOn: date("joinedOn"),
     address: text("address"),
     emergencyContact: varchar("emergencyContact", { length: 255 }),
@@ -941,9 +1590,12 @@ export const staffProfiles = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolEmployee: uniqueIndex("staff_school_employee_unique").on(table.schoolId, table.employeeNo),
+    schoolEmployee: uniqueIndex("staff_school_employee_unique").on(
+      table.schoolId,
+      table.employeeNo
+    ),
     schoolIndex: index("staff_school_idx").on(table.schoolId),
-  }),
+  })
 );
 
 export const staffSetupInvitations = mysqlTable(
@@ -957,8 +1609,23 @@ export const staffSetupInvitations = mysqlTable(
     employeeNo: varchar("employeeNo", { length: 48 }).notNull(),
     jobTitle: varchar("jobTitle", { length: 120 }).notNull(),
     role: mysqlEnum("role", ["admin", "staff", "teacher", "finance"]).notNull(),
-    employmentType: mysqlEnum("employmentType", ["full_time", "part_time", "contract", "temporary"]).notNull().default("full_time"),
-    status: mysqlEnum("status", ["draft", "sending", "sent", "accepted", "cancelled"]).notNull().default("draft"),
+    employmentType: mysqlEnum("employmentType", [
+      "full_time",
+      "part_time",
+      "contract",
+      "temporary",
+    ])
+      .notNull()
+      .default("full_time"),
+    status: mysqlEnum("status", [
+      "draft",
+      "sending",
+      "sent",
+      "accepted",
+      "cancelled",
+    ])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     acceptedUserId: int("acceptedUserId"),
     sentAt: timestamp("sentAt"),
@@ -967,9 +1634,15 @@ export const staffSetupInvitations = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolStatus: index("staff_setup_invitation_school_status_idx").on(table.schoolId, table.status),
-    schoolEmail: index("staff_setup_invitation_school_email_idx").on(table.schoolId, table.email),
-  }),
+    schoolStatus: index("staff_setup_invitation_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    schoolEmail: index("staff_setup_invitation_school_email_idx").on(
+      table.schoolId,
+      table.email
+    ),
+  })
 );
 
 export const staffDuties = mysqlTable(
@@ -982,10 +1655,15 @@ export const staffDuties = mysqlTable(
     description: text("description"),
     startsOn: date("startsOn"),
     endsOn: date("endsOn"),
-    status: mysqlEnum("status", ["active", "ended"]).notNull().default("active"),
+    status: mysqlEnum("status", ["active", "ended"])
+      .notNull()
+      .default("active"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("staffDuty_school_idx").on(table.schoolId), staffIndex: index("staffDuty_staff_idx").on(table.staffId) }),
+  table => ({
+    schoolIndex: index("staffDuty_school_idx").on(table.schoolId),
+    staffIndex: index("staffDuty_staff_idx").on(table.staffId),
+  })
 );
 
 export const guardians = mysqlTable(
@@ -1004,7 +1682,7 @@ export const guardians = mysqlTable(
     isPrimaryContact: boolean("isPrimaryContact").notNull().default(false),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("guardian_school_idx").on(table.schoolId) }),
+  table => ({ schoolIndex: index("guardian_school_idx").on(table.schoolId) })
 );
 
 export const studentProfiles = mysqlTable(
@@ -1018,14 +1696,27 @@ export const studentProfiles = mysqlTable(
     lastName: varchar("lastName", { length: 120 }).notNull(),
     middleName: varchar("middleName", { length: 120 }),
     dateOfBirth: date("dateOfBirth"),
-    gender: mysqlEnum("gender", ["female", "male", "other", "prefer_not_to_say"]),
+    gender: mysqlEnum("gender", [
+      "female",
+      "male",
+      "other",
+      "prefer_not_to_say",
+    ]),
     email: varchar("email", { length: 320 }),
     phone: varchar("phone", { length: 48 }),
     address: text("address"),
     stateOfOrigin: varchar("stateOfOrigin", { length: 120 }),
     localGovernment: varchar("localGovernment", { length: 120 }),
     medicalNotes: text("medicalNotes"),
-    status: mysqlEnum("status", ["active", "graduated", "withdrawn", "suspended", "alumni"]).notNull().default("active"),
+    status: mysqlEnum("status", [
+      "active",
+      "graduated",
+      "withdrawn",
+      "suspended",
+      "alumni",
+    ])
+      .notNull()
+      .default("active"),
     admittedOn: date("admittedOn"),
     graduationYear: int("graduationYear"),
     avatarUrl: text("avatarUrl"),
@@ -1033,9 +1724,12 @@ export const studentProfiles = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolAdmission: uniqueIndex("student_school_admission_unique").on(table.schoolId, table.admissionNo),
+    schoolAdmission: uniqueIndex("student_school_admission_unique").on(
+      table.schoolId,
+      table.admissionNo
+    ),
     schoolIndex: index("student_school_idx").on(table.schoolId),
-  }),
+  })
 );
 
 export const studentMigrationBatches = mysqlTable(
@@ -1051,14 +1745,22 @@ export const studentMigrationBatches = mysqlTable(
     rowCount: int("rowCount").notNull(),
     studentCount: int("studentCount").notNull().default(0),
     guardianCount: int("guardianCount").notNull().default(0),
-    status: mysqlEnum("status", ["processing", "completed", "failed"]).notNull().default("processing"),
+    status: mysqlEnum("status", ["processing", "completed", "failed"])
+      .notNull()
+      .default("processing"),
     completedAt: timestamp("completedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    schoolCreated: index("student_migration_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolKey: uniqueIndex("student_migration_school_key_unique").on(table.schoolId, table.idempotencyKey),
-  }),
+    schoolCreated: index("student_migration_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    schoolKey: uniqueIndex("student_migration_school_key_unique").on(
+      table.schoolId,
+      table.idempotencyKey
+    ),
+  })
 );
 
 export const staffMigrationBatches = mysqlTable(
@@ -1071,14 +1773,22 @@ export const staffMigrationBatches = mysqlTable(
     checksum: varchar("checksum", { length: 64 }).notNull(),
     rowCount: int("rowCount").notNull(),
     staffCount: int("staffCount").notNull().default(0),
-    status: mysqlEnum("status", ["processing", "completed", "failed"]).notNull().default("processing"),
+    status: mysqlEnum("status", ["processing", "completed", "failed"])
+      .notNull()
+      .default("processing"),
     completedAt: timestamp("completedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    schoolCreated: index("staff_migration_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolKey: uniqueIndex("staff_migration_school_key_unique").on(table.schoolId, table.idempotencyKey),
-  }),
+    schoolCreated: index("staff_migration_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    schoolKey: uniqueIndex("staff_migration_school_key_unique").on(
+      table.schoolId,
+      table.idempotencyKey
+    ),
+  })
 );
 
 export const academicMigrationBatches = mysqlTable(
@@ -1093,14 +1803,22 @@ export const academicMigrationBatches = mysqlTable(
     rowCount: int("rowCount").notNull(),
     classCount: int("classCount").notNull().default(0),
     subjectCount: int("subjectCount").notNull().default(0),
-    status: mysqlEnum("status", ["processing", "completed", "failed"]).notNull().default("processing"),
+    status: mysqlEnum("status", ["processing", "completed", "failed"])
+      .notNull()
+      .default("processing"),
     completedAt: timestamp("completedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    schoolCreated: index("academic_migration_school_created_idx").on(table.schoolId, table.createdAt),
-    schoolKey: uniqueIndex("academic_migration_school_key_unique").on(table.schoolId, table.idempotencyKey),
-  }),
+    schoolCreated: index("academic_migration_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    schoolKey: uniqueIndex("academic_migration_school_key_unique").on(
+      table.schoolId,
+      table.idempotencyKey
+    ),
+  })
 );
 
 export const studentGuardians = mysqlTable(
@@ -1112,7 +1830,12 @@ export const studentGuardians = mysqlTable(
     isPrimary: boolean("isPrimary").notNull().default(false),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ relationship: uniqueIndex("student_guardian_unique").on(table.studentId, table.guardianId) }),
+  table => ({
+    relationship: uniqueIndex("student_guardian_unique").on(
+      table.studentId,
+      table.guardianId
+    ),
+  })
 );
 
 export const guardianPortalInvitations = mysqlTable(
@@ -1122,14 +1845,61 @@ export const guardianPortalInvitations = mysqlTable(
     schoolId: int("schoolId").notNull(),
     guardianId: int("guardianId").notNull(),
     email: varchar("email", { length: 320 }).notNull(),
-    status: mysqlEnum("status", ["sending", "sent", "failed", "accepted"]).notNull().default("sending"),
+    status: mysqlEnum("status", ["sending", "sent", "failed", "accepted"])
+      .notNull()
+      .default("sending"),
     sentBy: int("sentBy").notNull(),
     acceptedUserId: int("acceptedUserId"),
     sentAt: timestamp("sentAt"),
     acceptedAt: timestamp("acceptedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolGuardian: index("guardian_portal_invitation_school_guardian_idx").on(table.schoolId, table.guardianId), emailStatus: index("guardian_portal_invitation_email_status_idx").on(table.email, table.status) }),
+  table => ({
+    schoolGuardian: index("guardian_portal_invitation_school_guardian_idx").on(
+      table.schoolId,
+      table.guardianId
+    ),
+    emailStatus: index("guardian_portal_invitation_email_status_idx").on(
+      table.email,
+      table.status
+    ),
+  })
+);
+
+export const studentPortalInvitations = mysqlTable(
+  "studentPortalInvitations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    studentId: int("studentId").notNull(),
+    email: varchar("email", { length: 320 }).notNull(),
+    status: mysqlEnum("status", [
+      "draft",
+      "sending",
+      "sent",
+      "failed",
+      "accepted",
+      "expired",
+    ])
+      .notNull()
+      .default("draft"),
+    createdBy: int("createdBy").notNull(),
+    acceptedUserId: int("acceptedUserId"),
+    expiresAt: timestamp("expiresAt").notNull(),
+    sentAt: timestamp("sentAt"),
+    acceptedAt: timestamp("acceptedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    schoolStudent: index("student_portal_invitation_school_student_idx").on(
+      table.schoolId,
+      table.studentId
+    ),
+    emailStatus: index("student_portal_invitation_email_status_idx").on(
+      table.email,
+      table.status
+    ),
+  })
 );
 
 export const admissionsApplications = mysqlTable(
@@ -1141,7 +1911,12 @@ export const admissionsApplications = mysqlTable(
     firstName: varchar("firstName", { length: 120 }).notNull(),
     lastName: varchar("lastName", { length: 120 }).notNull(),
     dateOfBirth: date("dateOfBirth"),
-    gender: mysqlEnum("gender", ["female", "male", "other", "prefer_not_to_say"]),
+    gender: mysqlEnum("gender", [
+      "female",
+      "male",
+      "other",
+      "prefer_not_to_say",
+    ]),
     applyingForClassId: int("applyingForClassId"),
     guardianName: varchar("guardianName", { length: 255 }).notNull(),
     guardianEmail: varchar("guardianEmail", { length: 320 }),
@@ -1149,8 +1924,16 @@ export const admissionsApplications = mysqlTable(
     priorSchool: varchar("priorSchool", { length: 255 }),
     notes: text("notes"),
     supplementalData: json("supplementalData").$type<Record<string, string>>(),
-    declarationAccepted: boolean("declarationAccepted").notNull().default(false),
-    status: mysqlEnum("status", ["submitted", "under_review", "accepted", "declined", "enrolled"])
+    declarationAccepted: boolean("declarationAccepted")
+      .notNull()
+      .default(false),
+    status: mysqlEnum("status", [
+      "submitted",
+      "under_review",
+      "accepted",
+      "declined",
+      "enrolled",
+    ])
       .notNull()
       .default("submitted"),
     reviewerId: int("reviewerId"),
@@ -1159,9 +1942,12 @@ export const admissionsApplications = mysqlTable(
     decidedAt: timestamp("decidedAt"),
   },
   table => ({
-    schoolApplication: uniqueIndex("application_school_no_unique").on(table.schoolId, table.applicationNo),
+    schoolApplication: uniqueIndex("application_school_no_unique").on(
+      table.schoolId,
+      table.applicationNo
+    ),
     schoolIndex: index("application_school_idx").on(table.schoolId),
-  }),
+  })
 );
 
 export const admissionDocuments = mysqlTable(
@@ -1172,17 +1958,29 @@ export const admissionDocuments = mysqlTable(
     label: varchar("label", { length: 160 }).notNull(),
     storageKey: text("storageKey").notNull(),
     url: text("url").notNull(),
-    documentType: mysqlEnum("documentType", ["supporting_document", "passport_photo", "admission_fee_receipt"]).notNull().default("supporting_document"),
+    documentType: mysqlEnum("documentType", [
+      "supporting_document",
+      "passport_photo",
+      "admission_fee_receipt",
+    ])
+      .notNull()
+      .default("supporting_document"),
     fileName: varchar("fileName", { length: 180 }),
     byteSize: int("byteSize"),
     mimeType: varchar("mimeType", { length: 120 }),
-    status: mysqlEnum("status", ["pending", "verified", "rejected"]).notNull().default("pending"),
+    status: mysqlEnum("status", ["pending", "verified", "rejected"])
+      .notNull()
+      .default("pending"),
     reviewedBy: int("reviewedBy"),
     reviewedAt: timestamp("reviewedAt"),
     reviewNote: text("reviewNote"),
     uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
   },
-  table => ({ applicationIndex: index("admissionDocument_application_idx").on(table.applicationId) }),
+  table => ({
+    applicationIndex: index("admissionDocument_application_idx").on(
+      table.applicationId
+    ),
+  })
 );
 
 export const classes = mysqlTable(
@@ -1196,10 +1994,17 @@ export const classes = mysqlTable(
     arm: varchar("arm", { length: 32 }),
     capacity: int("capacity"),
     classTeacherId: int("classTeacherId"),
-    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    status: mysqlEnum("status", ["active", "archived"])
+      .notNull()
+      .default("active"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolName: uniqueIndex("class_school_name_unique").on(table.schoolId, table.name) }),
+  table => ({
+    schoolName: uniqueIndex("class_school_name_unique").on(
+      table.schoolId,
+      table.name
+    ),
+  })
 );
 
 export const subjects = mysqlTable(
@@ -1211,10 +2016,17 @@ export const subjects = mysqlTable(
     name: varchar("name", { length: 160 }).notNull(),
     departmentId: int("departmentId"),
     description: text("description"),
-    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    status: mysqlEnum("status", ["active", "archived"])
+      .notNull()
+      .default("active"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolCode: uniqueIndex("subject_school_code_unique").on(table.schoolId, table.code) }),
+  table => ({
+    schoolCode: uniqueIndex("subject_school_code_unique").on(
+      table.schoolId,
+      table.code
+    ),
+  })
 );
 
 export const schoolCurriculumProfiles = mysqlTable(
@@ -1222,7 +2034,9 @@ export const schoolCurriculumProfiles = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
-    framework: mysqlEnum("framework", ["nerdc_basic", "nerdc_senior", "custom"]).notNull().default("custom"),
+    framework: mysqlEnum("framework", ["nerdc_basic", "nerdc_senior", "custom"])
+      .notNull()
+      .default("custom"),
     templateId: varchar("templateId", { length: 64 }),
     sourceUrl: varchar("sourceUrl", { length: 2048 }),
     appliedClassIds: json("appliedClassIds").$type<number[]>().notNull(),
@@ -1230,7 +2044,11 @@ export const schoolCurriculumProfiles = mysqlTable(
     appliedAt: timestamp("appliedAt"),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolUnique: uniqueIndex("curriculumProfile_school_unique").on(table.schoolId) }),
+  table => ({
+    schoolUnique: uniqueIndex("curriculumProfile_school_unique").on(
+      table.schoolId
+    ),
+  })
 );
 
 export const schemeOfWorkImports = mysqlTable(
@@ -1249,7 +2067,18 @@ export const schemeOfWorkImports = mysqlTable(
     importedBy: int("importedBy").notNull(),
     importedAt: timestamp("importedAt").defaultNow().notNull(),
   },
-  table => ({ schoolImported: index("schemeOfWorkImport_school_imported_idx").on(table.schoolId, table.importedAt), classSubjectTerm: index("schemeOfWorkImport_class_subject_term_idx").on(table.schoolId, table.classId, table.subjectId, table.termId) }),
+  table => ({
+    schoolImported: index("schemeOfWorkImport_school_imported_idx").on(
+      table.schoolId,
+      table.importedAt
+    ),
+    classSubjectTerm: index("schemeOfWorkImport_class_subject_term_idx").on(
+      table.schoolId,
+      table.classId,
+      table.subjectId,
+      table.termId
+    ),
+  })
 );
 
 export const schemeOfWorkRows = mysqlTable(
@@ -1264,7 +2093,14 @@ export const schemeOfWorkRows = mysqlTable(
     topic: varchar("topic", { length: 255 }).notNull(),
     objectives: text("objectives"),
     resources: text("resources"),
-    reviewStatus: mysqlEnum("reviewStatus", ["pending_review", "approved", "returned", "published"]).notNull().default("pending_review"),
+    reviewStatus: mysqlEnum("reviewStatus", [
+      "pending_review",
+      "approved",
+      "returned",
+      "published",
+    ])
+      .notNull()
+      .default("pending_review"),
     reviewNote: text("reviewNote"),
     reviewedBy: int("reviewedBy"),
     reviewedAt: timestamp("reviewedAt"),
@@ -1272,7 +2108,20 @@ export const schemeOfWorkRows = mysqlTable(
     publishedAt: timestamp("publishedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ importWeek: uniqueIndex("schemeOfWorkRow_import_week_unique").on(table.importId, table.weekNo), schoolClass: index("schemeOfWorkRow_school_idx").on(table.schoolId, table.createdAt), teacherReview: index("schemeOfWorkRow_teacher_review_idx").on(table.assignedTeacherId, table.reviewStatus) }),
+  table => ({
+    importWeek: uniqueIndex("schemeOfWorkRow_import_week_unique").on(
+      table.importId,
+      table.weekNo
+    ),
+    schoolClass: index("schemeOfWorkRow_school_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+    teacherReview: index("schemeOfWorkRow_teacher_review_idx").on(
+      table.assignedTeacherId,
+      table.reviewStatus
+    ),
+  })
 );
 
 export const schemeOfWorkInlineComments = mysqlTable(
@@ -1287,9 +2136,15 @@ export const schemeOfWorkInlineComments = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    rowCreated: index("schemeInlineComment_row_created_idx").on(table.rowId, table.createdAt),
-    schoolCreated: index("schemeInlineComment_school_created_idx").on(table.schoolId, table.createdAt),
-  }),
+    rowCreated: index("schemeInlineComment_row_created_idx").on(
+      table.rowId,
+      table.createdAt
+    ),
+    schoolCreated: index("schemeInlineComment_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+  })
 );
 
 export const teacherSchemeRevisionNotifications = mysqlTable(
@@ -1313,9 +2168,15 @@ export const teacherSchemeRevisionNotifications = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    recipientCreated: index("teacherSchemeRevision_recipient_created_idx").on(table.schoolId, table.recipientUserId, table.createdAt),
-    importRecipient: uniqueIndex("teacherSchemeRevision_import_recipient_unique").on(table.importId, table.recipientUserId),
-  }),
+    recipientCreated: index("teacherSchemeRevision_recipient_created_idx").on(
+      table.schoolId,
+      table.recipientUserId,
+      table.createdAt
+    ),
+    importRecipient: uniqueIndex(
+      "teacherSchemeRevision_import_recipient_unique"
+    ).on(table.importId, table.recipientUserId),
+  })
 );
 
 export const teacherSchemeRevisionRecommendationOutcomes = mysqlTable(
@@ -1335,9 +2196,14 @@ export const teacherSchemeRevisionRecommendationOutcomes = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    notification: uniqueIndex("teacherSchemeRecommendation_notification_unique").on(table.notificationId),
-    schoolExpiry: index("teacherSchemeRecommendation_school_expiry_idx").on(table.schoolId, table.expiresAt),
-  }),
+    notification: uniqueIndex(
+      "teacherSchemeRecommendation_notification_unique"
+    ).on(table.notificationId),
+    schoolExpiry: index("teacherSchemeRecommendation_school_expiry_idx").on(
+      table.schoolId,
+      table.expiresAt
+    ),
+  })
 );
 
 export const classSubjects = mysqlTable(
@@ -1350,7 +2216,12 @@ export const classSubjects = mysqlTable(
     teacherId: int("teacherId"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ classSubject: uniqueIndex("class_subject_unique").on(table.classId, table.subjectId) }),
+  table => ({
+    classSubject: uniqueIndex("class_subject_unique").on(
+      table.classId,
+      table.subjectId
+    ),
+  })
 );
 
 export const enrollments = mysqlTable(
@@ -1361,15 +2232,25 @@ export const enrollments = mysqlTable(
     studentId: int("studentId").notNull(),
     classId: int("classId").notNull(),
     sessionId: int("sessionId").notNull(),
-    status: mysqlEnum("status", ["active", "promoted", "graduated", "withdrawn"]).notNull().default("active"),
+    status: mysqlEnum("status", [
+      "active",
+      "promoted",
+      "graduated",
+      "withdrawn",
+    ])
+      .notNull()
+      .default("active"),
     enrolledOn: date("enrolledOn").notNull(),
     promotionNote: text("promotionNote"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    studentSession: uniqueIndex("enrollment_student_session_unique").on(table.studentId, table.sessionId),
+    studentSession: uniqueIndex("enrollment_student_session_unique").on(
+      table.studentId,
+      table.sessionId
+    ),
     schoolIndex: index("enrollment_school_idx").on(table.schoolId),
-  }),
+  })
 );
 
 export const timetableEntries = mysqlTable(
@@ -1380,13 +2261,26 @@ export const timetableEntries = mysqlTable(
     classId: int("classId").notNull(),
     subjectId: int("subjectId").notNull(),
     teacherId: int("teacherId"),
-    dayOfWeek: mysqlEnum("dayOfWeek", ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]).notNull(),
+    dayOfWeek: mysqlEnum("dayOfWeek", [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday",
+    ]).notNull(),
     startsAt: varchar("startsAt", { length: 8 }).notNull(),
     endsAt: varchar("endsAt", { length: 8 }).notNull(),
     room: varchar("room", { length: 80 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ classDay: index("timetable_class_day_idx").on(table.classId, table.dayOfWeek) }),
+  table => ({
+    classDay: index("timetable_class_day_idx").on(
+      table.classId,
+      table.dayOfWeek
+    ),
+  })
 );
 
 export const lessonPlans = mysqlTable(
@@ -1402,10 +2296,12 @@ export const lessonPlans = mysqlTable(
     topic: varchar("topic", { length: 255 }).notNull(),
     objectives: text("objectives"),
     resources: text("resources"),
-    status: mysqlEnum("status", ["draft", "submitted", "approved", "delivered"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "submitted", "approved", "delivered"])
+      .notNull()
+      .default("draft"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("lessonPlan_school_idx").on(table.schoolId) }),
+  table => ({ schoolIndex: index("lessonPlan_school_idx").on(table.schoolId) })
 );
 
 export const curriculumMilestones = mysqlTable(
@@ -1418,10 +2314,12 @@ export const curriculumMilestones = mysqlTable(
     title: varchar("title", { length: 255 }).notNull(),
     targetWeek: int("targetWeek"),
     completionPercentage: int("completionPercentage").notNull().default(0),
-    status: mysqlEnum("status", ["not_started", "in_progress", "complete"]).notNull().default("not_started"),
+    status: mysqlEnum("status", ["not_started", "in_progress", "complete"])
+      .notNull()
+      .default("not_started"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("curriculum_school_idx").on(table.schoolId) }),
+  table => ({ schoolIndex: index("curriculum_school_idx").on(table.schoolId) })
 );
 
 export const attendanceRecords = mysqlTable(
@@ -1434,16 +2332,30 @@ export const attendanceRecords = mysqlTable(
     staffId: int("staffId"),
     classId: int("classId"),
     attendanceDate: date("attendanceDate").notNull(),
-    status: mysqlEnum("status", ["present", "late", "absent", "excused"]).notNull(),
+    status: mysqlEnum("status", [
+      "present",
+      "late",
+      "absent",
+      "excused",
+    ]).notNull(),
     note: text("note"),
     recordedBy: int("recordedBy").notNull(),
     recordedAt: timestamp("recordedAt").defaultNow().notNull(),
   },
   table => ({
-    studentDate: uniqueIndex("attendance_student_date_unique").on(table.studentId, table.attendanceDate),
-    staffDate: uniqueIndex("attendance_staff_date_unique").on(table.staffId, table.attendanceDate),
-    schoolDate: index("attendance_school_date_idx").on(table.schoolId, table.attendanceDate),
-  }),
+    studentDate: uniqueIndex("attendance_student_date_unique").on(
+      table.studentId,
+      table.attendanceDate
+    ),
+    staffDate: uniqueIndex("attendance_staff_date_unique").on(
+      table.staffId,
+      table.attendanceDate
+    ),
+    schoolDate: index("attendance_school_date_idx").on(
+      table.schoolId,
+      table.attendanceDate
+    ),
+  })
 );
 
 export const assessments = mysqlTable(
@@ -1455,15 +2367,25 @@ export const assessments = mysqlTable(
     classId: int("classId").notNull(),
     subjectId: int("subjectId").notNull(),
     title: varchar("title", { length: 255 }).notNull(),
-    assessmentType: mysqlEnum("assessmentType", ["assignment", "test", "project", "exam", "practical"]).notNull(),
+    assessmentType: mysqlEnum("assessmentType", [
+      "assignment",
+      "test",
+      "project",
+      "exam",
+      "practical",
+    ]).notNull(),
     maximumScore: int("maximumScore").notNull(),
-    weight: decimal("weight", { precision: 5, scale: 2 }).notNull().default("100.00"),
+    weight: decimal("weight", { precision: 5, scale: 2 })
+      .notNull()
+      .default("100.00"),
     heldOn: date("heldOn"),
-    status: mysqlEnum("status", ["draft", "open", "locked", "published"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "open", "locked", "published"])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("assessment_school_idx").on(table.schoolId) }),
+  table => ({ schoolIndex: index("assessment_school_idx").on(table.schoolId) })
 );
 
 export const gradeScales = mysqlTable(
@@ -1472,13 +2394,24 @@ export const gradeScales = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     label: varchar("label", { length: 12 }).notNull(),
-    minPercentage: decimal("minPercentage", { precision: 5, scale: 2 }).notNull(),
-    maxPercentage: decimal("maxPercentage", { precision: 5, scale: 2 }).notNull(),
+    minPercentage: decimal("minPercentage", {
+      precision: 5,
+      scale: 2,
+    }).notNull(),
+    maxPercentage: decimal("maxPercentage", {
+      precision: 5,
+      scale: 2,
+    }).notNull(),
     remark: varchar("remark", { length: 255 }),
     sortOrder: int("sortOrder").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolLabel: uniqueIndex("grade_school_label_unique").on(table.schoolId, table.label) }),
+  table => ({
+    schoolLabel: uniqueIndex("grade_school_label_unique").on(
+      table.schoolId,
+      table.label
+    ),
+  })
 );
 
 export const scores = mysqlTable(
@@ -1494,7 +2427,12 @@ export const scores = mysqlTable(
     enteredAt: timestamp("enteredAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ assessmentStudent: uniqueIndex("score_assessment_student_unique").on(table.assessmentId, table.studentId) }),
+  table => ({
+    assessmentStudent: uniqueIndex("score_assessment_student_unique").on(
+      table.assessmentId,
+      table.studentId
+    ),
+  })
 );
 
 export const resultPublications = mysqlTable(
@@ -1504,14 +2442,21 @@ export const resultPublications = mysqlTable(
     schoolId: int("schoolId").notNull(),
     termId: int("termId").notNull(),
     classId: int("classId").notNull(),
-    status: mysqlEnum("status", ["draft", "approved", "published", "withdrawn"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "approved", "published", "withdrawn"])
+      .notNull()
+      .default("draft"),
     approvedBy: int("approvedBy"),
     approvedAt: timestamp("approvedAt"),
     publishedBy: int("publishedBy"),
     publishedAt: timestamp("publishedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ termClass: uniqueIndex("result_term_class_unique").on(table.termId, table.classId) }),
+  table => ({
+    termClass: uniqueIndex("result_term_class_unique").on(
+      table.termId,
+      table.classId
+    ),
+  })
 );
 
 export const feeStructures = mysqlTable(
@@ -1525,10 +2470,14 @@ export const feeStructures = mysqlTable(
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
     mandatory: boolean("mandatory").notNull().default(true),
     dueOn: date("dueOn"),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("feeStructure_school_idx").on(table.schoolId) }),
+  table => ({
+    schoolIndex: index("feeStructure_school_idx").on(table.schoolId),
+  })
 );
 
 export const invoices = mysqlTable(
@@ -1542,19 +2491,35 @@ export const invoices = mysqlTable(
     issueDate: date("issueDate").notNull(),
     dueDate: date("dueDate"),
     subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
-    discount: decimal("discount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    discount: decimal("discount", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0.00"),
     total: decimal("total", { precision: 12, scale: 2 }).notNull(),
-    amountPaid: decimal("amountPaid", { precision: 12, scale: 2 }).notNull().default("0.00"),
-    status: mysqlEnum("status", ["draft", "issued", "partial", "paid", "overdue", "void"]).notNull().default("draft"),
+    amountPaid: decimal("amountPaid", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0.00"),
+    status: mysqlEnum("status", [
+      "draft",
+      "issued",
+      "partial",
+      "paid",
+      "overdue",
+      "void",
+    ])
+      .notNull()
+      .default("draft"),
     note: text("note"),
     createdBy: int("createdBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
-    schoolNo: uniqueIndex("invoice_school_no_unique").on(table.schoolId, table.invoiceNo),
+    schoolNo: uniqueIndex("invoice_school_no_unique").on(
+      table.schoolId,
+      table.invoiceNo
+    ),
     studentIndex: index("invoice_student_idx").on(table.studentId),
-  }),
+  })
 );
 
 export const invoiceLineItems = mysqlTable("invoiceLineItems", {
@@ -1576,13 +2541,25 @@ export const payments = mysqlTable(
     receiptNo: varchar("receiptNo", { length: 64 }).notNull(),
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
     paidOn: date("paidOn").notNull(),
-    method: mysqlEnum("method", ["cash", "bank_transfer", "card", "pos", "cheque", "other"]).notNull(),
+    method: mysqlEnum("method", [
+      "cash",
+      "bank_transfer",
+      "card",
+      "pos",
+      "cheque",
+      "other",
+    ]).notNull(),
     reference: varchar("reference", { length: 160 }),
     recordedBy: int("recordedBy").notNull(),
     note: text("note"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolReceipt: uniqueIndex("payment_school_receipt_unique").on(table.schoolId, table.receiptNo) }),
+  table => ({
+    schoolReceipt: uniqueIndex("payment_school_receipt_unique").on(
+      table.schoolId,
+      table.receiptNo
+    ),
+  })
 );
 
 export const schoolBankAccounts = mysqlTable(
@@ -1594,15 +2571,35 @@ export const schoolBankAccounts = mysqlTable(
     accountName: varchar("accountName", { length: 160 }).notNull(),
     encryptedAccountNumber: text("encryptedAccountNumber").notNull(),
     accountNumberLast4: varchar("accountNumberLast4", { length: 4 }).notNull(),
-    accountType: mysqlEnum("accountType", ["current", "savings", "corporate", "other"]).notNull().default("current"),
-    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    accountType: mysqlEnum("accountType", [
+      "current",
+      "savings",
+      "corporate",
+      "other",
+    ])
+      .notNull()
+      .default("current"),
+    status: mysqlEnum("status", ["draft", "active", "archived"])
+      .notNull()
+      .default("draft"),
     isPrimary: boolean("isPrimary").notNull().default(false),
-    paymentReferenceGuidance: varchar("paymentReferenceGuidance", { length: 255 }),
+    paymentReferenceGuidance: varchar("paymentReferenceGuidance", {
+      length: 255,
+    }),
     configuredBy: int("configuredBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolStatus: index("schoolBankAccount_school_status_idx").on(table.schoolId, table.status), schoolPrimary: index("schoolBankAccount_school_primary_idx").on(table.schoolId, table.isPrimary) }),
+  table => ({
+    schoolStatus: index("schoolBankAccount_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    schoolPrimary: index("schoolBankAccount_school_primary_idx").on(
+      table.schoolId,
+      table.isPrimary
+    ),
+  })
 );
 
 export const cashAssuranceCases = mysqlTable(
@@ -1612,8 +2609,21 @@ export const cashAssuranceCases = mysqlTable(
     schoolId: int("schoolId").notNull(),
     studentId: int("studentId").notNull(),
     guardianId: int("guardianId"),
-    status: mysqlEnum("status", ["open", "contact_due", "awaiting_promise", "payment_under_review", "disputed", "escalated", "settled", "closed"]).notNull().default("open"),
-    priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).notNull().default("normal"),
+    status: mysqlEnum("status", [
+      "open",
+      "contact_due",
+      "awaiting_promise",
+      "payment_under_review",
+      "disputed",
+      "escalated",
+      "settled",
+      "closed",
+    ])
+      .notNull()
+      .default("open"),
+    priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"])
+      .notNull()
+      .default("normal"),
     assignedTo: int("assignedTo"),
     nextActionAt: timestamp("nextActionAt"),
     pausedReason: text("pausedReason"),
@@ -1623,7 +2633,14 @@ export const cashAssuranceCases = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolStatus: index("cashAssuranceCase_school_status_idx").on(table.schoolId, table.status), studentIndex: index("cashAssuranceCase_student_idx").on(table.studentId), assigneeIndex: index("cashAssuranceCase_assignee_idx").on(table.assignedTo) }),
+  table => ({
+    schoolStatus: index("cashAssuranceCase_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    studentIndex: index("cashAssuranceCase_student_idx").on(table.studentId),
+    assigneeIndex: index("cashAssuranceCase_assignee_idx").on(table.assignedTo),
+  })
 );
 
 export const cashAssuranceCaseInvoices = mysqlTable(
@@ -1632,10 +2649,21 @@ export const cashAssuranceCaseInvoices = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     caseId: int("caseId").notNull(),
     invoiceId: int("invoiceId").notNull(),
-    snapshotOutstandingAmount: decimal("snapshotOutstandingAmount", { precision: 12, scale: 2 }).notNull(),
+    snapshotOutstandingAmount: decimal("snapshotOutstandingAmount", {
+      precision: 12,
+      scale: 2,
+    }).notNull(),
     includedAt: timestamp("includedAt").defaultNow().notNull(),
   },
-  table => ({ caseInvoice: uniqueIndex("cashAssuranceCaseInvoice_unique").on(table.caseId, table.invoiceId), invoiceIndex: index("cashAssuranceCaseInvoice_invoice_idx").on(table.invoiceId) }),
+  table => ({
+    caseInvoice: uniqueIndex("cashAssuranceCaseInvoice_unique").on(
+      table.caseId,
+      table.invoiceId
+    ),
+    invoiceIndex: index("cashAssuranceCaseInvoice_invoice_idx").on(
+      table.invoiceId
+    ),
+  })
 );
 
 export const cashAssuranceEvents = mysqlTable(
@@ -1645,12 +2673,23 @@ export const cashAssuranceEvents = mysqlTable(
     schoolId: int("schoolId").notNull(),
     caseId: int("caseId").notNull(),
     eventType: varchar("eventType", { length: 96 }).notNull(),
-    actorType: mysqlEnum("actorType", ["user", "guardian", "system"]).notNull().default("user"),
+    actorType: mysqlEnum("actorType", ["user", "guardian", "system"])
+      .notNull()
+      .default("user"),
     actorUserId: int("actorUserId"),
     note: text("note"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ caseCreated: index("cashAssuranceEvent_case_created_idx").on(table.caseId, table.createdAt), schoolCreated: index("cashAssuranceEvent_school_created_idx").on(table.schoolId, table.createdAt) }),
+  table => ({
+    caseCreated: index("cashAssuranceEvent_case_created_idx").on(
+      table.caseId,
+      table.createdAt
+    ),
+    schoolCreated: index("cashAssuranceEvent_school_created_idx").on(
+      table.schoolId,
+      table.createdAt
+    ),
+  })
 );
 
 export const paymentEvidence = mysqlTable(
@@ -1660,9 +2699,19 @@ export const paymentEvidence = mysqlTable(
     schoolId: int("schoolId").notNull(),
     caseId: int("caseId").notNull(),
     invoiceId: int("invoiceId").notNull(),
-    amountClaimed: decimal("amountClaimed", { precision: 12, scale: 2 }).notNull(),
+    amountClaimed: decimal("amountClaimed", {
+      precision: 12,
+      scale: 2,
+    }).notNull(),
     claimedPaidOn: date("claimedPaidOn"),
-    source: mysqlEnum("source", ["manual_receipt", "bank_reference", "provider_event", "other"]).notNull().default("manual_receipt"),
+    source: mysqlEnum("source", [
+      "manual_receipt",
+      "bank_reference",
+      "provider_event",
+      "other",
+    ])
+      .notNull()
+      .default("manual_receipt"),
     providerReference: varchar("providerReference", { length: 160 }),
     note: text("note"),
     evidenceFileKey: varchar("evidenceFileKey", { length: 512 }),
@@ -1670,7 +2719,14 @@ export const paymentEvidence = mysqlTable(
     evidenceFileName: varchar("evidenceFileName", { length: 255 }),
     evidenceMimeType: varchar("evidenceMimeType", { length: 96 }),
     evidenceFileSize: int("evidenceFileSize"),
-    status: mysqlEnum("status", ["submitted", "under_review", "accepted", "rejected"]).notNull().default("submitted"),
+    status: mysqlEnum("status", [
+      "submitted",
+      "under_review",
+      "accepted",
+      "rejected",
+    ])
+      .notNull()
+      .default("submitted"),
     reviewedBy: int("reviewedBy"),
     reviewedAt: timestamp("reviewedAt"),
     linkedPaymentId: int("linkedPaymentId"),
@@ -1679,7 +2735,14 @@ export const paymentEvidence = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolStatus: index("paymentEvidence_school_status_idx").on(table.schoolId, table.status), caseIndex: index("paymentEvidence_case_idx").on(table.caseId), invoiceIndex: index("paymentEvidence_invoice_idx").on(table.invoiceId) }),
+  table => ({
+    schoolStatus: index("paymentEvidence_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    caseIndex: index("paymentEvidence_case_idx").on(table.caseId),
+    invoiceIndex: index("paymentEvidence_invoice_idx").on(table.invoiceId),
+  })
 );
 
 export const familyPaymentEvidenceNotifications = mysqlTable(
@@ -1694,9 +2757,13 @@ export const familyPaymentEvidenceNotifications = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
-    evidenceRecipient: uniqueIndex("familyEvidenceNotification_evidence_recipient_unique").on(table.evidenceId, table.recipientUserId),
-    recipientUnread: index("familyEvidenceNotification_recipient_unread_idx").on(table.schoolId, table.recipientUserId, table.readAt),
-  }),
+    evidenceRecipient: uniqueIndex(
+      "familyEvidenceNotification_evidence_recipient_unique"
+    ).on(table.evidenceId, table.recipientUserId),
+    recipientUnread: index(
+      "familyEvidenceNotification_recipient_unread_idx"
+    ).on(table.schoolId, table.recipientUserId, table.readAt),
+  })
 );
 
 export const paymentPromises = mysqlTable(
@@ -1705,15 +2772,26 @@ export const paymentPromises = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     caseId: int("caseId").notNull(),
-    promisedAmount: decimal("promisedAmount", { precision: 12, scale: 2 }).notNull(),
+    promisedAmount: decimal("promisedAmount", {
+      precision: 12,
+      scale: 2,
+    }).notNull(),
     promisedOn: date("promisedOn").notNull(),
     note: text("note"),
-    status: mysqlEnum("status", ["open", "fulfilled", "overdue", "cancelled"]).notNull().default("open"),
+    status: mysqlEnum("status", ["open", "fulfilled", "overdue", "cancelled"])
+      .notNull()
+      .default("open"),
     recordedBy: int("recordedBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ caseIndex: index("paymentPromise_case_idx").on(table.caseId), schoolStatus: index("paymentPromise_school_status_idx").on(table.schoolId, table.status) }),
+  table => ({
+    caseIndex: index("paymentPromise_case_idx").on(table.caseId),
+    schoolStatus: index("paymentPromise_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+  })
 );
 
 export const leaveRequests = mysqlTable(
@@ -1722,17 +2800,31 @@ export const leaveRequests = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     staffId: int("staffId").notNull(),
-    leaveType: mysqlEnum("leaveType", ["annual", "sick", "maternity", "paternity", "compassionate", "other"]).notNull(),
+    leaveType: mysqlEnum("leaveType", [
+      "annual",
+      "sick",
+      "maternity",
+      "paternity",
+      "compassionate",
+      "other",
+    ]).notNull(),
     startsOn: date("startsOn").notNull(),
     endsOn: date("endsOn").notNull(),
     reason: text("reason").notNull(),
-    status: mysqlEnum("status", ["pending", "approved", "declined", "cancelled"]).notNull().default("pending"),
+    status: mysqlEnum("status", [
+      "pending",
+      "approved",
+      "declined",
+      "cancelled",
+    ])
+      .notNull()
+      .default("pending"),
     reviewedBy: int("reviewedBy"),
     reviewNote: text("reviewNote"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolIndex: index("leave_school_idx").on(table.schoolId) }),
+  table => ({ schoolIndex: index("leave_school_idx").on(table.schoolId) })
 );
 
 export const payrollRecords = mysqlTable(
@@ -1743,13 +2835,22 @@ export const payrollRecords = mysqlTable(
     staffId: int("staffId").notNull(),
     periodLabel: varchar("periodLabel", { length: 64 }).notNull(),
     grossPay: decimal("grossPay", { precision: 12, scale: 2 }).notNull(),
-    deductions: decimal("deductions", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    deductions: decimal("deductions", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0.00"),
     netPay: decimal("netPay", { precision: 12, scale: 2 }).notNull(),
-    status: mysqlEnum("status", ["draft", "approved", "paid", "void"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "approved", "paid", "void"])
+      .notNull()
+      .default("draft"),
     paidOn: date("paidOn"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ staffPeriod: uniqueIndex("payroll_staff_period_unique").on(table.staffId, table.periodLabel) }),
+  table => ({
+    staffPeriod: uniqueIndex("payroll_staff_period_unique").on(
+      table.staffId,
+      table.periodLabel
+    ),
+  })
 );
 
 export const performanceNotes = mysqlTable("performanceNotes", {
@@ -1759,7 +2860,9 @@ export const performanceNotes = mysqlTable("performanceNotes", {
   authorId: int("authorId").notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   note: text("note").notNull(),
-  visibility: mysqlEnum("visibility", ["private", "shared"]).notNull().default("private"),
+  visibility: mysqlEnum("visibility", ["private", "shared"])
+    .notNull()
+    .default("private"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -1770,15 +2873,27 @@ export const announcements = mysqlTable(
     schoolId: int("schoolId").notNull(),
     title: varchar("title", { length: 255 }).notNull(),
     body: text("body").notNull(),
-    audience: mysqlEnum("audience", ["everyone", "staff", "students", "guardians", "class"]).notNull().default("everyone"),
+    audience: mysqlEnum("audience", [
+      "everyone",
+      "staff",
+      "students",
+      "guardians",
+      "class",
+    ])
+      .notNull()
+      .default("everyone"),
     classId: int("classId"),
-    status: mysqlEnum("status", ["draft", "published", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "published", "archived"])
+      .notNull()
+      .default("draft"),
     publishedAt: timestamp("publishedAt"),
     createdBy: int("createdBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolIndex: index("announcement_school_idx").on(table.schoolId) }),
+  table => ({
+    schoolIndex: index("announcement_school_idx").on(table.schoolId),
+  })
 );
 
 export const messageLogs = mysqlTable(
@@ -1786,18 +2901,31 @@ export const messageLogs = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
-    channel: mysqlEnum("channel", ["in_app", "email", "sms", "whatsapp"]).notNull(),
-    audience: mysqlEnum("audience", ["everyone", "staff", "students", "guardians", "class"]).notNull(),
+    channel: mysqlEnum("channel", [
+      "in_app",
+      "email",
+      "sms",
+      "whatsapp",
+    ]).notNull(),
+    audience: mysqlEnum("audience", [
+      "everyone",
+      "staff",
+      "students",
+      "guardians",
+      "class",
+    ]).notNull(),
     subject: varchar("subject", { length: 255 }),
     body: text("body").notNull(),
     recipientCount: int("recipientCount").notNull().default(0),
     providerMessageId: varchar("providerMessageId", { length: 255 }),
-    status: mysqlEnum("status", ["queued", "sent", "failed"]).notNull().default("queued"),
+    status: mysqlEnum("status", ["queued", "sent", "failed"])
+      .notNull()
+      .default("queued"),
     createdBy: int("createdBy").notNull(),
     sentAt: timestamp("sentAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ schoolIndex: index("message_school_idx").on(table.schoolId) }),
+  table => ({ schoolIndex: index("message_school_idx").on(table.schoolId) })
 );
 
 export const providerConfigurations = mysqlTable(
@@ -1806,9 +2934,19 @@ export const providerConfigurations = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     category: mysqlEnum("category", ["payment", "notification"]).notNull(),
-    channel: mysqlEnum("channel", ["payment", "sms", "whatsapp", "email", "in_app"]).notNull().default("payment"),
+    channel: mysqlEnum("channel", [
+      "payment",
+      "sms",
+      "whatsapp",
+      "email",
+      "in_app",
+    ])
+      .notNull()
+      .default("payment"),
     provider: varchar("provider", { length: 64 }).notNull(),
-    status: mysqlEnum("status", ["draft", "ready", "disabled"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "ready", "disabled"])
+      .notNull()
+      .default("draft"),
     configuration: json("configuration").notNull(),
     encryptedCredentials: text("encryptedCredentials"),
     configuredBy: int("configuredBy").notNull(),
@@ -1816,7 +2954,12 @@ export const providerConfigurations = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolChannel: uniqueIndex("providerConfiguration_school_channel_unique").on(table.schoolId, table.channel), schoolIndex: index("providerConfiguration_school_idx").on(table.schoolId) }),
+  table => ({
+    schoolChannel: uniqueIndex(
+      "providerConfiguration_school_channel_unique"
+    ).on(table.schoolId, table.channel),
+    schoolIndex: index("providerConfiguration_school_idx").on(table.schoolId),
+  })
 );
 
 export const schoolAdvertisingAccounts = mysqlTable(
@@ -1825,18 +2968,38 @@ export const schoolAdvertisingAccounts = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     schoolId: int("schoolId").notNull(),
     provider: mysqlEnum("provider", ["meta"]).notNull().default("meta"),
-    status: mysqlEnum("status", ["not_connected", "connected", "attention", "disabled"]).notNull().default("not_connected"),
+    status: mysqlEnum("status", [
+      "not_connected",
+      "connected",
+      "attention",
+      "disabled",
+    ])
+      .notNull()
+      .default("not_connected"),
     accountName: varchar("accountName", { length: 160 }),
     externalAccountId: varchar("externalAccountId", { length: 160 }),
     currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
     encryptedCredentials: text("encryptedCredentials"),
     connectedBy: int("connectedBy"),
     lastValidatedAt: timestamp("lastValidatedAt"),
-    webhookStatus: mysqlEnum("webhookStatus", ["not_configured", "pending", "active"]).notNull().default("not_configured"),
+    webhookStatus: mysqlEnum("webhookStatus", [
+      "not_configured",
+      "pending",
+      "active",
+    ])
+      .notNull()
+      .default("not_configured"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolProvider: uniqueIndex("schoolAdvertisingAccount_school_provider_unique").on(table.schoolId, table.provider), schoolIndex: index("schoolAdvertisingAccount_school_idx").on(table.schoolId) }),
+  table => ({
+    schoolProvider: uniqueIndex(
+      "schoolAdvertisingAccount_school_provider_unique"
+    ).on(table.schoolId, table.provider),
+    schoolIndex: index("schoolAdvertisingAccount_school_idx").on(
+      table.schoolId
+    ),
+  })
 );
 
 export const advertisingCampaigns = mysqlTable(
@@ -1847,20 +3010,49 @@ export const advertisingCampaigns = mysqlTable(
     advertisingAccountId: int("advertisingAccountId").notNull(),
     provider: mysqlEnum("provider", ["meta"]).notNull().default("meta"),
     name: varchar("name", { length: 160 }).notNull(),
-    objective: mysqlEnum("objective", ["lead_generation", "website_visits", "awareness"]).notNull(),
+    objective: mysqlEnum("objective", [
+      "lead_generation",
+      "website_visits",
+      "awareness",
+    ]).notNull(),
     destinationUrl: varchar("destinationUrl", { length: 2048 }),
     facebookPageId: varchar("facebookPageId", { length: 80 }),
     creativeImageUrl: varchar("creativeImageUrl", { length: 2048 }),
     primaryText: text("primaryText").notNull(),
     headline: varchar("headline", { length: 255 }).notNull(),
-    callToAction: mysqlEnum("callToAction", ["learn_more", "apply_now", "contact_us"]).notNull().default("learn_more"),
-    audienceSummary: json("audienceSummary").$type<{ locations: string[]; ageMin?: number; ageMax?: number; note?: string }>().notNull(),
+    callToAction: mysqlEnum("callToAction", [
+      "learn_more",
+      "apply_now",
+      "contact_us",
+    ])
+      .notNull()
+      .default("learn_more"),
+    audienceSummary: json("audienceSummary")
+      .$type<{
+        locations: string[];
+        ageMin?: number;
+        ageMax?: number;
+        note?: string;
+      }>()
+      .notNull(),
     dailyBudget: decimal("dailyBudget", { precision: 12, scale: 2 }).notNull(),
     totalBudget: decimal("totalBudget", { precision: 12, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
     startsAt: timestamp("startsAt"),
     endsAt: timestamp("endsAt"),
-    status: mysqlEnum("status", ["draft", "pending_approval", "approved", "launching", "active", "paused", "completed", "failed", "archived"]).notNull().default("draft"),
+    status: mysqlEnum("status", [
+      "draft",
+      "pending_approval",
+      "approved",
+      "launching",
+      "active",
+      "paused",
+      "completed",
+      "failed",
+      "archived",
+    ])
+      .notNull()
+      .default("draft"),
     providerCampaignId: varchar("providerCampaignId", { length: 160 }),
     providerAdSetId: varchar("providerAdSetId", { length: 160 }),
     providerCreativeId: varchar("providerCreativeId", { length: 160 }),
@@ -1876,7 +3068,19 @@ export const advertisingCampaigns = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolStatus: index("advertisingCampaign_school_status_idx").on(table.schoolId, table.status), accountStatus: index("advertisingCampaign_account_status_idx").on(table.advertisingAccountId, table.status), providerId: index("advertisingCampaign_provider_id_idx").on(table.providerCampaignId) }),
+  table => ({
+    schoolStatus: index("advertisingCampaign_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    accountStatus: index("advertisingCampaign_account_status_idx").on(
+      table.advertisingAccountId,
+      table.status
+    ),
+    providerId: index("advertisingCampaign_provider_id_idx").on(
+      table.providerCampaignId
+    ),
+  })
 );
 
 export const aiTutors = mysqlTable(
@@ -1889,13 +3093,28 @@ export const aiTutors = mysqlTable(
     curriculumScope: text("curriculumScope").notNull(),
     allowedLevels: json("allowedLevels").$type<string[]>().notNull(),
     supervisorUserId: int("supervisorUserId").notNull(),
-    status: mysqlEnum("status", ["draft", "active", "paused", "retired"]).notNull().default("draft"),
+    status: mysqlEnum("status", ["draft", "active", "paused", "retired"])
+      .notNull()
+      .default("draft"),
     dailyQuestionLimit: int("dailyQuestionLimit").notNull().default(20),
     createdBy: int("createdBy").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ schoolSubject: uniqueIndex("aiTutor_school_subject_unique").on(table.schoolId, table.subjectId), schoolStatus: index("aiTutor_school_status_idx").on(table.schoolId, table.status), supervisorStatus: index("aiTutor_supervisor_status_idx").on(table.supervisorUserId, table.status) }),
+  table => ({
+    schoolSubject: uniqueIndex("aiTutor_school_subject_unique").on(
+      table.schoolId,
+      table.subjectId
+    ),
+    schoolStatus: index("aiTutor_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    supervisorStatus: index("aiTutor_supervisor_status_idx").on(
+      table.supervisorUserId,
+      table.status
+    ),
+  })
 );
 
 export const aiTutorSessionSummaries = mysqlTable(
@@ -1910,7 +3129,15 @@ export const aiTutorSessionSummaries = mysqlTable(
     escalationCount: int("escalationCount").notNull().default(0),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ tutorStudentDate: uniqueIndex("aiTutorSession_tutor_student_date_unique").on(table.tutorId, table.studentId, table.sessionDate), schoolStudent: index("aiTutorSession_school_student_idx").on(table.schoolId, table.studentId) }),
+  table => ({
+    tutorStudentDate: uniqueIndex(
+      "aiTutorSession_tutor_student_date_unique"
+    ).on(table.tutorId, table.studentId, table.sessionDate),
+    schoolStudent: index("aiTutorSession_school_student_idx").on(
+      table.schoolId,
+      table.studentId
+    ),
+  })
 );
 
 export const aiTutorEscalations = mysqlTable(
@@ -1920,13 +3147,29 @@ export const aiTutorEscalations = mysqlTable(
     schoolId: int("schoolId").notNull(),
     tutorId: int("tutorId").notNull(),
     studentId: int("studentId").notNull(),
-    reason: mysqlEnum("reason", ["learner_requested", "safeguarding", "out_of_scope", "needs_teacher_review"]).notNull(),
-    status: mysqlEnum("status", ["open", "acknowledged", "closed"]).notNull().default("open"),
+    reason: mysqlEnum("reason", [
+      "learner_requested",
+      "safeguarding",
+      "out_of_scope",
+      "needs_teacher_review",
+    ]).notNull(),
+    status: mysqlEnum("status", ["open", "acknowledged", "closed"])
+      .notNull()
+      .default("open"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     acknowledgedAt: timestamp("acknowledgedAt"),
     acknowledgedBy: int("acknowledgedBy"),
   },
-  table => ({ schoolStatus: index("aiTutorEscalation_school_status_idx").on(table.schoolId, table.status), tutorStudent: index("aiTutorEscalation_tutor_student_idx").on(table.tutorId, table.studentId) }),
+  table => ({
+    schoolStatus: index("aiTutorEscalation_school_status_idx").on(
+      table.schoolId,
+      table.status
+    ),
+    tutorStudent: index("aiTutorEscalation_tutor_student_idx").on(
+      table.tutorId,
+      table.studentId
+    ),
+  })
 );
 
 export const aiTutorInteractions = mysqlTable(
@@ -1939,7 +3182,19 @@ export const aiTutorInteractions = mysqlTable(
     interactionKey: varchar("interactionKey", { length: 64 }).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ interactionKeyUnique: uniqueIndex("aiTutorInteraction_key_unique").on(table.interactionKey), schoolTutor: index("aiTutorInteraction_school_tutor_idx").on(table.schoolId, table.tutorId), studentTutor: index("aiTutorInteraction_student_tutor_idx").on(table.studentId, table.tutorId) }),
+  table => ({
+    interactionKeyUnique: uniqueIndex("aiTutorInteraction_key_unique").on(
+      table.interactionKey
+    ),
+    schoolTutor: index("aiTutorInteraction_school_tutor_idx").on(
+      table.schoolId,
+      table.tutorId
+    ),
+    studentTutor: index("aiTutorInteraction_student_tutor_idx").on(
+      table.studentId,
+      table.tutorId
+    ),
+  })
 );
 
 export const aiTutorFeedback = mysqlTable(
@@ -1950,11 +3205,27 @@ export const aiTutorFeedback = mysqlTable(
     tutorId: int("tutorId").notNull(),
     studentId: int("studentId").notNull(),
     interactionId: int("interactionId").notNull(),
-    helpfulness: mysqlEnum("helpfulness", ["helpful", "partly_helpful", "not_helpful"]).notNull(),
+    helpfulness: mysqlEnum("helpfulness", [
+      "helpful",
+      "partly_helpful",
+      "not_helpful",
+    ]).notNull(),
     comment: varchar("comment", { length: 500 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => ({ interactionUnique: uniqueIndex("aiTutorFeedback_interaction_unique").on(table.interactionId), schoolTutor: index("aiTutorFeedback_school_tutor_idx").on(table.schoolId, table.tutorId), studentTutor: index("aiTutorFeedback_student_tutor_idx").on(table.studentId, table.tutorId) }),
+  table => ({
+    interactionUnique: uniqueIndex("aiTutorFeedback_interaction_unique").on(
+      table.interactionId
+    ),
+    schoolTutor: index("aiTutorFeedback_school_tutor_idx").on(
+      table.schoolId,
+      table.tutorId
+    ),
+    studentTutor: index("aiTutorFeedback_student_tutor_idx").on(
+      table.studentId,
+      table.tutorId
+    ),
+  })
 );
 
 export const aiTutorTeachingPreferences = mysqlTable(
@@ -1965,10 +3236,25 @@ export const aiTutorTeachingPreferences = mysqlTable(
     tutorId: int("tutorId").notNull(),
     studentId: int("studentId").notNull(),
     adaptationEnabled: boolean("adaptationEnabled").notNull().default(true),
-    preferredStyle: mysqlEnum("preferredStyle", ["balanced", "step_by_step", "worked_examples", "concise_review"]).notNull().default("balanced"),
+    preferredStyle: mysqlEnum("preferredStyle", [
+      "balanced",
+      "step_by_step",
+      "worked_examples",
+      "concise_review",
+    ])
+      .notNull()
+      .default("balanced"),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ studentTutor: uniqueIndex("aiTutorTeachingPreference_student_tutor_unique").on(table.studentId, table.tutorId), schoolTutor: index("aiTutorTeachingPreference_school_tutor_idx").on(table.schoolId, table.tutorId) }),
+  table => ({
+    studentTutor: uniqueIndex(
+      "aiTutorTeachingPreference_student_tutor_unique"
+    ).on(table.studentId, table.tutorId),
+    schoolTutor: index("aiTutorTeachingPreference_school_tutor_idx").on(
+      table.schoolId,
+      table.tutorId
+    ),
+  })
 );
 
 export const securityAuditEvents = mysqlTable(
@@ -1983,7 +3269,16 @@ export const securityAuditEvents = mysqlTable(
     metadata: json("metadata").notNull(),
     occurredAt: timestamp("occurredAt").defaultNow().notNull(),
   },
-  table => ({ schoolOccurred: index("securityAudit_school_occurred_idx").on(table.schoolId, table.occurredAt), actorOccurred: index("securityAudit_actor_occurred_idx").on(table.actorUserId, table.occurredAt) }),
+  table => ({
+    schoolOccurred: index("securityAudit_school_occurred_idx").on(
+      table.schoolId,
+      table.occurredAt
+    ),
+    actorOccurred: index("securityAudit_actor_occurred_idx").on(
+      table.actorUserId,
+      table.occurredAt
+    ),
+  })
 );
 
 export const rateLimitBuckets = mysqlTable(
@@ -1994,26 +3289,34 @@ export const rateLimitBuckets = mysqlTable(
     expiresAt: timestamp("expiresAt").notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ expiresIndex: index("rateLimit_expires_idx").on(table.expiresAt) }),
+  table => ({
+    expiresIndex: index("rateLimit_expires_idx").on(table.expiresAt),
+  })
 );
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
-
 
 export const marketingSubscriptions = mysqlTable(
   "marketingSubscriptions",
   {
     id: int("id").autoincrement().primaryKey(),
     userId: int("userId").notNull(),
-    status: mysqlEnum("status", ["subscribed", "unsubscribed"]).notNull().default("unsubscribed"),
+    status: mysqlEnum("status", ["subscribed", "unsubscribed"])
+      .notNull()
+      .default("unsubscribed"),
     consentSource: varchar("consentSource", { length: 64 }),
     consentedAt: timestamp("consentedAt"),
     unsubscribedAt: timestamp("unsubscribedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ userUnique: uniqueIndex("marketingSubscription_user_unique").on(table.userId), statusIndex: index("marketingSubscription_status_idx").on(table.status) }),
+  table => ({
+    userUnique: uniqueIndex("marketingSubscription_user_unique").on(
+      table.userId
+    ),
+    statusIndex: index("marketingSubscription_status_idx").on(table.status),
+  })
 );
 
 export const marketingConsentEvents = mysqlTable(
@@ -2025,7 +3328,12 @@ export const marketingConsentEvents = mysqlTable(
     source: varchar("source", { length: 64 }).notNull(),
     occurredAt: timestamp("occurredAt").defaultNow().notNull(),
   },
-  table => ({ userOccurred: index("marketingConsentEvent_user_occurred_idx").on(table.userId, table.occurredAt) }),
+  table => ({
+    userOccurred: index("marketingConsentEvent_user_occurred_idx").on(
+      table.userId,
+      table.occurredAt
+    ),
+  })
 );
 
 export const marketingCampaigns = mysqlTable(
@@ -2035,7 +3343,16 @@ export const marketingCampaigns = mysqlTable(
     title: varchar("title", { length: 160 }).notNull(),
     subject: varchar("subject", { length: 255 }).notNull(),
     body: text("body").notNull(),
-    status: mysqlEnum("status", ["draft", "approved", "sending", "sent", "failed", "cancelled"]).notNull().default("draft"),
+    status: mysqlEnum("status", [
+      "draft",
+      "approved",
+      "sending",
+      "sent",
+      "failed",
+      "cancelled",
+    ])
+      .notNull()
+      .default("draft"),
     createdBy: int("createdBy").notNull(),
     approvedBy: int("approvedBy"),
     approvedAt: timestamp("approvedAt"),
@@ -2043,7 +3360,10 @@ export const marketingCampaigns = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ statusIndex: index("marketingCampaign_status_idx").on(table.status), creatorIndex: index("marketingCampaign_creator_idx").on(table.createdBy) }),
+  table => ({
+    statusIndex: index("marketingCampaign_status_idx").on(table.status),
+    creatorIndex: index("marketingCampaign_creator_idx").on(table.createdBy),
+  })
 );
 
 export const marketingCampaignDeliveries = mysqlTable(
@@ -2052,11 +3372,22 @@ export const marketingCampaignDeliveries = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     campaignId: int("campaignId").notNull(),
     userId: int("userId").notNull(),
-    status: mysqlEnum("status", ["queued", "sent", "failed", "suppressed"]).notNull().default("queued"),
+    status: mysqlEnum("status", ["queued", "sent", "failed", "suppressed"])
+      .notNull()
+      .default("queued"),
     providerMessageId: varchar("providerMessageId", { length: 255 }),
     lastError: varchar("lastError", { length: 500 }),
     queuedAt: timestamp("queuedAt").defaultNow().notNull(),
     sentAt: timestamp("sentAt"),
   },
-  table => ({ campaignUserUnique: uniqueIndex("marketingCampaignDelivery_campaign_user_unique").on(table.campaignId, table.userId), campaignStatus: index("marketingCampaignDelivery_campaign_status_idx").on(table.campaignId, table.status), userIndex: index("marketingCampaignDelivery_user_idx").on(table.userId) }),
+  table => ({
+    campaignUserUnique: uniqueIndex(
+      "marketingCampaignDelivery_campaign_user_unique"
+    ).on(table.campaignId, table.userId),
+    campaignStatus: index("marketingCampaignDelivery_campaign_status_idx").on(
+      table.campaignId,
+      table.status
+    ),
+    userIndex: index("marketingCampaignDelivery_user_idx").on(table.userId),
+  })
 );

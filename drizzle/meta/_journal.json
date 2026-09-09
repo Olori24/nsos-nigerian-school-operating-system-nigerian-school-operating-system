@@ -498,6 +498,13 @@
       "when": 1788132798161,
       "tag": "0070_simple_anthem",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "5",
+      "when": 1788822122949,
+      "tag": "0071_slim_gwen_stacy",
+      "breakpoints": true
     }
   ]
 }

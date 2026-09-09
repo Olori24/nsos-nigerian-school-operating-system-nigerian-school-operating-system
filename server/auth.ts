@@ -261,6 +261,37 @@ async function sendMagicLinkEmail(input: {
   return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
 }
 
+export async function sendStudentPortalInvitationEmail(input: {
+  email: string;
+  studentName: string;
+  schoolName: string;
+  origin: string;
+}) {
+  const email = db.normaliseAuthEmail(input.email);
+  const origin = validOrigin(input.origin);
+  if (!origin)
+    throw new Error(
+      "A valid application origin is required for the student portal invitation."
+    );
+  const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
+  const link = `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`;
+  const studentName = (input.studentName.trim() || "Learner").replace(
+    /[\r\n<>&"']/g,
+    ""
+  );
+  const schoolName = (input.schoolName.trim() || "the school").replace(
+    /[\r\n<>&"']/g,
+    ""
+  );
+  return sendMagicLinkEmail({
+    email,
+    link,
+    subject: `Your ${schoolName} student portal invitation`,
+    text: `Hello ${studentName},\n\nYou have been invited to the ${schoolName} student portal. Use this secure sign-in link within ${MAGIC_LINK_TTL_LABEL}: ${link}\n\nIf you were not expecting this invitation, you can safely ignore this email.`,
+    html: `<p>Hello ${studentName},</p><p>You have been invited to the ${schoolName} student portal.</p><p><a href="${link}">Open your student portal</a></p><p>This secure sign-in link is valid for ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>`,
+  });
+}
+
 export async function sendAdmissionLetterEmail(input: {
   email: string;
   subject: string;
@@ -720,6 +751,10 @@ export function registerEmailAuthRoutes(app: Express) {
         userId: user.id,
       });
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({
+        email: link.email,
+        userId: user.id,
+      });
+      await db.acceptStudentPortalInvitationsForVerifiedEmail({
         email: link.email,
         userId: user.id,
       });

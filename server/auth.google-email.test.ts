@@ -5,6 +5,7 @@ import {
   authRoutePolicies,
   registerEmailAuthRoutes,
   registerGoogleAuthRoutes,
+  sendStudentPortalInvitationEmail,
 } from "./auth";
 import * as database from "./db";
 import { normaliseAuthEmail } from "./db";
@@ -260,13 +261,11 @@ describe("external authentication policy", () => {
   });
 
   it("keeps a bounded set of separate pending Google states so one completed attempt does not invalidate another", async () => {
-    const providerFetch = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: "invalid_grant" }), {
-          status: 400,
-        })
-      );
+    const providerFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "invalid_grant" }), {
+        status: 400,
+      })
+    );
     vi.stubGlobal("fetch", providerFetch);
     await withAuthRouteServer(async origin => {
       const first = await requestRoute(
@@ -290,13 +289,11 @@ describe("external authentication policy", () => {
   });
 
   it("handles a failed Google provider exchange without creating a session", async () => {
-    const providerFetch = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: "invalid_grant" }), {
-          status: 400,
-        })
-      );
+    const providerFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "invalid_grant" }), {
+        status: 400,
+      })
+    );
     vi.stubGlobal("fetch", providerFetch);
     await withAuthRouteServer(async origin => {
       const start = await requestRoute(
@@ -453,6 +450,10 @@ describe("external authentication policy", () => {
       database,
       "acceptGuardianPortalInvitationsForVerifiedEmail"
     ).mockResolvedValue({ acceptedCount: 0 });
+    vi.spyOn(
+      database,
+      "acceptStudentPortalInvitationsForVerifiedEmail"
+    ).mockResolvedValue({ acceptedCount: 0 });
     vi.spyOn(database, "createUserSession").mockResolvedValue(
       "email-new-session"
     );
@@ -503,17 +504,53 @@ describe("external authentication policy", () => {
     });
   });
 
+  it("sends a student invitation only through a trusted origin and the shared single-use email-link flow", async () => {
+    vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("c".repeat(43));
+    const providerFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "student-invite_123" }), {
+        status: 200,
+      })
+    );
+    vi.stubGlobal("fetch", providerFetch);
+    await expect(
+      sendStudentPortalInvitationEmail({
+        email: "learner@example.ng",
+        studentName: "Learner",
+        schoolName: "Example School",
+        origin: "https://nsos-system-uhkdscaf.manus.space",
+      })
+    ).resolves.toBe("student-invite_123");
+    expect(database.createAuthMagicLink).toHaveBeenCalledWith({
+      email: "learner@example.ng",
+      redirectOrigin: "https://nsos-system-uhkdscaf.manus.space",
+    });
+    const body = JSON.parse(
+      String((providerFetch.mock.calls[0]?.[1] as RequestInit).body)
+    ) as { to: string; subject: string; text: string; html: string };
+    expect(body.to).toBe("learner@example.ng");
+    expect(body.subject).toContain("student portal invitation");
+    expect(body.text).toContain("c".repeat(43));
+    expect(body.html).toContain("Open your student portal");
+    await expect(
+      sendStudentPortalInvitationEmail({
+        email: "learner@example.ng",
+        studentName: "Learner",
+        schoolName: "Example School",
+        origin: "https://example.ng/unsafe-path",
+      })
+    ).rejects.toThrow("valid application origin");
+    expect(providerFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("does not report passwordless-email delivery success when the provider rejects the request", async () => {
     vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("a".repeat(43));
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ error: "provider unavailable" }), {
-            status: 503,
-          })
-        )
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "provider unavailable" }), {
+          status: 503,
+        })
+      )
     );
     await withAuthRouteServer(async origin => {
       const response = await requestRoute(`${origin}/api/auth/email/request`, {
@@ -605,6 +642,9 @@ describe("external authentication policy", () => {
     const acceptGuardianInvitations = vi
       .spyOn(database, "acceptGuardianPortalInvitationsForVerifiedEmail")
       .mockResolvedValue({ acceptedCount: 0 });
+    const acceptStudentInvitations = vi
+      .spyOn(database, "acceptStudentPortalInvitationsForVerifiedEmail")
+      .mockResolvedValue({ acceptedCount: 0 });
     const createSession = vi
       .spyOn(database, "createUserSession")
       .mockResolvedValue("test-session-id");
@@ -624,6 +664,10 @@ describe("external authentication policy", () => {
         userId: 123,
       });
       expect(acceptGuardianInvitations).toHaveBeenCalledWith({
+        email: "parent@example.ng",
+        userId: 123,
+      });
+      expect(acceptStudentInvitations).toHaveBeenCalledWith({
         email: "parent@example.ng",
         userId: 123,
       });

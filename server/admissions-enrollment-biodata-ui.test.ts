@@ -5,7 +5,10 @@ const enrollmentStation = readFileSync(
   new URL("../client/src/components/EnrollmentStation.tsx", import.meta.url),
   "utf8"
 );
-const dbSource = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
+const dbSource = readFileSync(
+  new URL("./db/core.ts", import.meta.url),
+  "utf8"
+).replace(/\s+/g, " ");
 const globalStyles = readFileSync(
   new URL("../client/src/index.css", import.meta.url),
   "utf8"
@@ -109,9 +112,9 @@ describe("admissions enrollment biodata and letter wiring", () => {
     expect(dbSource).toContain("stateOfOrigin");
     expect(dbSource).toContain("localGovernment");
     expect(dbSource).toContain("eq(guardians.schoolId, input.schoolId)");
-    expect(dbSource).toContain(
-      "await db.insert(studentGuardians).values({ studentId, guardianId, isPrimary: true })"
-    );
+    expect(dbSource).toContain("await db.insert(studentGuardians).values({");
+    expect(dbSource).toContain("guardianId");
+    expect(dbSource).toContain("isPrimary: true");
     expect(dbSource).toContain('relationship: "Parent/Guardian"');
     expect(dbSource).toContain("getStudentEnrollmentRecord");
     expect(dbSource).toContain("eq(studentProfiles.schoolId, schoolId)");

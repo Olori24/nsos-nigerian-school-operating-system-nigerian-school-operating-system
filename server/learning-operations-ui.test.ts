@@ -7,7 +7,10 @@ const workspace = readFileSync(
   resolve(root, "client/src/components/LearningOperationsWorkspace.tsx"),
   "utf8"
 );
-const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
+const home = readFileSync(
+  resolve(root, "client/src/pages/Home.tsx"),
+  "utf8"
+).replace(/\s+/g, " ");
 const courseStudio = readFileSync(
   resolve(root, "client/src/components/CourseStudio.tsx"),
   "utf8"
@@ -36,8 +39,8 @@ const courseMaterialsDraft = readFileSync(
 describe("Learning operations workspace interface", () => {
   it("exposes programme operations only through the owner/admin navigation route", () => {
     expect(home).toContain('{ id: "learning", label: "Programmes"');
-    expect(home).toContain(
-      'role === "owner" || role === "admin" ? <LearningOperationsWorkspace'
+    expect(home).toMatch(
+      /role === "owner" \|\| role === "admin" \?\s*\(?\s*<LearningOperationsWorkspace/
     );
   });
 
@@ -87,13 +90,15 @@ describe("Learning operations workspace interface", () => {
     expect(progress).toContain(
       "not a grade, certificate, or verified credential"
     );
-    expect(home).toContain('role === "student" && <LearnerProgramProgress');
+    expect(home).toMatch(
+      /role === "student" &&\s*\(?\s*<LearnerProgramProgress/
+    );
   });
 
   it("mounts a protected owner/admin or assigned-instructor evidence review queue without automatic progress or credential action", () => {
     expect(workspace).toContain("<LearningEvidenceReview");
-    expect(home).toContain(
-      'role === "teacher" || role === "staff" ? <LearningEvidenceReview'
+    expect(home).toMatch(
+      /role === "teacher" \|\| role === "staff" \?\s*\(?\s*<LearningEvidenceReview/
     );
     expect(evidenceReview).toContain("Learning evidence review");
     expect(evidenceReview).toContain("Review to accept");
