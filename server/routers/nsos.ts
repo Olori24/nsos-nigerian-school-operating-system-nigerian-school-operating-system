@@ -25,7 +25,10 @@ import {
   jobCanRun,
   validateAutomationInput,
 } from "../automationDesk";
-import { buildCourseStudioDraft } from "../courseStudio";
+import {
+  buildCourseStudioDraft,
+  buildGuidedCourseStudioDraft,
+} from "../courseStudio";
 import { buildInstitutionBlueprint } from "../institutionBuilder";
 import {
   analyseKnowledgeForBusiness,
@@ -2747,6 +2750,7 @@ export const nsosRouter = router({
             .enum(["in_person", "live_online", "self_paced", "blended"])
             .optional(),
           durationPreference: z.string().trim().max(120).optional(),
+          guidedOnly: z.boolean().optional().default(false),
           curatedSourceIds: z.array(curatedSourceIdInput).max(3).default([]),
           evidenceSourceIds: z
             .array(z.number().int().positive())
@@ -2772,7 +2776,7 @@ export const nsosRouter = router({
           curatedSourceIds: input.curatedSourceIds,
           evidenceSourceIds: input.evidenceSourceIds,
         });
-        const draft = await buildCourseStudioDraft({
+        const request = {
           brief: input.brief,
           audience: input.audience,
           deliveryMode: input.deliveryMode,
@@ -2780,7 +2784,10 @@ export const nsosRouter = router({
           operatingType,
           evidenceReferences,
           learningExperience: input.learningExperience,
-        });
+        };
+        const draft = input.guidedOnly
+          ? buildGuidedCourseStudioDraft(request)
+          : await buildCourseStudioDraft(request);
         await db.recordSecurityAuditEvent({
           schoolId: input.schoolId,
           actorUserId: ctx.user.id,
@@ -2801,6 +2808,7 @@ export const nsosRouter = router({
             messageSent: false,
             paymentAction: false,
             credentialIssued: false,
+            guidedOnly: input.guidedOnly,
           },
         });
         return draft;

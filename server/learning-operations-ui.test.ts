@@ -14,7 +14,7 @@ const home = readFileSync(
 const courseStudio = readFileSync(
   resolve(root, "client/src/components/CourseStudio.tsx"),
   "utf8"
-);
+).replace(/\s+/g, " ");
 const governance = readFileSync(
   resolve(root, "client/src/components/LearningDesignGovernance.tsx"),
   "utf8"
