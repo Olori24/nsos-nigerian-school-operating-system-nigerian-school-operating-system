@@ -144,6 +144,17 @@ function compactTopic(input: CourseStudioRequest) {
   );
 }
 
+function isCodingForBeginnersEightWeekBrief(input: CourseStudioRequest) {
+  const requestText =
+    `${input.brief} ${input.durationPreference ?? ""}`.toLocaleLowerCase(
+      "en-NG"
+    );
+  return (
+    requestText.includes("coding for beginners") &&
+    /\b8\s*weeks?\b/.test(requestText)
+  );
+}
+
 function safeExperience(
   input: CourseStudioRequest
 ): CourseStudioLearningExperience {
@@ -184,7 +195,201 @@ function safeEvidence(
     );
 }
 
+function codingForBeginnersEightWeekGuidedDraft(
+  input: CourseStudioRequest
+): CourseStudioDraft {
+  const deliveryMode = input.deliveryMode ?? "live_online";
+  const modules: CourseStudioModule[] = [
+    {
+      title: "Week 1 — Coding orientation and digital setup",
+      description:
+        "Introduce the learning routine, safe digital workspace habits, computational thinking, and the idea of giving clear instructions to a computer.",
+      learningType: "topic",
+      milestones: [
+        {
+          title: "Review the learning routine",
+          description:
+            "A supervising facilitator checks that the learner can describe the support route, practice routine, and one example of an unambiguous instruction.",
+        },
+      ],
+    },
+    {
+      title: "Week 2 — Problems, steps, and pseudocode",
+      description:
+        "Break a familiar task into ordered steps, identify assumptions, and draft plain-language pseudocode before using a programming tool.",
+      learningType: "practice",
+      milestones: [
+        {
+          title: "Review a step-by-step solution",
+          description:
+            "A facilitator reviews one learner-created sequence of steps and discusses any missing or unclear instruction without assigning a score.",
+        },
+      ],
+    },
+    {
+      title: "Week 3 — Values, variables, input, and output",
+      description:
+        "Use small worked examples to explore how programs store values, receive input, and present a clear output.",
+      learningType: "topic",
+      milestones: [
+        {
+          title: "Discuss a variable example",
+          description:
+            "A supervising facilitator reviews the learner’s explanation of what changes and what stays the same in an approved example.",
+        },
+      ],
+    },
+    {
+      title: "Week 4 — Decisions, repetition, and tracing",
+      description:
+        "Practise reading simple decisions and repeated steps, then trace a short approved example by hand before trying it in a supported tool.",
+      learningType: "practice",
+      milestones: [
+        {
+          title: "Walk through a traced example",
+          description:
+            "A facilitator reviews the learner’s trace and agrees an appropriate next practice step; this is not an examination or pass/fail decision.",
+        },
+      ],
+    },
+    {
+      title: "Week 5 — Functions, testing, and simple debugging",
+      description:
+        "Introduce reusable instructions, predictable test cases, and a calm process for noticing, describing, and correcting small errors.",
+      learningType: "practical",
+      milestones: [
+        {
+          title: "Review a debugging note",
+          description:
+            "A human facilitator reviews how the learner described an expected result, an observed result, and one safe next test.",
+        },
+      ],
+    },
+    {
+      title: "Week 6 — Web page structure and accessible content",
+      description:
+        "Create a simple approved web page structure with meaningful headings, short content sections, and basic accessibility-aware choices.",
+      learningType: "practical",
+      milestones: [
+        {
+          title: "Review page structure",
+          description:
+            "A supervising facilitator reviews the learner’s page outline for clear headings and logical content order without publishing it.",
+        },
+      ],
+    },
+    {
+      title: "Week 7 — Styling, layout, and refinement",
+      description:
+        "Use beginner-friendly styling and layout practice to improve clarity, contrast, spacing, and readability in the internal web-page exercise.",
+      learningType: "practice",
+      milestones: [
+        {
+          title: "Review one design refinement",
+          description:
+            "A facilitator discusses one learner-selected readability or layout improvement and records only an appropriate internal next step.",
+        },
+      ],
+    },
+    {
+      title: "Week 8 — Guided mini-project and human review",
+      description:
+        "Bring approved beginner concepts together in a small internal web-page or program demonstration, followed by reflection and facilitator feedback.",
+      learningType: "project",
+      milestones: [
+        {
+          title: "Hold a human project reflection",
+          description:
+            "A human reviewer discusses the learner’s chosen demonstration, support needs, and next learning step; it does not create completion, a credential, or a grade.",
+        },
+      ],
+    },
+  ];
+
+  return {
+    courseTitle: "Coding for Beginners",
+    courseSummary:
+      "An editable internal eight-week outline for beginner learners, covering programming logic, supported practical exercises, web basics, and a small guided capstone. Review local curriculum, safeguarding, facilitator capacity, and delivery requirements before use.",
+    deliveryMode,
+    durationLabel: cleanText(input.durationPreference, 120) || "Eight weeks",
+    tutorBrief:
+      "Prepare a supervised coding tutor only after an owner or administrator defines the approved beginner scope, intended learner levels, facilitator escalation route, and human review process in the existing tutor workspace.",
+    evidenceReferences: safeEvidence(input),
+    learningExperience: safeExperience(input),
+    modules,
+    materials: [
+      {
+        title: "Week 1 facilitator orientation guide",
+        materialType: "facilitator_guide",
+        modulePosition: 1,
+        content:
+          "Explain the eight-week learning routine, support boundary, safe use of the chosen practice environment, and the difference between guided practice and an assessed result. Invite questions and record only organisation-approved teaching notes.",
+      },
+      {
+        title: "Week 2 problem-solving practice sheet",
+        materialType: "practice_activity",
+        modulePosition: 2,
+        content:
+          "Ask learners to turn one familiar task into clear ordered instructions, identify one assumption, and discuss a revised sequence with a supervising facilitator. Keep the activity non-graded.",
+      },
+      {
+        title: "Week 3 variables worked-example guide",
+        materialType: "lesson_guide",
+        modulePosition: 3,
+        content:
+          "Use one organisation-reviewed example to explain values, variables, input, and output in plain language. Ask learners to restate what changes in the example and offer human support where needed.",
+      },
+      {
+        title: "Week 4 decisions and repetition practice",
+        materialType: "practice_activity",
+        modulePosition: 4,
+        content:
+          "Guide learners through tracing an approved small decision and repetition example on paper or in a supported tool. Review the reasoning with a facilitator without calculating a score or completion outcome.",
+      },
+      {
+        title: "Week 5 testing and debugging guide",
+        materialType: "lesson_guide",
+        modulePosition: 5,
+        content:
+          "Model a simple test: expected result, observed result, and one next check. Emphasise that errors are useful evidence for practice and that a human facilitator decides any further support.",
+      },
+      {
+        title: "Week 6 accessible web-page lab",
+        materialType: "practice_activity",
+        modulePosition: 6,
+        content:
+          "Guide learners to create an internal web-page outline with meaningful headings, short sections, and a readability check. Do not publish the page or treat the activity as a public portfolio.",
+      },
+      {
+        title: "Week 7 styling and layout refinement prompt",
+        materialType: "reflection_prompt",
+        modulePosition: 7,
+        content:
+          "Invite learners to identify one contrast, spacing, or layout improvement in their internal practice page and discuss the choice with a facilitator. Do not convert the reflection into a grade or completion status.",
+      },
+      {
+        title: "Week 8 guided mini-project brief",
+        materialType: "project_brief",
+        modulePosition: 8,
+        content:
+          "Ask learners to combine approved beginner concepts in a small internal demonstration, explain one choice they made, and receive human feedback on a next learning step. This does not create a certificate, grade, or public work.",
+      },
+    ],
+    setupRecommendation:
+      "Create the programme as an internal draft, review and activate it separately, then apply the eight-week outline as internal draft modules, milestones, and materials only after owner review.",
+    limitations: [
+      "This guided outline does not infer curriculum approval, accreditation, staffing, learner identity, fees, or a public offering.",
+      "No programme, material, tutor, enrolment, message, credential, payment, grade, or publication is created from this plan alone.",
+    ],
+    source: "guided",
+    requiresConfirmation: true,
+  };
+}
+
 function fallbackDraft(input: CourseStudioRequest): CourseStudioDraft {
+  if (isCodingForBeginnersEightWeekBrief(input)) {
+    return codingForBeginnersEightWeekGuidedDraft(input);
+  }
   const topic = compactTopic(input);
   const deliveryMode = input.deliveryMode ?? "blended";
   const modules: CourseStudioModule[] = [
@@ -381,7 +586,7 @@ function validateDraft(
             : null;
         })
         .filter((item): item is CourseStudioModule => Boolean(item))
-        .slice(0, 6)
+        .slice(0, 8)
     : [];
   if (
     modules.length < 2 ||
@@ -411,7 +616,7 @@ function validateDraft(
             : null;
         })
         .filter((item): item is CourseStudioMaterial => Boolean(item))
-        .slice(0, 6)
+        .slice(0, 8)
     : [];
   if (materials.length < 2) return null;
   return {
@@ -475,7 +680,7 @@ export async function buildCourseStudioDraft(input: CourseStudioRequest) {
               modules: {
                 type: "array",
                 minItems: 2,
-                maxItems: 6,
+                maxItems: 8,
                 items: {
                   type: "object",
                   properties: {
@@ -518,7 +723,7 @@ export async function buildCourseStudioDraft(input: CourseStudioRequest) {
               materials: {
                 type: "array",
                 minItems: 2,
-                maxItems: 6,
+                maxItems: 8,
                 items: {
                   type: "object",
                   properties: {
@@ -537,7 +742,7 @@ export async function buildCourseStudioDraft(input: CourseStudioRequest) {
                         "resource_checklist",
                       ],
                     },
-                    modulePosition: { type: "integer", minimum: 1, maximum: 6 },
+                    modulePosition: { type: "integer", minimum: 1, maximum: 8 },
                     content: { type: "string" },
                   },
                   required: [

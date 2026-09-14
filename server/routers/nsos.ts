@@ -423,7 +423,7 @@ const courseStudioDraftInput = z.object({
       })
     )
     .min(2)
-    .max(6),
+    .max(8),
   materials: z
     .array(
       z.object({
@@ -444,7 +444,7 @@ const courseStudioDraftInput = z.object({
       })
     )
     .min(2)
-    .max(6),
+    .max(8),
 });
 const courseStudioExperienceInput = z.object({
   learningPace: z.enum(["guided", "flexible", "intensive"]).default("guided"),

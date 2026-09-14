@@ -195,4 +195,39 @@ describe("NSOS Course Studio", () => {
     expect(draft.materials.length).toBeGreaterThanOrEqual(2);
     expect(vi.mocked(invokeLLM)).not.toHaveBeenCalled();
   });
+
+  it("builds an editable eight-week Coding for Beginners progression without contacting a model provider", () => {
+    const draft = buildGuidedCourseStudioDraft({
+      ...request,
+      brief:
+        "Coding for Beginners with programming logic, web basics, and a guided capstone.",
+      audience: "Beginner learners",
+      deliveryMode: "live_online",
+      durationPreference: "8 weeks from 4 September",
+    });
+
+    expect(draft).toEqual(
+      expect.objectContaining({
+        courseTitle: "Coding for Beginners",
+        source: "guided",
+        requiresConfirmation: true,
+        deliveryMode: "live_online",
+      })
+    );
+    expect(draft.modules).toHaveLength(8);
+    expect(draft.modules.map(module => module.title)).toEqual(
+      expect.arrayContaining([
+        "Week 1 — Coding orientation and digital setup",
+        "Week 8 — Guided mini-project and human review",
+      ])
+    );
+    expect(draft.materials).toHaveLength(8);
+    expect(draft.materials.map(material => material.modulePosition)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
+    expect(draft.limitations.join(" ")).toMatch(
+      /No programme, material, tutor, enrolment/i
+    );
+    expect(vi.mocked(invokeLLM)).not.toHaveBeenCalled();
+  });
 });
