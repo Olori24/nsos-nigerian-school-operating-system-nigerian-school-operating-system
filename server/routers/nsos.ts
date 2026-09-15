@@ -439,7 +439,7 @@ const courseStudioDraftInput = z.object({
           "revision_sheet",
           "resource_checklist",
         ]),
-        modulePosition: z.number().int().positive().max(6),
+        modulePosition: z.number().int().positive().max(8),
         content: z.string().trim().min(30).max(4500),
       })
     )

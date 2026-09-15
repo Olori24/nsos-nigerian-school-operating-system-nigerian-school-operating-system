@@ -22,6 +22,8 @@ The fresh **Programmes** check then showed the **Build guided offline draft** co
 
 The deterministic guided outline then rendered successfully. It is explicitly marked non-persistent and requires a separate confirmation before internal drafts can be saved. Its baseline has three generic review-first modules, so it requires owner-reviewed tailoring to the requested eight-week Coding for Beginners progression before any save should be considered.
 
+After checkpoint `3d6e1657` was deployed, the owner workspace generated the tailored deterministic outline successfully. It contains eight editable weekly modules: orientation and digital setup; problem decomposition and pseudocode; values, variables, input and output; decisions, repetition and tracing; functions, testing and debugging; accessible web-page structure; styling and refinement; and a guided mini-project with human review. It also contains eight aligned internal facilitator/practice materials. This review does **not** create a programme, modules, materials, tutor, learner enrolment, account, invitation, payment, message, grade, credential, or public content. The currently visible **Confirm and save internal drafts** control remains unselected and has not been invoked.
+
 ## Boundary
 
 No Course Studio draft was saved, and no programme, material, pathway, learner enrolment, invitation, account, payment, message, grade, certificate, or public content was created during this rollout check.
