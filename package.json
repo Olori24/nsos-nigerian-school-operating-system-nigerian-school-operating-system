@@ -12,7 +12,8 @@
     "format:check": "prettier --check package.json .github/workflows/ci.yml vitest.config.ts",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "arsenal:audit": "node scripts/arsenal-audit.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1112.0",
