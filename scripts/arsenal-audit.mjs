@@ -16,6 +16,7 @@ const required = [
   "docs/PROVIDER_ADAPTER_STANDARD.md",
   "docs/AUTOMATION_ENGINEERING_STANDARD.md",
   "docs/CLIENT_DELIVERY_STANDARD.md",
+  "docs/RECOVERY_RUNBOOK.md",
 ];
 
 const missing = required.filter(path => !existsSync(join(root, path)));
