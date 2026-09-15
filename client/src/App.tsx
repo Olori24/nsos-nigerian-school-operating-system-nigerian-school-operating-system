@@ -8,6 +8,7 @@ import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
 import { BiodataDocumentAutofill, type BiodataAutofillProposal } from "./components/BiodataDocumentAutofill";
 import { InstallNSOSPrompt } from "./components/InstallNSOSPrompt";
 import { NSOSUpdatePrompt } from "./components/NSOSUpdatePrompt";
+import { DeveloperArsenalLaunch } from "./components/DeveloperArsenalLaunch";
 import { useEffect, useState } from "react";
 import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
@@ -52,6 +53,7 @@ export default function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <DeveloperArsenalLaunch />
           <InternalBiodataAutofillLauncher />
           <InstallNSOSPrompt />
           <NSOSUpdatePrompt />
