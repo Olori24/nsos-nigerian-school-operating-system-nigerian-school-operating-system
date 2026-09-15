@@ -10,9 +10,12 @@ const required = [
   ".github/dependabot.yml",
   ".github/workflows/ci.yml",
   ".github/workflows/security.yml",
+  ".github/workflows/performance.yml",
   "docs/DEVELOPER_ARSENAL.md",
   "docs/AI_ENGINEERING_STANDARD.md",
   "docs/PROVIDER_ADAPTER_STANDARD.md",
+  "docs/AUTOMATION_ENGINEERING_STANDARD.md",
+  "docs/CLIENT_DELIVERY_STANDARD.md",
 ];
 
 const missing = required.filter(path => !existsSync(join(root, path)));
