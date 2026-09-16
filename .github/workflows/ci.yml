@@ -56,6 +56,9 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit repository engineering baseline
+        run: pnpm arsenal:audit
+
       - name: Audit production dependencies
         run: pnpm audit --prod
 
