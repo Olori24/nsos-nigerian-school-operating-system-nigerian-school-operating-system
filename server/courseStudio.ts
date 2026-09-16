@@ -151,7 +151,7 @@ function isCodingForBeginnersEightWeekBrief(input: CourseStudioRequest) {
     );
   return (
     requestText.includes("coding for beginners") &&
-    /\b8\s*weeks?\b/.test(requestText)
+    /\b(?:8|eight)\s*weeks?\b/.test(requestText)
   );
 }
 

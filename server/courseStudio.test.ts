@@ -230,4 +230,21 @@ describe("NSOS Course Studio", () => {
     );
     expect(vi.mocked(invokeLLM)).not.toHaveBeenCalled();
   });
+
+  it("recognizes the approved word-form Eight weeks duration without contacting a model provider", () => {
+    const draft = buildGuidedCourseStudioDraft({
+      ...request,
+      brief:
+        "Coding for Beginners with programming logic, web basics, and a guided capstone.",
+      audience: "Beginner learners",
+      deliveryMode: "live_online",
+      durationPreference:
+        "Eight weeks · 4 September to 29 October · Monday and Wednesday 4–6 pm; Saturday 11 am–1 pm WAT",
+    });
+
+    expect(draft.courseTitle).toBe("Coding for Beginners");
+    expect(draft.modules).toHaveLength(8);
+    expect(draft.materials).toHaveLength(8);
+    expect(vi.mocked(invokeLLM)).not.toHaveBeenCalled();
+  });
 });
