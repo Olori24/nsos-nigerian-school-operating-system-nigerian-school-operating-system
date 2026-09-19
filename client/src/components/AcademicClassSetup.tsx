@@ -1,4 +1,4 @@
-import { BookOpen, Check, LockKeyhole, Plus } from "lucide-react";
+import { BookOpen, CalendarDays, Check, LockKeyhole, Plus } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -32,6 +32,37 @@ export function AcademicClassSetup({
   });
   const classes = academic?.classes ?? [];
   const sessions = academic?.sessions ?? [];
+  const subjects = new Map<number, string>(
+    (academic?.subjects ?? []).map((item: any) => [
+      Number(item.id),
+      String(item.name),
+    ])
+  );
+  const scheduleByClass = new Map<number, any[]>();
+  (academic?.timetable ?? []).forEach((entry: any) => {
+    const classId = Number(entry.classId);
+    scheduleByClass.set(classId, [
+      ...(scheduleByClass.get(classId) ?? []),
+      entry,
+    ]);
+  });
+  const dayLabels: Record<string, string> = {
+    monday: "Mon",
+    tuesday: "Tue",
+    wednesday: "Wed",
+    thursday: "Thu",
+    friday: "Fri",
+    saturday: "Sat",
+    sunday: "Sun",
+  };
+  const formatTime = (value: string | undefined) => {
+    if (!value) return "—";
+    const [hours, minutes] = value.split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
+    const suffix = hours >= 12 ? "pm" : "am";
+    const displayHour = hours % 12 || 12;
+    return `${displayHour}:${String(minutes).padStart(2, "0")}${suffix}`;
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -97,29 +128,69 @@ export function AcademicClassSetup({
           </div>
           {classes.length ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {classes.map((item: any) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl border border-[#dce8df] bg-[#fbfdfb] p-3"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[#e2f1e8] text-[#176145]">
-                      <Check className="h-3.5 w-3.5" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-bold text-[#29483a]">
-                        {item.name}
-                      </p>
-                      <p className="mt-1 text-[10px] text-[#6b7d73]">
-                        {item.level || "Class"}
-                        {item.sessionId
-                          ? ` · ${sessions.find((session: any) => Number(session.id) === Number(item.sessionId))?.name ?? "Academic session"}`
-                          : " · No session selected"}
-                      </p>
+              {classes.map((item: any) => {
+                const schedule = scheduleByClass.get(Number(item.id)) ?? [];
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-[#dce8df] bg-[#fbfdfb] p-3"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[#e2f1e8] text-[#176145]">
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-[#29483a]">
+                          {item.name}
+                        </p>
+                        <p className="mt-1 text-[10px] text-[#6b7d73]">
+                          {item.level || "Class"}
+                          {item.sessionId
+                            ? ` · ${sessions.find((session: any) => Number(session.id) === Number(item.sessionId))?.name ?? "Academic session"}`
+                            : " · No session selected"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 border-t border-[#e7eee8] pt-3">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#557064]">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        Schedule preview
+                      </div>
+                      {schedule.length ? (
+                        <div className="mt-2 grid gap-1.5">
+                          {schedule.slice(0, 2).map((entry: any) => (
+                            <p
+                              key={entry.id}
+                              className="text-[10px] leading-4 text-[#536a5e]"
+                            >
+                              <span className="font-bold">
+                                {dayLabels[entry.dayOfWeek] ?? entry.dayOfWeek}
+                              </span>{" "}
+                              {formatTime(entry.startsAt)}–
+                              {formatTime(entry.endsAt)} ·{" "}
+                              {subjects.get(Number(entry.subjectId)) ??
+                                "Subject"}
+                              {entry.room ? ` · ${entry.room}` : ""}
+                            </p>
+                          ))}
+                          {schedule.length > 2 && (
+                            <p className="text-[10px] font-semibold text-[#176145]">
+                              {schedule.length - 2 === 1
+                                ? "+1 more timetable entry"
+                                : `+${schedule.length - 2} more timetable entries`}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-[10px] leading-4 text-[#7a887f]">
+                          No timetable entries yet. Add a schedule when this
+                          class is ready for teaching.
+                        </p>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="mt-3 rounded-xl border border-dashed border-[#d4e2d6] bg-[#fbfdfb] p-4 text-xs leading-5 text-[#687b71]">

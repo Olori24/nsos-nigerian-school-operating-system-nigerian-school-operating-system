@@ -23,6 +23,10 @@ describe("Academic class setup interface", () => {
     );
     expect(component).toContain("Tenant-scoped");
     expect(component).toContain("createClass.useMutation");
+    expect(component).toContain("Schedule preview");
+    expect(component).toContain("academic?.timetable");
+    expect(component).toContain("No timetable entries yet.");
+    expect(component).toContain("subjects.get(Number(entry.subjectId))");
   });
 
   it("mounts the class workflow only in the school academic workspace", () => {
