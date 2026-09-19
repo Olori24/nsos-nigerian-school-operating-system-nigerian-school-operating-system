@@ -5,6 +5,28 @@ import { trpc } from "@/lib/trpc";
 
 const inputClass =
   "h-10 w-full rounded-lg border border-[#dfe5df] bg-[#fbfcfa] px-3 text-sm text-[#15201c] outline-none transition focus:border-[#0f5c4f] focus:ring-2 focus:ring-[#0f5c4f]/10";
+const scheduleTagStyles = [
+  {
+    row: "border-[#b8dfd0] bg-[#f1fbf5]",
+    tag: "bg-[#d8f1e3] text-[#145c45]",
+    dot: "bg-[#258765]",
+  },
+  {
+    row: "border-[#c8d8ef] bg-[#f3f7fd]",
+    tag: "bg-[#dfeafb] text-[#24528a]",
+    dot: "bg-[#4b78bd]",
+  },
+  {
+    row: "border-[#ead4a5] bg-[#fffaf0]",
+    tag: "bg-[#f8e9bd] text-[#755619]",
+    dot: "bg-[#b27b1f]",
+  },
+  {
+    row: "border-[#e6c7d9] bg-[#fff5fa]",
+    tag: "bg-[#f5dbe9] text-[#7d315b]",
+    dot: "bg-[#ae4e7f]",
+  },
+];
 
 export function AcademicClassSetup({
   schoolId,
@@ -62,6 +84,14 @@ export function AcademicClassSetup({
     const suffix = hours >= 12 ? "pm" : "am";
     const displayHour = hours % 12 || 12;
     return `${displayHour}:${String(minutes).padStart(2, "0")}${suffix}`;
+  };
+  const scheduleStyleFor = (entry: any) => {
+    const label = `${subjects.get(Number(entry.subjectId)) ?? "Subject"}|${entry.room ?? ""}`;
+    const hash = Array.from(label).reduce(
+      (total, character) => total + character.charCodeAt(0),
+      0
+    );
+    return scheduleTagStyles[hash % scheduleTagStyles.length];
   };
 
   const submit = (event: FormEvent) => {
@@ -158,21 +188,39 @@ export function AcademicClassSetup({
                       </div>
                       {schedule.length ? (
                         <div className="mt-2 grid gap-1.5">
-                          {schedule.slice(0, 2).map((entry: any) => (
-                            <p
-                              key={entry.id}
-                              className="text-[10px] leading-4 text-[#536a5e]"
-                            >
-                              <span className="font-bold">
-                                {dayLabels[entry.dayOfWeek] ?? entry.dayOfWeek}
-                              </span>{" "}
-                              {formatTime(entry.startsAt)}–
-                              {formatTime(entry.endsAt)} ·{" "}
-                              {subjects.get(Number(entry.subjectId)) ??
-                                "Subject"}
-                              {entry.room ? ` · ${entry.room}` : ""}
-                            </p>
-                          ))}
+                          {schedule.slice(0, 2).map((entry: any) => {
+                            const style = scheduleStyleFor(entry);
+                            const subject =
+                              subjects.get(Number(entry.subjectId)) ??
+                              "Subject";
+                            return (
+                              <p
+                                key={entry.id}
+                                className={`flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] leading-4 text-[#536a5e] ${style.row}`}
+                              >
+                                <span
+                                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`}
+                                  aria-hidden="true"
+                                />
+                                <span className="font-bold">
+                                  {dayLabels[entry.dayOfWeek] ??
+                                    entry.dayOfWeek}
+                                </span>{" "}
+                                {formatTime(entry.startsAt)}–
+                                {formatTime(entry.endsAt)}
+                                <span
+                                  className={`rounded px-1.5 py-0.5 font-bold ${style.tag}`}
+                                >
+                                  {subject}
+                                </span>
+                                {entry.room && (
+                                  <span className="text-[#536a5e]">
+                                    Room {entry.room}
+                                  </span>
+                                )}
+                              </p>
+                            );
+                          })}
                           {schedule.length > 2 && (
                             <p className="text-[10px] font-semibold text-[#176145]">
                               {schedule.length - 2 === 1

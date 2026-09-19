@@ -27,6 +27,10 @@ describe("Academic class setup interface", () => {
     expect(component).toContain("academic?.timetable");
     expect(component).toContain("No timetable entries yet.");
     expect(component).toContain("subjects.get(Number(entry.subjectId))");
+    expect(component).toContain("scheduleTagStyles");
+    expect(component).toContain("scheduleStyleFor");
+    expect(component).toContain('aria-hidden="true"');
+    expect(component).toContain("Room {entry.room}");
   });
 
   it("mounts the class workflow only in the school academic workspace", () => {
