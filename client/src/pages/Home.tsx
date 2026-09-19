@@ -2826,6 +2826,7 @@ function Workspace({
           academics={academics}
           canMigrate={role === "owner" || role === "admin"}
           onRefresh={onRefresh}
+          onNavigate={onNavigate}
         />
         <StudentLifecycleControls
           schoolId={schoolId}
@@ -4331,6 +4332,7 @@ function Students({
   academics,
   canMigrate,
   onRefresh,
+  onNavigate,
 }: {
   schoolId: number;
   schoolName: string;
@@ -4338,6 +4340,7 @@ function Students({
   academics: Query<any>;
   canMigrate: boolean;
   onRefresh: () => void;
+  onNavigate: (view: View) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   return (
@@ -4352,6 +4355,7 @@ function Students({
           schoolId={schoolId}
           academic={academics.data}
           onDone={onRefresh}
+          onOpenClassSetup={() => onNavigate("academics")}
         />
       )}
       {showForm && (
@@ -7001,6 +7005,7 @@ function StudentsWithPromotion({
   academics,
   canMigrate,
   onRefresh,
+  onNavigate,
 }: {
   schoolId: number;
   schoolName: string;
@@ -7008,6 +7013,7 @@ function StudentsWithPromotion({
   academics: Query<any>;
   canMigrate: boolean;
   onRefresh: () => void;
+  onNavigate: (view: View) => void;
 }) {
   return (
     <div className="grid gap-6">
@@ -7018,6 +7024,7 @@ function StudentsWithPromotion({
         academics={academics}
         canMigrate={canMigrate}
         onRefresh={onRefresh}
+        onNavigate={onNavigate}
       />
       <PromotionStation
         schoolId={schoolId}
