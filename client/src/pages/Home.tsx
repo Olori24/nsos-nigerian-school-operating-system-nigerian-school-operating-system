@@ -21,6 +21,7 @@ import { PlatformRevenueConsole } from "@/components/PlatformRevenueConsole";
 import { AffiliatePilotConsole } from "@/components/AffiliatePilotConsole";
 import { SubscriptionStatusCard } from "@/components/SubscriptionStatusCard";
 import { AcademicHistoryStation } from "@/components/AcademicHistoryStation";
+import { AcademicClassSetup } from "@/components/AcademicClassSetup";
 import { GuardianProfilePanel } from "@/components/GuardianProfilePanel";
 import { StudentPortalAccessPanel } from "@/components/StudentPortalAccessPanel";
 import { GuardianPortalOnboardingChecklist } from "@/components/GuardianPortalOnboardingChecklist";
@@ -4496,6 +4497,12 @@ function Academics({
             <TeacherWeeklyPlanReview schoolId={schoolId} onDone={onRefresh} />
           ) : (
             <>
+              <AcademicClassSetup
+                schoolId={schoolId}
+                academic={data.data}
+                canConfigure={canConfigureCurriculum}
+                onDone={onRefresh}
+              />
               <NigerianCurriculumSetup
                 schoolId={schoolId}
                 academic={data.data}
