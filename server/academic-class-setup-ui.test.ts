@@ -43,6 +43,11 @@ describe("Academic class setup interface", () => {
     expect(component).toContain("Register a learner");
     expect(component).toContain("onRegister();");
     expect(component).toMatch(/does not enroll a\s+learner/);
+    expect(component).toContain("isRegistering");
+    expect(component).toContain("Registration review ready");
+    expect(component).toContain("Opening Admissions…");
+    expect(component).toContain("animate-spin");
+    expect(component).toContain("window.setTimeout");
     expect(component).toContain("Standard Nigerian class presets");
     expect(component).toContain('"Basic 1"');
     expect(component).toContain('"Basic 6"');

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Check,
   LockKeyhole,
+  Loader2,
   Plus,
   UserRound,
 } from "lucide-react";
@@ -83,6 +84,7 @@ export function AcademicClassSetup({
     classItem: any;
     entry: any;
   } | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
   const createClass = trpc.nsos.academics.createClass.useMutation({
     onSuccess: () => {
       toast.success("Class created and added to school class choices.");
@@ -165,6 +167,16 @@ export function AcademicClassSetup({
       level: level.trim() || undefined,
       sessionId: sessionId ? Number(sessionId) : undefined,
     });
+  };
+  const handleRegister = () => {
+    if (isRegistering) return;
+    setIsRegistering(true);
+    toast.success("Registration review ready — opening Admissions.");
+    window.setTimeout(() => {
+      setSelectedSchedule(null);
+      setIsRegistering(false);
+      onRegister();
+    }, 550);
   };
 
   return (
@@ -524,15 +536,24 @@ export function AcademicClassSetup({
             </button>
             <button
               type="button"
+              disabled={isRegistering}
               onClick={() => {
-                setSelectedSchedule(null);
-                onRegister();
+                handleRegister();
               }}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#0f5c4f] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#0b4d42]"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#0f5c4f] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#0b4d42] disabled:cursor-wait disabled:opacity-75"
             >
-              <UserRound className="h-4 w-4" />
-              Register a learner
-              <ArrowRight className="h-3.5 w-3.5" />
+              {isRegistering ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Opening Admissions…
+                </>
+              ) : (
+                <>
+                  <UserRound className="h-4 w-4" />
+                  Register a learner
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </>
+              )}
             </button>
           </DialogFooter>
         </DialogContent>
