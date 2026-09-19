@@ -87,6 +87,8 @@ export function AcademicClassSetup({
   const [name, setName] = useState("");
   const [level, setLevel] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [classSearch, setClassSearch] = useState("");
+  const [classLevelFilter, setClassLevelFilter] = useState("all");
   const [standardSessionId, setStandardSessionId] = useState("");
   const [standardSetupConfirmed, setStandardSetupConfirmed] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<{
@@ -125,6 +127,17 @@ export function AcademicClassSetup({
   const missingStandardClasses = standardSchoolClasses.filter(
     item => !existingClassNames.has(item.name.toLowerCase())
   );
+  const normalizedClassSearch = classSearch.trim().toLowerCase();
+  const filteredClasses = classes.filter((item: any) => {
+    const matchesSearch = normalizedClassSearch
+      ? `${item.name} ${item.level ?? ""} ${item.arm ?? ""}`
+          .toLowerCase()
+          .includes(normalizedClassSearch)
+      : true;
+    const matchesLevel =
+      classLevelFilter === "all" || item.level === classLevelFilter;
+    return matchesSearch && matchesLevel;
+  });
   const staffNames = new Map<number, string>(
     staff.map(item => [
       Number(item.id),
@@ -268,119 +281,178 @@ export function AcademicClassSetup({
                 Tenant-scoped
               </span>
             </div>
+            {classes.length > 0 && (
+              <div className="mt-3 grid gap-2 rounded-xl border border-[#dce8df] bg-[#f8fcf8] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(170px,0.45fr)]">
+                <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b]">
+                  <span>Find a class</span>
+                  <input
+                    type="search"
+                    value={classSearch}
+                    onChange={event => setClassSearch(event.target.value)}
+                    className={inputClass}
+                    placeholder="Search JSS 1, SS 3, or a level"
+                    aria-label="Search configured classes"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b]">
+                  <span>Filter by level</span>
+                  <select
+                    value={classLevelFilter}
+                    onChange={event => setClassLevelFilter(event.target.value)}
+                    className={inputClass}
+                    aria-label="Filter classes by level"
+                  >
+                    <option value="all">All levels</option>
+                    <option value="Basic">Basic</option>
+                    <option value="Junior secondary">Junior secondary</option>
+                    <option value="Senior secondary">Senior secondary</option>
+                  </select>
+                </label>
+                {(classSearch || classLevelFilter !== "all") && (
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-[#667b70] sm:col-span-2">
+                    <span>
+                      Showing {filteredClasses.length} of {classes.length}{" "}
+                      configured classes.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClassSearch("");
+                        setClassLevelFilter("all");
+                      }}
+                      className="font-bold text-[#176145] underline underline-offset-2 hover:text-[#0f5c4f]"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {classes.length ? (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {classes.map((item: any) => {
-                  const schedule = scheduleByClass.get(Number(item.id)) ?? [];
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-xl border border-[#dce8df] bg-[#fbfdfb] p-3"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[#e2f1e8] text-[#176145]">
-                          <Check className="h-3.5 w-3.5" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-bold text-[#29483a]">
-                            {item.name}
-                          </p>
-                          <p className="mt-1 text-[10px] text-[#6b7d73]">
-                            {item.level || "Class"}
-                            {item.sessionId
-                              ? ` · ${sessions.find((session: any) => Number(session.id) === Number(item.sessionId))?.name ?? "Academic session"}`
-                              : " · No session selected"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 border-t border-[#e7eee8] pt-3">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#557064]">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          Schedule preview
-                        </div>
-                        {schedule.length ? (
-                          <div className="mt-2 grid gap-1.5">
-                            {schedule.slice(0, 2).map((entry: any) => {
-                              const style = scheduleStyleFor(entry);
-                              const subject =
-                                subjects.get(Number(entry.subjectId)) ??
-                                "Subject";
-                              return (
-                                <button
-                                  type="button"
-                                  key={entry.id}
-                                  onClick={() =>
-                                    setSelectedSchedule({
-                                      classItem: item,
-                                      entry,
-                                    })
-                                  }
-                                  tabIndex={0}
-                                  aria-label={`Open ${subject} schedule details for ${item.name}`}
-                                  aria-describedby={`schedule-tooltip-${entry.id}`}
-                                  className={`group relative flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] leading-4 text-[#536a5e] outline-none transition focus:ring-2 focus:ring-[#0f5c4f]/25 ${style.row}`}
-                                >
-                                  <span
-                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`}
-                                    aria-hidden="true"
-                                  />
-                                  <span className="font-bold">
-                                    {dayLabels[entry.dayOfWeek] ??
-                                      entry.dayOfWeek}
-                                  </span>{" "}
-                                  {formatTime(entry.startsAt)}–
-                                  {formatTime(entry.endsAt)}
-                                  <span
-                                    className={`rounded px-1.5 py-0.5 font-bold ${style.tag}`}
-                                  >
-                                    {subject}
-                                  </span>
-                                  {entry.room && (
-                                    <span className="text-[#536a5e]">
-                                      Room {entry.room}
-                                    </span>
-                                  )}
-                                  <span
-                                    id={`schedule-tooltip-${entry.id}`}
-                                    role="tooltip"
-                                    className="pointer-events-none invisible absolute bottom-full left-0 z-30 mb-2 w-64 translate-y-1 rounded-lg border border-[#245b49] bg-[#123b31] p-3 text-left text-[10px] leading-4 text-white opacity-0 shadow-lg transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
-                                  >
-                                    <span className="block text-[9px] font-bold uppercase tracking-[0.08em] text-[#b9e4c2]">
-                                      Instructor
-                                    </span>
-                                    <span className="block font-semibold text-white">
-                                      {staffNames.get(
-                                        Number(entry.teacherId)
-                                      ) || "Not assigned"}
-                                    </span>
-                                    <span className="mt-2 block text-[9px] font-bold uppercase tracking-[0.08em] text-[#b9e4c2]">
-                                      Class description
-                                    </span>
-                                    <span className="block text-white/85">
-                                      {classDescriptionFor(item)}
-                                    </span>
-                                  </span>
-                                </button>
-                              );
-                            })}
-                            {schedule.length > 2 && (
-                              <p className="text-[10px] font-semibold text-[#176145]">
-                                {schedule.length - 2 === 1
-                                  ? "+1 more timetable entry"
-                                  : `+${schedule.length - 2} more timetable entries`}
-                              </p>
-                            )}
+                {filteredClasses.length ? (
+                  filteredClasses.map((item: any) => {
+                    const schedule = scheduleByClass.get(Number(item.id)) ?? [];
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-[#dce8df] bg-[#fbfdfb] p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[#e2f1e8] text-[#176145]">
+                            <Check className="h-3.5 w-3.5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-[#29483a]">
+                              {item.name}
+                            </p>
+                            <p className="mt-1 text-[10px] text-[#6b7d73]">
+                              {item.level || "Class"}
+                              {item.sessionId
+                                ? ` · ${sessions.find((session: any) => Number(session.id) === Number(item.sessionId))?.name ?? "Academic session"}`
+                                : " · No session selected"}
+                            </p>
                           </div>
-                        ) : (
-                          <p className="mt-1 text-[10px] leading-4 text-[#7a887f]">
-                            No timetable entries yet. Add a schedule when this
-                            class is ready for teaching.
-                          </p>
-                        )}
+                        </div>
+                        <div className="mt-3 border-t border-[#e7eee8] pt-3">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#557064]">
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            Schedule preview
+                          </div>
+                          {schedule.length ? (
+                            <div className="mt-2 grid gap-1.5">
+                              {schedule.slice(0, 2).map((entry: any) => {
+                                const style = scheduleStyleFor(entry);
+                                const subject =
+                                  subjects.get(Number(entry.subjectId)) ??
+                                  "Subject";
+                                return (
+                                  <button
+                                    type="button"
+                                    key={entry.id}
+                                    onClick={() =>
+                                      setSelectedSchedule({
+                                        classItem: item,
+                                        entry,
+                                      })
+                                    }
+                                    tabIndex={0}
+                                    aria-label={`Open ${subject} schedule details for ${item.name}`}
+                                    aria-describedby={`schedule-tooltip-${entry.id}`}
+                                    className={`group relative flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] leading-4 text-[#536a5e] outline-none transition focus:ring-2 focus:ring-[#0f5c4f]/25 ${style.row}`}
+                                  >
+                                    <span
+                                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`}
+                                      aria-hidden="true"
+                                    />
+                                    <span className="font-bold">
+                                      {dayLabels[entry.dayOfWeek] ??
+                                        entry.dayOfWeek}
+                                    </span>{" "}
+                                    {formatTime(entry.startsAt)}–
+                                    {formatTime(entry.endsAt)}
+                                    <span
+                                      className={`rounded px-1.5 py-0.5 font-bold ${style.tag}`}
+                                    >
+                                      {subject}
+                                    </span>
+                                    {entry.room && (
+                                      <span className="text-[#536a5e]">
+                                        Room {entry.room}
+                                      </span>
+                                    )}
+                                    <span
+                                      id={`schedule-tooltip-${entry.id}`}
+                                      role="tooltip"
+                                      className="pointer-events-none invisible absolute bottom-full left-0 z-30 mb-2 w-64 translate-y-1 rounded-lg border border-[#245b49] bg-[#123b31] p-3 text-left text-[10px] leading-4 text-white opacity-0 shadow-lg transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+                                    >
+                                      <span className="block text-[9px] font-bold uppercase tracking-[0.08em] text-[#b9e4c2]">
+                                        Instructor
+                                      </span>
+                                      <span className="block font-semibold text-white">
+                                        {staffNames.get(
+                                          Number(entry.teacherId)
+                                        ) || "Not assigned"}
+                                      </span>
+                                      <span className="mt-2 block text-[9px] font-bold uppercase tracking-[0.08em] text-[#b9e4c2]">
+                                        Class description
+                                      </span>
+                                      <span className="block text-white/85">
+                                        {classDescriptionFor(item)}
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                              {schedule.length > 2 && (
+                                <p className="text-[10px] font-semibold text-[#176145]">
+                                  {schedule.length - 2 === 1
+                                    ? "+1 more timetable entry"
+                                    : `+${schedule.length - 2} more timetable entries`}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="mt-1 text-[10px] leading-4 text-[#7a887f]">
+                              No timetable entries yet. Add a schedule when this
+                              class is ready for teaching.
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#d4e2d6] bg-[#fbfdfb] p-4 text-xs leading-5 text-[#687b71] sm:col-span-2">
+                    <p className="font-bold text-[#3e5d4d]">
+                      No classes match this search.
+                    </p>
+                    <p className="mt-1">
+                      Try a different class name or level, or clear the filters
+                      to view every configured class.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="mt-3 rounded-xl border border-dashed border-[#d4e2d6] bg-[#fbfdfb] p-4 text-xs leading-5 text-[#687b71]">

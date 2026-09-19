@@ -71,6 +71,15 @@ describe("Academic class setup interface", () => {
       /create\s+subjects,\s+enroll\s+learners,\s+assign\s+fees,\s+or\s+send\s+messages/
     );
     expect(component).toContain("standardSchoolClasses");
+    expect(component).toContain('type="search"');
+    expect(component).toContain("Search JSS 1, SS 3, or a level");
+    expect(component).toContain("Filter by level");
+    expect(component).toContain("classLevelFilter");
+    expect(component).toContain("No classes match this search.");
+    expect(component).toContain("Clear filters");
+    expect(component).toContain(
+      "Showing {filteredClasses.length} of {classes.length}"
+    );
   });
 
   it("mounts the class workflow only in the school academic workspace", () => {
