@@ -31,11 +31,13 @@ const scheduleTagStyles = [
 export function AcademicClassSetup({
   schoolId,
   academic,
+  staff,
   canConfigure,
   onDone,
 }: {
   schoolId: number;
   academic: any;
+  staff: any[];
   canConfigure: boolean;
   onDone: () => void;
 }) {
@@ -54,6 +56,12 @@ export function AcademicClassSetup({
   });
   const classes = academic?.classes ?? [];
   const sessions = academic?.sessions ?? [];
+  const staffNames = new Map<number, string>(
+    staff.map(item => [
+      Number(item.id),
+      `${item.firstName ?? ""} ${item.lastName ?? ""}`.trim(),
+    ])
+  );
   const subjects = new Map<number, string>(
     (academic?.subjects ?? []).map((item: any) => [
       Number(item.id),
@@ -93,6 +101,14 @@ export function AcademicClassSetup({
     );
     return scheduleTagStyles[hash % scheduleTagStyles.length];
   };
+  const classDescriptionFor = (item: any) =>
+    [
+      item.level || "General school class",
+      item.arm ? `Arm ${item.arm}` : null,
+      item.capacity ? `Capacity ${item.capacity}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -196,7 +212,9 @@ export function AcademicClassSetup({
                             return (
                               <p
                                 key={entry.id}
-                                className={`flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] leading-4 text-[#536a5e] ${style.row}`}
+                                tabIndex={0}
+                                aria-describedby={`schedule-tooltip-${entry.id}`}
+                                className={`group relative flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] leading-4 text-[#536a5e] outline-none transition focus:ring-2 focus:ring-[#0f5c4f]/25 ${style.row}`}
                               >
                                 <span
                                   className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`}
@@ -218,6 +236,25 @@ export function AcademicClassSetup({
                                     Room {entry.room}
                                   </span>
                                 )}
+                                <span
+                                  id={`schedule-tooltip-${entry.id}`}
+                                  role="tooltip"
+                                  className="pointer-events-none invisible absolute bottom-full left-0 z-30 mb-2 w-64 translate-y-1 rounded-lg border border-[#245b49] bg-[#123b31] p-3 text-left text-[10px] leading-4 text-white opacity-0 shadow-lg transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+                                >
+                                  <span className="block text-[9px] font-bold uppercase tracking-[0.08em] text-[#b9e4c2]">
+                                    Instructor
+                                  </span>
+                                  <span className="block font-semibold text-white">
+                                    {staffNames.get(Number(entry.teacherId)) ||
+                                      "Not assigned"}
+                                  </span>
+                                  <span className="mt-2 block text-[9px] font-bold uppercase tracking-[0.08em] text-[#b9e4c2]">
+                                    Class description
+                                  </span>
+                                  <span className="block text-white/85">
+                                    {classDescriptionFor(item)}
+                                  </span>
+                                </span>
                               </p>
                             );
                           })}

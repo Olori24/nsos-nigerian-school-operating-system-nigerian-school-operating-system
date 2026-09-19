@@ -4500,6 +4500,7 @@ function Academics({
               <AcademicClassSetup
                 schoolId={schoolId}
                 academic={data.data}
+                staff={staff.data ?? []}
                 canConfigure={canConfigureCurriculum}
                 onDone={onRefresh}
               />

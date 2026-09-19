@@ -31,10 +31,16 @@ describe("Academic class setup interface", () => {
     expect(component).toContain("scheduleStyleFor");
     expect(component).toContain('aria-hidden="true"');
     expect(component).toContain("Room {entry.room}");
+    expect(component).toContain("staffNames.get(Number(entry.teacherId))");
+    expect(component).toContain('role="tooltip"');
+    expect(component).toContain("Instructor");
+    expect(component).toContain("Class description");
+    expect(component).toContain("group-focus-within:visible");
   });
 
   it("mounts the class workflow only in the school academic workspace", () => {
     expect(home).toContain("<AcademicClassSetup");
+    expect(home).toContain("staff={staff.data ?? []}");
     expect(home).toContain('operatingType === "school"');
     expect(home).toContain("canConfigure={canConfigureCurriculum}");
   });
