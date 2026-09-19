@@ -2873,6 +2873,7 @@ function Workspace({
           data={academics}
           staff={staff}
           role={role}
+          onNavigate={onNavigate}
           onRefresh={onRefresh}
         />
         <CurriculumStation
@@ -4447,12 +4448,14 @@ function Academics({
   data,
   staff,
   role,
+  onNavigate,
   onRefresh,
 }: {
   schoolId: number;
   data: Query<any>;
   staff: Query<any[]>;
   role: Role;
+  onNavigate: (view: View) => void;
   onRefresh: () => void;
 }) {
   const [tool, setTool] = useState<
@@ -4502,6 +4505,7 @@ function Academics({
                 academic={data.data}
                 staff={staff.data ?? []}
                 canConfigure={canConfigureCurriculum}
+                onRegister={() => onNavigate("admissions")}
                 onDone={onRefresh}
               />
               <NigerianCurriculumSetup

@@ -31,16 +31,34 @@ describe("Academic class setup interface", () => {
     expect(component).toContain("scheduleStyleFor");
     expect(component).toContain('aria-hidden="true"');
     expect(component).toContain("Room {entry.room}");
-    expect(component).toContain("staffNames.get(Number(entry.teacherId))");
+    expect(component).toContain("staffNames.get");
+    expect(component).toContain("teacherId");
     expect(component).toContain('role="tooltip"');
     expect(component).toContain("Instructor");
     expect(component).toContain("Class description");
     expect(component).toContain("group-focus-within:visible");
+    expect(component).toContain("setSelectedSchedule");
+    expect(component).toContain("Schedule details");
+    expect(component).toContain("<DialogContent");
+    expect(component).toContain("Register a learner");
+    expect(component).toContain("onRegister();");
+    expect(component).toMatch(/does not enroll a\s+learner/);
+    expect(component).toContain("Standard Nigerian class presets");
+    expect(component).toContain('"Basic 1"');
+    expect(component).toContain('"Basic 6"');
+    expect(component).toContain('"JSS 1"');
+    expect(component).toContain('"JSS 3"');
+    expect(component).toContain('"SS 1"');
+    expect(component).toContain('"SS 3"');
+    expect(component).toMatch(
+      /Nothing is created until you\s+press\s+Create class/
+    );
   });
 
   it("mounts the class workflow only in the school academic workspace", () => {
     expect(home).toContain("<AcademicClassSetup");
     expect(home).toContain("staff={staff.data ?? []}");
+    expect(home).toContain('onRegister={() => onNavigate("admissions")}');
     expect(home).toContain('operatingType === "school"');
     expect(home).toContain("canConfigure={canConfigureCurriculum}");
   });
