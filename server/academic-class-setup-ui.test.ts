@@ -13,6 +13,10 @@ const home = readFileSync(
   resolve(import.meta.dirname, "../client/src/pages/Home.tsx"),
   "utf8"
 );
+const catalog = readFileSync(
+  resolve(import.meta.dirname, "../shared/standardSchoolClasses.ts"),
+  "utf8"
+);
 
 describe("Academic class setup interface", () => {
   it("exposes a visible class-management workflow with a safe empty state", () => {
@@ -49,15 +53,24 @@ describe("Academic class setup interface", () => {
     expect(component).toContain("animate-spin");
     expect(component).toContain("window.setTimeout");
     expect(component).toContain("Standard Nigerian class presets");
-    expect(component).toContain('"Basic 1"');
-    expect(component).toContain('"Basic 6"');
-    expect(component).toContain('"JSS 1"');
-    expect(component).toContain('"JSS 3"');
-    expect(component).toContain('"SS 1"');
-    expect(component).toContain('"SS 3"');
+    expect(catalog).toContain('name: "Basic 1"');
+    expect(catalog).toContain('name: "Basic 6"');
+    expect(catalog).toContain('name: "JSS 1"');
+    expect(catalog).toContain('name: "JSS 3"');
+    expect(catalog).toContain('name: "SS 1"');
+    expect(catalog).toContain('name: "SS 3"');
     expect(component).toMatch(
-      /Nothing is created until you\s+press\s+Create class/
+      /Nothing is created until\s+you\s+press\s+Create class/
     );
+    expect(component).toContain("Set up standard Nigerian classes");
+    expect(component).toContain("setupStandardClasses.useMutation");
+    expect(component).toContain("missingStandardClasses");
+    expect(component).toContain("Select this school’s session");
+    expect(component).toContain("Create reviewed class set");
+    expect(component).toMatch(
+      /create\s+subjects,\s+enroll\s+learners,\s+assign\s+fees,\s+or\s+send\s+messages/
+    );
+    expect(component).toContain("standardSchoolClasses");
   });
 
   it("mounts the class workflow only in the school academic workspace", () => {

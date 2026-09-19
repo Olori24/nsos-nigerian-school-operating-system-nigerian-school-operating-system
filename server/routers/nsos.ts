@@ -5362,6 +5362,32 @@ export const nsosRouter = router({
         })
       )
       .mutation(({ input }) => db.createClass(input)),
+    setupStandardClasses: onboardingAdminProcedure
+      .input(
+        schoolInput.extend({
+          sessionId: z.number().int().positive(),
+          confirmed: z.literal(true),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { confirmed: _confirmed, ...setup } = input;
+        const result = await db.setupStandardSchoolClasses(setup);
+        await db.recordSecurityAuditEvent({
+          schoolId: input.schoolId,
+          actorUserId: ctx.user.id,
+          eventType: "standard_school_classes_setup_completed",
+          targetType: "academic_class_foundation",
+          targetId: input.sessionId,
+          metadata: {
+            createdCount: result.createdCount,
+            skippedCount: result.skippedCount,
+            sessionId: result.sessionId,
+            confirmationRequired: true,
+            subjectsCreated: false,
+          },
+        });
+        return result;
+      }),
     createSubject: managementProcedure("academics.write")
       .input(
         schoolInput.extend({

@@ -11,6 +11,7 @@ import {
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { standardSchoolClasses } from "@shared/standardSchoolClasses";
 import {
   Dialog,
   DialogContent,
@@ -47,17 +48,23 @@ const scheduleTagStyles = [
 const standardClassPresets = [
   {
     group: "Basic",
-    options: ["Basic 1", "Basic 2", "Basic 3", "Basic 4", "Basic 5", "Basic 6"],
+    options: standardSchoolClasses
+      .filter(item => item.level === "Basic")
+      .map(item => item.name),
     level: "Basic",
   },
   {
     group: "Junior Secondary",
-    options: ["JSS 1", "JSS 2", "JSS 3"],
+    options: standardSchoolClasses
+      .filter(item => item.level === "Junior secondary")
+      .map(item => item.name),
     level: "Junior secondary",
   },
   {
     group: "Senior Secondary",
-    options: ["SS 1", "SS 2", "SS 3"],
+    options: standardSchoolClasses
+      .filter(item => item.level === "Senior secondary")
+      .map(item => item.name),
     level: "Senior secondary",
   },
 ];
@@ -80,6 +87,8 @@ export function AcademicClassSetup({
   const [name, setName] = useState("");
   const [level, setLevel] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [standardSessionId, setStandardSessionId] = useState("");
+  const [standardSetupConfirmed, setStandardSetupConfirmed] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<{
     classItem: any;
     entry: any;
@@ -95,8 +104,27 @@ export function AcademicClassSetup({
     },
     onError: error => toast.error(error.message),
   });
+  const setupStandardClasses =
+    trpc.nsos.academics.setupStandardClasses.useMutation({
+      onSuccess: result => {
+        toast.success(
+          result.createdCount
+            ? `${result.createdCount} standard classes added to this school.`
+            : "All standard classes are already configured for this school."
+        );
+        setStandardSetupConfirmed(false);
+        onDone();
+      },
+      onError: error => toast.error(error.message),
+    });
   const classes = academic?.classes ?? [];
   const sessions = academic?.sessions ?? [];
+  const existingClassNames = new Set(
+    classes.map((item: any) => String(item.name).trim().toLowerCase())
+  );
+  const missingStandardClasses = standardSchoolClasses.filter(
+    item => !existingClassNames.has(item.name.toLowerCase())
+  );
   const staffNames = new Map<number, string>(
     staff.map(item => [
       Number(item.id),
@@ -166,6 +194,14 @@ export function AcademicClassSetup({
       name: name.trim(),
       level: level.trim() || undefined,
       sessionId: sessionId ? Number(sessionId) : undefined,
+    });
+  };
+  const submitStandardSetup = () => {
+    if (!standardSessionId || !standardSetupConfirmed) return;
+    setupStandardClasses.mutate({
+      schoolId,
+      sessionId: Number(standardSessionId),
+      confirmed: true,
     });
   };
   const handleRegister = () => {
@@ -360,103 +396,211 @@ export function AcademicClassSetup({
           </div>
 
           {canConfigure ? (
-            <form
-              onSubmit={submit}
-              className="rounded-xl border border-[#dce8df] bg-[#f8fcf8] p-4"
-            >
-              <p className="text-xs font-bold text-[#304c3d]">
-                Add a school class
-              </p>
-              <p className="mt-1 text-[11px] leading-5 text-[#667b70]">
-                Use the school’s approved name, such as Primary 1, JSS 1, or SS
-                2 Science.
-              </p>
-              <div className="mt-4 rounded-xl border border-[#dce8df] bg-white p-3">
-                <p className="text-[11px] font-bold text-[#304c3d]">
-                  Standard Nigerian class presets
-                </p>
-                <p className="mt-1 text-[10px] leading-4 text-[#718279]">
-                  Select a preset to fill the form. Nothing is created until you
-                  press Create class.
-                </p>
-                <div className="mt-3 grid gap-3">
-                  {standardClassPresets.map(preset => (
-                    <div key={preset.group}>
-                      <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#718279]">
-                        {preset.group}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {preset.options.map(option => (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => {
-                              setName(option);
-                              setLevel(preset.level);
-                            }}
-                            className="rounded-lg border border-[#cfe0d2] bg-[#f7fbf7] px-2.5 py-1.5 text-[10px] font-bold text-[#176145] hover:bg-[#eaf5ec]"
-                          >
-                            {option}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+            <div className="grid gap-4">
+              <div className="rounded-xl border border-[#b9d9c2] bg-[linear-gradient(135deg,#f0fbf3_0%,#fffdf7_100%)] p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#d8f1e3] text-[#176145]">
+                    <Check className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-[#244333]">
+                      Set up standard Nigerian classes
+                    </p>
+                    <p className="mt-1 text-[11px] leading-5 text-[#5f7568]">
+                      Add Basic 1–6, JSS 1–3, and SS 1–3 to this school in one
+                      reviewed step. Existing class names are skipped safely.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg border border-[#dce8df] bg-white p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-bold text-[#304c3d]">
+                      Review before creating
+                    </p>
+                    <span className="rounded-full bg-[#e2f1e8] px-2.5 py-1 text-[10px] font-bold text-[#176145]">
+                      {missingStandardClasses.length} to add ·{" "}
+                      {standardSchoolClasses.length -
+                        missingStandardClasses.length}{" "}
+                      already present
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(missingStandardClasses.length
+                      ? missingStandardClasses
+                      : standardSchoolClasses
+                    ).map(item => (
+                      <span
+                        key={item.name}
+                        className={`rounded-md px-2 py-1 text-[10px] font-semibold ${missingStandardClasses.length ? "bg-[#f1fbf5] text-[#176145]" : "bg-[#f3f5f3] text-[#687b71]"}`}
+                      >
+                        {item.name}
+                        {!missingStandardClasses.length && " · configured"}
+                      </span>
+                    ))}
+                  </div>
+                  <label className="mt-3 grid gap-1.5 text-[11px] font-bold text-[#43554b]">
+                    <span>Academic session for these classes</span>
+                    <select
+                      value={standardSessionId}
+                      onChange={event =>
+                        setStandardSessionId(event.target.value)
+                      }
+                      className={inputClass}
+                      disabled={
+                        !sessions.length || setupStandardClasses.isPending
+                      }
+                    >
+                      <option value="">Select this school’s session</option>
+                      {sessions.map((item: any) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {!sessions.length && (
+                    <p className="mt-2 rounded-lg border border-[#ead9a6] bg-[#fffaf0] p-2.5 text-[10px] leading-4 text-[#745b2b]">
+                      Create this school’s academic session first. NSOS will not
+                      invent dates or attach classes to another school’s
+                      session.
+                    </p>
+                  )}
+                  <label className="mt-3 flex items-start gap-2 text-[10px] leading-4 text-[#5f7568]">
+                    <input
+                      type="checkbox"
+                      checked={standardSetupConfirmed}
+                      onChange={event =>
+                        setStandardSetupConfirmed(event.target.checked)
+                      }
+                      disabled={setupStandardClasses.isPending}
+                      className="mt-0.5 h-4 w-4 accent-[#0f5c4f]"
+                    />
+                    <span>
+                      I confirm this reviewed class list is approved for this
+                      school. This creates class records only; it does not
+                      create subjects, enroll learners, assign fees, or send
+                      messages.
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={submitStandardSetup}
+                    disabled={
+                      setupStandardClasses.isPending ||
+                      !standardSessionId ||
+                      !standardSetupConfirmed ||
+                      !missingStandardClasses.length
+                    }
+                    className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#0f5c4f] px-3.5 py-2.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Check className="h-4 w-4" />
+                    {setupStandardClasses.isPending
+                      ? "Setting up classes…"
+                      : missingStandardClasses.length
+                        ? "Create reviewed class set"
+                        : "All standard classes configured"}
+                  </button>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b] sm:col-span-2 lg:col-span-1 xl:col-span-1">
-                  <span>Class name</span>
-                  <input
-                    required
-                    value={name}
-                    onChange={event => setName(event.target.value)}
-                    className={inputClass}
-                    placeholder="e.g. JSS 1"
-                    maxLength={120}
-                  />
-                </label>
-                <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b]">
-                  <span>Level (optional)</span>
-                  <input
-                    value={level}
-                    onChange={event => setLevel(event.target.value)}
-                    className={inputClass}
-                    placeholder="e.g. Junior secondary"
-                    maxLength={80}
-                  />
-                </label>
-                <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b] sm:col-span-3 lg:col-span-1 xl:col-span-1">
-                  <span>Academic session (optional)</span>
-                  <select
-                    value={sessionId}
-                    onChange={event => setSessionId(event.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">No session selected</option>
-                    {sessions.map((item: any) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {!sessions.length && (
-                <p className="mt-3 rounded-lg border border-[#ead9a6] bg-[#fffaf0] p-3 text-[11px] leading-5 text-[#745b2b]">
-                  You can add a session later. The class will still be available
-                  now; link it to a session when the academic calendar is ready.
-                </p>
-              )}
-              <button
-                type="submit"
-                disabled={createClass.isPending || !name.trim()}
-                className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#0f5c4f] px-3.5 py-2.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              <form
+                onSubmit={submit}
+                className="rounded-xl border border-[#dce8df] bg-[#f8fcf8] p-4"
               >
-                <Plus className="h-4 w-4" />
-                {createClass.isPending ? "Creating class…" : "Create class"}
-              </button>
-            </form>
+                <p className="text-xs font-bold text-[#304c3d]">
+                  Add a school class
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-[#667b70]">
+                  Use the school’s approved name, such as Primary 1, JSS 1, or
+                  SS 2 Science.
+                </p>
+                <div className="mt-4 rounded-xl border border-[#dce8df] bg-white p-3">
+                  <p className="text-[11px] font-bold text-[#304c3d]">
+                    Standard Nigerian class presets
+                  </p>
+                  <p className="mt-1 text-[10px] leading-4 text-[#718279]">
+                    Select a preset to fill the form. Nothing is created until
+                    you press Create class.
+                  </p>
+                  <div className="mt-3 grid gap-3">
+                    {standardClassPresets.map(preset => (
+                      <div key={preset.group}>
+                        <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#718279]">
+                          {preset.group}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {preset.options.map(option => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setName(option);
+                                setLevel(preset.level);
+                              }}
+                              className="rounded-lg border border-[#cfe0d2] bg-[#f7fbf7] px-2.5 py-1.5 text-[10px] font-bold text-[#176145] hover:bg-[#eaf5ec]"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                  <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b] sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                    <span>Class name</span>
+                    <input
+                      required
+                      value={name}
+                      onChange={event => setName(event.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. JSS 1"
+                      maxLength={120}
+                    />
+                  </label>
+                  <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b]">
+                    <span>Level (optional)</span>
+                    <input
+                      value={level}
+                      onChange={event => setLevel(event.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. Junior secondary"
+                      maxLength={80}
+                    />
+                  </label>
+                  <label className="grid gap-1.5 text-[11px] font-bold text-[#43554b] sm:col-span-3 lg:col-span-1 xl:col-span-1">
+                    <span>Academic session (optional)</span>
+                    <select
+                      value={sessionId}
+                      onChange={event => setSessionId(event.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">No session selected</option>
+                      {sessions.map((item: any) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {!sessions.length && (
+                  <p className="mt-3 rounded-lg border border-[#ead9a6] bg-[#fffaf0] p-3 text-[11px] leading-5 text-[#745b2b]">
+                    You can add a session later. The class will still be
+                    available now; link it to a session when the academic
+                    calendar is ready.
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={createClass.isPending || !name.trim()}
+                  className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#0f5c4f] px-3.5 py-2.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  {createClass.isPending ? "Creating class…" : "Create class"}
+                </button>
+              </form>
+            </div>
           ) : (
             <div className="flex gap-3 rounded-xl border border-[#e6dfc9] bg-[#fffaf0] p-4 text-xs leading-5 text-[#725b2d]">
               <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />

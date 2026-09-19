@@ -134,6 +134,7 @@ import {
   marketingCampaigns,
   marketingCampaignDeliveries,
 } from "../../drizzle/schema";
+import { standardSchoolClasses } from "@shared/standardSchoolClasses";
 import { ENV } from "../_core/env";
 import { invokeLLM } from "../_core/llm";
 import { generateSupervisedTutorResponse } from "../aiTutor";
@@ -10341,6 +10342,56 @@ export const createClass = async (input: Record<string, unknown>) =>
   (await database())
     .insert(classes)
     .values(input as typeof classes.$inferInsert);
+export async function setupStandardSchoolClasses(input: {
+  schoolId: number;
+  sessionId: number;
+}) {
+  const db = await database();
+  const session = await db
+    .select({ id: academicSessions.id })
+    .from(academicSessions)
+    .where(
+      and(
+        eq(academicSessions.id, input.sessionId),
+        eq(academicSessions.schoolId, input.schoolId)
+      )
+    )
+    .limit(1);
+  if (!session[0])
+    throw new Error("Select an academic session belonging to this school.");
+
+  const existing = await db
+    .select({ name: classes.name })
+    .from(classes)
+    .where(eq(classes.schoolId, input.schoolId));
+  const existingNames = new Set(
+    existing.map(item => item.name.trim().toLowerCase())
+  );
+  const missing = standardSchoolClasses.filter(
+    item => !existingNames.has(item.name.toLowerCase())
+  );
+
+  if (missing.length) {
+    await db.transaction(async tx => {
+      for (const item of missing) {
+        await tx.insert(classes).values({
+          schoolId: input.schoolId,
+          sessionId: input.sessionId,
+          name: item.name,
+          level: item.level,
+          status: "active",
+        });
+      }
+    });
+  }
+
+  return {
+    createdCount: missing.length,
+    skippedCount: standardSchoolClasses.length - missing.length,
+    sessionId: input.sessionId,
+    classNames: standardSchoolClasses.map(item => item.name),
+  };
+}
 export const createSubject = async (input: Record<string, unknown>) =>
   (await database())
     .insert(subjects)
