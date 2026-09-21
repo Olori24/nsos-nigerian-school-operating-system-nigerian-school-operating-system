@@ -545,3 +545,4 @@
 - [x] Validate with 141 test files, 524 passing tests, 1 intentional skip, TypeScript, lint, production build, formatting, diff checks, and local host-aware discovery requests.
 - [ ] Verify external search-engine indexing, answer-engine citations, traffic, leads, and ranking only through independently authorized measurement; no performance claim is made yet.
 - [ ] Publish checkpoint `e41cf36b` through the managed WebDev deployment control, then recheck `/`, all public marketing routes, canonical metadata, and structured data externally; current `nsos.top` HTTPS and discovery files are reachable, but `/ai-for-schools` still returns the deployed bundle’s 404 page.
+- [x] Rebrand the floating copilot entry point as the native `NSOS Guide` with Compass icon, clean tooltip, and unchanged protected review-first behavior; add UI regression coverage and validate the full suite, TypeScript, lint, build, formatting, and diff checks.
