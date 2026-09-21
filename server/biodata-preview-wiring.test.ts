@@ -14,11 +14,11 @@ const home = readFileSync(
 
 describe("biodata PDF preview integration wiring", () => {
   it("passes approved public-school branding and submit-ready completion time into the public preview", () => {
-    expect(publicAdmissions).toContain(
-      "useFormCompletionTimestamp(isAdmissionBiodataReady(form, completionTemplate.requireDeclaration, declarationAccepted))"
+    expect(publicAdmissions).toMatch(
+      /useFormCompletionTimestamp\(\s*isAdmissionBiodataReady\(\s*form,\s*completionTemplate\.requireDeclaration,\s*declarationAccepted\s*\)\s*\)/
     );
-    expect(publicAdmissions).toContain(
-      "biodataPdfHeaderDefaults({ organizationName: school.data.name"
+    expect(publicAdmissions).toMatch(
+      /biodataPdfHeaderDefaults\(\s*\{\s*organizationName:\s*school\.data\.name/
     );
     expect(publicAdmissions).toContain(
       "logoUrl: template.headerLogoUrl ?? undefined"

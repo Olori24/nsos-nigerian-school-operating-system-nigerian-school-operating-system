@@ -5310,20 +5310,43 @@ export async function verifySchoolWebsiteDomain(schoolId: number) {
   return getSchoolWebsite(schoolId);
 }
 
-async function publicWebsiteResponse(row: {
-  school: typeof schools.$inferSelect;
-  website: typeof schoolWebsites.$inferSelect;
-}) {
+export function publicWebsitePayload(
+  row: {
+    school: typeof schools.$inferSelect;
+    website: typeof schoolWebsites.$inferSelect;
+  },
+  media: { logoUrl: string | null; heroUrl: string | null }
+) {
   return {
-    ...row,
+    school: {
+      name: row.school.name,
+      shortCode: row.school.shortCode,
+      operatingType: row.school.operatingType,
+      state: row.school.state,
+    },
     website: {
-      ...row.website,
-      ...(await publicSelectedWebsiteMedia(row.school.id, row.website)),
+      headline: row.website.headline,
+      introduction: row.website.introduction,
+      primaryColor: row.website.primaryColor,
+      contactEmail: row.website.contactEmail,
+      contactPhone: row.website.contactPhone,
+      campusLocation: row.website.campusLocation,
+      admissionsEnabled: row.website.admissionsEnabled,
+      visualTheme: row.website.visualTheme,
+      ...media,
     },
     admissionsUrl: row.website.admissionsEnabled
       ? `/apply/${row.school.shortCode}`
       : null,
   };
+}
+
+async function publicWebsiteResponse(row: {
+  school: typeof schools.$inferSelect;
+  website: typeof schoolWebsites.$inferSelect;
+}) {
+  const media = await publicSelectedWebsiteMedia(row.school.id, row.website);
+  return publicWebsitePayload(row, media);
 }
 
 export async function getPublicSchoolWebsite(shortCode: string) {

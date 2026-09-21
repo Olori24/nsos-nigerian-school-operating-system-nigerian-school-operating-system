@@ -34,13 +34,13 @@ describe("biodata document auto-fill integration wiring", () => {
       "setAiAppliedFields(suggestedFieldKeys(values))"
     );
     expect(publicAdmissions).toContain("AiAppliedFieldProvider");
-    expect(publicAdmissions).toContain("submit.mutate({ shortCode, ...form");
+    expect(publicAdmissions).toMatch(/submit\.mutate\(\s*\{\s*shortCode/);
   });
 
   it("targets only the currently open internal admission or student form and bounds the extraction endpoint", () => {
     expect(app).toContain("InternalBiodataAutofillLauncher");
-    expect(app).toContain(
-      'const BiodataDocumentAutofill = lazy(() => import("./components/BiodataDocumentAutofill")'
+    expect(app).toMatch(
+      /const BiodataDocumentAutofill = lazy\(\(\) =>\s*import\("\.\/components\/BiodataDocumentAutofill"\)/
     );
     expect(app).toContain("Loading document autofill…");
     expect(app).toContain("<Suspense fallback=");

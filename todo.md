@@ -534,3 +534,13 @@
 - [x] Add click-to-detail schedule modal with full class/timetable details and a protected Admissions registration handoff; no automatic enrollment, fee, message, or learner-record mutation. Full validation passed.
 - [x] Add a success toast and brief spinner transition when the class-detail modal registration button is clicked; keep the Admissions handoff review-first and preserve no-auto-enrollment, payment, message, and invitation boundaries. Full validation passed.
 - [x] Resolve the class-update gap in OAE Academy: imported and verified 12 tenant-scoped school class records—Basic 1–6, JSS 1–3, and SS 1–3—through the protected academic migration review and owner confirmation gate. Existing Primary 1 remains unchanged, for 13 configured classes total; no subjects, learners, enrollments, fees, timetable entries, messages, or invitations were created by this update.
+
+## AI visibility and public discoverability — 2026-09-21
+
+- [x] Add public NSOS route architecture for the root overview, school-management software, Nigerian school operations, AI for schools, administration, student management, academics, finance, attendance, results, parent portal, communication, FAQ, about, and contact pages.
+- [x] Add route-specific titles, descriptions, canonical URLs, Open Graph/Twitter metadata, JSON-LD identity, service, breadcrumb, and FAQ structures.
+- [x] Add host-aware `robots.txt`, `sitemap.xml`, and `llms.txt` responses for `nsos.top` and `www.nsos.top`; keep managed previews and unrelated hosts out of the corporate public index.
+- [x] Preserve `/school/:shortCode` and `/apply/:shortCode` routes and add metadata to public school and admissions pages.
+- [x] Replace anonymous public school website row spreads with an explicit privacy allowlist; add regression coverage for domain-token and internal-field exclusion.
+- [x] Validate with 141 test files, 524 passing tests, 1 intentional skip, TypeScript, lint, production build, formatting, diff checks, and local host-aware discovery requests.
+- [ ] Verify external search-engine indexing, answer-engine citations, traffic, leads, and ranking only through independently authorized measurement; no performance claim is made yet.

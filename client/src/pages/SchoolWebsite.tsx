@@ -9,6 +9,11 @@ import {
   School,
 } from "lucide-react";
 import { CodingForBeginnersSection } from "@/components/CodingForBeginnersSection";
+import {
+  NSOS_PUBLIC_ORIGIN,
+  breadcrumbJsonLd,
+  usePublicMetadata,
+} from "@/lib/publicMetadata";
 import { useMemo } from "react";
 import { useRoute } from "wouter";
 
@@ -57,6 +62,37 @@ export default function SchoolWebsite() {
     { shortCode },
     { enabled: !!shortCode }
   );
+  const metadata = useMemo(() => {
+    const name = site.data?.school.name;
+    const canonicalUrl = `${NSOS_PUBLIC_ORIGIN}/school/${encodeURIComponent(shortCode)}`;
+    return {
+      title: name ? `${name} | NSOS` : "School website unavailable | NSOS",
+      description: name
+        ? site.data?.website.introduction ||
+          `${name} public school website on NSOS.`
+        : "This school website is not published, the domain is not active, or the link is not recognised.",
+      canonicalUrl,
+      robots: name ? "index, follow" : "noindex, nofollow",
+      jsonLd: name
+        ? [
+            {
+              "@context": "https://schema.org",
+              "@type": "WebPage",
+              name: `${name} | NSOS`,
+              url: canonicalUrl,
+              description:
+                site.data?.website.introduction ||
+                `${name} public school website on NSOS.`,
+            },
+            breadcrumbJsonLd([
+              { name: "NSOS", path: "/" },
+              { name, path: `/school/${encodeURIComponent(shortCode)}` },
+            ]),
+          ]
+        : undefined,
+    };
+  }, [shortCode, site.data]);
+  usePublicMetadata(metadata);
   return <SchoolWebsitePage site={site} />;
 }
 
