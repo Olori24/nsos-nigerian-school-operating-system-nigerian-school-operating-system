@@ -84,6 +84,14 @@ The completed source validation produced the following evidence:
 
 These results verify the repository implementation. They do not verify external search-engine indexing, search ranking, answer-engine citation, conversion, or uptime on third-party infrastructure.
 
+## External deployment status
+
+The external domain and HTTPS layer are reachable. On 21 September 2026, `https://nsos.top/` returned HTTP 200. `https://www.nsos.top/` returned HTTP 301 to the canonical `https://nsos.top/` origin, which returned HTTP 200. The external `robots.txt`, `sitemap.xml`, and `llms.txt` paths each returned HTTP 200.
+
+The new marketing route bundle is **not yet live on the external deployment**. A browser check of `https://nsos.top/ai-for-schools` resolved to the deployed application’s 404 page, and the external HTML still exposed only the older shell title. The current repository checkpoint is therefore ready for release, but the production publish or managed deployment handoff remains outstanding. No DNS change is required based on this check; the blocker is the stale deployed application bundle, not HTTPS or the `www` redirect.
+
+The managed WebDev environment does not expose a publish tool in this session. The remaining production action is to publish checkpoint `e41cf36b` through the project’s WebDev deployment control, then repeat the external route, metadata, and discovery checks. Do not submit the sitemap to Google Search Console or Bing Webmaster Tools until the new public routes return their intended content.
+
 ## References
 
 [1]: https://nsos.top/ "NSOS public website"
