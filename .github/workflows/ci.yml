@@ -22,17 +22,13 @@ jobs:
     env:
       DATABASE_URL: mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos
       JWT_SECRET: ci-test-jwt-secret
-      OAUTH_SERVER_URL: https://auth.test.local
-      GOOGLE_CLIENT_ID: ci-google-client-id
-      GOOGLE_CLIENT_SECRET: ci-google-client-secret
-      RESEND_API_KEY: ci-resend-api-key
-      AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>"
-      BUILT_IN_FORGE_API_KEY: ci-forge-api-key
       APP_SECRET: ci-test-application-secret
+      OAUTH_SERVER_URL: https://auth.test.local
       GOOGLE_CLIENT_ID: ci-test-google-client-id
       GOOGLE_CLIENT_SECRET: ci-test-google-client-secret
       RESEND_API_KEY: ci-test-resend-api-key
-      AUTH_EMAIL_FROM: NSOS <onboarding@resend.dev>
+      AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>"
+      BUILT_IN_FORGE_API_KEY: ci-test-forge-api-key
       OPENAI_API_KEY: ci-test-openai-api-key
     services:
       mysql:
