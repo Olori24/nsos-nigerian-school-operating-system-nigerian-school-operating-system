@@ -11,6 +11,7 @@ import { NSOSUpdatePrompt } from "./components/NSOSUpdatePrompt";
 import { DeveloperArsenalLaunch } from "./components/DeveloperArsenalLaunch";
 import { useEffect, useState } from "react";
 import Home from "./pages/Home";
+import PublicLanding from "./pages/PublicLanding";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
@@ -19,7 +20,12 @@ function isNsosPlatformHost(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
 }
 
+function isNsosPublicDomain(hostname: string) {
+  return hostname === "nsos.top" || hostname === "www.nsos.top";
+}
+
 function Router() {
+  if (typeof window !== "undefined" && isNsosPublicDomain(window.location.hostname)) return <PublicLanding />;
   if (typeof window !== "undefined" && !isNsosPlatformHost(window.location.hostname)) return <DomainSchoolWebsite />;
   return (
     <Switch>
