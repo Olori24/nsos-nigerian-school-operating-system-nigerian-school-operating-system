@@ -1,15 +1,36 @@
-# NSOS — Nigerian School Operating System
+<div align="center">
 
-> **A Nigeria-first operating system for schools and learning businesses that need to move from fragmented administration to controlled, AI-assisted learning operations.**
+# NSOS · Nigerian School Operating System
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)](https://react.dev/)
-[![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![tRPC](https://img.shields.io/badge/tRPC-11-2596BE)](https://trpc.io/)
-[![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F)](https://orm.drizzle.team/)
-[![Vitest](https://img.shields.io/badge/Vitest-2.1-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
+**A Nigeria-first operating system for schools and learning institutions.**
 
-**[Live managed preview](https://nsos-system-uhkdscaf.manus.space)** · **[Architecture](docs/NSOS_ARCHITECTURE_AND_DEPLOYMENT.md)** · **[Security](SECURITY.md)** · **[Product roadmap](docs/NSOS_PRODUCT_DIFFERENTIATION_ROADMAP.md)** · **[AI education business engine delivery contract](docs/ai-education-business-engine-delivery-contract.md)** · **[Knowledge-to-Business Engine](docs/knowledge-to-business-engine-contract.md)** · **[File-to-School Engine](docs/file-to-school-engine-contract.md)** · **[Learning Centre operating model](docs/learning-centre-of-excellence-operating-model.md)** · **[One-Prompt Institution Builder](docs/one-prompt-institution-builder-operating-model.md)** · **[AI School Operator](docs/ai-school-operator-operating-model.md)**
+[![Documentation standard](https://img.shields.io/badge/README-Premium%20Standard-111827?style=flat-square)](#documentation-standard)
+[![Repository](https://img.shields.io/badge/GitHub-Olori24-181717?style=flat-square&logo=github)](https://github.com/Olori24)
+
+</div>
+
+![NSOS · Nigerian School Operating System architecture overview](./docs/assets/repo-hero.svg)
+
+> **Repository status:** Active development. This README describes implemented repository capabilities and explicitly separates shipped work from future or environment-dependent work.
+
+## Documentation standard
+
+This repository follows the portfolio documentation standard established for NSMS: clear product positioning, visual orientation, architecture, security boundaries, setup, validation evidence, maturity tracking, roadmap, and honest production-status language. Claims are kept scoped to repository evidence rather than inferred from intent.
+
+### At a glance
+
+| Area | Standard |
+|---|---|
+| Product | Clear one-sentence purpose and user value |
+| Architecture | Visual system model plus technical boundaries |
+| Security | Explicit trust, permission, tenant and secret-handling boundaries |
+| Evidence | Tests, CI, deployment and production claims separated |
+| Maturity | Implemented / pending / environment-dependent status |
+| Roadmap | Future work clearly separated from shipped capability |
+
+### Evidence language
+
+**IMPLEMENTED** means present in the repository. **TESTED** means supported by an executed test or CI result. **DEPLOYED** means a deployment target is configured or documented. **VERIFIED IN PRODUCTION** requires production evidence. **MEASURED** requires an actual measurement. Roadmap items are not represented as shipped.
 
 ---
 
