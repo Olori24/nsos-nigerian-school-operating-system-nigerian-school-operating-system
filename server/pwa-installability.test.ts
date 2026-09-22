@@ -27,8 +27,11 @@ const updatePrompt = readFileSync(
 );
 
 describe("NSOS installable web app", () => {
-  it("exposes standalone app metadata and the original app icon", () => {
+  it("exposes standalone app metadata and the custom NSOS icon set", () => {
     expect(html).toContain('rel="manifest"');
+    expect(html).toContain('rel="icon" type="image/svg+xml"');
+    expect(html).toContain('href="/icons/nsos-mark.svg"');
+    expect(html).toContain('rel="mask-icon"');
     expect(manifest).toContain('"display": "standalone"');
     expect(manifest).toContain('"short_name": "NSOS"');
     expect(manifest).toContain('"src": "/icons/nsos-icon-192.png"');
@@ -45,8 +48,8 @@ describe("NSOS installable web app", () => {
   });
 
   it("uses an offline shell without caching NSOS API responses", () => {
-    expect(worker).toContain('const CACHE_NAME = "nsos-shell-v4"');
-    expect(worker).not.toContain('const CACHE_NAME = "nsos-shell-v3"');
+    expect(worker).toContain('const CACHE_NAME = "nsos-shell-v5"');
+    expect(worker).not.toContain('const CACHE_NAME = "nsos-shell-v4"');
     expect(worker).toContain('"/offline.html"');
     expect(worker).toContain('url.pathname.startsWith("/api/")');
     expect(worker).toContain('request.mode === "navigate"');

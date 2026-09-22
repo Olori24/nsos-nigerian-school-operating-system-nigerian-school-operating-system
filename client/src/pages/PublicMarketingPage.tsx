@@ -569,14 +569,12 @@ function PublicHeader({ onMenu }: { onMenu: () => void }) {
   return (
     <header className="border-b border-[#dfe9e1] bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-        <a
-          href="/"
-          className="min-w-0 text-sm font-bold tracking-tight text-[#17342a]"
-        >
-          NSOS{" "}
-          <span className="font-normal text-[#708078]">
-            · Nigerian School Operating System
-          </span>
+        <a href="/" className="min-w-0">
+          <img
+            src="/icons/nsos-logo.svg"
+            alt="NSOS — Nigerian School Operating System"
+            className="h-10 w-auto max-w-[190px]"
+          />
         </a>
         <nav
           className="hidden items-center gap-5 text-xs font-semibold text-[#52675d] lg:flex"
@@ -814,12 +812,14 @@ export default function PublicMarketingPage() {
       )}
       <footer className="border-t border-[#e2e9e3] bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-xs text-[#718079] sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <p>
-            <strong className="text-[#29483d]">
-              NSOS — Nigerian School Operating System
-            </strong>{" "}
-            · Nigeria-first school and learning operations
-          </p>
+          <div className="flex items-center gap-3">
+            <img
+              src="/icons/nsos-logo.svg"
+              alt="NSOS — Nigerian School Operating System"
+              className="h-9 w-auto max-w-[170px]"
+            />
+            <span>· Nigeria-first school and learning operations</span>
+          </div>
           <div className="flex gap-4">
             <a href="/about" className="font-semibold text-[#0f5c4f]">
               About

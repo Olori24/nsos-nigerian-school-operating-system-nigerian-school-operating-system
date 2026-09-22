@@ -1821,30 +1821,12 @@ function EntryPath({
 
 function Brand({ inverse = false }: { inverse?: boolean }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center">
       <img
-        src="/icons/nsos-icon-192.png"
-        alt="NSOS"
-        className="h-9 w-9 rounded-xl shadow-[0_4px_10px_rgba(7,42,33,0.16)]"
+        src={inverse ? "/icons/nsos-logo-inverse.svg" : "/icons/nsos-logo.svg"}
+        alt="NSOS — Nigerian School Operating System"
+        className="h-11 w-auto max-w-[190px]"
       />
-      <div>
-        <p
-          className={cn(
-            "text-sm font-bold leading-none tracking-[-0.04em]",
-            inverse && "text-white"
-          )}
-        >
-          NSOS
-        </p>
-        <p
-          className={cn(
-            "mt-1 text-[9px] font-semibold uppercase tracking-[0.15em]",
-            inverse ? "text-white/48" : "text-[#7a847e]"
-          )}
-        >
-          Nigerian School OS
-        </p>
-      </div>
     </div>
   );
 }

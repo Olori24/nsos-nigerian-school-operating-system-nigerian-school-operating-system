@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 88" role="img" aria-labelledby="title desc">
+  <title id="title">NSOS — Nigerian School Operating System</title>
+  <desc id="desc">NSOS wordmark with a grounded school-and-learning mark.</desc>
+  <g transform="translate(4 4)">
+    <rect width="80" height="80" rx="20" fill="#0b1715"/>
+    <rect x="7" y="7" width="66" height="66" rx="16" fill="#0f5c4f"/>
+    <path d="M18 35 40 21l22 14" fill="none" stroke="#dff5e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
+    <path d="M20 37h40" fill="none" stroke="#b8dfc3" stroke-linecap="round" stroke-width="3"/>
+    <path d="M21 39v23M33 39v23M47 39v23M59 39v23" fill="none" stroke="#fffdf7" stroke-linecap="round" stroke-width="5"/>
+    <path d="M18 64h44" fill="none" stroke="#b8dfc3" stroke-linecap="round" stroke-width="3.5"/>
+    <circle cx="62" cy="18" r="4" fill="#d8a64a"/>
+  </g>
+  <text x="108" y="43" fill="#0f5c4f" font-family="DM Sans, Arial, sans-serif" font-size="30" font-weight="800" letter-spacing="-1.6">NSOS</text>
+  <text x="110" y="64" fill="#60736a" font-family="DM Sans, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="2.2">NIGERIAN SCHOOL OS</text>
+</svg>
