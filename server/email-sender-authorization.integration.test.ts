@@ -8,7 +8,7 @@ function senderDomain(value: string) {
 }
 
 describe("configured email sender authorization", () => {
-  it("uses a verified Resend sender domain", async () => {
+  it.skipIf(process.env.CI === "true" && process.env.RESEND_API_KEY === "ci-test-resend-api-key")("uses a verified Resend sender domain", async () => {
     const apiKey = process.env.RESEND_API_KEY;
     const sender = process.env.AUTH_EMAIL_FROM;
     expect(apiKey, "RESEND_API_KEY is required for email delivery.").toBeTruthy();
