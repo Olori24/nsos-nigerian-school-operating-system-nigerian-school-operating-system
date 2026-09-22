@@ -21,6 +21,12 @@ jobs:
     timeout-minutes: 20
     env:
       DATABASE_URL: mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos
+      APP_SECRET: ci-test-application-secret
+      GOOGLE_CLIENT_ID: ci-test-google-client-id
+      GOOGLE_CLIENT_SECRET: ci-test-google-client-secret
+      RESEND_API_KEY: ci-test-resend-api-key
+      AUTH_EMAIL_FROM: NSOS <onboarding@resend.dev>
+      OPENAI_API_KEY: ci-test-openai-api-key
     services:
       mysql:
         image: mysql:8.4
