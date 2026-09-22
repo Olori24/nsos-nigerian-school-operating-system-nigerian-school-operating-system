@@ -1,1 +1,1 @@
-ALTER TABLE `schoolWebsites` ADD COLUMN IF NOT EXISTS `domainVerificationToken` varchar(96);
+ALTER TABLE `schoolWebsites` ADD COLUMN `domainVerificationToken` varchar(96);
