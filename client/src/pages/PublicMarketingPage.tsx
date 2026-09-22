@@ -23,6 +23,7 @@ import {
   serviceJsonLd,
   usePublicMetadata,
 } from "@/lib/publicMetadata";
+import { NSOSLogo } from "@/components/NSOSLogo";
 
 const appUrl = "https://nsos-system-uhkdscaf.manus.space";
 
@@ -567,14 +568,10 @@ function iconFor(title: string) {
 
 function PublicHeader({ onMenu }: { onMenu: () => void }) {
   return (
-    <header className="border-b border-[#dfe9e1] bg-white/95 backdrop-blur">
+    <header className="border-b border-[#dfe9e1] bg-white/95 backdrop-blur dark:border-[#34463e] dark:bg-[#18231f]/95">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
         <a href="/" className="min-w-0">
-          <img
-            src="/icons/nsos-logo.svg"
-            alt="NSOS — Nigerian School Operating System"
-            className="h-10 w-auto max-w-[190px]"
-          />
+          <NSOSLogo className="h-10 max-w-[190px]" />
         </a>
         <nav
           className="hidden items-center gap-5 text-xs font-semibold text-[#52675d] lg:flex"
@@ -649,7 +646,7 @@ export default function PublicMarketingPage() {
     <main className="min-h-screen bg-[#f7faf7] text-[#13251f]">
       <PublicHeader onMenu={() => setMenuOpen(value => !value)} />
       {menuOpen && (
-        <div className="border-b border-[#dfe9e1] bg-white px-5 py-4 lg:hidden">
+        <div className="border-b border-[#dfe9e1] bg-white px-5 py-4 dark:border-[#34463e] dark:bg-[#18231f] lg:hidden">
           <div className="mx-auto grid max-w-7xl gap-2 text-sm font-semibold text-[#38564a]">
             <div className="flex items-center justify-between pb-2 text-xs uppercase tracking-[.14em] text-[#718078]">
               Navigate{" "}
@@ -813,11 +810,7 @@ export default function PublicMarketingPage() {
       <footer className="border-t border-[#e2e9e3] bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-xs text-[#718079] sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div className="flex items-center gap-3">
-            <img
-              src="/icons/nsos-logo.svg"
-              alt="NSOS — Nigerian School Operating System"
-              className="h-9 w-auto max-w-[170px]"
-            />
+            <NSOSLogo className="h-9 max-w-[170px]" />
             <span>· Nigeria-first school and learning operations</span>
           </div>
           <div className="flex gap-4">

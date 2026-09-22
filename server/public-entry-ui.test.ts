@@ -40,11 +40,11 @@ describe("public NSOS entry presentation", () => {
     expect(installPromptSource).toContain("!readyToOffer");
   });
 
-  it("keeps nonessential fixed overlays out of the unauthenticated NSOS entry", () => {
+  it("keeps the optional install card delayed while making the theme toggle global", () => {
     expect(appSource).toContain("function EntryOverlayLayer()");
-    expect(appSource).toContain("if (isPublicEntry && !user) return null;");
     expect(appSource).toContain("<InstallNSOSPrompt />");
     expect(appSource).toContain("<BiodataThemeToggle />");
+    expect(appSource).not.toContain("if (isPublicEntry && !user) return null;");
   });
 
   it("lazy-loads independent public routes behind an accessible fallback", () => {

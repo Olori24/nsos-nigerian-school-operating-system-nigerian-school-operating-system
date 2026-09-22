@@ -47,6 +47,7 @@ import { NonSchoolCurriculumStart } from "@/components/NonSchoolCurriculumStart"
 import { LearnerProgramProgress } from "@/components/LearnerProgramProgress";
 import { InstitutionSwitcher } from "@/components/InstitutionSwitcher";
 import { InstitutionProfileSummary } from "@/components/InstitutionProfileSummary";
+import { NSOSLogo } from "@/components/NSOSLogo";
 import DomainSchoolWebsite from "@/pages/DomainSchoolWebsite";
 import { trpc } from "@/lib/trpc";
 import { isNsosPlatformHost } from "@/lib/platformHost";
@@ -1822,11 +1823,7 @@ function EntryPath({
 function Brand({ inverse = false }: { inverse?: boolean }) {
   return (
     <div className="flex items-center">
-      <img
-        src={inverse ? "/icons/nsos-logo-inverse.svg" : "/icons/nsos-logo.svg"}
-        alt="NSOS — Nigerian School Operating System"
-        className="h-11 w-auto max-w-[190px]"
-      />
+      <NSOSLogo forceInverse={inverse || undefined} />
     </div>
   );
 }

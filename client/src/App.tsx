@@ -9,7 +9,6 @@ import type { BiodataAutofillProposal } from "./components/BiodataDocumentAutofi
 import { InstallNSOSPrompt } from "./components/InstallNSOSPrompt";
 import { NSOSUpdatePrompt } from "./components/NSOSUpdatePrompt";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useAuth } from "./_core/hooks/useAuth";
 import { isNsosPlatformHost, isNsosPublicDomain } from "./lib/platformHost";
 
 const Home = lazy(() => import("./pages/Home"));
@@ -163,13 +162,6 @@ function InternalBiodataAutofillLauncher() {
 }
 
 function EntryOverlayLayer() {
-  const { user } = useAuth();
-  const isPublicEntry =
-    typeof window !== "undefined" &&
-    isNsosPublicDomain(window.location.hostname);
-
-  if (isPublicEntry && !user) return null;
-
   return (
     <>
       <InstallNSOSPrompt />
