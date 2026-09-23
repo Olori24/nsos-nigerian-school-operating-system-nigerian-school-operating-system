@@ -111,6 +111,28 @@ textarea {
   background: var(--background);
   color: var(--foreground);
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .nsos-theme-scope,
+  .nsos-theme-scope .admin-theme-surface,
+  .nsos-theme-scope .admin-theme-surface * {
+    transition-property:
+      background-color, border-color, color, box-shadow, fill, stroke,
+      transform, opacity;
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nsos-theme-scope,
+  .nsos-theme-scope .admin-theme-surface,
+  .nsos-theme-scope .admin-theme-surface * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
+
 .dark {
   --background: #0d1512;
   --foreground: #edf5ef;

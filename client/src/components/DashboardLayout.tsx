@@ -83,6 +83,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider
+      className="admin-theme-surface"
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,

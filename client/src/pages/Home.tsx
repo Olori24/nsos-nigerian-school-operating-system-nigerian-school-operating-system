@@ -2296,7 +2296,7 @@ export default function Home() {
     setMobileNav(false);
   };
   return (
-    <div className="min-h-screen bg-[#f5f6f1] text-[#15201c]">
+    <div className="admin-theme-surface min-h-screen bg-[#f5f6f1] text-[#15201c]">
       <div className="flex min-h-screen">
         <Sidebar
           activeView={activeView}
@@ -2311,7 +2311,7 @@ export default function Home() {
           onClose={() => setMobileNav(false)}
         />
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-[#e0e5df] bg-[#f5f6f1]/90 px-5 backdrop-blur-xl sm:px-8 lg:px-10">
+          <header className="admin-theme-surface sticky top-0 z-20 flex h-[70px] items-center justify-between border-b border-[#e0e5df] bg-[#f5f6f1]/90 px-5 backdrop-blur-xl sm:px-8 lg:px-10">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5df] bg-white text-[#365047] lg:hidden"
@@ -2410,7 +2410,7 @@ export default function Home() {
               </div>
             </section>
           )}
-          <main className="app-grid min-h-[calc(100vh-70px)] px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
+          <main className="admin-theme-surface app-grid min-h-[calc(100vh-70px)] px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
             <div className="mx-auto max-w-[1440px] soft-enter">
               <Suspense fallback={<WorkspaceLoading />}>
                 <Workspace

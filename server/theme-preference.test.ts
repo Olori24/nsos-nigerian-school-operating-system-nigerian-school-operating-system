@@ -65,6 +65,10 @@ describe("biodata dark-mode preference", () => {
     expect(dashboardAppearance).toContain("aria-pressed={isDark}");
     expect(dashboardAppearance).toContain("Use dark mode");
     expect(dashboardAppearance).toContain("Use light mode");
+    expect(dashboardAppearance).toContain("admin-theme-surface");
+    expect(dashboardAppearance).toContain("motion-safe:duration-[220ms]");
+    expect(styles).toContain(".nsos-theme-scope .admin-theme-surface *");
+    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
     expect(styles).toContain(".dark .app-grid");
     expect(styles).toContain(".dark .text-\\[\\#294d3d\\]");
   });
