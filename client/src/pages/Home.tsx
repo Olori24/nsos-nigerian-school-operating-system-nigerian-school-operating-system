@@ -2563,16 +2563,23 @@ function Sidebar({
                     <button
                       key={item.id}
                       onClick={() => onSelect(item.id)}
+                      aria-current={active ? "page" : undefined}
                       className={cn(
-                        "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition",
+                        "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-left text-[13px] outline-none motion-safe:transition-[background-color,color,box-shadow,transform] motion-safe:duration-200 motion-safe:ease-out focus-visible:ring-2 focus-visible:ring-[#9bdcaf] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10231f]",
                         active
-                          ? "bg-white/[0.12] font-semibold text-white shadow-sm"
-                          : "font-medium text-white/62 hover:bg-white/[0.06] hover:text-white"
+                          ? "bg-white/[0.12] font-semibold text-white shadow-[inset_0_0_0_1px_rgba(184,223,195,0.12)]"
+                          : "font-medium text-white/62 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white"
                       )}
                     >
+                      {active && (
+                        <span
+                          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-[#b8dfc3]"
+                          aria-hidden="true"
+                        />
+                      )}
                       <item.icon
                         className={cn(
-                          "h-4 w-4",
+                          "h-4 w-4 motion-safe:transition-transform motion-safe:duration-200 group-hover:scale-105",
                           active
                             ? "text-[#b8dfc3]"
                             : "text-white/42 group-hover:text-white/72"
@@ -2604,18 +2611,18 @@ function Sidebar({
                 120
               );
             }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium text-white/58 hover:bg-white/[0.06] hover:text-white"
+            className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium text-white/58 outline-none motion-safe:transition-[background-color,color,transform] motion-safe:duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white focus-visible:ring-2 focus-visible:ring-[#9bdcaf] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10231f]"
           >
-            <Settings2 className="h-4 w-4 text-white/40" />
+            <Settings2 className="h-4 w-4 text-white/40 motion-safe:transition-transform motion-safe:duration-200 group-hover:rotate-12 group-hover:text-white/72" />
             {role === "owner" || role === "admin"
               ? "Settings & services"
               : "Account settings"}
           </button>
           <button
             onClick={onSignOut}
-            className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium text-white/58 hover:bg-white/[0.06] hover:text-white"
+            className="group mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium text-white/58 outline-none motion-safe:transition-[background-color,color,transform] motion-safe:duration-200 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white focus-visible:ring-2 focus-visible:ring-[#9bdcaf] focus-visible:ring-offset-2 focus-visible:ring-offset-[#10231f]"
           >
-            <span className="grid h-4 w-4 place-items-center rounded border border-white/25 text-[9px]">
+            <span className="grid h-4 w-4 place-items-center rounded border border-white/25 text-[9px] motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-0.5">
               ↙
             </span>
             Sign out

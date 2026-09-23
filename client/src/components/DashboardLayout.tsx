@@ -24,7 +24,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
 const menuItems = [
@@ -53,7 +53,7 @@ export default function DashboardLayout({
   }, [sidebarWidth]);
 
   if (loading) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   if (!user) {
@@ -65,7 +65,8 @@ export default function DashboardLayout({
               Sign in to continue
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Access to this dashboard requires authentication. Continue to launch the login flow.
+              Access to this dashboard requires authentication. Continue to
+              launch the login flow.
             </p>
           </div>
           <Button
@@ -161,7 +162,7 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="h-8 w-8 flex shrink-0 items-center justify-center rounded-lg outline-none transition-[background-color,transform] duration-200 hover:bg-accent hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Toggle navigation"
               >
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
@@ -185,11 +186,12 @@ function DashboardLayoutContent({
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
+                      aria-current={isActive ? "page" : undefined}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className={`h-10 font-normal outline-none transition-[background-color,color,transform,box-shadow] duration-200 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "shadow-[inset_2px_0_0_var(--primary)]" : ""}`}
                     >
                       <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        className={`h-4 w-4 transition-transform duration-200 group-hover:scale-105 ${isActive ? "text-primary" : ""}`}
                       />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
@@ -221,7 +223,7 @@ function DashboardLayoutContent({
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
                   onClick={logout}
-                  className="cursor-pointer text-destructive focus:text-destructive"
+                  className="cursor-pointer text-destructive transition-colors focus:bg-destructive/10 focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Sign out</span>

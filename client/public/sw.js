@@ -1,4 +1,4 @@
-const CACHE_NAME = "nsos-shell-v6";
+const CACHE_NAME = "nsos-shell-v7";
 const APP_SHELL = [
   "/",
   "/offline.html",

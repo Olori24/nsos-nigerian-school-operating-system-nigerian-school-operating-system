@@ -24,6 +24,7 @@ import {
   usePublicMetadata,
 } from "@/lib/publicMetadata";
 import { NSOSLogo } from "@/components/NSOSLogo";
+import { cn } from "@/lib/utils";
 
 const appUrl = "https://nsos-system-uhkdscaf.manus.space";
 
@@ -566,7 +567,21 @@ function iconFor(title: string) {
   return ShieldCheck;
 }
 
-function PublicHeader({ onMenu }: { onMenu: () => void }) {
+function PublicHeader({
+  activePath,
+  onMenu,
+}: {
+  activePath: string;
+  onMenu: () => void;
+}) {
+  const links = [
+    ["/school-management-software", "Platform"],
+    ["/for-schools", "For schools"],
+    ["/ai-for-schools", "AI for schools"],
+    ["/faq", "FAQ"],
+    ["/contact", "Contact"],
+  ] as const;
+
   return (
     <header className="border-b border-[#dfe9e1] bg-white/95 backdrop-blur dark:border-[#34463e] dark:bg-[#18231f]/95">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
@@ -577,14 +592,26 @@ function PublicHeader({ onMenu }: { onMenu: () => void }) {
           className="hidden items-center gap-5 text-xs font-semibold text-[#52675d] lg:flex"
           aria-label="Public NSOS navigation"
         >
-          <a href="/school-management-software">Platform</a>
-          <a href="/for-schools">For schools</a>
-          <a href="/ai-for-schools">AI for schools</a>
-          <a href="/faq">FAQ</a>
-          <a href="/contact">Contact</a>
+          {links.map(([href, label]) => {
+            const active = activePath === href;
+            return (
+              <a
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative rounded-lg px-2 py-2 outline-none motion-safe:transition-[background-color,color,transform] motion-safe:duration-200 hover:-translate-y-0.5 hover:bg-[#eef6ef] hover:text-[#0f5c4f] focus-visible:ring-2 focus-visible:ring-[#0f5c4f] focus-visible:ring-offset-2 dark:hover:bg-[#23352d] dark:hover:text-[#b8dfc3] dark:focus-visible:ring-[#9bdcaf] dark:focus-visible:ring-offset-[#18231f]",
+                  active &&
+                    "bg-[#eef6ef] text-[#0f5c4f] after:absolute after:inset-x-2 after:-bottom-0.5 after:h-0.5 after:rounded-full after:bg-[#0f5c4f] dark:bg-[#23352d] dark:text-[#b8dfc3] dark:after:bg-[#b8dfc3]"
+                )}
+              >
+                {label}
+              </a>
+            );
+          })}
           <a
             href={appUrl}
-            className="rounded-xl bg-[#0f5c4f] px-4 py-2.5 text-white"
+            className="rounded-xl bg-[#0f5c4f] px-4 py-2.5 text-white outline-none motion-safe:transition-[background-color,transform,box-shadow] motion-safe:duration-200 hover:-translate-y-0.5 hover:bg-[#0c4e43] hover:shadow-[0_6px_16px_rgba(15,92,79,0.2)] focus-visible:ring-2 focus-visible:ring-[#0f5c4f] focus-visible:ring-offset-2 dark:focus-visible:ring-[#9bdcaf] dark:focus-visible:ring-offset-[#18231f]"
           >
             Open NSOS
           </a>
@@ -592,7 +619,7 @@ function PublicHeader({ onMenu }: { onMenu: () => void }) {
         <button
           type="button"
           onClick={onMenu}
-          className="rounded-lg p-2 text-[#0f5c4f] lg:hidden"
+          className="rounded-lg p-2 text-[#0f5c4f] outline-none motion-safe:transition-[background-color,transform] motion-safe:duration-200 hover:bg-[#eef6ef] hover:text-[#0c4e43] focus-visible:ring-2 focus-visible:ring-[#0f5c4f] focus-visible:ring-offset-2 dark:hover:bg-[#23352d] dark:hover:text-[#b8dfc3] dark:focus-visible:ring-[#9bdcaf] dark:focus-visible:ring-offset-[#18231f] lg:hidden"
           aria-label="Open public navigation"
         >
           <Menu className="h-5 w-5" />
@@ -644,7 +671,10 @@ export default function PublicMarketingPage() {
 
   return (
     <main className="min-h-screen bg-[#f7faf7] text-[#13251f]">
-      <PublicHeader onMenu={() => setMenuOpen(value => !value)} />
+      <PublicHeader
+        activePath={page.path}
+        onMenu={() => setMenuOpen(value => !value)}
+      />
       {menuOpen && (
         <div className="border-b border-[#dfe9e1] bg-white px-5 py-4 dark:border-[#34463e] dark:bg-[#18231f] lg:hidden">
           <div className="mx-auto grid max-w-7xl gap-2 text-sm font-semibold text-[#38564a]">
@@ -654,6 +684,7 @@ export default function PublicMarketingPage() {
                 type="button"
                 onClick={() => setMenuOpen(false)}
                 aria-label="Close public navigation"
+                className="rounded-md p-1 outline-none focus-visible:ring-2 focus-visible:ring-[#0f5c4f] focus-visible:ring-offset-2 dark:focus-visible:ring-[#9bdcaf] dark:focus-visible:ring-offset-[#18231f]"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -669,14 +700,19 @@ export default function PublicMarketingPage() {
                 key={path}
                 href={path}
                 onClick={() => setMenuOpen(false)}
-                className="rounded-lg px-2 py-2 hover:bg-[#eef6ef]"
+                aria-current={page.path === path ? "page" : undefined}
+                className={cn(
+                  "rounded-lg px-2 py-2 outline-none motion-safe:transition-[background-color,color,transform] motion-safe:duration-200 hover:translate-x-0.5 hover:bg-[#eef6ef] hover:text-[#0f5c4f] focus-visible:ring-2 focus-visible:ring-[#0f5c4f] focus-visible:ring-offset-2 dark:hover:bg-[#23352d] dark:hover:text-[#b8dfc3] dark:focus-visible:ring-[#9bdcaf] dark:focus-visible:ring-offset-[#18231f]",
+                  page.path === path &&
+                    "bg-[#eef6ef] text-[#0f5c4f] dark:bg-[#23352d] dark:text-[#b8dfc3]"
+                )}
               >
                 {pages[path].navLabel}
               </a>
             ))}
             <a
               href={appUrl}
-              className="mt-2 rounded-xl bg-[#0f5c4f] px-4 py-3 text-center text-white"
+              className="mt-2 rounded-xl bg-[#0f5c4f] px-4 py-3 text-center text-white outline-none motion-safe:transition-[background-color,transform,box-shadow] motion-safe:duration-200 hover:-translate-y-0.5 hover:bg-[#0c4e43] hover:shadow-[0_6px_16px_rgba(15,92,79,0.2)] focus-visible:ring-2 focus-visible:ring-[#0f5c4f] focus-visible:ring-offset-2 dark:focus-visible:ring-[#9bdcaf] dark:focus-visible:ring-offset-[#18231f]"
             >
               Open NSOS
             </a>
