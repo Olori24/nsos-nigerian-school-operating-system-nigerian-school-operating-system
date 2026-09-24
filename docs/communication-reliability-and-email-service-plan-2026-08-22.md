@@ -1,6 +1,6 @@
 # NSOS Communication Reliability and Email-Service Plan
 
-**Status:** Updated operating model. The NSOS managed outbound sender is `notifications@nsos.top`, and one owner-authorized controlled invitation was previously accepted by the provider. On 27 August, Resend Support stated that `nsos.top` is verified and ready to send, but an immediate independent read-only API check still returned `partially_failed` with sending enabled and receiving disabled. This is an unresolved provider-status contradiction, so no new sender-health or delivery-readiness claim is made. It does not establish inbox delivery, open tracking, inbound mail, bulk campaigns, or school-branded technical sender capability.
+**Status:** Approved implementation direction. Live email delivery remains blocked until the NSOS sender domain is verified, but the channel model, setup experience, delivery state model, and admissions-upload work can proceed independently.
 
 ## 1. Problem Statement
 
@@ -37,36 +37,22 @@ Retries will be explicit and idempotent. A retry creates a fresh attempt linked 
 
 ## 4. NSOS Email-Service Operating Model
 
-NSOS is configured with a **single managed outbound transactional sender**. The technical `From` configuration is the bare mailbox `notifications@nsos.top`; application copy and transactional templates identify NSOS and, where appropriate, the originating school. The bare mailbox is intentional: it avoids unsafe display-name parsing at the environment boundary. The provider’s Support statement and read-only API state currently conflict, so this configuration remains subject to sender-health reconciliation rather than being declared healthy. Resend permits sending only from an account-owned, verified domain.[1]
+NSOS will launch email in two layers.
 
-| Capability | Current state | Controls and evidence | Explicit limit |
+| Layer | Sender pattern | Scope | Constraint |
 |---|---|---|---|
-| Passwordless sign-in links | Existing protected workflow; current sender-health reconciliation pending | Normalized recipient, short-lived token, origin validation, provider-acceptance or fail-closed status | Provider acceptance is not inbox delivery; do not assert current send readiness until the provider state agrees |
-| Staff and guardian invitations | Existing protected workflow; current sender-health reconciliation pending | Tenant scope, linked-recipient checks, confirmation gates, sent/failed records, one controlled provider-accepted test | No autonomous invitation sending or new sender-health claim |
-| Admission letters and protected student-record PDFs | Existing protected workflow; current sender-health reconciliation pending | Tenant/record linkage, explicit confirmation where required, sender readiness, rate limits, audit-safe metadata | No bulk delivery or recipient-data leakage |
-| School-branded technical sender | Not enabled | Requires a separately verified school domain and approved sender policy | NSOS does not impersonate an unverified school domain |
-| Inbound mailboxes, replies, and helpdesk processing | Not configured | None | `mail`, `pop`, and `smtp` DNS defaults do not establish a usable NSOS mailbox |
-| Bulk campaigns, open tracking, and delivery webhooks | Not enabled | Future explicit provider/webhook approval required | Provider submission must not be presented as delivered or opened |
+| Managed NSOS transactional mail | `NSOS Notifications <notifications@nsos.ng>` | Sign-in links, guardian/staff invitations, admission letters, security notices | Requires active `nsos.ng`, Resend domain verification, and platform `AUTH_EMAIL_FROM` update |
+| School-branded mail | Display name such as `Greener Future Academy via NSOS`; optional verified school sending domain later | School admissions and announcements | A school must verify any custom sending domain before it is used as the technical `From` address |
 
-The tenant-safe default is therefore **NSOS-managed transport with school context in approved content, not in an unverified `From` address**. Per-school provider credentials, technical sender overrides, raw recipients, raw content, and provider secrets remain outside broad dashboards and audit metadata.
+Until a school verifies its own sender domain, the technical sender will remain the verified NSOS sender with the school’s approved display name and a school-controlled reply-to address only when that address is valid. NSOS will never impersonate an unverified school domain. Resend requires a domain owned and verified in the account before it can send from addresses at that domain.[1]
 
-### 4.1 Current launch controls
+The production launch sequence is therefore:
 
-1. An authorised workflow must select a tenant-scoped recipient or accept an explicitly supplied sign-in address; no email is initiated merely by opening a screen.
-2. Consequential invitation, protected-record, and enrollment communication routes retain their existing final confirmation and rate-limit controls.
-3. NSOS records whether Resend accepted or rejected a request. It does not claim delivered, opened, or read without an authenticated provider callback.
-4. A provider failure preserves the underlying student, enrollment, invitation, and finance state. Recovery is an explicit staff action, not an automatic retry loop.
-5. The managed sender is platform-wide. A future school-specific technical sender requires separate domain verification, tenant ownership evidence, policy approval, and a controlled cutover.
-
-### 4.2 Changes that require a separate owner decision
-
-| Proposed change | Why it is consequential | Required approval/evidence before implementation |
-|---|---|---|
-| School-specific `From` domains | Alters external identity and DNS posture | School ownership, provider-issued verification records, owner confirmation, and sender-policy test |
-| Reply-to processing or an NSOS mailbox | Introduces inbound personal-data handling and support operations | Mailbox provider, retention/access policy, support ownership, and privacy review |
-| Delivery/bounce/open webhooks | Adds signed external callbacks and message-status processing | Provider webhook specification, secret, replay protection, data-minimisation review, and test evidence |
-| Bulk campaigns or announcements by email | Expands recipient reach and consent obligations | Audience/consent model, rate controls, unsubscribe design, and separate launch approval |
-| Automatic retry/recovery | Can create duplicate recipient contact | Idempotency design, retry policy, recovery controls, and owner approval |
+1. Complete the compliant `nsos.ng` credit-transfer and registration path with DomainKing.
+2. Add the exact Resend-issued DNS records in the `nsos.ng` DNS zone and wait for Resend verification.
+3. Set `AUTH_EMAIL_FROM` through the managed secrets process to `NSOS Notifications <notifications@nsos.ng>`.
+4. Send controlled staff and guardian invitation tests, recording accepted or failed outcomes.
+5. Enable provider delivery-webhook tracking before treating provider acceptance as confirmed delivery.
 
 ## 5. Public Admission Passport and Fee-Receipt Uploads
 

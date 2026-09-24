@@ -1,1164 +1,282 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import {
-  getStudentRecordEmailSenderReadiness,
-  sendAdmissionLetterEmail,
-  sendGuardianPortalInvitationEmail,
-  sendStaffSetupInvitationEmail,
-  sendStudentEnrollmentRecordEmail,
-  sendStudentPortalInvitationEmail,
-} from "../auth";
-import { sendMarketingUpdateEmail } from "../marketingEmail";
-import {
-  normaliseStudentRecordEmailCopy,
-  resolveStudentRecordEmailRecipient,
-  studentRecordEmailCopy,
-  studentRecordEmailCopyBounds,
-  studentRecordEmailRecipients,
-} from "../studentRecordEmail";
+import { sendAdmissionLetterEmail, sendGuardianPortalInvitationEmail, sendStaffSetupInvitationEmail } from "../auth";
 import { buildAdmissionLetter } from "../admissionLetter";
 import { buildAiSetupPlan } from "../aiOnboardingAgent";
 import { generateAiWebsiteDraft } from "../aiWebsiteAgent";
-import {
-  buildAutomationPlan,
-  jobCanRun,
-  validateAutomationInput,
-} from "../automationDesk";
-import {
-  buildCourseStudioDraft,
-  buildGuidedCourseStudioDraft,
-} from "../courseStudio";
+import { buildAutomationPlan, jobCanRun, validateAutomationInput } from "../automationDesk";
+import { buildCourseStudioDraft } from "../courseStudio";
 import { buildInstitutionBlueprint } from "../institutionBuilder";
-import {
-  analyseKnowledgeForBusiness,
-  validateKnowledgeSourceText,
-} from "../knowledgeBusinessEngine";
-import {
-  curatedLearningSources,
-  getCuratedLearningSource,
-} from "@shared/curatedLearningSources";
+import { analyseKnowledgeForBusiness, validateKnowledgeSourceText } from "../knowledgeBusinessEngine";
+import { curatedLearningSources, getCuratedLearningSource } from "@shared/curatedLearningSources";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildEnterpriseConciergePlan } from "../enterpriseConcierge";
 import { buildSetupAgentAssessment } from "../setupAgent";
 import { calculatePercentage, resolveGrade } from "../grade-calculations";
-import {
-  listNigerianLgas,
-  listNigerianOriginStates,
-  normaliseNigerianOrigin,
-} from "../nigerianOrigin";
+import { listNigerianLgas, listNigerianOriginStates, normaliseNigerianOrigin } from "../nigerianOrigin";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
-import {
-  hasPlatformOwnerAccess,
-  platformOwnerProcedure,
-  protectedProcedure,
-  publicProcedure,
-  router,
-} from "../_core/trpc";
+import { platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { sendNsosLeadEvent } from "../resendLead";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
-const studentRecordEmailCopyInput = z.object({
-  subject: z
-    .string()
-    .trim()
-    .min(studentRecordEmailCopyBounds.subjectMin)
-    .max(studentRecordEmailCopyBounds.subjectMax)
-    .refine(
-      value => !/[\r\n]/.test(value),
-      "Email subject cannot contain line breaks."
-    ),
-  body: z
-    .string()
-    .trim()
-    .min(studentRecordEmailCopyBounds.bodyMin)
-    .max(studentRecordEmailCopyBounds.bodyMax),
-});
 
-function validatedNigerianOrigin(input: {
-  stateOfOrigin?: string;
-  localGovernmentOfOrigin?: string;
-}) {
+function validatedNigerianOrigin(input: { stateOfOrigin?: string; localGovernmentOfOrigin?: string }) {
   try {
     return normaliseNigerianOrigin(input);
   } catch (error) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Select a valid State and Local Government Area of Origin.",
-    });
+    throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Select a valid State and Local Government Area of Origin." });
   }
 }
 
-async function accessSchool(
-  userId: number,
-  schoolId: number,
-  permission: string
-) {
+async function accessSchool(userId: number, schoolId: number, permission: string) {
   const membership = await db.getSchoolMembership(userId, schoolId);
   if (!membership || membership.status !== "active") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You do not have access to this school workspace.",
-    });
+    throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this school workspace." });
   }
   if (!can(membership.role as SchoolRole, permission)) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Your school role does not permit this action.",
-    });
+    throw new TRPCError({ code: "FORBIDDEN", message: "Your school role does not permit this action." });
   }
   return membership;
 }
 
-async function consumeLearningOperationsRate(
-  schoolId: number,
-  userId: number,
-  route: string
-) {
-  const rate = await db.consumeSharedRateLimit({
-    namespace: "nsos-learning-operations",
-    route,
-    clientKey: `${schoolId}:${userId}`,
-    limit: 18,
-    windowMs: 10 * 60_000,
-  });
-  if (!rate.allowed)
-    throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: `Learning operations are taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-    });
+async function consumeLearningOperationsRate(schoolId: number, userId: number, route: string) {
+  const rate = await db.consumeSharedRateLimit({ namespace: "nsos-learning-operations", route, clientKey: `${schoolId}:${userId}`, limit: 18, windowMs: 10 * 60_000 });
+  if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Learning operations are taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
 }
 
 const managementProcedure = (permission: string) =>
   protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      permission
-    );
+    const membership = await accessSchool(ctx.user.id, input.schoolId, permission);
     return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
   });
 
-const familyPortalProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "portal.read"
-    );
-    if (membership.role !== "parent" && membership.role !== "student")
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "This portal action is available only to linked parents and students.",
-      });
-    return next({
-      ctx: { ...ctx, schoolRole: membership.role as "parent" | "student" },
-    });
-  });
-
-const websiteAdminProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "communications.read"
-    );
-    if (!isManagementRole(membership.role as SchoolRole))
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Only school owners and administrators can manage the public website or custom domain.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
-  });
-
-const providerAdminProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "communications.read"
-    );
-    if (!isManagementRole(membership.role as SchoolRole))
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Only school owners and administrators can configure payment or notification providers.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
-  });
-
-const onboardingAdminProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "students.read"
-    );
-    if (!isManagementRole(membership.role as SchoolRole))
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Only school owners and administrators can view tenant onboarding progress.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
-  });
-
-const studentMigrationAdminProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "students.write"
-    );
-    if (!isManagementRole(membership.role as SchoolRole))
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Only school owners and administrators can migrate approved student records.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
-  });
-
-const advertisingAdminProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "communications.read"
-    );
-    if (!isManagementRole(membership.role as SchoolRole))
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Only school owners and administrators can manage advertising accounts or approve campaign spend.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
-  });
-
-const aiTutorAdminProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "academics.read"
-    );
-    if (!isManagementRole(membership.role as SchoolRole))
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Only school owners and administrators can configure supervised AI tutors.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
-  });
-
-const aiTutorStudentProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "portal.read"
-    );
-    if (membership.role !== "student")
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "AI study tutors are available only through a linked student account.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: "student" as const } });
-  });
-
-const aiTutorTeacherProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "academics.read"
-    );
-    if (membership.role !== "teacher")
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "AI tutor adaptation analytics are available only to active teacher accounts.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: "teacher" as const } });
-  });
-
-const learningEvidenceStudentProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "portal.read"
-    );
-    if (membership.role !== "student")
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Learning evidence can be submitted only through a linked learner account.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: "student" as const } });
-  });
-
-const learningEvidenceReviewerProcedure = protectedProcedure
-  .input(schoolInput)
-  .use(async ({ ctx, input, next }) => {
-    const membership = await accessSchool(
-      ctx.user.id,
-      input.schoolId,
-      "academics.read"
-    );
-    if (
-      !isManagementRole(membership.role as SchoolRole) &&
-      membership.role !== "teacher" &&
-      membership.role !== "staff"
-    )
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Only an assigned instructor or learning administrator can review learner evidence.",
-      });
-    return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
-  });
-
-const customDomainInput = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(
-    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i,
-    "Enter a valid domain name without a protocol or path."
-  )
-  .optional();
-const admissionTemplateFieldInput = z.enum([
-  "middleName",
-  "dateOfBirth",
-  "placeOfBirth",
-  "nationality",
-  "homeTown",
-  "gender",
-  "residentialAddress",
-  "postalAddress",
-  "priorSchool",
-  "currentClass",
-  "religion",
-  "medicalHistory",
-  "familyDoctor",
-  "guardianOccupation",
-  "guardianOfficeAddress",
-]);
-const feeScheduleInput = z.object({
-  category: z.string().trim().min(2).max(120),
-  tuitionFee: z.number().positive().max(10_000_000),
+const familyPortalProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "portal.read");
+  if (membership.role !== "parent" && membership.role !== "student") throw new TRPCError({ code: "FORBIDDEN", message: "This portal action is available only to linked parents and students." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as "parent" | "student" } });
 });
+
+const websiteAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can manage the public website or custom domain." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const providerAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can configure payment or notification providers." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const onboardingAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "students.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can view tenant onboarding progress." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const studentMigrationAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "students.write");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can migrate approved student records." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const advertisingAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can manage advertising accounts or approve campaign spend." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const aiTutorAdminProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "academics.read");
+  if (!isManagementRole(membership.role as SchoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school owners and administrators can configure supervised AI tutors." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const aiTutorStudentProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "portal.read");
+  if (membership.role !== "student") throw new TRPCError({ code: "FORBIDDEN", message: "AI study tutors are available only through a linked student account." });
+  return next({ ctx: { ...ctx, schoolRole: "student" as const } });
+});
+
+const aiTutorTeacherProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "academics.read");
+  if (membership.role !== "teacher") throw new TRPCError({ code: "FORBIDDEN", message: "AI tutor adaptation analytics are available only to active teacher accounts." });
+  return next({ ctx: { ...ctx, schoolRole: "teacher" as const } });
+});
+
+const learningEvidenceStudentProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "portal.read");
+  if (membership.role !== "student") throw new TRPCError({ code: "FORBIDDEN", message: "Learning evidence can be submitted only through a linked learner account." });
+  return next({ ctx: { ...ctx, schoolRole: "student" as const } });
+});
+
+const learningEvidenceReviewerProcedure = protectedProcedure.input(schoolInput).use(async ({ ctx, input, next }) => {
+  const membership = await accessSchool(ctx.user.id, input.schoolId, "academics.read");
+  if (!isManagementRole(membership.role as SchoolRole) && membership.role !== "teacher" && membership.role !== "staff") throw new TRPCError({ code: "FORBIDDEN", message: "Only an assigned instructor or learning administrator can review learner evidence." });
+  return next({ ctx: { ...ctx, schoolRole: membership.role as SchoolRole } });
+});
+
+const customDomainInput = z.string().trim().toLowerCase().regex(/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, "Enter a valid domain name without a protocol or path.").optional();
+const admissionTemplateFieldInput = z.enum(["middleName", "dateOfBirth", "placeOfBirth", "nationality", "homeTown", "gender", "residentialAddress", "postalAddress", "priorSchool", "currentClass", "religion", "medicalHistory", "familyDoctor", "guardianOccupation", "guardianOfficeAddress"]);
+const feeScheduleInput = z.object({ category: z.string().trim().min(2).max(120), tuitionFee: z.number().positive().max(10_000_000) });
 const courseStudioDraftInput = z.object({
   courseTitle: z.string().trim().min(3).max(180),
   courseSummary: z.string().trim().min(50).max(1600),
   deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]),
   durationLabel: z.string().trim().min(2).max(120),
-  evidenceReferences: z
-    .array(
-      z.object({
-        id: z.string().trim().min(2).max(80),
-        title: z.string().trim().min(2).max(180),
-        organisation: z.string().trim().min(2).max(180),
-        sourceUrl: z.string().url().max(2048),
-        category: z.enum([
-          "official_curriculum",
-          "global_pedagogy",
-          "institution_approved",
-          "professional_body",
-          "learning_resource",
-        ]),
-        allowedUse: z.string().trim().min(10).max(500),
-      })
-    )
-    .max(5),
-  learningExperience: z.object({
-    learningPace: z.enum(["guided", "flexible", "intensive"]),
-    supportStyle: z.enum([
-      "balanced",
-      "step_by_step",
-      "worked_examples",
-      "concise_review",
-    ]),
-    practiceMode: z.enum(["reflection", "guided_practice", "project_based"]),
-    accessibilityNote: z.string().trim().max(500),
-  }),
-  modules: z
-    .array(
-      z.object({
-        title: z.string().trim().min(2).max(180),
-        description: z.string().trim().min(10).max(1200),
-        learningType: z.enum([
-          "topic",
-          "practical",
-          "project",
-          "practice",
-          "resource",
-        ]),
-        milestones: z
-          .array(
-            z.object({
-              title: z.string().trim().min(2).max(180),
-              description: z.string().trim().min(10).max(1000),
-            })
-          )
-          .min(1)
-          .max(4),
-      })
-    )
-    .min(2)
-    .max(8),
-  materials: z
-    .array(
-      z.object({
-        title: z.string().trim().min(2).max(180),
-        materialType: z.enum([
-          "facilitator_guide",
-          "lesson_guide",
-          "practice_activity",
-          "knowledge_check",
-          "project_brief",
-          "discussion_prompt",
-          "reflection_prompt",
-          "revision_sheet",
-          "resource_checklist",
-        ]),
-        modulePosition: z.number().int().positive().max(8),
-        content: z.string().trim().min(30).max(4500),
-      })
-    )
-    .min(2)
-    .max(8),
+  evidenceReferences: z.array(z.object({ id: z.string().trim().min(2).max(80), title: z.string().trim().min(2).max(180), organisation: z.string().trim().min(2).max(180), sourceUrl: z.string().url().max(2048), category: z.enum(["official_curriculum", "global_pedagogy", "institution_approved", "professional_body", "learning_resource"]), allowedUse: z.string().trim().min(10).max(500) })).max(5),
+  learningExperience: z.object({ learningPace: z.enum(["guided", "flexible", "intensive"]), supportStyle: z.enum(["balanced", "step_by_step", "worked_examples", "concise_review"]), practiceMode: z.enum(["reflection", "guided_practice", "project_based"]), accessibilityNote: z.string().trim().max(500) }),
+  modules: z.array(z.object({ title: z.string().trim().min(2).max(180), description: z.string().trim().min(10).max(1200), learningType: z.enum(["topic", "practical", "project", "practice", "resource"]), milestones: z.array(z.object({ title: z.string().trim().min(2).max(180), description: z.string().trim().min(10).max(1000) })).min(1).max(4) })).min(2).max(6),
+  materials: z.array(z.object({ title: z.string().trim().min(2).max(180), materialType: z.enum(["facilitator_guide", "lesson_guide", "practice_activity", "knowledge_check", "project_brief", "discussion_prompt", "reflection_prompt", "revision_sheet", "resource_checklist"]), modulePosition: z.number().int().positive().max(6), content: z.string().trim().min(30).max(4500) })).min(2).max(6),
 });
-const courseStudioExperienceInput = z.object({
-  learningPace: z.enum(["guided", "flexible", "intensive"]).default("guided"),
-  supportStyle: z
-    .enum(["balanced", "step_by_step", "worked_examples", "concise_review"])
-    .default("balanced"),
-  practiceMode: z
-    .enum(["reflection", "guided_practice", "project_based"])
-    .default("guided_practice"),
-  accessibilityNote: z.string().trim().max(500).default(""),
-});
-const curatedSourceIdInput = z.enum(
-  curatedLearningSources.map(source => source.id) as [
-    "nerdc_basic_education",
-    "nerdc_senior_secondary",
-    "unesco_ai_students",
-  ]
-);
+const courseStudioExperienceInput = z.object({ learningPace: z.enum(["guided", "flexible", "intensive"]).default("guided"), supportStyle: z.enum(["balanced", "step_by_step", "worked_examples", "concise_review"]).default("balanced"), practiceMode: z.enum(["reflection", "guided_practice", "project_based"]).default("guided_practice"), accessibilityNote: z.string().trim().max(500).default("") });
+const curatedSourceIdInput = z.enum(curatedLearningSources.map(source => source.id) as ["nerdc_basic_education", "nerdc_senior_secondary", "unesco_ai_students"]);
 
-async function resolveLearningEvidenceReferences(input: {
-  schoolId: number;
-  curatedSourceIds?: string[];
-  evidenceSourceIds?: number[];
-  draftReferences?: Array<{ id: string }>;
-}) {
-  const requestedCurated = new Set<string>(
-    input.curatedSourceIds ??
-      input.draftReferences
-        ?.filter(reference => reference.id.startsWith("curated:"))
-        .map(reference => reference.id.replace("curated:", "")) ??
-      []
-  );
-  const requestedTenant = new Set<number>(
-    input.evidenceSourceIds ??
-      input.draftReferences
-        ?.filter(reference => reference.id.startsWith("tenant:"))
-        .map(reference => Number(reference.id.replace("tenant:", "")))
-        .filter(Number.isInteger) ??
-      []
-  );
-  const curated = Array.from(requestedCurated)
-    .map(id => getCuratedLearningSource(id))
-    .filter((source): source is NonNullable<typeof source> => Boolean(source))
-    .map(source => ({
-      id: `curated:${source.id}`,
-      title: source.title,
-      organisation: source.organisation,
-      sourceUrl: source.sourceUrl,
-      category: source.category,
-      allowedUse: source.allowedUse,
-    }));
-  if (curated.length !== requestedCurated.size)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "One selected curated source is unavailable.",
-    });
-  const tenantSources = (
-    await db.listLearningEvidenceSources(input.schoolId)
-  ).filter(
-    source => source.status === "active" && requestedTenant.has(source.id)
-  );
-  if (tenantSources.length !== requestedTenant.size)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "Select only active institution-approved sources from this learning organisation.",
-    });
-  return [
-    ...curated,
-    ...tenantSources.map(source => ({
-      id: `tenant:${source.id}`,
-      title: source.title,
-      organisation: source.organisation,
-      sourceUrl: source.sourceUrl,
-      category: source.category,
-      allowedUse: source.allowedUse,
-    })),
-  ].slice(0, 5);
+async function resolveLearningEvidenceReferences(input: { schoolId: number; curatedSourceIds?: string[]; evidenceSourceIds?: number[]; draftReferences?: Array<{ id: string }> }) {
+  const requestedCurated = new Set<string>(input.curatedSourceIds ?? input.draftReferences?.filter(reference => reference.id.startsWith("curated:")).map(reference => reference.id.replace("curated:", "")) ?? []);
+  const requestedTenant = new Set<number>(input.evidenceSourceIds ?? input.draftReferences?.filter(reference => reference.id.startsWith("tenant:")).map(reference => Number(reference.id.replace("tenant:", ""))).filter(Number.isInteger) ?? []);
+  const curated = Array.from(requestedCurated).map(id => getCuratedLearningSource(id)).filter((source): source is NonNullable<typeof source> => Boolean(source)).map(source => ({ id: `curated:${source.id}`, title: source.title, organisation: source.organisation, sourceUrl: source.sourceUrl, category: source.category, allowedUse: source.allowedUse }));
+  if (curated.length !== requestedCurated.size) throw new TRPCError({ code: "BAD_REQUEST", message: "One selected curated source is unavailable." });
+  const tenantSources = (await db.listLearningEvidenceSources(input.schoolId)).filter(source => source.status === "active" && requestedTenant.has(source.id));
+  if (tenantSources.length !== requestedTenant.size) throw new TRPCError({ code: "BAD_REQUEST", message: "Select only active institution-approved sources from this learning organisation." });
+  return [...curated, ...tenantSources.map(source => ({ id: `tenant:${source.id}`, title: source.title, organisation: source.organisation, sourceUrl: source.sourceUrl, category: source.category, allowedUse: source.allowedUse }))].slice(0, 5);
 }
-const studentMigrationRowInput = z.object({
-  sourceRow: z.number().int().positive(),
-  admissionNo: z.string().max(64),
-  firstName: z.string().max(120),
-  lastName: z.string().max(120),
-  middleName: z.string().max(120).optional(),
-  dateOfBirth: z.string().max(10).optional(),
-  gender: z.string().max(24).optional(),
-  email: z.string().max(320).optional(),
-  phone: z.string().max(48).optional(),
-  guardianFirstName: z.string().max(120).optional(),
-  guardianLastName: z.string().max(120).optional(),
-  guardianRelationship: z.string().max(80).optional(),
-  guardianEmail: z.string().max(320).optional(),
-  guardianPhone: z.string().max(48).optional(),
-});
-const staffMigrationRowInput = z.object({
-  sourceRow: z.number().int().positive(),
-  employeeNo: z.string().max(48),
-  firstName: z.string().max(120),
-  lastName: z.string().max(120),
-  jobTitle: z.string().max(120),
-  employmentType: z.string().max(24).optional(),
-  email: z.string().max(320).optional(),
-  phone: z.string().max(48).optional(),
-  joinedOn: z.string().max(10).optional(),
-  address: z.string().max(2000).optional(),
-});
-const academicMigrationRowInput = z.object({
-  sourceRow: z.number().int().positive(),
-  kind: z.string().max(16),
-  name: z.string().max(160),
-  code: z.string().max(32).optional(),
-  level: z.string().max(64).optional(),
-  arm: z.string().max(32).optional(),
-  capacity: z
-    .union([z.string().max(8), z.number().int().positive()])
-    .optional(),
-  description: z.string().max(5000).optional(),
-});
+const studentMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), admissionNo: z.string().max(64), firstName: z.string().max(120), lastName: z.string().max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().max(10).optional(), gender: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), guardianFirstName: z.string().max(120).optional(), guardianLastName: z.string().max(120).optional(), guardianRelationship: z.string().max(80).optional(), guardianEmail: z.string().max(320).optional(), guardianPhone: z.string().max(48).optional() });
+const staffMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), employeeNo: z.string().max(48), firstName: z.string().max(120), lastName: z.string().max(120), jobTitle: z.string().max(120), employmentType: z.string().max(24).optional(), email: z.string().max(320).optional(), phone: z.string().max(48).optional(), joinedOn: z.string().max(10).optional(), address: z.string().max(2000).optional() });
+const academicMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), kind: z.string().max(16), name: z.string().max(160), code: z.string().max(32).optional(), level: z.string().max(64).optional(), arm: z.string().max(32).optional(), capacity: z.union([z.string().max(8), z.number().int().positive()]).optional(), description: z.string().max(5000).optional() });
 
 export const nsosRouter = router({
-  platform: router({
-    ownerAccess: protectedProcedure.query(async ({ ctx }) => {
-      const isPlatformOwner = await hasPlatformOwnerAccess(ctx.user);
-      return {
-        isPlatformOwner,
-        canClaimOwnerAccess:
-          !isPlatformOwner &&
-          (await db.canClaimVerifiedGooglePlatformOwnerLink(ctx.user.id)),
-      };
-    }),
-    claimOwnerAccess: protectedProcedure
-      .input(z.object({ confirmed: z.literal(true) }))
-      .mutation(async ({ ctx }) => {
-        await db.claimVerifiedGooglePlatformOwnerLink({ userId: ctx.user.id });
-        return { isPlatformOwner: await hasPlatformOwnerAccess(ctx.user) };
+  leads: router({
+    capture: publicProcedure
+      .input(z.object({
+        firstName: z.string().trim().min(1).max(80),
+        email: z.string().trim().toLowerCase().email().max(320),
+        schoolName: z.string().trim().max(180).optional(),
+        leadSource: z.string().trim().max(120).default("nsos.top/start"),
+        consent: z.literal(true),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          return await sendNsosLeadEvent(input);
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error instanceof Error ? error.message : "Lead capture is temporarily unavailable. Please try again.",
+          });
+        }
       }),
-    revokeLinkedOwnerAccess: platformOwnerProcedure
-      .input(z.object({ confirmed: z.literal(true) }))
-      .mutation(async ({ ctx }) => ({
-        revoked: await db.revokePlatformOwnerIdentityLink(ctx.user.id),
-      })),
   }),
 
-  marketing: router({
-    preference: protectedProcedure.query(({ ctx }) =>
-      db.getMarketingSubscription(ctx.user.id)
-    ),
-    setPreference: protectedProcedure
-      .input(
-        z.object({
-          subscribed: z.boolean(),
-          source: z.enum([
-            "account_settings",
-            "registration",
-            "unsubscribe_link",
-          ]),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.setMarketingSubscription({
-          userId: ctx.user.id,
-          subscribed: input.subscribed,
-          source: input.source,
-        });
-        return {
-          status: result.status,
-          subscribed: result.status === "subscribed",
-        };
-      }),
-    campaigns: platformOwnerProcedure.query(() => db.listMarketingCampaigns()),
-    createCampaign: platformOwnerProcedure
-      .input(
-        z.object({
-          title: z.string().trim().min(3).max(160),
-          subject: z.string().trim().min(3).max(255),
-          body: z.string().trim().min(10).max(10000),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createMarketingCampaign({ ...input, createdBy: ctx.user.id })
-      ),
-    approveCampaign: platformOwnerProcedure
-      .input(
-        z.object({
-          campaignId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.approveMarketingCampaign({
-          campaignId: input.campaignId,
-          approvedBy: ctx.user.id,
-        })
-      ),
-    sendCampaign: platformOwnerProcedure
-      .input(
-        z.object({
-          campaignId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ input }) => {
-        const campaign = await db.getMarketingCampaign(input.campaignId);
-        if (!campaign || campaign.status !== "approved")
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Only an approved campaign can be sent.",
-          });
-        const recipients = await db.listSubscribedMarketingUsers();
-        let sent = 0;
-        let failed = 0;
-        for (const recipient of recipients) {
-          if (!recipient.email) continue;
-          const delivery = await db.queueMarketingCampaignDelivery({
-            campaignId: campaign.id,
-            userId: recipient.userId,
-          });
-          if (
-            !delivery ||
-            delivery.status === "sent" ||
-            delivery.status === "suppressed"
-          )
-            continue;
-          try {
-            const providerMessageId = await sendMarketingUpdateEmail({
-              userId: recipient.userId,
-              email: recipient.email,
-              name: recipient.name,
-              subject: campaign.subject,
-              body: campaign.body,
-              idempotencyKey: `nsos-marketing-${campaign.id}-${recipient.userId}`,
-            });
-            await db.markMarketingDeliverySent({
-              deliveryId: delivery.id,
-              providerMessageId,
-            });
-            sent += 1;
-          } catch (error) {
-            await db.markMarketingDeliveryFailed({
-              deliveryId: delivery.id,
-              error,
-            });
-            failed += 1;
-          }
-        }
-        await db.finishMarketingCampaign(
-          campaign.id,
-          failed ? "failed" : "sent"
-        );
-        return { sent, failed, eligibleRecipients: recipients.length };
-      }),
-  }),
 
   schools: router({
-    list: protectedProcedure.query(({ ctx }) =>
-      db.listUserSchools(ctx.user.id)
-    ),
+    list: protectedProcedure.query(({ ctx }) => db.listUserSchools(ctx.user.id)),
     create: protectedProcedure
-      .input(
-        z.object({
-          name: z.string().min(3).max(255),
-          shortCode: z.string().min(2).max(32),
-          operatingType: z
-            .enum([
-              "school",
-              "vocational_institute",
-              "coaching_centre",
-              "online_training_provider",
-              "hybrid_learning_provider",
-              "corporate_academy",
-            ])
-            .default("school"),
-          state: z.string().max(100).optional(),
-          email: z.string().email().optional(),
-          phone: z.string().max(48).optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createSchool({
-          ...input,
-          shortCode: input.shortCode.trim().toUpperCase(),
-          createdBy: ctx.user.id,
-        })
-      ),
-    context: protectedProcedure
-      .input(schoolInput)
-      .query(async ({ ctx, input }) => {
-        const membership = await accessSchool(
-          ctx.user.id,
-          input.schoolId,
-          "communications.read"
-        );
-        return db.getSchoolContext(
-          input.schoolId,
-          membership.role as SchoolRole
-        );
-      }),
+      .input(z.object({ name: z.string().min(3).max(255), shortCode: z.string().min(2).max(32), operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider", "corporate_academy"]).default("school"), state: z.string().max(100).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional() }))
+      .mutation(({ ctx, input }) => db.createSchool({ ...input, shortCode: input.shortCode.trim().toUpperCase(), createdBy: ctx.user.id })),
+    context: protectedProcedure.input(schoolInput).query(async ({ ctx, input }) => {
+      const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+      return db.getSchoolContext(input.schoolId, membership.role as SchoolRole);
+    }),
     invite: managementProcedure("communications.read")
-      .input(
-        schoolInput.extend({
-          userId: z.number().int().positive(),
-          role: roleInput,
-        })
-      )
+      .input(schoolInput.extend({ userId: z.number().int().positive(), role: roleInput }))
       .mutation(async ({ ctx, input }) => {
-        if (!isManagementRole(ctx.schoolRole))
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Only school administrators can assign roles.",
-          });
-        const result = await db.upsertMembership(
-          input.schoolId,
-          input.userId,
-          input.role
-        );
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_membership_assigned",
-          targetType: "school_membership",
-          targetId: input.userId,
-          metadata: { assignedRole: input.role },
-        });
+        if (!isManagementRole(ctx.schoolRole)) throw new TRPCError({ code: "FORBIDDEN", message: "Only school administrators can assign roles." });
+        const result = await db.upsertMembership(input.schoolId, input.userId, input.role);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_membership_assigned", targetType: "school_membership", targetId: input.userId, metadata: { assignedRole: input.role } });
         return result;
       }),
   }),
 
   platformRevenue: router({
-    overview: platformOwnerProcedure.query(() =>
-      db.getPlatformRevenueOverview()
-    ),
+    overview: platformOwnerProcedure.query(() => db.getPlatformRevenueOverview()),
     createPlan: platformOwnerProcedure
-      .input(
-        z.object({
-          code: z.string().min(2).max(48),
-          name: z.string().min(2).max(120),
-          description: z.string().max(2000).optional(),
-          monthlyAmount: z.number().min(0).max(100_000_000),
-          annualAmount: z.number().min(0).max(1_000_000_000),
-          studentLimit: z.number().int().positive().max(1_000_000).optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createSubscriptionPlan({ ...input, createdBy: ctx.user.id })
-      ),
+      .input(z.object({ code: z.string().min(2).max(48), name: z.string().min(2).max(120), description: z.string().max(2000).optional(), monthlyAmount: z.number().min(0).max(100_000_000), annualAmount: z.number().min(0).max(1_000_000_000), studentLimit: z.number().int().positive().max(1_000_000).optional() }))
+      .mutation(({ ctx, input }) => db.createSubscriptionPlan({ ...input, createdBy: ctx.user.id })),
     assignSubscription: platformOwnerProcedure
-      .input(
-        z.object({
-          schoolId: z.number().int().positive(),
-          planId: z.number().int().positive().optional(),
-          status: z.enum([
-            "trial",
-            "active",
-            "payment_due",
-            "suspended",
-            "cancelled",
-          ]),
-          billingCycle: z.enum(["monthly", "annual", "manual"]),
-          startsAt: z.string().min(10).max(10).optional(),
-          endsAt: z.string().min(10).max(10).optional(),
-          note: z.string().max(2000).optional(),
-        })
-      )
+      .input(z.object({ schoolId: z.number().int().positive(), planId: z.number().int().positive().optional(), status: z.enum(["trial", "active", "payment_due", "suspended", "cancelled"]), billingCycle: z.enum(["monthly", "annual", "manual"]), startsAt: z.string().min(10).max(10).optional(), endsAt: z.string().min(10).max(10).optional(), note: z.string().max(2000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.assignSchoolSubscription({
-          ...input,
-          assignedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "platform_subscription_assigned",
-          targetType: "school_subscription",
-          metadata: {
-            status: input.status,
-            billingCycle: input.billingCycle,
-            planAssigned: Boolean(input.planId),
-          },
-        });
+        const result = await db.assignSchoolSubscription({ ...input, assignedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "platform_subscription_assigned", targetType: "school_subscription", metadata: { status: input.status, billingCycle: input.billingCycle, planAssigned: Boolean(input.planId) } });
         return result;
       }),
     issueBillingRecord: platformOwnerProcedure
-      .input(
-        z.object({
-          schoolId: z.number().int().positive(),
-          issueDate: z.string().min(10).max(10),
-          dueDate: z.string().min(10).max(10).optional(),
-          note: z.string().max(2000).optional(),
-        })
-      )
+      .input(z.object({ schoolId: z.number().int().positive(), issueDate: z.string().min(10).max(10), dueDate: z.string().min(10).max(10).optional(), note: z.string().max(2000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.issuePlatformBillingRecord({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "platform_billing_record_issued",
-          targetType: "platform_billing_record",
-          targetId: result.billingRecordId,
-          metadata: { action: "issued" },
-        });
+        const result = await db.issuePlatformBillingRecord({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "platform_billing_record_issued", targetType: "platform_billing_record", targetId: result.billingRecordId, metadata: { action: "issued" } });
         return result;
       }),
     recordBillingPayment: platformOwnerProcedure
-      .input(
-        z.object({
-          billingRecordId: z.number().int().positive(),
-          paidAt: z.string().min(10).max(10),
-          paymentMethod: z.enum(["bank_transfer", "card", "manual"]),
-          providerReference: z.string().max(160).optional(),
-        })
-      )
+      .input(z.object({ billingRecordId: z.number().int().positive(), paidAt: z.string().min(10).max(10), paymentMethod: z.enum(["bank_transfer", "card", "manual"]), providerReference: z.string().max(160).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.recordPlatformBillingPayment({
-          ...input,
-          settledBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: result.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "platform_billing_record_paid",
-          targetType: "platform_billing_record",
-          targetId: result.billingRecordId,
-          metadata: {
-            paymentMethod: input.paymentMethod,
-            paymentRecorded: true,
-          },
-        });
+        const result = await db.recordPlatformBillingPayment({ ...input, settledBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: result.schoolId, actorUserId: ctx.user.id, eventType: "platform_billing_record_paid", targetType: "platform_billing_record", targetId: result.billingRecordId, metadata: { paymentMethod: input.paymentMethod, paymentRecorded: true } });
         return result;
       }),
-    schoolSubscription: websiteAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getSchoolSubscription(input.schoolId)),
-  }),
-
-  affiliatePilot: router({
-    overview: platformOwnerProcedure.query(() =>
-      db.getInternalAffiliatePilotOverview()
-    ),
-    confirmInternalDefaults: platformOwnerProcedure
-      .input(z.object({ confirmed: z.literal(true) }))
-      .mutation(({ ctx }) =>
-        db.confirmInternalAffiliatePilotDefaults({ confirmedBy: ctx.user.id })
-      ),
+    schoolSubscription: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolSubscription(input.schoolId)),
   }),
 
   website: router({
-    config: websiteAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getSchoolWebsite(input.schoolId)),
-    media: websiteAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.listSchoolWebsiteMedia(input.schoolId)),
+    config: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolWebsite(input.schoolId)),
+    media: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.listSchoolWebsiteMedia(input.schoolId)),
     uploadMedia: websiteAdminProcedure
-      .input(
-        schoolInput.extend({
-          purpose: z.enum(["logo", "hero"]),
-          label: z.string().trim().min(2).max(120),
-          fileName: z.string().trim().min(1).max(180),
-          mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
-          base64: z.string().min(80).max(7_100_000),
-        })
-      )
+      .input(schoolInput.extend({ purpose: z.enum(["logo", "hero"]), label: z.string().trim().min(2).max(120), fileName: z.string().trim().min(1).max(180), mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]), base64: z.string().min(80).max(7_100_000) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "website-media",
-          route: "upload",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 8,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Website image uploads are taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const media = await db.uploadSchoolWebsiteMedia({
-          ...input,
-          uploadedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_website_media_uploaded",
-          targetType: "school_website_media",
-          targetId: media.id,
-          metadata: {
-            purpose: media.purpose,
-            mimeType: media.mimeType,
-            byteSize: media.byteSize,
-          },
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "website-media", route: "upload", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Website image uploads are taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const media = await db.uploadSchoolWebsiteMedia({ ...input, uploadedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_website_media_uploaded", targetType: "school_website_media", targetId: media.id, metadata: { purpose: media.purpose, mimeType: media.mimeType, byteSize: media.byteSize } });
         return media;
       }),
     save: websiteAdminProcedure
-      .input(
-        schoolInput.extend({
-          headline: z.string().max(255).optional(),
-          introduction: z.string().max(5000).optional(),
-          primaryColor: z
-            .string()
-            .regex(/^#[0-9a-fA-F]{6}$/)
-            .optional(),
-          contactEmail: z.string().email().optional(),
-          contactPhone: z.string().max(48).optional(),
-          campusLocation: z.string().max(255).optional(),
-          customDomain: customDomainInput,
-          admissionsEnabled: z.boolean().optional(),
-          logoMediaId: z.number().int().positive().nullable().optional(),
-          heroMediaId: z.number().int().positive().nullable().optional(),
-          visualTheme: z.enum(["modern", "academic", "community"]).optional(),
-          published: z.boolean().optional(),
-        })
-      )
+      .input(schoolInput.extend({ headline: z.string().max(255).optional(), introduction: z.string().max(5000).optional(), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), contactEmail: z.string().email().optional(), contactPhone: z.string().max(48).optional(), campusLocation: z.string().max(255).optional(), customDomain: customDomainInput, admissionsEnabled: z.boolean().optional(), logoMediaId: z.number().int().positive().nullable().optional(), heroMediaId: z.number().int().positive().nullable().optional(), visualTheme: z.enum(["modern", "academic", "community"]).optional(), published: z.boolean().optional() }))
       .mutation(async ({ ctx, input }) => {
         const result = await db.saveSchoolWebsite(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_website_configuration_saved",
-          targetType: "school_website",
-          metadata: {
-            admissionsEnabled: input.admissionsEnabled,
-            published: input.published,
-            customDomainConfigured: Boolean(input.customDomain),
-          },
-        });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_website_configuration_saved", targetType: "school_website", metadata: { admissionsEnabled: input.admissionsEnabled, published: input.published, customDomainConfigured: Boolean(input.customDomain) } });
         return result;
       }),
     applySetupAgentDraft: websiteAdminProcedure
-      .input(
-        schoolInput.extend({
-          headline: z.string().trim().min(5).max(255),
-          introduction: z.string().trim().min(20).max(5000),
-          primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-          contactEmail: z.string().email().optional(),
-          contactPhone: z.string().trim().min(5).max(48).optional(),
-          campusLocation: z.string().trim().min(2).max(255).optional(),
-          admissionsEnabled: z.boolean(),
-          logoMediaId: z.number().int().positive().nullable().optional(),
-          heroMediaId: z.number().int().positive().nullable().optional(),
-          visualTheme: z.enum(["modern", "academic", "community"]).optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ headline: z.string().trim().min(5).max(255), introduction: z.string().trim().min(20).max(5000), primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), contactEmail: z.string().email().optional(), contactPhone: z.string().trim().min(5).max(48).optional(), campusLocation: z.string().trim().min(2).max(255).optional(), admissionsEnabled: z.boolean(), logoMediaId: z.number().int().positive().nullable().optional(), heroMediaId: z.number().int().positive().nullable().optional(), visualTheme: z.enum(["modern", "academic", "community"]).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.saveSchoolWebsite({
-          schoolId: input.schoolId,
-          headline: input.headline,
-          introduction: input.introduction,
-          primaryColor: input.primaryColor,
-          contactEmail: input.contactEmail,
-          contactPhone: input.contactPhone,
-          campusLocation: input.campusLocation,
-          admissionsEnabled: input.admissionsEnabled,
-          logoMediaId: input.logoMediaId,
-          heroMediaId: input.heroMediaId,
-          visualTheme: input.visualTheme,
-          published: false,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "website_setup_agent_draft_applied",
-          targetType: "school_website",
-          metadata: {
-            appliedAsDraft: true,
-            admissionsEnabled: input.admissionsEnabled,
-            contactEmailProvided: Boolean(input.contactEmail),
-            contactPhoneProvided: Boolean(input.contactPhone),
-            campusLocationProvided: Boolean(input.campusLocation),
-            logoMediaSelected: Boolean(input.logoMediaId),
-            heroMediaSelected: Boolean(input.heroMediaId),
-            visualTheme: input.visualTheme ?? "modern",
-          },
-        });
+        const result = await db.saveSchoolWebsite({ schoolId: input.schoolId, headline: input.headline, introduction: input.introduction, primaryColor: input.primaryColor, contactEmail: input.contactEmail, contactPhone: input.contactPhone, campusLocation: input.campusLocation, admissionsEnabled: input.admissionsEnabled, logoMediaId: input.logoMediaId, heroMediaId: input.heroMediaId, visualTheme: input.visualTheme, published: false });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "website_setup_agent_draft_applied", targetType: "school_website", metadata: { appliedAsDraft: true, admissionsEnabled: input.admissionsEnabled, contactEmailProvided: Boolean(input.contactEmail), contactPhoneProvided: Boolean(input.contactPhone), campusLocationProvided: Boolean(input.campusLocation), logoMediaSelected: Boolean(input.logoMediaId), heroMediaSelected: Boolean(input.heroMediaId), visualTheme: input.visualTheme ?? "modern" } });
         return result;
       }),
     generateAgentDraft: websiteAdminProcedure
       .input(schoolInput.extend({ brief: z.string().trim().min(10).max(700) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-ai-agent",
-          route: "website-draft",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 10,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Try another website draft in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-ai-agent", route: "website-draft", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 10, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Try another website draft in about ${rate.retryAfterSeconds} seconds.` });
         const { school, website } = await db.getSchoolWebsite(input.schoolId);
-        const draft = await generateAiWebsiteDraft({
-          schoolName: school.name,
-          state: school.state,
-          existingHeadline: website.headline,
-          existingIntroduction: website.introduction,
-          brief: input.brief,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "website_ai_draft_generated",
-          targetType: "school_website",
-          metadata: {
-            generatedAsDraft: true,
-            source: draft.source,
-            requiresConfirmation: true,
-          },
-        });
+        const draft = await generateAiWebsiteDraft({ schoolName: school.name, state: school.state, existingHeadline: website.headline, existingIntroduction: website.introduction, brief: input.brief });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "website_ai_draft_generated", targetType: "school_website", metadata: { generatedAsDraft: true, source: draft.source, requiresConfirmation: true } });
         return draft;
       }),
-    verifyDomain: websiteAdminProcedure
-      .input(schoolInput)
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.verifySchoolWebsiteDomain(input.schoolId);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_domain_verified",
-          targetType: "school_website",
-          metadata: { verification: "active" },
-        });
-        return result;
-      }),
-    publicSite: publicProcedure
-      .input(z.object({ shortCode: z.string().min(2).max(32) }))
-      .query(({ input }) => db.getPublicSchoolWebsite(input.shortCode)),
-    publicDomain: publicProcedure
-      .input(z.object({ domain: z.string().min(3).max(255) }))
-      .query(({ input }) => db.getPublicSchoolWebsiteByDomain(input.domain)),
+    verifyDomain: websiteAdminProcedure.input(schoolInput).mutation(async ({ ctx, input }) => {
+      const result = await db.verifySchoolWebsiteDomain(input.schoolId);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_domain_verified", targetType: "school_website", metadata: { verification: "active" } });
+      return result;
+    }),
+    publicSite: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getPublicSchoolWebsite(input.shortCode)),
+    publicDomain: publicProcedure.input(z.object({ domain: z.string().min(3).max(255) })).query(({ input }) => db.getPublicSchoolWebsiteByDomain(input.domain)),
   }),
 
   documentTemplates: router({
-    get: websiteAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getSchoolDocumentTemplate(input.schoolId)),
+    get: websiteAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolDocumentTemplate(input.schoolId)),
     save: websiteAdminProcedure
-      .input(
-        schoolInput.extend({
-          admissionTitle: z.string().trim().min(3).max(160),
-          headerTagline: z.string().trim().max(255).optional(),
-          headerLogoUrl: z
-            .string()
-            .trim()
-            .url()
-            .max(2048)
-            .refine(
-              value => new URL(value).protocol === "https:",
-              "Use an HTTPS logo URL."
-            )
-            .optional(),
-          headerAddressLine: z.string().trim().max(500).optional(),
-          headerContactLine: z.string().trim().max(500).optional(),
-          admissionFields: z.array(admissionTemplateFieldInput).max(15),
-          declarationText: z.string().trim().max(3000).optional(),
-          requireDeclaration: z.boolean(),
-          requirePassportPhoto: z.boolean(),
-          requireAdmissionFeeReceipt: z.boolean(),
-          termlyFeeTitle: z.string().trim().min(3).max(160),
-          feeSchedule: z.array(feeScheduleInput).min(1).max(24),
-        })
-      )
+      .input(schoolInput.extend({ admissionTitle: z.string().trim().min(3).max(160), headerTagline: z.string().trim().max(255).optional(), headerLogoUrl: z.string().trim().url().max(2048).refine(value => new URL(value).protocol === "https:", "Use an HTTPS logo URL.").optional(), headerAddressLine: z.string().trim().max(500).optional(), headerContactLine: z.string().trim().max(500).optional(), admissionFields: z.array(admissionTemplateFieldInput).max(15), declarationText: z.string().trim().max(3000).optional(), requireDeclaration: z.boolean(), requirePassportPhoto: z.boolean(), requireAdmissionFeeReceipt: z.boolean(), termlyFeeTitle: z.string().trim().min(3).max(160), feeSchedule: z.array(feeScheduleInput).min(1).max(24) }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.saveSchoolDocumentTemplate({
-          ...input,
-          updatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_document_template_saved",
-          targetType: "school_document_template",
-          metadata: {
-            admissionFieldCount: input.admissionFields.length,
-            feeBandCount: input.feeSchedule.length,
-            requiresDeclaration: input.requireDeclaration,
-            requiresPassportPhoto: input.requirePassportPhoto,
-            requiresAdmissionFeeReceipt: input.requireAdmissionFeeReceipt,
-            brandedHeaderConfigured: Boolean(
-              input.headerLogoUrl ||
-                input.headerAddressLine ||
-                input.headerContactLine
-            ),
-          },
-        });
+        const result = await db.saveSchoolDocumentTemplate({ ...input, updatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_document_template_saved", targetType: "school_document_template", metadata: { admissionFieldCount: input.admissionFields.length, feeBandCount: input.feeSchedule.length, requiresDeclaration: input.requireDeclaration, requiresPassportPhoto: input.requirePassportPhoto, requiresAdmissionFeeReceipt: input.requireAdmissionFeeReceipt, brandedHeaderConfigured: Boolean(input.headerLogoUrl || input.headerAddressLine || input.headerContactLine) } });
         return result;
       }),
     adoptFeeSchedule: websiteAdminProcedure
-      .input(
-        schoolInput.extend({
-          termId: z.number().int().positive(),
-          classId: z.number().int().positive().optional(),
-        })
-      )
+      .input(schoolInput.extend({ termId: z.number().int().positive(), classId: z.number().int().positive().optional() }))
       .mutation(async ({ ctx, input }) => {
         const result = await db.createDraftFeesFromTemplate(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "termly_fee_template_adopted",
-          targetType: "fee_structure",
-          metadata: {
-            termId: input.termId,
-            classScoped: Boolean(input.classId),
-            createdCount: result.createdCount,
-            status: "draft",
-          },
-        });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "termly_fee_template_adopted", targetType: "fee_structure", metadata: { termId: input.termId, classScoped: Boolean(input.classId), createdCount: result.createdCount, status: "draft" } });
         return result;
       }),
   }),
@@ -1167,88 +285,31 @@ export const nsosRouter = router({
     ask: protectedProcedure
       .input(schoolInput.extend({ message: z.string().trim().min(2).max(600) }))
       .mutation(async ({ ctx, input }) => {
-        const membership = await accessSchool(
-          ctx.user.id,
-          input.schoolId,
-          "communications.read"
-        );
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-copilot",
-          route: "navigation",
-          clientKey: String(ctx.user.id),
-          limit: 24,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Copilot is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-copilot", route: "navigation", clientKey: String(ctx.user.id), limit: 24, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Copilot is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const role = membership.role as SchoolRole;
-        const guidance = await getCopilotGuidance({
-          role,
-          message: input.message,
-        });
+        const guidance = await getCopilotGuidance({ role, message: input.message });
         try {
-          await db.saveCopilotRecentSearch({
-            userId: ctx.user.id,
-            schoolId: input.schoolId,
-            query: input.message,
-            destinationId: guidance.destination,
-          });
+          await db.saveCopilotRecentSearch({ userId: ctx.user.id, schoolId: input.schoolId, query: input.message, destinationId: guidance.destination });
         } catch (error) {
           console.warn("[Copilot] Recent-search persistence failed", error);
         }
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "copilot_navigation_requested",
-          targetType: "copilot_navigation",
-          targetId: guidance.destination ?? undefined,
-          metadata: {
-            source: guidance.source,
-            role,
-            destinationProvided: Boolean(guidance.destination),
-          },
-        });
-        return {
-          ...guidance,
-          destinations: destinationsForRole(role).map(destination => ({
-            id: destination.id,
-            label: destination.label,
-            description: destination.description,
-          })),
-        };
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "copilot_navigation_requested", targetType: "copilot_navigation", targetId: guidance.destination ?? undefined, metadata: { source: guidance.source, role, destinationProvided: Boolean(guidance.destination) } });
+        return { ...guidance, destinations: destinationsForRole(role).map(destination => ({ id: destination.id, label: destination.label, description: destination.description })) };
       }),
     recent: protectedProcedure
-      .input(
-        schoolInput.extend({
-          limit: z.number().int().min(1).max(12).optional(),
-        })
-      )
+      .input(schoolInput.extend({ limit: z.number().int().min(1).max(12).optional() }))
       .query(async ({ ctx, input }) => {
         await accessSchool(ctx.user.id, input.schoolId, "communications.read");
-        return db.listCopilotRecentSearches({
-          userId: ctx.user.id,
-          schoolId: input.schoolId,
-          limit: input.limit,
-        });
+        return db.listCopilotRecentSearches({ userId: ctx.user.id, schoolId: input.schoolId, limit: input.limit });
       }),
     clearRecent: protectedProcedure
       .input(schoolInput)
       .mutation(async ({ ctx, input }) => {
         await accessSchool(ctx.user.id, input.schoolId, "communications.read");
-        const result = await db.clearCopilotRecentSearches({
-          userId: ctx.user.id,
-          schoolId: input.schoolId,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "copilot_recent_searches_cleared",
-          targetType: "copilot_recent_searches",
-          metadata: { deletedCount: result.deletedCount },
-        });
+        const result = await db.clearCopilotRecentSearches({ userId: ctx.user.id, schoolId: input.schoolId });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "copilot_recent_searches_cleared", targetType: "copilot_recent_searches", metadata: { deletedCount: result.deletedCount } });
         return result;
       }),
   }),
@@ -1257,4981 +318,1012 @@ export const nsosRouter = router({
     plan: protectedProcedure
       .input(schoolInput.extend({ request: z.string().trim().min(2).max(600) }))
       .mutation(async ({ ctx, input }) => {
-        const membership = await accessSchool(
-          ctx.user.id,
-          input.schoolId,
-          "communications.read"
-        );
+        const membership = await accessSchool(ctx.user.id, input.schoolId, "communications.read");
         const role = membership.role as SchoolRole;
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-enterprise-concierge",
-          route: "plan",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 18,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The Enterprise Concierge is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const assessment = isManagementRole(role)
-          ? buildSetupAgentAssessment(
-              await db.getTenantOnboardingStatus(input.schoolId)
-            )
-          : undefined;
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-enterprise-concierge", route: "plan", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 18, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Enterprise Concierge is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const assessment = isManagementRole(role) ? buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId)) : undefined;
         const operatingType = await db.getLearningOperatingType(input.schoolId);
-        const plan = await buildEnterpriseConciergePlan({
-          request: input.request,
-          role,
-          assessment,
-          operatingType,
-        });
+        const plan = await buildEnterpriseConciergePlan({ request: input.request, role, assessment, operatingType });
         try {
-          await db.saveCopilotRecentSearch({
-            userId: ctx.user.id,
-            schoolId: input.schoolId,
-            query: input.request,
-            destinationId: plan.action.destination,
-          });
+          await db.saveCopilotRecentSearch({ userId: ctx.user.id, schoolId: input.schoolId, query: input.request, destinationId: plan.action.destination });
         } catch (error) {
-          console.warn(
-            "[EnterpriseConcierge] Recent-search persistence failed",
-            error
-          );
+          console.warn("[EnterpriseConcierge] Recent-search persistence failed", error);
         }
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "enterprise_concierge_plan_generated",
-          targetType: "enterprise_concierge",
-          targetId: plan.action.id,
-          metadata: {
-            source: plan.source,
-            role,
-            actionKind: plan.action.kind,
-            actionId: plan.action.id,
-            requiresConfirmation: plan.action.requiresConfirmation,
-          },
-        });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "enterprise_concierge_plan_generated", targetType: "enterprise_concierge", targetId: plan.action.id, metadata: { source: plan.source, role, actionKind: plan.action.kind, actionId: plan.action.id, requiresConfirmation: plan.action.requiresConfirmation } });
         return plan;
       }),
   }),
 
   automationDesk: router({
-    jobs: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.listAutomationJobs({ schoolId: input.schoolId, userId: ctx.user.id })
-      ),
-    detail: onboardingAdminProcedure
-      .input(schoolInput.extend({ jobId: z.number().int().positive() }))
-      .query(({ ctx, input }) =>
-        db.getAutomationJobDetail({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          jobId: input.jobId,
-        })
-      ),
+    jobs: onboardingAdminProcedure.input(schoolInput).query(({ ctx, input }) => db.listAutomationJobs({ schoolId: input.schoolId, userId: ctx.user.id })),
+    detail: onboardingAdminProcedure.input(schoolInput.extend({ jobId: z.number().int().positive() })).query(({ ctx, input }) => db.getAutomationJobDetail({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId })),
     create: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          request: z.string().trim().min(2).max(600),
-          idempotencyKey: z.string().trim().min(12).max(96),
-        })
-      )
+      .input(schoolInput.extend({ request: z.string().trim().min(2).max(600), idempotencyKey: z.string().trim().min(12).max(96) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-automation-desk",
-          route: "job-create",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 12,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The Automation Desk is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const assessment = buildSetupAgentAssessment(
-          await db.getTenantOnboardingStatus(input.schoolId)
-        );
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-automation-desk", route: "job-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Automation Desk is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const assessment = buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId));
         const operatingType = await db.getLearningOperatingType(input.schoolId);
-        const plan = await buildAutomationPlan({
-          request: input.request,
-          assessment,
-          operatingType,
-        });
-        const launchInput =
-          plan.jobType === "online_school_launch" && plan.launchDraft
-            ? {
-                draft: {
-                  courseTitle: plan.launchDraft.courseTitle,
-                  courseSummary: plan.launchDraft.courseSummary,
-                  deliveryMode: plan.launchDraft.deliveryMode,
-                  durationLabel: plan.launchDraft.durationLabel,
-                  modules: plan.launchDraft.modules,
-                  materials: plan.launchDraft.materials,
-                },
-                validationMode: "private_configuration_only" as const,
-              }
-            : undefined;
-        const job = await db.createAutomationJob({
-          schoolId: input.schoolId,
-          createdBy: ctx.user.id,
-          jobType: plan.jobType,
-          requestSummary: plan.title,
-          plan,
-          input: launchInput,
-          idempotencyKey: input.idempotencyKey,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "automation_job_prepared",
-          targetType: "automation_job",
-          targetId: job.id,
-          metadata: {
-            jobType: plan.jobType,
-            source: plan.source,
-            status: job.status,
-            promptStored: false,
-            requiresConfirmation: true,
-            executable: jobCanRun(plan.jobType),
-            privateLaunch: plan.jobType === "online_school_launch",
-            configurationValidationOnly:
-              plan.jobType === "online_school_launch",
-            publicAction: false,
-            accountCreated: false,
-            messageSent: false,
-            paymentAction: false,
-            credentialIssued: false,
-          },
-        });
+        const plan = await buildAutomationPlan({ request: input.request, assessment, operatingType });
+        const launchInput = plan.jobType === "online_school_launch" && plan.launchDraft ? { draft: { courseTitle: plan.launchDraft.courseTitle, courseSummary: plan.launchDraft.courseSummary, deliveryMode: plan.launchDraft.deliveryMode, durationLabel: plan.launchDraft.durationLabel, modules: plan.launchDraft.modules, materials: plan.launchDraft.materials }, validationMode: "private_configuration_only" as const } : undefined;
+        const job = await db.createAutomationJob({ schoolId: input.schoolId, createdBy: ctx.user.id, jobType: plan.jobType, requestSummary: plan.title, plan, input: launchInput, idempotencyKey: input.idempotencyKey });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_prepared", targetType: "automation_job", targetId: job.id, metadata: { jobType: plan.jobType, source: plan.source, status: job.status, promptStored: false, requiresConfirmation: true, executable: jobCanRun(plan.jobType), privateLaunch: plan.jobType === "online_school_launch", configurationValidationOnly: plan.jobType === "online_school_launch", publicAction: false, accountCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
         return job;
       }),
     saveInput: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          jobId: z.number().int().positive(),
-          input: z.record(z.string(), z.unknown()),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ jobId: z.number().int().positive(), input: z.record(z.string(), z.unknown()), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const detail = await db.getAutomationJobDetail({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          jobId: input.jobId,
-        });
-        if (!jobCanRun(detail.job.jobType))
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "This goal needs its dedicated editable workspace and cannot run as a one-tap automation job.",
-          });
-        const validated = validateAutomationInput(
-          detail.job.jobType,
-          input.input
-        );
-        const job = await db.saveAutomationJobInput({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          jobId: input.jobId,
-          value: validated,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "automation_job_input_reviewed",
-          targetType: "automation_job",
-          targetId: input.jobId,
-          metadata: {
-            jobType: job.jobType,
-            inputStored: true,
-            rawPromptStored: false,
-            confirmationRequired: true,
-          },
-        });
+        const detail = await db.getAutomationJobDetail({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+        if (!jobCanRun(detail.job.jobType)) throw new TRPCError({ code: "BAD_REQUEST", message: "This goal needs its dedicated editable workspace and cannot run as a one-tap automation job." });
+        const validated = validateAutomationInput(detail.job.jobType, input.input);
+        const job = await db.saveAutomationJobInput({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId, value: validated });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_input_reviewed", targetType: "automation_job", targetId: input.jobId, metadata: { jobType: job.jobType, inputStored: true, rawPromptStored: false, confirmationRequired: true } });
         return job;
       }),
     approveAndRun: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          jobId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ jobId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-automation-desk",
-          route: "job-run",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 6,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The Automation Desk is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const existing = await db.getAutomationJobDetail({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          jobId: input.jobId,
-        });
-        if (!jobCanRun(existing.job.jobType))
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "This goal needs its dedicated editable workspace and cannot run as a one-tap automation job.",
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-automation-desk", route: "job-run", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The Automation Desk is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const existing = await db.getAutomationJobDetail({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+        if (!jobCanRun(existing.job.jobType)) throw new TRPCError({ code: "BAD_REQUEST", message: "This goal needs its dedicated editable workspace and cannot run as a one-tap automation job." });
         if (existing.job.status === "completed") return existing.job;
-        await db.approveAutomationJob({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          jobId: input.jobId,
-        });
-        await db.claimAutomationJobExecution({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          jobId: input.jobId,
-        });
+        await db.approveAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+        await db.claimAutomationJobExecution({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
         try {
-          const result = await db.executeAutomationJob({
-            schoolId: input.schoolId,
-            userId: ctx.user.id,
-            jobId: input.jobId,
-          });
-          const job = await db.completeAutomationJob({
-            schoolId: input.schoolId,
-            userId: ctx.user.id,
-            jobId: input.jobId,
-            result,
-          });
-          await db.recordSecurityAuditEvent({
-            schoolId: input.schoolId,
-            actorUserId: ctx.user.id,
-            eventType: "automation_job_completed",
-            targetType: "automation_job",
-            targetId: input.jobId,
-            metadata: {
-              jobType: job.jobType,
-              destination: result.destination,
-              referenceCount: result.references.length,
-              confirmationRequired: true,
-              publicAction: false,
-              accountCreated: false,
-              invitationSent: false,
-              feeActivated: false,
-              paymentAction: false,
-              providerChanged: false,
-              credentialIssued: false,
-            },
-          });
+          const result = await db.executeAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId });
+          const job = await db.completeAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId, result });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_completed", targetType: "automation_job", targetId: input.jobId, metadata: { jobType: job.jobType, destination: result.destination, referenceCount: result.references.length, confirmationRequired: true, publicAction: false, accountCreated: false, invitationSent: false, feeActivated: false, paymentAction: false, providerChanged: false, credentialIssued: false } });
           return job;
         } catch (error) {
-          await db.failAutomationJob({
-            schoolId: input.schoolId,
-            userId: ctx.user.id,
-            jobId: input.jobId,
-            failureCode: "execution_failed",
-          });
-          await db.recordSecurityAuditEvent({
-            schoolId: input.schoolId,
-            actorUserId: ctx.user.id,
-            eventType: "automation_job_failed",
-            targetType: "automation_job",
-            targetId: input.jobId,
-            metadata: {
-              failureCode: "execution_failed",
-              outcomeConfirmed: false,
-              automaticRetry: false,
-            },
-          });
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message:
-              error instanceof Error
-                ? `${error.message} Review the target workspace before attempting a new job.`
-                : "The automation job stopped. Review the target workspace before attempting a new job.",
-          });
+          await db.failAutomationJob({ schoolId: input.schoolId, userId: ctx.user.id, jobId: input.jobId, failureCode: "execution_failed" });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "automation_job_failed", targetType: "automation_job", targetId: input.jobId, metadata: { failureCode: "execution_failed", outcomeConfirmed: false, automaticRetry: false } });
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error ? `${error.message} Review the target workspace before attempting a new job.` : "The automation job stopped. Review the target workspace before attempting a new job." });
         }
       }),
   }),
 
   setupAgent: router({
-    assess: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(async ({ input }) =>
-        buildSetupAgentAssessment(
-          await db.getTenantOnboardingStatus(input.schoolId)
-        )
-      ),
+    assess: onboardingAdminProcedure.input(schoolInput).query(async ({ input }) => buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId))),
     plan: onboardingAdminProcedure
       .input(schoolInput.extend({ request: z.string().trim().min(2).max(600) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-ai-agent",
-          route: "onboarding-plan",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 16,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The AI onboarding agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const assessment = buildSetupAgentAssessment(
-          await db.getTenantOnboardingStatus(input.schoolId)
-        );
-        const plan = await buildAiSetupPlan({
-          request: input.request,
-          assessment,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "ai_onboarding_plan_generated",
-          targetType: "setup_agent",
-          targetId: plan.recommendedActionId,
-          metadata: {
-            source: plan.source,
-            recommendedActionId: plan.recommendedActionId,
-            requiresConfirmation: true,
-          },
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-ai-agent", route: "onboarding-plan", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 16, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The AI onboarding agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const assessment = buildSetupAgentAssessment(await db.getTenantOnboardingStatus(input.schoolId));
+        const plan = await buildAiSetupPlan({ request: input.request, assessment });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_onboarding_plan_generated", targetType: "setup_agent", targetId: plan.recommendedActionId, metadata: { source: plan.source, recommendedActionId: plan.recommendedActionId, requiresConfirmation: true } });
         return plan;
       }),
-    history: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.listCopilotSetupAgentHistory(input.schoolId)),
-    staffInvitations: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) =>
-        db.listCopilotSetupAgentStaffInvitations(input.schoolId)
-      ),
-    financeDrafts: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) =>
-        db.listCopilotSetupAgentFinanceDrafts(input.schoolId)
-      ),
+    history: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentHistory(input.schoolId)),
+    staffInvitations: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentStaffInvitations(input.schoolId)),
+    financeDrafts: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listCopilotSetupAgentFinanceDrafts(input.schoolId)),
     applyAcademicFoundation: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sessionName: z.string().trim().min(3).max(64),
-          sessionStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          sessionEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          termName: z.string().trim().min(3).max(64),
-          termStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          termEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          classes: z
-            .array(
-              z.object({
-                name: z.string().trim().min(2).max(120),
-                level: z.string().trim().max(64).optional(),
-              })
-            )
-            .min(1)
-            .max(30),
-          templateId: z.enum([
-            "basic_primary",
-            "basic_junior_secondary",
-            "senior_secondary_review",
-          ]),
-          includeOptional: z.boolean().default(false),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ sessionName: z.string().trim().min(3).max(64), sessionStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), sessionEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), termName: z.string().trim().min(3).max(64), termStartsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), termEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), classes: z.array(z.object({ name: z.string().trim().min(2).max(120), level: z.string().trim().max(64).optional() })).min(1).max(30), templateId: z.enum(["basic_primary", "basic_junior_secondary", "senior_secondary_review"]), includeOptional: z.boolean().default(false), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-setup-agent",
-          route: "academic-foundation",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 6,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        return db.runCopilotSetupAgentAcademicFoundation({
-          ...input,
-          executedBy: ctx.user.id,
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "academic-foundation", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.runCopilotSetupAgentAcademicFoundation({ ...input, executedBy: ctx.user.id });
       }),
     prepareStaffInvitation: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          firstName: z.string().trim().min(1).max(120),
-          lastName: z.string().trim().min(1).max(120),
-          email: z.string().trim().email().max(320),
-          employeeNo: z.string().trim().min(2).max(48),
-          jobTitle: z.string().trim().min(2).max(120),
-          role: z.enum(["admin", "staff", "teacher", "finance"]),
-          employmentType: z
-            .enum(["full_time", "part_time", "contract", "temporary"])
-            .default("full_time"),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ firstName: z.string().trim().min(1).max(120), lastName: z.string().trim().min(1).max(120), email: z.string().trim().email().max(320), employeeNo: z.string().trim().min(2).max(48), jobTitle: z.string().trim().min(2).max(120), role: z.enum(["admin", "staff", "teacher", "finance"]), employmentType: z.enum(["full_time", "part_time", "contract", "temporary"]).default("full_time"), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-setup-agent",
-          route: "staff-invitation-prepare",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 8,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        return db.prepareCopilotSetupAgentStaffInvitation({
-          ...input,
-          preparedBy: ctx.user.id,
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "staff-invitation-prepare", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.prepareCopilotSetupAgentStaffInvitation({ ...input, preparedBy: ctx.user.id });
       }),
     sendStaffInvitation: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          invitationId: z.number().int().positive(),
-          origin: z.string().trim().min(1).max(512),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ invitationId: z.number().int().positive(), origin: z.string().trim().min(1).max(512), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-setup-agent",
-          route: "staff-invitation-send",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const invitation =
-          await db.claimCopilotSetupAgentStaffInvitationForDelivery({
-            schoolId: input.schoolId,
-            invitationId: input.invitationId,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "staff-invitation-send", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const invitation = await db.claimCopilotSetupAgentStaffInvitationForDelivery({ schoolId: input.schoolId, invitationId: input.invitationId });
         try {
-          await sendStaffSetupInvitationEmail({
-            email: invitation.email,
-            schoolName: invitation.schoolName,
-            role: invitation.role,
-            jobTitle: invitation.jobTitle,
-            origin: input.origin,
-          });
-          return await db.markCopilotSetupAgentStaffInvitationSent({
-            schoolId: input.schoolId,
-            invitationId: input.invitationId,
-            sentBy: ctx.user.id,
-          });
+          await sendStaffSetupInvitationEmail({ email: invitation.email, schoolName: invitation.schoolName, role: invitation.role, jobTitle: invitation.jobTitle, origin: input.origin });
+          return await db.markCopilotSetupAgentStaffInvitationSent({ schoolId: input.schoolId, invitationId: input.invitationId, sentBy: ctx.user.id });
         } catch (error) {
-          await db.releaseCopilotSetupAgentStaffInvitationDelivery({
-            schoolId: input.schoolId,
-            invitationId: input.invitationId,
-          });
+          await db.releaseCopilotSetupAgentStaffInvitationDelivery({ schoolId: input.schoolId, invitationId: input.invitationId });
           throw error;
         }
       }),
     prepareFinanceDraft: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          name: z.string().trim().min(2).max(255),
-          amount: z.number().positive().max(10_000_000),
-          termId: z.number().int().positive().optional(),
-          classId: z.number().int().positive().optional(),
-          mandatory: z.boolean().default(true),
-          dueOn: z
-            .string()
-            .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ name: z.string().trim().min(2).max(255), amount: z.number().positive().max(10_000_000), termId: z.number().int().positive().optional(), classId: z.number().int().positive().optional(), mandatory: z.boolean().default(true), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-setup-agent",
-          route: "finance-draft-prepare",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 8,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        return db.prepareCopilotSetupAgentFinanceDraft({
-          ...input,
-          preparedBy: ctx.user.id,
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "finance-draft-prepare", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.prepareCopilotSetupAgentFinanceDraft({ ...input, preparedBy: ctx.user.id });
       }),
     activateFinanceDraft: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          feeStructureId: z.number().int().positive(),
-          approvalNote: z.string().trim().max(160).optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ feeStructureId: z.number().int().positive(), approvalNote: z.string().trim().max(160).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-setup-agent",
-          route: "finance-draft-activate",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 6,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        return db.activateCopilotSetupAgentFinanceDraft({
-          schoolId: input.schoolId,
-          feeStructureId: input.feeStructureId,
-          approvedBy: ctx.user.id,
-          approvalNote: input.approvalNote,
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-setup-agent", route: "finance-draft-activate", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The setup agent is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        return db.activateCopilotSetupAgentFinanceDraft({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, approvedBy: ctx.user.id, approvalNote: input.approvalNote });
       }),
   }),
 
   institutionBuilder: router({
-    list: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) =>
-        db.listInstitutionBlueprints({ schoolId: input.schoolId })
-      ),
-    detail: onboardingAdminProcedure
-      .input(schoolInput.extend({ blueprintId: z.number().int().positive() }))
-      .query(({ input }) =>
-        db.getInstitutionBlueprint({
-          schoolId: input.schoolId,
-          blueprintId: input.blueprintId,
-        })
-      ),
+    list: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listInstitutionBlueprints({ schoolId: input.schoolId })),
+    detail: onboardingAdminProcedure.input(schoolInput.extend({ blueprintId: z.number().int().positive() })).query(({ input }) => db.getInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId })),
     create: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          request: z.string().trim().min(24).max(700),
-          idempotencyKey: z.string().trim().min(12).max(96),
-        })
-      )
+      .input(schoolInput.extend({ request: z.string().trim().min(24).max(700), idempotencyKey: z.string().trim().min(12).max(96) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-institution-builder",
-          route: "blueprint-create",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 6,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Institution planning is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-institution-builder", route: "blueprint-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 6, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Institution planning is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const operatingType = await db.getLearningOperatingType(input.schoolId);
-        const blueprint = await buildInstitutionBlueprint({
-          prompt: input.request,
-          operatingType,
-        });
-        const record = await db.createInstitutionBlueprint({
-          schoolId: input.schoolId,
-          createdBy: ctx.user.id,
-          blueprint,
-          idempotencyKey: input.idempotencyKey,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_blueprint_prepared",
-          targetType: "institution_blueprint",
-          targetId: record.id,
-          metadata: {
-            source: blueprint.source,
-            promptStored: false,
-            requiresConfirmation: true,
-            programmeModuleCount: blueprint.courseDraft.modules.length,
-            materialCount: blueprint.courseDraft.materials.length,
-            publicAction: false,
-            accountCreated: false,
-            enrollmentCreated: false,
-            admissionCreated: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-          },
-        });
+        const blueprint = await buildInstitutionBlueprint({ prompt: input.request, operatingType });
+        const record = await db.createInstitutionBlueprint({ schoolId: input.schoolId, createdBy: ctx.user.id, blueprint, idempotencyKey: input.idempotencyKey });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_prepared", targetType: "institution_blueprint", targetId: record.id, metadata: { source: blueprint.source, promptStored: false, requiresConfirmation: true, programmeModuleCount: blueprint.courseDraft.modules.length, materialCount: blueprint.courseDraft.materials.length, publicAction: false, accountCreated: false, enrollmentCreated: false, admissionCreated: false, paymentAction: false, messageSent: false, credentialIssued: false } });
         return record;
       }),
     update: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          blueprintId: z.number().int().positive(),
-          edits: z.object({
-            nameSuggestion: z.string().trim().min(3).max(140),
-            tagline: z.string().trim().min(3).max(180),
-            description: z.string().trim().min(3).max(900),
-            targetLearners: z.string().trim().min(3).max(360),
-            positioning: z.string().trim().min(3).max(500),
-            primaryProgramTitle: z.string().trim().min(3).max(180),
-            primaryProgramSummary: z.string().trim().min(3).max(1200),
-          }),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ blueprintId: z.number().int().positive(), edits: z.object({ nameSuggestion: z.string().trim().min(3).max(140), tagline: z.string().trim().min(3).max(180), description: z.string().trim().min(3).max(900), targetLearners: z.string().trim().min(3).max(360), positioning: z.string().trim().min(3).max(500), primaryProgramTitle: z.string().trim().min(3).max(180), primaryProgramSummary: z.string().trim().min(3).max(1200) }), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const record = await db.updateInstitutionBlueprint({
-          schoolId: input.schoolId,
-          blueprintId: input.blueprintId,
-          edits: input.edits,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_blueprint_edited",
-          targetType: "institution_blueprint",
-          targetId: input.blueprintId,
-          metadata: {
-            confirmationRequired: true,
-            rawEditTextStoredInAudit: false,
-            publicAction: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-          },
-        });
+        const record = await db.updateInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId, edits: input.edits });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_edited", targetType: "institution_blueprint", targetId: input.blueprintId, metadata: { confirmationRequired: true, rawEditTextStoredInAudit: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false } });
         return record;
       }),
-    deleteBlueprint: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          blueprintId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-institution-builder",
-          route: "blueprint-delete",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 4,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Private-blueprint deletion is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.deletePreparedInstitutionBlueprint({
-          schoolId: input.schoolId,
-          blueprintId: input.blueprintId,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_blueprint_deleted",
-          targetType: "institution_blueprint",
-          targetId: input.blueprintId,
-          metadata: {
-            confirmationRequired: true,
-            preparedOnly: true,
-            appliedProgramme: false,
-            publicAction: false,
-            accountCreated: false,
-            enrollmentCreated: false,
-            admissionCreated: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-            providerChanged: false,
-            domainChanged: false,
-          },
-        });
-        return result;
-      }),
     applyBlueprint: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          blueprintId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ blueprintId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-institution-builder",
-          route: "blueprint-apply",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 4,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Institution application is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.applyInstitutionBlueprint({
-          schoolId: input.schoolId,
-          blueprintId: input.blueprintId,
-          appliedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_blueprint_applied",
-          targetType: "institution_blueprint",
-          targetId: input.blueprintId,
-          metadata: {
-            confirmationRequired: true,
-            applied: result.applied,
-            programmeCreated: result.applied,
-            moduleCount:
-              result.program && "moduleCount" in result.program
-                ? result.program.moduleCount
-                : 0,
-            milestoneCount:
-              result.program && "milestoneCount" in result.program
-                ? result.program.milestoneCount
-                : 0,
-            materialCount:
-              result.program && "materialCount" in result.program
-                ? result.program.materialCount
-                : 0,
-            publicAction: false,
-            accountCreated: false,
-            enrollmentCreated: false,
-            admissionCreated: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-            progressChanged: false,
-          },
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-institution-builder", route: "blueprint-apply", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Institution application is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const result = await db.applyInstitutionBlueprint({ schoolId: input.schoolId, blueprintId: input.blueprintId, appliedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_applied", targetType: "institution_blueprint", targetId: input.blueprintId, metadata: { confirmationRequired: true, applied: result.applied, programmeCreated: result.applied, moduleCount: result.program && "moduleCount" in result.program ? result.program.moduleCount : 0, milestoneCount: result.program && "milestoneCount" in result.program ? result.program.milestoneCount : 0, materialCount: result.program && "materialCount" in result.program ? result.program.materialCount : 0, publicAction: false, accountCreated: false, enrollmentCreated: false, admissionCreated: false, paymentAction: false, messageSent: false, credentialIssued: false, progressChanged: false } });
         return result;
       }),
     saveWebsiteDraft: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          blueprintId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ blueprintId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-institution-builder",
-          route: "blueprint-website-draft-save",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 4,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Website-draft saving is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.saveInstitutionBlueprintWebsiteDraft({
-          schoolId: input.schoolId,
-          blueprintId: input.blueprintId,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_blueprint_website_draft_saved",
-          targetType: "institution_blueprint",
-          targetId: input.blueprintId,
-          metadata: {
-            confirmationRequired: true,
-            unpublishedDraftSaved: result.saved,
-            publicAction: false,
-            published: false,
-            domainChanged: false,
-            admissionsChanged: false,
-            accountCreated: false,
-            enrollmentCreated: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-          },
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-institution-builder", route: "blueprint-website-draft-save", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Website-draft saving is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const result = await db.saveInstitutionBlueprintWebsiteDraft({ schoolId: input.schoolId, blueprintId: input.blueprintId });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_blueprint_website_draft_saved", targetType: "institution_blueprint", targetId: input.blueprintId, metadata: { confirmationRequired: true, unpublishedDraftSaved: result.saved, publicAction: false, published: false, domainChanged: false, admissionsChanged: false, accountCreated: false, enrollmentCreated: false, paymentAction: false, messageSent: false, credentialIssued: false } });
         return result;
       }),
   }),
 
   knowledgeBusiness: router({
-    workspace: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) =>
-        db.listInstitutionKnowledgeWorkspace({ schoolId: input.schoolId })
-      ),
-    sourceDetail: onboardingAdminProcedure
-      .input(schoolInput.extend({ sourceId: z.number().int().positive() }))
-      .query(({ input }) =>
-        db.getInstitutionKnowledgeSourceDetail({
-          schoolId: input.schoolId,
-          sourceId: input.sourceId,
-        })
-      ),
+    workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listInstitutionKnowledgeWorkspace({ schoolId: input.schoolId })),
+    sourceDetail: onboardingAdminProcedure.input(schoolInput.extend({ sourceId: z.number().int().positive() })).query(({ input }) => db.getInstitutionKnowledgeSourceDetail({ schoolId: input.schoolId, sourceId: input.sourceId })),
     analyse: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sourceType: z.enum([
-            "description",
-            "expertise_notes",
-            "structured_notes",
-            "course_material",
-            "transcript",
-          ]),
-          title: z.string().trim().min(3).max(180),
-          sourceText: z.string().trim().min(80).max(12_000),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ sourceType: z.enum(["description", "expertise_notes", "structured_notes", "course_material", "transcript"]), title: z.string().trim().min(3).max(180), sourceText: z.string().trim().min(80).max(12_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-knowledge-business",
-          route: "source-analyse",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Knowledge analysis is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-knowledge-business", route: "source-analyse", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Knowledge analysis is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const sourceText = validateKnowledgeSourceText(input.sourceText);
-        const source = await db.createInstitutionKnowledgeSource({
-          schoolId: input.schoolId,
-          createdBy: ctx.user.id,
-          sourceType: input.sourceType,
-          title: input.title,
-          sourceText,
-        });
-        const analysis = await analyseKnowledgeForBusiness({
-          title: source.title,
-          sourceType: source.sourceType,
-          sourceText: source.sourceText,
-        });
-        const record = await db.createInstitutionKnowledgeAnalysis({
-          schoolId: input.schoolId,
-          sourceId: source.id,
-          createdBy: ctx.user.id,
-          analysis,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_knowledge_analysed",
-          targetType: "institution_knowledge_source",
-          targetId: source.id,
-          metadata: {
-            sourceType: source.sourceType,
-            sourceStored: true,
-            sourceTextStoredInAudit: false,
-            sourceCharacterBand:
-              sourceText.length > 6000
-                ? "long"
-                : sourceText.length > 1500
-                  ? "medium"
-                  : "short",
-            analysisSource: analysis.source,
-            objectiveCount: analysis.learningObjectives.length,
-            programmeIdeaCount: analysis.programmeIdeas.length,
-            projectIdeaCount: analysis.projectIdeas.length,
-            publicAction: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-            learnerDecision: false,
-          },
-        });
-        return {
-          source: {
-            id: source.id,
-            sourceType: source.sourceType,
-            title: source.title,
-            createdAt: source.createdAt,
-          },
-          analysis: record,
-        };
+        const source = await db.createInstitutionKnowledgeSource({ schoolId: input.schoolId, createdBy: ctx.user.id, sourceType: input.sourceType, title: input.title, sourceText });
+        const analysis = await analyseKnowledgeForBusiness({ title: source.title, sourceType: source.sourceType, sourceText: source.sourceText });
+        const record = await db.createInstitutionKnowledgeAnalysis({ schoolId: input.schoolId, sourceId: source.id, createdBy: ctx.user.id, analysis });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_analysed", targetType: "institution_knowledge_source", targetId: source.id, metadata: { sourceType: source.sourceType, sourceStored: true, sourceTextStoredInAudit: false, sourceCharacterBand: sourceText.length > 6000 ? "long" : sourceText.length > 1500 ? "medium" : "short", analysisSource: analysis.source, objectiveCount: analysis.learningObjectives.length, programmeIdeaCount: analysis.programmeIdeas.length, projectIdeaCount: analysis.projectIdeas.length, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false } });
+        return { source: { id: source.id, sourceType: source.sourceType, title: source.title, createdAt: source.createdAt }, analysis: record };
       }),
     uploadAndAnalyse: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sourceType: z.enum([
-            "description",
-            "expertise_notes",
-            "structured_notes",
-            "course_material",
-            "transcript",
-          ]),
-          title: z.string().trim().min(3).max(180),
-          upload: z.object({
-            base64: z.string().min(8).max(900_000),
-            fileName: z.string().trim().min(1).max(180),
-            mimeType: z.enum([
-              "text/plain",
-              "text/markdown",
-              "text/x-markdown",
-              "text/csv",
-            ]),
-          }),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ sourceType: z.enum(["description", "expertise_notes", "structured_notes", "course_material", "transcript"]), title: z.string().trim().min(3).max(180), upload: z.object({ base64: z.string().min(8).max(900_000), fileName: z.string().trim().min(1).max(180), mimeType: z.enum(["text/plain", "text/markdown", "text/x-markdown", "text/csv"]) }), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-file-to-school",
-          route: "file-upload-analyse",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `File-to-School analysis is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const extractedText = db.extractInstitutionKnowledgeUploadText(
-          input.upload
-        );
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-file-to-school", route: "file-upload-analyse", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `File-to-School analysis is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const extractedText = db.extractInstitutionKnowledgeUploadText(input.upload);
         const sourceText = validateKnowledgeSourceText(extractedText);
-        const source = await db.createInstitutionKnowledgeFileSource({
-          schoolId: input.schoolId,
-          createdBy: ctx.user.id,
-          sourceType: input.sourceType,
-          title: input.title,
-          upload: input.upload,
-          sourceText,
-        });
-        const analysis = await analyseKnowledgeForBusiness({
-          title: source.title,
-          sourceType: source.sourceType,
-          sourceText: source.sourceText,
-        });
-        const record = await db.createInstitutionKnowledgeAnalysis({
-          schoolId: input.schoolId,
-          sourceId: source.id,
-          createdBy: ctx.user.id,
-          analysis,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_knowledge_file_analysed",
-          targetType: "institution_knowledge_source",
-          targetId: source.id,
-          metadata: {
-            confirmationRequired: true,
-            sourceFormat: source.sourceFormat,
-            originalFileStored: true,
-            sourceTextStoredInAudit: false,
-            rawFileStoredInAudit: false,
-            sourceRevision: source.sourceRevision,
-            byteSizeBand:
-              (source.byteSize ?? 0) > 400_000
-                ? "large"
-                : (source.byteSize ?? 0) > 80_000
-                  ? "medium"
-                  : "small",
-            analysisSource: analysis.source,
-            externalResearchIncluded: false,
-            publicAction: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-            learnerDecision: false,
-          },
-        });
-        return {
-          source: {
-            id: source.id,
-            sourceType: source.sourceType,
-            sourceFormat: source.sourceFormat,
-            title: source.title,
-            originalFileName: source.originalFileName,
-            sourceRevision: source.sourceRevision,
-            createdAt: source.createdAt,
-          },
-          analysis: record,
-        };
+        const source = await db.createInstitutionKnowledgeFileSource({ schoolId: input.schoolId, createdBy: ctx.user.id, sourceType: input.sourceType, title: input.title, upload: input.upload, sourceText });
+        const analysis = await analyseKnowledgeForBusiness({ title: source.title, sourceType: source.sourceType, sourceText: source.sourceText });
+        const record = await db.createInstitutionKnowledgeAnalysis({ schoolId: input.schoolId, sourceId: source.id, createdBy: ctx.user.id, analysis });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_file_analysed", targetType: "institution_knowledge_source", targetId: source.id, metadata: { confirmationRequired: true, sourceFormat: source.sourceFormat, originalFileStored: true, sourceTextStoredInAudit: false, rawFileStoredInAudit: false, sourceRevision: source.sourceRevision, byteSizeBand: (source.byteSize ?? 0) > 400_000 ? "large" : (source.byteSize ?? 0) > 80_000 ? "medium" : "small", analysisSource: analysis.source, externalResearchIncluded: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false } });
+        return { source: { id: source.id, sourceType: source.sourceType, sourceFormat: source.sourceFormat, title: source.title, originalFileName: source.originalFileName, sourceRevision: source.sourceRevision, createdAt: source.createdAt }, analysis: record };
       }),
     reviseAndAnalyse: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sourceId: z.number().int().positive(),
-          title: z.string().trim().min(3).max(180),
-          sourceText: z.string().trim().min(80).max(12_000),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ sourceId: z.number().int().positive(), title: z.string().trim().min(3).max(180), sourceText: z.string().trim().min(80).max(12_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-file-to-school",
-          route: "source-revise-analyse",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Source revision is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-file-to-school", route: "source-revise-analyse", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Source revision is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const sourceText = validateKnowledgeSourceText(input.sourceText);
-        const source = await db.reviseInstitutionKnowledgeSource({
-          schoolId: input.schoolId,
-          sourceId: input.sourceId,
-          title: input.title,
-          sourceText,
-        });
-        const analysis = await analyseKnowledgeForBusiness({
-          title: source.title,
-          sourceType: source.sourceType,
-          sourceText: source.sourceText,
-        });
-        const record = await db.createInstitutionKnowledgeAnalysis({
-          schoolId: input.schoolId,
-          sourceId: source.id,
-          createdBy: ctx.user.id,
-          analysis,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_knowledge_source_revised",
-          targetType: "institution_knowledge_source",
-          targetId: source.id,
-          metadata: {
-            confirmationRequired: true,
-            sourceRevision: source.sourceRevision,
-            sourceTextStoredInAudit: false,
-            rawFileStoredInAudit: false,
-            analysisSource: analysis.source,
-            externalResearchIncluded: false,
-            publicAction: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-            learnerDecision: false,
-          },
-        });
+        const source = await db.reviseInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId, title: input.title, sourceText });
+        const analysis = await analyseKnowledgeForBusiness({ title: source.title, sourceType: source.sourceType, sourceText: source.sourceText });
+        const record = await db.createInstitutionKnowledgeAnalysis({ schoolId: input.schoolId, sourceId: source.id, createdBy: ctx.user.id, analysis });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_source_revised", targetType: "institution_knowledge_source", targetId: source.id, metadata: { confirmationRequired: true, sourceRevision: source.sourceRevision, sourceTextStoredInAudit: false, rawFileStoredInAudit: false, analysisSource: analysis.source, externalResearchIncluded: false, publicAction: false, paymentAction: false, messageSent: false, credentialIssued: false, learnerDecision: false } });
         return { source, analysis: record };
       }),
     prepareBuilder: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          analysisId: z.number().int().positive(),
-          idempotencyKey: z.string().trim().min(12).max(96),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ analysisId: z.number().int().positive(), idempotencyKey: z.string().trim().min(12).max(96), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-knowledge-business",
-          route: "builder-prepare",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Knowledge-to-business preparation is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const analysis = await db.getInstitutionKnowledgeAnalysis({
-          schoolId: input.schoolId,
-          analysisId: input.analysisId,
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-knowledge-business", route: "builder-prepare", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Knowledge-to-business preparation is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const analysis = await db.getInstitutionKnowledgeAnalysis({ schoolId: input.schoolId, analysisId: input.analysisId });
         const operatingType = await db.getLearningOperatingType(input.schoolId);
-        const blueprint = await buildInstitutionBlueprint({
-          prompt: analysis.analysis.builderPrompt,
-          operatingType,
-        });
-        const record = await db.createInstitutionBlueprint({
-          schoolId: input.schoolId,
-          createdBy: ctx.user.id,
-          blueprint,
-          idempotencyKey: input.idempotencyKey,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_knowledge_builder_prepared",
-          targetType: "institution_knowledge_analysis",
-          targetId: analysis.id,
-          metadata: {
-            confirmationRequired: true,
-            blueprintId: record.id,
-            rawAnalysisStoredInAudit: false,
-            publicAction: false,
-            accountCreated: false,
-            enrollmentCreated: false,
-            admissionCreated: false,
-            paymentAction: false,
-            messageSent: false,
-            credentialIssued: false,
-            programmeModuleCount: blueprint.courseDraft.modules.length,
-            materialCount: blueprint.courseDraft.materials.length,
-          },
-        });
+        const blueprint = await buildInstitutionBlueprint({ prompt: analysis.analysis.builderPrompt, operatingType });
+        const record = await db.createInstitutionBlueprint({ schoolId: input.schoolId, createdBy: ctx.user.id, blueprint, idempotencyKey: input.idempotencyKey });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_builder_prepared", targetType: "institution_knowledge_analysis", targetId: analysis.id, metadata: { confirmationRequired: true, blueprintId: record.id, rawAnalysisStoredInAudit: false, publicAction: false, accountCreated: false, enrollmentCreated: false, admissionCreated: false, paymentAction: false, messageSent: false, credentialIssued: false, programmeModuleCount: blueprint.courseDraft.modules.length, materialCount: blueprint.courseDraft.materials.length } });
         return record;
       }),
     deleteSource: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sourceId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ sourceId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-knowledge-business",
-          route: "source-delete",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 8,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Knowledge-source deletion is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.deleteInstitutionKnowledgeSource({
-          schoolId: input.schoolId,
-          sourceId: input.sourceId,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "institution_knowledge_source_deleted",
-          targetType: "institution_knowledge_source",
-          targetId: input.sourceId,
-          metadata: {
-            confirmationRequired: true,
-            rawSourceStoredInAudit: false,
-            analysesRemoved: true,
-            lineageRemoved: true,
-            publicAction: false,
-          },
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-knowledge-business", route: "source-delete", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Knowledge-source deletion is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const result = await db.deleteInstitutionKnowledgeSource({ schoolId: input.schoolId, sourceId: input.sourceId });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "institution_knowledge_source_deleted", targetType: "institution_knowledge_source", targetId: input.sourceId, metadata: { confirmationRequired: true, rawSourceStoredInAudit: false, analysesRemoved: true, lineageRemoved: true, publicAction: false } });
         return result;
       }),
   }),
 
   schoolOperator: router({
-    workspace: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getSchoolOperatorWorkspace(input.schoolId)),
+    workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolOperatorWorkspace(input.schoolId)),
     refresh: onboardingAdminProcedure
       .input(schoolInput.extend({ confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-school-operator",
-          route: "refresh",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 12,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `School Operator refresh is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-school-operator", route: "refresh", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `School Operator refresh is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const insights = await db.refreshSchoolOperatorInsights(input.schoolId);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_operator_insights_refreshed",
-          targetType: "school_operator",
-          metadata: {
-            confirmationRequired: true,
-            insightCount: insights.length,
-            source: "deterministic-v1",
-            rawLearnerDataIncluded: false,
-            publicAction: false,
-            messageSent: false,
-            paymentAction: false,
-            academicChanged: false,
-            credentialIssued: false,
-          },
-        });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_insights_refreshed", targetType: "school_operator", metadata: { confirmationRequired: true, insightCount: insights.length, source: "deterministic-v1", rawLearnerDataIncluded: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
         return insights;
       }),
     saveProfile: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          profile: z.object({
-            mission: z.string().trim().max(1600).optional(),
-            targetLearners: z.string().trim().max(1000).optional(),
-            brandTone: z.string().trim().max(180).optional(),
-            teachingPhilosophy: z.string().trim().max(1600).optional(),
-            curriculumStrategy: z.string().trim().max(1600).optional(),
-            pricingApproach: z.string().trim().max(1600).optional(),
-            policyNotes: z.string().trim().max(1600).optional(),
-            operatingGoals: z.string().trim().max(1600).optional(),
-          }),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ profile: z.object({ mission: z.string().trim().max(1600).optional(), targetLearners: z.string().trim().max(1000).optional(), brandTone: z.string().trim().max(180).optional(), teachingPhilosophy: z.string().trim().max(1600).optional(), curriculumStrategy: z.string().trim().max(1600).optional(), pricingApproach: z.string().trim().max(1600).optional(), policyNotes: z.string().trim().max(1600).optional(), operatingGoals: z.string().trim().max(1600).optional() }), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const profile = await db.saveInstitutionOperatingProfile({
-          schoolId: input.schoolId,
-          updatedBy: ctx.user.id,
-          profile: input.profile,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_operator_profile_saved",
-          targetType: "institution_operating_profile",
-          metadata: {
-            confirmationRequired: true,
-            fieldsProvided: Object.values(input.profile).filter(Boolean).length,
-            rawProfileTextStoredInAudit: false,
-            publicAction: false,
-            messageSent: false,
-            paymentAction: false,
-            academicChanged: false,
-            credentialIssued: false,
-          },
-        });
+        const profile = await db.saveInstitutionOperatingProfile({ schoolId: input.schoolId, updatedBy: ctx.user.id, profile: input.profile });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_profile_saved", targetType: "institution_operating_profile", metadata: { confirmationRequired: true, fieldsProvided: Object.values(input.profile).filter(Boolean).length, rawProfileTextStoredInAudit: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
         return profile;
       }),
     saveWorkflowPreferences: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          preferences: z.object({
-            reviewFocus: z.enum([
-              "balanced",
-              "learning",
-              "admissions",
-              "revenue",
-              "operational_readiness",
-            ]),
-            reviewCadence: z.enum(["daily", "weekly", "monthly"]),
-            evidenceDetail: z.enum(["concise", "standard"]),
-            showDismissedInsights: z.boolean(),
-          }),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ preferences: z.object({ reviewFocus: z.enum(["balanced", "learning", "admissions", "revenue", "operational_readiness"]), reviewCadence: z.enum(["daily", "weekly", "monthly"]), evidenceDetail: z.enum(["concise", "standard"]), showDismissedInsights: z.boolean() }), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "nsos-school-operator",
-          route: "workflow-preferences-save",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 8,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Workflow preference saving is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const preferences = await db.saveSchoolOperatorWorkflowPreferences({
-          schoolId: input.schoolId,
-          updatedBy: ctx.user.id,
-          preferences: input.preferences,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_operator_workflow_preferences_saved",
-          targetType: "school_operator_workflow_preferences",
-          metadata: {
-            confirmationRequired: true,
-            reviewFocus: input.preferences.reviewFocus,
-            reviewCadence: input.preferences.reviewCadence,
-            evidenceDetail: input.preferences.evidenceDetail,
-            showDismissedInsights: input.preferences.showDismissedInsights,
-            scheduleCreated: false,
-            rulesBypassed: false,
-            publicAction: false,
-            messageSent: false,
-            paymentAction: false,
-            academicChanged: false,
-            credentialIssued: false,
-          },
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-school-operator", route: "workflow-preferences-save", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 8, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Workflow preference saving is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const preferences = await db.saveSchoolOperatorWorkflowPreferences({ schoolId: input.schoolId, updatedBy: ctx.user.id, preferences: input.preferences });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_workflow_preferences_saved", targetType: "school_operator_workflow_preferences", metadata: { confirmationRequired: true, reviewFocus: input.preferences.reviewFocus, reviewCadence: input.preferences.reviewCadence, evidenceDetail: input.preferences.evidenceDetail, showDismissedInsights: input.preferences.showDismissedInsights, scheduleCreated: false, rulesBypassed: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
         return preferences;
       }),
     dismissInsight: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          insightId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ insightId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const insights = await db.dismissSchoolOperatorInsight({
-          schoolId: input.schoolId,
-          insightId: input.insightId,
-          dismissedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "school_operator_insight_dismissed",
-          targetType: "school_operator_insight",
-          targetId: input.insightId,
-          metadata: {
-            confirmationRequired: true,
-            localVisibilityChanged: true,
-            publicAction: false,
-            messageSent: false,
-            paymentAction: false,
-            academicChanged: false,
-            credentialIssued: false,
-          },
-        });
+        const insights = await db.dismissSchoolOperatorInsight({ schoolId: input.schoolId, insightId: input.insightId, dismissedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_insight_dismissed", targetType: "school_operator_insight", targetId: input.insightId, metadata: { confirmationRequired: true, localVisibilityChanged: true, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
         return insights;
       }),
   }),
 
   learningOperations: router({
-    workspace: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getLearningOperationsWorkspace(input.schoolId)),
-    evidenceReviewQueue: learningEvidenceReviewerProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.listReviewableProgramMilestoneEvidence({
-          schoolId: input.schoolId,
-          reviewerUserId: ctx.user.id,
-          reviewerIsManagement: isManagementRole(ctx.schoolRole),
-        })
-      ),
+    workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getLearningOperationsWorkspace(input.schoolId)),
+    evidenceReviewQueue: learningEvidenceReviewerProcedure.input(schoolInput).query(({ ctx, input }) => db.listReviewableProgramMilestoneEvidence({ schoolId: input.schoolId, reviewerUserId: ctx.user.id, reviewerIsManagement: isManagementRole(ctx.schoolRole) })),
     submitMyMilestoneEvidence: learningEvidenceStudentProcedure
-      .input(
-        schoolInput.extend({
-          enrollmentId: z.number().int().positive(),
-          milestoneId: z.number().int().positive(),
-          evidenceNote: z.string().trim().min(20).max(1500),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), milestoneId: z.number().int().positive(), evidenceNote: z.string().trim().min(20).max(1500), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "learning-evidence-submit"
-        );
-        const result = await db.submitProgramMilestoneEvidence({
-          schoolId: input.schoolId,
-          enrollmentId: input.enrollmentId,
-          milestoneId: input.milestoneId,
-          evidenceNote: input.evidenceNote,
-          submittedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_milestone_evidence_submitted",
-          targetType: "program_milestone_evidence",
-          targetId: input.milestoneId,
-          metadata: {
-            enrollmentId: input.enrollmentId,
-            confirmationRequired: true,
-            evidenceLength: input.evidenceNote.length,
-            rawEvidenceStoredInAudit: false,
-            automaticCompletion: false,
-            gradeRecorded: false,
-            credentialIssued: false,
-            messageSent: false,
-            paymentAction: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learning-evidence-submit");
+        const result = await db.submitProgramMilestoneEvidence({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, evidenceNote: input.evidenceNote, submittedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_milestone_evidence_submitted", targetType: "program_milestone_evidence", targetId: input.milestoneId, metadata: { enrollmentId: input.enrollmentId, confirmationRequired: true, evidenceLength: input.evidenceNote.length, rawEvidenceStoredInAudit: false, automaticCompletion: false, gradeRecorded: false, credentialIssued: false, messageSent: false, paymentAction: false } });
         return result;
       }),
     reviewMilestoneEvidence: learningEvidenceReviewerProcedure
-      .input(
-        schoolInput.extend({
-          evidenceSubmissionId: z.number().int().positive(),
-          status: z.enum(["reviewed_accepted", "reviewed_returned"]),
-          reviewNote: z.string().trim().min(10).max(700),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ evidenceSubmissionId: z.number().int().positive(), status: z.enum(["reviewed_accepted", "reviewed_returned"]), reviewNote: z.string().trim().min(10).max(700), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "learning-evidence-review"
-        );
-        const result = await db.reviewProgramMilestoneEvidence({
-          schoolId: input.schoolId,
-          evidenceSubmissionId: input.evidenceSubmissionId,
-          status: input.status,
-          reviewNote: input.reviewNote,
-          reviewedBy: ctx.user.id,
-          reviewerIsManagement: isManagementRole(ctx.schoolRole),
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_milestone_evidence_reviewed",
-          targetType: "program_milestone_evidence",
-          targetId: input.evidenceSubmissionId,
-          metadata: {
-            status: input.status,
-            reviewNoteProvided: true,
-            confirmationRequired: true,
-            rawReviewNoteStoredInAudit: false,
-            automaticCompletion: false,
-            milestoneProgressChanged: false,
-            gradeRecorded: false,
-            credentialIssued: false,
-            messageSent: false,
-            paymentAction: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learning-evidence-review");
+        const result = await db.reviewProgramMilestoneEvidence({ schoolId: input.schoolId, evidenceSubmissionId: input.evidenceSubmissionId, status: input.status, reviewNote: input.reviewNote, reviewedBy: ctx.user.id, reviewerIsManagement: isManagementRole(ctx.schoolRole) });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_milestone_evidence_reviewed", targetType: "program_milestone_evidence", targetId: input.evidenceSubmissionId, metadata: { status: input.status, reviewNoteProvided: true, confirmationRequired: true, rawReviewNoteStoredInAudit: false, automaticCompletion: false, milestoneProgressChanged: false, gradeRecorded: false, credentialIssued: false, messageSent: false, paymentAction: false } });
         return result;
       }),
-    evidenceSources: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.listLearningEvidenceSources(input.schoolId)),
+    evidenceSources: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listLearningEvidenceSources(input.schoolId)),
     createEvidenceSource: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          title: z.string().trim().min(3).max(180),
-          organisation: z.string().trim().min(2).max(180),
-          sourceUrl: z.string().url().max(2048),
-          category: z.enum([
-            "institution_approved",
-            "professional_body",
-            "learning_resource",
-          ]),
-          allowedUse: z.string().trim().min(20).max(500),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ title: z.string().trim().min(3).max(180), organisation: z.string().trim().min(2).max(180), sourceUrl: z.string().url().max(2048), category: z.enum(["institution_approved", "professional_body", "learning_resource"]), allowedUse: z.string().trim().min(20).max(500), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "learning-evidence-source-create"
-        );
-        const result = await db.createLearningEvidenceSource({
-          ...input,
-          createdBy: ctx.user.id,
-          approvedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_evidence_source_created",
-          targetType: "learning_evidence_source",
-          targetId: result.evidenceSourceId,
-          metadata: {
-            category: input.category,
-            confirmationRequired: true,
-            sourceUrlStored: true,
-            sourceContentCopied: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learning-evidence-source-create");
+        const result = await db.createLearningEvidenceSource({ ...input, createdBy: ctx.user.id, approvedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_evidence_source_created", targetType: "learning_evidence_source", targetId: result.evidenceSourceId, metadata: { category: input.category, confirmationRequired: true, sourceUrlStored: true, sourceContentCopied: false } });
         return result;
       }),
     courseStudio: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          brief: z.string().trim().min(12).max(700),
-          audience: z.string().trim().min(2).max(220),
-          deliveryMode: z
-            .enum(["in_person", "live_online", "self_paced", "blended"])
-            .optional(),
-          durationPreference: z.string().trim().max(120).optional(),
-          guidedOnly: z.boolean().optional().default(false),
-          curatedSourceIds: z.array(curatedSourceIdInput).max(3).default([]),
-          evidenceSourceIds: z
-            .array(z.number().int().positive())
-            .max(2)
-            .default([]),
-          learningExperience: courseStudioExperienceInput.default({
-            learningPace: "guided",
-            supportStyle: "balanced",
-            practiceMode: "guided_practice",
-            accessibilityNote: "",
-          }),
-        })
-      )
+      .input(schoolInput.extend({ brief: z.string().trim().min(12).max(700), audience: z.string().trim().min(2).max(220), deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]).optional(), durationPreference: z.string().trim().max(120).optional(), curatedSourceIds: z.array(curatedSourceIdInput).max(3).default([]), evidenceSourceIds: z.array(z.number().int().positive()).max(2).default([]), learningExperience: courseStudioExperienceInput.default({ learningPace: "guided", supportStyle: "balanced", practiceMode: "guided_practice", accessibilityNote: "" }) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "course-studio-prepare"
-        );
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "course-studio-prepare");
         const operatingType = await db.getLearningOperatingType(input.schoolId);
-        const evidenceReferences = await resolveLearningEvidenceReferences({
-          schoolId: input.schoolId,
-          curatedSourceIds: input.curatedSourceIds,
-          evidenceSourceIds: input.evidenceSourceIds,
-        });
-        const request = {
-          brief: input.brief,
-          audience: input.audience,
-          deliveryMode: input.deliveryMode,
-          durationPreference: input.durationPreference,
-          operatingType,
-          evidenceReferences,
-          learningExperience: input.learningExperience,
-        };
-        const draft = input.guidedOnly
-          ? buildGuidedCourseStudioDraft(request)
-          : await buildCourseStudioDraft(request);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "course_studio_draft_prepared",
-          targetType: "learning_programme_draft",
-          metadata: {
-            operatingType,
-            source: draft.source,
-            moduleCount: draft.modules.length,
-            materialCount: draft.materials.length,
-            curatedSourceCount: input.curatedSourceIds.length,
-            institutionSourceCount: input.evidenceSourceIds.length,
-            promptStored: false,
-            persisted: false,
-            publicCoursePublished: false,
-            accountCreated: false,
-            enrollmentCreated: false,
-            messageSent: false,
-            paymentAction: false,
-            credentialIssued: false,
-            guidedOnly: input.guidedOnly,
-          },
-        });
+        const evidenceReferences = await resolveLearningEvidenceReferences({ schoolId: input.schoolId, curatedSourceIds: input.curatedSourceIds, evidenceSourceIds: input.evidenceSourceIds });
+        const draft = await buildCourseStudioDraft({ brief: input.brief, audience: input.audience, deliveryMode: input.deliveryMode, durationPreference: input.durationPreference, operatingType, evidenceReferences, learningExperience: input.learningExperience });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_prepared", targetType: "learning_programme_draft", metadata: { operatingType, source: draft.source, moduleCount: draft.modules.length, materialCount: draft.materials.length, curatedSourceCount: input.curatedSourceIds.length, institutionSourceCount: input.evidenceSourceIds.length, promptStored: false, persisted: false, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, credentialIssued: false } });
         return draft;
       }),
     applyCourseStudioDraft: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          draft: courseStudioDraftInput,
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ draft: courseStudioDraftInput, confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "course-studio-apply"
-        );
-        const evidenceReferences = await resolveLearningEvidenceReferences({
-          schoolId: input.schoolId,
-          draftReferences: input.draft.evidenceReferences,
-        });
-        const result = await db.applyCourseStudioDraft({
-          schoolId: input.schoolId,
-          createdBy: ctx.user.id,
-          draft: { ...input.draft, evidenceReferences },
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "course_studio_draft_applied",
-          targetType: "learning_program",
-          targetId: result.programId,
-          metadata: {
-            moduleCount: result.moduleCount,
-            milestoneCount: result.milestoneCount,
-            materialCount: result.materialCount,
-            evidenceSourceCount: evidenceReferences.length,
-            confirmationRequired: true,
-            publicCoursePublished: false,
-            accountCreated: false,
-            enrollmentCreated: false,
-            messageSent: false,
-            paymentAction: false,
-            automaticCompletion: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "course-studio-apply");
+        const evidenceReferences = await resolveLearningEvidenceReferences({ schoolId: input.schoolId, draftReferences: input.draft.evidenceReferences });
+        const result = await db.applyCourseStudioDraft({ schoolId: input.schoolId, createdBy: ctx.user.id, draft: { ...input.draft, evidenceReferences } });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "course_studio_draft_applied", targetType: "learning_program", targetId: result.programId, metadata: { moduleCount: result.moduleCount, milestoneCount: result.milestoneCount, materialCount: result.materialCount, evidenceSourceCount: evidenceReferences.length, confirmationRequired: true, publicCoursePublished: false, accountCreated: false, enrollmentCreated: false, messageSent: false, paymentAction: false, automaticCompletion: false, credentialIssued: false } });
         return result;
       }),
     setOperatingType: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          operatingType: z.enum([
-            "school",
-            "vocational_institute",
-            "coaching_centre",
-            "online_training_provider",
-            "hybrid_learning_provider",
-            "corporate_academy",
-          ]),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ operatingType: z.enum(["school", "vocational_institute", "coaching_centre", "online_training_provider", "hybrid_learning_provider", "corporate_academy"]), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "operating-type"
-        );
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "operating-type");
         const result = await db.updateLearningOperatingType(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_operating_type_updated",
-          targetType: "learning_organisation",
-          metadata: {
-            operatingType: input.operatingType,
-            confirmationRequired: true,
-          },
-        });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_operating_type_updated", targetType: "learning_organisation", metadata: { operatingType: input.operatingType, confirmationRequired: true } });
         return result;
       }),
     createProgram: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          title: z.string().trim().min(3).max(180),
-          code: z.string().trim().max(48).optional(),
-          description: z.string().trim().max(4000).optional(),
-          deliveryMode: z.enum([
-            "in_person",
-            "live_online",
-            "self_paced",
-            "blended",
-          ]),
-          durationLabel: z.string().trim().max(120).optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ title: z.string().trim().min(3).max(180), code: z.string().trim().max(48).optional(), description: z.string().trim().max(4000).optional(), deliveryMode: z.enum(["in_person", "live_online", "self_paced", "blended"]), durationLabel: z.string().trim().max(120).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "program-create"
-        );
-        const result = await db.createLearningProgram({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_draft_created",
-          targetType: "learning_program",
-          targetId: result.programId,
-          metadata: {
-            deliveryMode: input.deliveryMode,
-            codeProvided: Boolean(input.code),
-            descriptionProvided: Boolean(input.description),
-            confirmationRequired: true,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "program-create");
+        const result = await db.createLearningProgram({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_draft_created", targetType: "learning_program", targetId: result.programId, metadata: { deliveryMode: input.deliveryMode, codeProvided: Boolean(input.code), descriptionProvided: Boolean(input.description), confirmationRequired: true } });
         return result;
       }),
     activateProgram: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "program-activate"
-        );
-        const result = await db.activateLearningProgram({
-          schoolId: input.schoolId,
-          programId: input.programId,
-          activatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_activated",
-          targetType: "learning_program",
-          targetId: input.programId,
-          metadata: {
-            confirmationRequired: true,
-            publicPublication: false,
-            paymentCollection: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "program-activate");
+        const result = await db.activateLearningProgram({ schoolId: input.schoolId, programId: input.programId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_activated", targetType: "learning_program", targetId: input.programId, metadata: { confirmationRequired: true, publicPublication: false, paymentCollection: false } });
         return result;
       }),
     createCurriculumPathway: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          pathwayType: z.enum([
-            "school_learning_sequence",
-            "vocational_competency",
-            "coaching_plan",
-            "online_learning_path",
-            "hybrid_learning_path",
-            "workplace_capability_path",
-            "custom_learning_path",
-          ]),
-          title: z.string().trim().min(2).max(180),
-          description: z.string().trim().max(4000).optional(),
-          targetLevel: z.string().trim().max(160).optional(),
-          deliveryGuidance: z.string().trim().max(500).optional(),
-          sortOrder: z.number().int().positive().max(10_000),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), pathwayType: z.enum(["school_learning_sequence", "vocational_competency", "coaching_plan", "online_learning_path", "hybrid_learning_path", "workplace_capability_path", "custom_learning_path"]), title: z.string().trim().min(2).max(180), description: z.string().trim().max(4000).optional(), targetLevel: z.string().trim().max(160).optional(), deliveryGuidance: z.string().trim().max(500).optional(), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "curriculum-pathway-create"
-        );
-        const result = await db.createProgramCurriculumPathway({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_curriculum_pathway_draft_created",
-          targetType: "program_curriculum_pathway",
-          targetId: result.pathwayId,
-          metadata: {
-            programId: input.programId,
-            pathwayType: input.pathwayType,
-            order: input.sortOrder,
-            targetLevelProvided: Boolean(input.targetLevel),
-            deliveryGuidanceProvided: Boolean(input.deliveryGuidance),
-            confirmationRequired: true,
-            publicCoursePublished: false,
-            learnerProgressCreated: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-pathway-create");
+        const result = await db.createProgramCurriculumPathway({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_pathway_draft_created", targetType: "program_curriculum_pathway", targetId: result.pathwayId, metadata: { programId: input.programId, pathwayType: input.pathwayType, order: input.sortOrder, targetLevelProvided: Boolean(input.targetLevel), deliveryGuidanceProvided: Boolean(input.deliveryGuidance), confirmationRequired: true, publicCoursePublished: false, learnerProgressCreated: false, credentialIssued: false } });
         return result;
       }),
     activateCurriculumPathway: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          pathwayId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ pathwayId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "curriculum-pathway-activate"
-        );
-        const result = await db.activateProgramCurriculumPathway({
-          schoolId: input.schoolId,
-          pathwayId: input.pathwayId,
-          activatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_curriculum_pathway_activated",
-          targetType: "program_curriculum_pathway",
-          targetId: input.pathwayId,
-          metadata: {
-            confirmationRequired: true,
-            publicCoursePublished: false,
-            learnerProgressCreated: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-pathway-activate");
+        const result = await db.activateProgramCurriculumPathway({ schoolId: input.schoolId, pathwayId: input.pathwayId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_pathway_activated", targetType: "program_curriculum_pathway", targetId: input.pathwayId, metadata: { confirmationRequired: true, publicCoursePublished: false, learnerProgressCreated: false, credentialIssued: false } });
         return result;
       }),
     createCurriculumModule: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          pathwayId: z.number().int().positive().optional(),
-          title: z.string().trim().min(2).max(180),
-          code: z.string().trim().max(48).optional(),
-          description: z.string().trim().max(4000).optional(),
-          learningType: z.enum([
-            "topic",
-            "practical",
-            "project",
-            "practice",
-            "resource",
-          ]),
-          sortOrder: z.number().int().positive().max(10_000),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), pathwayId: z.number().int().positive().optional(), title: z.string().trim().min(2).max(180), code: z.string().trim().max(48).optional(), description: z.string().trim().max(4000).optional(), learningType: z.enum(["topic", "practical", "project", "practice", "resource"]), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "curriculum-module-create"
-        );
-        const result = await db.createProgramCurriculumModule({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_curriculum_module_draft_created",
-          targetType: "program_curriculum_module",
-          targetId: result.moduleId,
-          metadata: {
-            programId: input.programId,
-            pathwayLinked: Boolean(input.pathwayId),
-            learningType: input.learningType,
-            order: input.sortOrder,
-            descriptionProvided: Boolean(input.description),
-            confirmationRequired: true,
-            publicCoursePublished: false,
-            accountCreated: false,
-            messageSent: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-module-create");
+        const result = await db.createProgramCurriculumModule({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_module_draft_created", targetType: "program_curriculum_module", targetId: result.moduleId, metadata: { programId: input.programId, pathwayLinked: Boolean(input.pathwayId), learningType: input.learningType, order: input.sortOrder, descriptionProvided: Boolean(input.description), confirmationRequired: true, publicCoursePublished: false, accountCreated: false, messageSent: false, credentialIssued: false } });
         return result;
       }),
     activateCurriculumModule: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          moduleId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ moduleId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "curriculum-module-activate"
-        );
-        const result = await db.activateProgramCurriculumModule({
-          schoolId: input.schoolId,
-          moduleId: input.moduleId,
-          activatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_curriculum_module_activated",
-          targetType: "program_curriculum_module",
-          targetId: input.moduleId,
-          metadata: {
-            confirmationRequired: true,
-            publicCoursePublished: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-module-activate");
+        const result = await db.activateProgramCurriculumModule({ schoolId: input.schoolId, moduleId: input.moduleId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_module_activated", targetType: "program_curriculum_module", targetId: input.moduleId, metadata: { confirmationRequired: true, publicCoursePublished: false, credentialIssued: false } });
         return result;
       }),
     createCurriculumMilestone: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          moduleId: z.number().int().positive(),
-          title: z.string().trim().min(2).max(180),
-          description: z.string().trim().max(4000).optional(),
-          sortOrder: z.number().int().positive().max(10_000),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), moduleId: z.number().int().positive(), title: z.string().trim().min(2).max(180), description: z.string().trim().max(4000).optional(), sortOrder: z.number().int().positive().max(10_000), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "curriculum-milestone-create"
-        );
-        const result = await db.createProgramCurriculumMilestone({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_curriculum_milestone_draft_created",
-          targetType: "program_curriculum_milestone",
-          targetId: result.milestoneId,
-          metadata: {
-            programId: input.programId,
-            moduleId: input.moduleId,
-            order: input.sortOrder,
-            descriptionProvided: Boolean(input.description),
-            confirmationRequired: true,
-            learnerProgressCreated: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-milestone-create");
+        const result = await db.createProgramCurriculumMilestone({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_milestone_draft_created", targetType: "program_curriculum_milestone", targetId: result.milestoneId, metadata: { programId: input.programId, moduleId: input.moduleId, order: input.sortOrder, descriptionProvided: Boolean(input.description), confirmationRequired: true, learnerProgressCreated: false, credentialIssued: false } });
         return result;
       }),
     activateCurriculumMilestone: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          milestoneId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ milestoneId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "curriculum-milestone-activate"
-        );
-        const result = await db.activateProgramCurriculumMilestone({
-          schoolId: input.schoolId,
-          milestoneId: input.milestoneId,
-          activatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_curriculum_milestone_activated",
-          targetType: "program_curriculum_milestone",
-          targetId: input.milestoneId,
-          metadata: {
-            confirmationRequired: true,
-            learnerProgressCreated: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "curriculum-milestone-activate");
+        const result = await db.activateProgramCurriculumMilestone({ schoolId: input.schoolId, milestoneId: input.milestoneId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_milestone_activated", targetType: "program_curriculum_milestone", targetId: input.milestoneId, metadata: { confirmationRequired: true, learnerProgressCreated: false, credentialIssued: false } });
         return result;
       }),
     recordMilestoneProgress: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          enrollmentId: z.number().int().positive(),
-          milestoneId: z.number().int().positive(),
-          status: z.enum(["not_started", "in_progress", "reviewed_complete"]),
-          note: z.string().trim().max(500).optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), milestoneId: z.number().int().positive(), status: z.enum(["not_started", "in_progress", "reviewed_complete"]), note: z.string().trim().max(500).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "milestone-progress-record"
-        );
-        const result = await db.recordProgramMilestoneProgress({
-          schoolId: input.schoolId,
-          enrollmentId: input.enrollmentId,
-          milestoneId: input.milestoneId,
-          status: input.status,
-          note: input.note,
-          updatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_curriculum_milestone_progress_reviewed",
-          targetType: "program_milestone_progress",
-          targetId: input.milestoneId,
-          metadata: {
-            enrollmentId: input.enrollmentId,
-            status: input.status,
-            noteProvided: Boolean(input.note),
-            confirmationRequired: true,
-            automaticCompletion: false,
-            credentialIssued: false,
-            messageSent: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "milestone-progress-record");
+        const result = await db.recordProgramMilestoneProgress({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, milestoneId: input.milestoneId, status: input.status, note: input.note, updatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_curriculum_milestone_progress_reviewed", targetType: "program_milestone_progress", targetId: input.milestoneId, metadata: { enrollmentId: input.enrollmentId, status: input.status, noteProvided: Boolean(input.note), confirmationRequired: true, automaticCompletion: false, credentialIssued: false, messageSent: false } });
         return result;
       }),
     createCohort: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          name: z.string().trim().min(2).max(160),
-          startsOn: z
-            .string()
-            .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .optional(),
-          endsOn: z
-            .string()
-            .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .optional(),
-          deliveryReference: z.string().trim().max(255).optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), name: z.string().trim().min(2).max(160), startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), deliveryReference: z.string().trim().max(255).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "cohort-create"
-        );
-        const result = await db.createProgramCohort({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_cohort_created",
-          targetType: "program_cohort",
-          targetId: result.cohortId,
-          metadata: {
-            programId: input.programId,
-            datesProvided: Boolean(input.startsOn || input.endsOn),
-            deliveryReferenceProvided: Boolean(input.deliveryReference),
-            confirmationRequired: true,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "cohort-create");
+        const result = await db.createProgramCohort({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_cohort_created", targetType: "program_cohort", targetId: result.cohortId, metadata: { programId: input.programId, datesProvided: Boolean(input.startsOn || input.endsOn), deliveryReferenceProvided: Boolean(input.deliveryReference), confirmationRequired: true } });
         return result;
       }),
     assignInstructor: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          cohortId: z.number().int().positive().optional(),
-          staffId: z.number().int().positive(),
-          assignmentRole: z.enum(["lead", "assistant"]),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), cohortId: z.number().int().positive().optional(), staffId: z.number().int().positive(), assignmentRole: z.enum(["lead", "assistant"]), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "instructor-assign"
-        );
-        const result = await db.assignProgramInstructor({
-          ...input,
-          assignedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_instructor_assigned",
-          targetType: "program_instructor_assignment",
-          targetId: result.assignmentId,
-          metadata: {
-            programId: input.programId,
-            cohortScoped: Boolean(input.cohortId),
-            assignmentRole: input.assignmentRole,
-            confirmationRequired: true,
-            accountCreated: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "instructor-assign");
+        const result = await db.assignProgramInstructor({ ...input, assignedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_instructor_assigned", targetType: "program_instructor_assignment", targetId: result.assignmentId, metadata: { programId: input.programId, cohortScoped: Boolean(input.cohortId), assignmentRole: input.assignmentRole, confirmationRequired: true, accountCreated: false } });
         return result;
       }),
     enrolLearner: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          cohortId: z.number().int().positive().optional(),
-          studentId: z.number().int().positive(),
-          enrolledOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), cohortId: z.number().int().positive().optional(), studentId: z.number().int().positive(), enrolledOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "learner-enrol"
-        );
-        const result = await db.enrolLearnerInProgram({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_learner_enrolled",
-          targetType: "program_enrollment",
-          targetId: result.enrollmentId,
-          metadata: {
-            programId: input.programId,
-            cohortScoped: Boolean(input.cohortId),
-            confirmationRequired: true,
-            accountCreated: false,
-            invitationSent: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "learner-enrol");
+        const result = await db.enrolLearnerInProgram({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_learner_enrolled", targetType: "program_enrollment", targetId: result.enrollmentId, metadata: { programId: input.programId, cohortScoped: Boolean(input.cohortId), confirmationRequired: true, accountCreated: false, invitationSent: false } });
         return result;
       }),
     confirmCompletion: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          enrollmentId: z.number().int().positive(),
-          completionNote: z.string().trim().max(500).optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), completionNote: z.string().trim().max(500).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "completion-confirm"
-        );
-        const result = await db.confirmProgramCompletion({
-          schoolId: input.schoolId,
-          enrollmentId: input.enrollmentId,
-          completionNote: input.completionNote,
-          confirmedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_completion_confirmed",
-          targetType: "program_enrollment",
-          targetId: input.enrollmentId,
-          metadata: {
-            completionNoteProvided: Boolean(input.completionNote),
-            confirmationRequired: true,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "completion-confirm");
+        const result = await db.confirmProgramCompletion({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, completionNote: input.completionNote, confirmedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_completion_confirmed", targetType: "program_enrollment", targetId: input.enrollmentId, metadata: { completionNoteProvided: Boolean(input.completionNote), confirmationRequired: true, credentialIssued: false } });
         return result;
       }),
     createCertificationPolicy: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          issuerName: z.string().trim().min(2).max(180),
-          credentialTitle: z.string().trim().min(3).max(180),
-          completionCriteria: z.string().trim().min(30).max(1200),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), issuerName: z.string().trim().min(2).max(180), credentialTitle: z.string().trim().min(3).max(180), completionCriteria: z.string().trim().min(30).max(1200), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "certification-policy-create"
-        );
-        const result = await db.createProgramCertificationPolicy({
-          schoolId: input.schoolId,
-          programId: input.programId,
-          issuerName: input.issuerName,
-          credentialTitle: input.credentialTitle,
-          completionCriteria: input.completionCriteria,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "program_certification_policy_created",
-          targetType: "program_certification_policy",
-          targetId: result.certificationPolicyId,
-          metadata: {
-            programId: input.programId,
-            confirmationRequired: true,
-            publicVerificationEnabled: false,
-            accreditationClaimed: false,
-            credentialIssued: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "certification-policy-create");
+        const result = await db.createProgramCertificationPolicy({ schoolId: input.schoolId, programId: input.programId, issuerName: input.issuerName, credentialTitle: input.credentialTitle, completionCriteria: input.completionCriteria, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "program_certification_policy_created", targetType: "program_certification_policy", targetId: result.certificationPolicyId, metadata: { programId: input.programId, confirmationRequired: true, publicVerificationEnabled: false, accreditationClaimed: false, credentialIssued: false } });
         return result;
       }),
     activateCertificationPolicy: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          certificationPolicyId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ certificationPolicyId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "certification-policy-activate"
-        );
-        const result = await db.activateProgramCertificationPolicy({
-          schoolId: input.schoolId,
-          certificationPolicyId: input.certificationPolicyId,
-          activatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "program_certification_policy_activated",
-          targetType: "program_certification_policy",
-          targetId: input.certificationPolicyId,
-          metadata: {
-            confirmationRequired: true,
-            publicVerificationEnabled: false,
-            accreditationClaimed: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "certification-policy-activate");
+        const result = await db.activateProgramCertificationPolicy({ schoolId: input.schoolId, certificationPolicyId: input.certificationPolicyId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "program_certification_policy_activated", targetType: "program_certification_policy", targetId: input.certificationPolicyId, metadata: { confirmationRequired: true, publicVerificationEnabled: false, accreditationClaimed: false } });
         return result;
       }),
     issuePrivateCertificate: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          certificationPolicyId: z.number().int().positive(),
-          enrollmentId: z.number().int().positive(),
-          evidenceSummary: z.string().trim().min(30).max(1200),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ certificationPolicyId: z.number().int().positive(), enrollmentId: z.number().int().positive(), evidenceSummary: z.string().trim().min(30).max(1200), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "certificate-issue"
-        );
-        const result = await db.issueProgramCertificate({
-          schoolId: input.schoolId,
-          certificationPolicyId: input.certificationPolicyId,
-          enrollmentId: input.enrollmentId,
-          evidenceSummary: input.evidenceSummary,
-          issuedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "program_certificate_issued",
-          targetType: "program_certificate",
-          targetId: result.certificateId,
-          metadata: {
-            certificationPolicyId: input.certificationPolicyId,
-            enrollmentId: input.enrollmentId,
-            evidenceSummaryProvided: true,
-            confirmationRequired: true,
-            publicVerificationEnabled: false,
-            accreditationClaimed: false,
-            messageSent: false,
-            automaticCompletion: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "certificate-issue");
+        const result = await db.issueProgramCertificate({ schoolId: input.schoolId, certificationPolicyId: input.certificationPolicyId, enrollmentId: input.enrollmentId, evidenceSummary: input.evidenceSummary, issuedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "program_certificate_issued", targetType: "program_certificate", targetId: result.certificateId, metadata: { certificationPolicyId: input.certificationPolicyId, enrollmentId: input.enrollmentId, evidenceSummaryProvided: true, confirmationRequired: true, publicVerificationEnabled: false, accreditationClaimed: false, messageSent: false, automaticCompletion: false } });
         return result;
       }),
     recordAttendance: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          enrollmentId: z.number().int().positive(),
-          attendanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          status: z.enum(["present", "late", "absent", "excused"]),
-          note: z.string().trim().max(500).optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ enrollmentId: z.number().int().positive(), attendanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), status: z.enum(["present", "late", "absent", "excused"]), note: z.string().trim().max(500).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "attendance-record"
-        );
-        const result = await db.recordProgramAttendance({
-          schoolId: input.schoolId,
-          enrollmentId: input.enrollmentId,
-          attendanceDate: input.attendanceDate,
-          status: input.status,
-          note: input.note,
-          recordedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_attendance_recorded",
-          targetType: "program_enrollment",
-          targetId: input.enrollmentId,
-          metadata: {
-            attendanceDate: input.attendanceDate,
-            status: input.status,
-            noteProvided: Boolean(input.note),
-            confirmationRequired: true,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "attendance-record");
+        const result = await db.recordProgramAttendance({ schoolId: input.schoolId, enrollmentId: input.enrollmentId, attendanceDate: input.attendanceDate, status: input.status, note: input.note, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_attendance_recorded", targetType: "program_enrollment", targetId: input.enrollmentId, metadata: { attendanceDate: input.attendanceDate, status: input.status, noteProvided: Boolean(input.note), confirmationRequired: true } });
         return result;
       }),
     createFeeStructure: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          programId: z.number().int().positive(),
-          cohortId: z.number().int().positive().optional(),
-          name: z.string().trim().min(2).max(180),
-          amount: z.number().positive().max(100_000_000),
-          mandatory: z.boolean(),
-          dueOn: z
-            .string()
-            .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .optional(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ programId: z.number().int().positive(), cohortId: z.number().int().positive().optional(), name: z.string().trim().min(2).max(180), amount: z.number().positive().max(100_000_000), mandatory: z.boolean(), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "fee-structure-create"
-        );
-        const result = await db.createProgramFeeStructure({
-          schoolId: input.schoolId,
-          programId: input.programId,
-          cohortId: input.cohortId,
-          name: input.name,
-          amount: input.amount.toFixed(2),
-          mandatory: input.mandatory,
-          dueOn: input.dueOn,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_fee_structure_draft_created",
-          targetType: "program_fee_structure",
-          targetId: result.feeStructureId,
-          metadata: {
-            programId: input.programId,
-            cohortScoped: Boolean(input.cohortId),
-            mandatory: input.mandatory,
-            dueDateProvided: Boolean(input.dueOn),
-            confirmationRequired: true,
-            invoiceCreated: false,
-            paymentCollection: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "fee-structure-create");
+        const result = await db.createProgramFeeStructure({ schoolId: input.schoolId, programId: input.programId, cohortId: input.cohortId, name: input.name, amount: input.amount.toFixed(2), mandatory: input.mandatory, dueOn: input.dueOn, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_fee_structure_draft_created", targetType: "program_fee_structure", targetId: result.feeStructureId, metadata: { programId: input.programId, cohortScoped: Boolean(input.cohortId), mandatory: input.mandatory, dueDateProvided: Boolean(input.dueOn), confirmationRequired: true, invoiceCreated: false, paymentCollection: false } });
         return result;
       }),
     activateFeeStructure: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          feeStructureId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ feeStructureId: z.number().int().positive(), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        await consumeLearningOperationsRate(
-          input.schoolId,
-          ctx.user.id,
-          "fee-structure-activate"
-        );
-        const result = await db.activateProgramFeeStructure({
-          schoolId: input.schoolId,
-          feeStructureId: input.feeStructureId,
-          activatedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "learning_program_fee_structure_activated",
-          targetType: "program_fee_structure",
-          targetId: input.feeStructureId,
-          metadata: {
-            confirmationRequired: true,
-            invoiceCreated: false,
-            paymentCollection: false,
-          },
-        });
+        await consumeLearningOperationsRate(input.schoolId, ctx.user.id, "fee-structure-activate");
+        const result = await db.activateProgramFeeStructure({ schoolId: input.schoolId, feeStructureId: input.feeStructureId, activatedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "learning_program_fee_structure_activated", targetType: "program_fee_structure", targetId: input.feeStructureId, metadata: { confirmationRequired: true, invoiceCreated: false, paymentCollection: false } });
         return result;
       }),
   }),
 
   providers: router({
-    list: providerAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.listProviderConfigurations(input.schoolId)),
-    emailReadiness: providerAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getEmailServiceReadiness(input.schoolId)),
-    save: providerAdminProcedure
-      .input(
-        schoolInput.extend({
-          channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]),
-          provider: z.enum([
-            "paystack",
-            "flutterwave",
-            "stripe",
-            "manual",
-            "termii",
-            "twilio",
-            "resend",
-            "sendgrid",
-            "whatsapp_cloud",
-            "in_app",
-          ]),
-          status: z.enum(["draft", "ready", "disabled"]),
-          configuration: z.record(z.string(), z.unknown()).default({}),
-          credentials: z
-            .object({
-              apiKey: z.string().max(500).optional(),
-              secretKey: z.string().max(500).optional(),
-              webhookSecret: z.string().max(500).optional(),
-            })
-            .optional(),
-          clearCredentials: z.boolean().optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.saveProviderConfiguration({ ...input, configuredBy: ctx.user.id })
-      ),
-    testConnection: providerAdminProcedure
-      .input(
-        schoolInput.extend({
-          channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]),
-        })
-      )
-      .mutation(({ input }) =>
-        db.testProviderConnection(input.schoolId, input.channel)
-      ),
-    webhookUrls: providerAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getSmsDeliveryWebhookUrls(input.schoolId)),
-    sendTestSms: providerAdminProcedure
-      .input(
-        schoolInput.extend({
-          to: z.string().min(7).max(24),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.sendProviderSmsTest({ ...input, createdBy: ctx.user.id })
-      ),
-    checkTestSmsDelivery: providerAdminProcedure
-      .input(schoolInput.extend({ messageLogId: z.number().int().positive() }))
-      .mutation(({ input }) => db.checkProviderSmsTestDelivery(input)),
+    list: providerAdminProcedure.input(schoolInput).query(({ input }) => db.listProviderConfigurations(input.schoolId)),
+    emailReadiness: providerAdminProcedure.input(schoolInput).query(({ input }) => db.getEmailServiceReadiness(input.schoolId)),
+    save: providerAdminProcedure.input(schoolInput.extend({ channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]), provider: z.enum(["paystack", "flutterwave", "stripe", "manual", "termii", "twilio", "resend", "sendgrid", "whatsapp_cloud", "in_app"]), status: z.enum(["draft", "ready", "disabled"]), configuration: z.record(z.string(), z.unknown()).default({}), credentials: z.object({ apiKey: z.string().max(500).optional(), secretKey: z.string().max(500).optional(), webhookSecret: z.string().max(500).optional() }).optional(), clearCredentials: z.boolean().optional() }))
+      .mutation(({ ctx, input }) => db.saveProviderConfiguration({ ...input, configuredBy: ctx.user.id })),
+    testConnection: providerAdminProcedure.input(schoolInput.extend({ channel: z.enum(["payment", "sms", "whatsapp", "email", "in_app"]) })).mutation(({ input }) => db.testProviderConnection(input.schoolId, input.channel)),
+    webhookUrls: providerAdminProcedure.input(schoolInput).query(({ input }) => db.getSmsDeliveryWebhookUrls(input.schoolId)),
+    sendTestSms: providerAdminProcedure.input(schoolInput.extend({ to: z.string().min(7).max(24), confirmed: z.literal(true) })).mutation(({ ctx, input }) => db.sendProviderSmsTest({ ...input, createdBy: ctx.user.id })),
+    checkTestSmsDelivery: providerAdminProcedure.input(schoolInput.extend({ messageLogId: z.number().int().positive() })).mutation(({ input }) => db.checkProviderSmsTestDelivery(input)),
   }),
 
   advertising: router({
-    workspace: advertisingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getAdvertisingWorkspace(input.schoolId)),
+    workspace: advertisingAdminProcedure.input(schoolInput).query(({ input }) => db.getAdvertisingWorkspace(input.schoolId)),
     generateCopy: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          objective: z.enum(["lead_generation", "website_visits", "awareness"]),
-          audienceSummary: z
-            .object({
-              locations: z
-                .array(z.string().trim().min(2).max(120))
-                .min(1)
-                .max(12),
-              ageMin: z.number().int().min(18).max(64).optional(),
-              ageMax: z.number().int().min(18).max(65).optional(),
-              note: z.string().trim().max(500).optional(),
-            })
-            .refine(
-              value =>
-                !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin,
-              "Audience maximum age must not be lower than the minimum."
-            ),
-          guidance: z.string().trim().max(600).optional(),
-        })
-      )
+      .input(schoolInput.extend({ objective: z.enum(["lead_generation", "website_visits", "awareness"]), audienceSummary: z.object({ locations: z.array(z.string().trim().min(2).max(120)).min(1).max(12), ageMin: z.number().int().min(18).max(64).optional(), ageMax: z.number().int().min(18).max(65).optional(), note: z.string().trim().max(500).optional() }).refine(value => !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin, "Audience maximum age must not be lower than the minimum."), guidance: z.string().trim().max(600).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const limit = await db.consumeSharedRateLimit({
-          namespace: "advertising",
-          route: "copy-generate",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 12,
-          windowMs: 10 * 60_000,
-        });
-        if (!limit.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Try another AI copy suggestion in about ${limit.retryAfterSeconds} seconds.`,
-          });
+        const limit = await db.consumeSharedRateLimit({ namespace: "advertising", route: "copy-generate", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+        if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Try another AI copy suggestion in about ${limit.retryAfterSeconds} seconds.` });
         const result = await db.generateAdvertisingCopySuggestions(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_ai_copy_generated",
-          targetType: "advertising_campaign_draft",
-          metadata: {
-            objective: input.objective,
-            locationCount: input.audienceSummary.locations.length,
-            suggestionCount: result.suggestions.length,
-            requiresReview: result.requiresReview,
-            publishingAction: result.publishingAction,
-          },
-        });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_ai_copy_generated", targetType: "advertising_campaign_draft", metadata: { objective: input.objective, locationCount: input.audienceSummary.locations.length, suggestionCount: result.suggestions.length, requiresReview: result.requiresReview, publishingAction: result.publishingAction } });
         return result;
       }),
     saveMetaAccount: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          accountName: z.string().trim().min(2).max(160),
-          externalAccountId: z.string().trim().min(3).max(100),
-          accessToken: z.string().trim().min(20).max(2000).optional(),
-          clearAccessToken: z.boolean().optional(),
-        })
-      )
+      .input(schoolInput.extend({ accountName: z.string().trim().min(2).max(160), externalAccountId: z.string().trim().min(3).max(100), accessToken: z.string().trim().min(20).max(2000).optional(), clearAccessToken: z.boolean().optional() }))
       .mutation(async ({ ctx, input }) => {
-        const account = await db.saveMetaAdvertisingAccount({
-          ...input,
-          connectedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: input.clearAccessToken
-            ? "advertising_meta_access_cleared"
-            : "advertising_meta_account_saved",
-          targetType: "advertising_account",
-          targetId: account.id ?? undefined,
-          metadata: {
-            provider: "meta",
-            accountConfigured: true,
-            accessTokenState: input.clearAccessToken
-              ? "cleared"
-              : input.accessToken
-                ? "updated"
-                : "retained",
-          },
-        });
+        const account = await db.saveMetaAdvertisingAccount({ ...input, connectedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: input.clearAccessToken ? "advertising_meta_access_cleared" : "advertising_meta_account_saved", targetType: "advertising_account", targetId: account.id ?? undefined, metadata: { provider: "meta", accountConfigured: true, accessTokenState: input.clearAccessToken ? "cleared" : input.accessToken ? "updated" : "retained" } });
         return account;
       }),
-    testMetaAccount: advertisingAdminProcedure
-      .input(schoolInput)
-      .mutation(async ({ ctx, input }) => {
-        const limit = await db.consumeSharedRateLimit({
-          namespace: "advertising",
-          route: "meta-account-test",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!limit.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Try the Meta connection test again in about ${limit.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.testMetaAdvertisingAccount(input.schoolId);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_meta_account_tested",
-          targetType: "advertising_account",
-          metadata: { provider: "meta", verified: result.ok },
-        });
-        return result;
-      }),
+    testMetaAccount: advertisingAdminProcedure.input(schoolInput).mutation(async ({ ctx, input }) => {
+      const limit = await db.consumeSharedRateLimit({ namespace: "advertising", route: "meta-account-test", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+      if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Try the Meta connection test again in about ${limit.retryAfterSeconds} seconds.` });
+      const result = await db.testMetaAdvertisingAccount(input.schoolId);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_account_tested", targetType: "advertising_account", metadata: { provider: "meta", verified: result.ok } });
+      return result;
+    }),
     createCampaign: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          name: z.string().trim().min(3).max(160),
-          objective: z.enum(["lead_generation", "website_visits", "awareness"]),
-          destinationUrl: z.string().trim().url().max(2048).optional(),
-          facebookPageId: z
-            .string()
-            .trim()
-            .regex(/^\d{3,80}$/, "Enter the numeric Facebook Page ID.")
-            .optional(),
-          creativeImageUrl: z
-            .string()
-            .trim()
-            .url()
-            .max(2048)
-            .refine(
-              value => new URL(value).protocol === "https:",
-              "Use an HTTPS creative image URL."
-            )
-            .optional(),
-          primaryText: z.string().trim().min(5).max(5000),
-          headline: z.string().trim().min(3).max(255),
-          callToAction: z.enum(["learn_more", "apply_now", "contact_us"]),
-          audienceSummary: z
-            .object({
-              locations: z
-                .array(z.string().trim().min(2).max(120))
-                .min(1)
-                .max(12),
-              ageMin: z.number().int().min(18).max(64).optional(),
-              ageMax: z.number().int().min(18).max(65).optional(),
-              note: z.string().trim().max(500).optional(),
-            })
-            .refine(
-              value =>
-                !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin,
-              "Audience maximum age must not be lower than the minimum."
-            ),
-          dailyBudget: z.number().positive().max(10_000_000),
-          totalBudget: z.number().positive().max(100_000_000),
-          startsAt: z.string().datetime().optional(),
-          endsAt: z.string().datetime().optional(),
-        })
-      )
+      .input(schoolInput.extend({ name: z.string().trim().min(3).max(160), objective: z.enum(["lead_generation", "website_visits", "awareness"]), destinationUrl: z.string().trim().url().max(2048).optional(), facebookPageId: z.string().trim().regex(/^\d{3,80}$/, "Enter the numeric Facebook Page ID.").optional(), creativeImageUrl: z.string().trim().url().max(2048).refine(value => new URL(value).protocol === "https:", "Use an HTTPS creative image URL.").optional(), primaryText: z.string().trim().min(5).max(5000), headline: z.string().trim().min(3).max(255), callToAction: z.enum(["learn_more", "apply_now", "contact_us"]), audienceSummary: z.object({ locations: z.array(z.string().trim().min(2).max(120)).min(1).max(12), ageMin: z.number().int().min(18).max(64).optional(), ageMax: z.number().int().min(18).max(65).optional(), note: z.string().trim().max(500).optional() }).refine(value => !value.ageMin || !value.ageMax || value.ageMax >= value.ageMin, "Audience maximum age must not be lower than the minimum."), dailyBudget: z.number().positive().max(10_000_000), totalBudget: z.number().positive().max(100_000_000), startsAt: z.string().datetime().optional(), endsAt: z.string().datetime().optional() }))
       .mutation(async ({ ctx, input }) => {
-        const limit = await db.consumeSharedRateLimit({
-          namespace: "advertising",
-          route: "campaign-create",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 30,
-          windowMs: 10 * 60_000,
-        });
-        if (!limit.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `You have reached the campaign-draft limit. Try again in about ${limit.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.createAdvertisingCampaign({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_campaign_draft_created",
-          targetType: "advertising_campaign",
-          targetId: result.campaignId,
-          metadata: {
-            provider: "meta",
-            objective: input.objective,
-            dailyBudget: input.dailyBudget,
-            totalBudget: input.totalBudget,
-            accountConnected: result.accountConnected,
-          },
-        });
+        const limit = await db.consumeSharedRateLimit({ namespace: "advertising", route: "campaign-create", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 30, windowMs: 10 * 60_000 });
+        if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `You have reached the campaign-draft limit. Try again in about ${limit.retryAfterSeconds} seconds.` });
+        const result = await db.createAdvertisingCampaign({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_campaign_draft_created", targetType: "advertising_campaign", targetId: result.campaignId, metadata: { provider: "meta", objective: input.objective, dailyBudget: input.dailyBudget, totalBudget: input.totalBudget, accountConnected: result.accountConnected } });
         return result;
       }),
-    submitForApproval: advertisingAdminProcedure
-      .input(schoolInput.extend({ campaignId: z.number().int().positive() }))
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.requestAdvertisingCampaignApproval(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_campaign_submitted_for_approval",
-          targetType: "advertising_campaign",
-          targetId: input.campaignId,
-          metadata: { provider: "meta", status: result.status },
-        });
-        return result;
-      }),
-    approveCampaign: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          campaignId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.approveAdvertisingCampaign({
-          schoolId: input.schoolId,
-          campaignId: input.campaignId,
-          approvedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_campaign_spend_approved",
-          targetType: "advertising_campaign",
-          targetId: input.campaignId,
-          metadata: {
-            provider: "meta",
-            status: result.status,
-            explicitConfirmation: true,
-          },
-        });
-        return result;
-      }),
-    preparePausedMetaCampaign: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          campaignId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.preparePausedMetaCampaign({
-          schoolId: input.schoolId,
-          campaignId: input.campaignId,
-          launchedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_meta_campaign_prepared_paused",
-          targetType: "advertising_campaign",
-          targetId: input.campaignId,
-          metadata: {
-            provider: "meta",
-            status: result.status,
-            externalCampaignPrepared: true,
-            activeAdvertCreated: false,
-          },
-        });
-        return result;
-      }),
-    preparePausedMetaDelivery: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          campaignId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.preparePausedMetaDelivery({
-          schoolId: input.schoolId,
-          campaignId: input.campaignId,
-          preparedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_meta_delivery_prepared_paused",
-          targetType: "advertising_campaign",
-          targetId: input.campaignId,
-          metadata: {
-            provider: "meta",
-            status: result.status,
-            externalAdPrepared: true,
-            activeAdvertCreated: false,
-          },
-        });
-        return result;
-      }),
-    activateMetaAd: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          campaignId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.setMetaAdvertisingAdStatus({
-          schoolId: input.schoolId,
-          campaignId: input.campaignId,
-          status: "ACTIVE",
-          changedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_meta_ad_activated",
-          targetType: "advertising_campaign",
-          targetId: input.campaignId,
-          metadata: {
-            provider: "meta",
-            status: result.status,
-            explicitConfirmation: true,
-            spendMayBegin: true,
-          },
-        });
-        return result;
-      }),
-    pauseMetaAd: advertisingAdminProcedure
-      .input(
-        schoolInput.extend({
-          campaignId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.setMetaAdvertisingAdStatus({
-          schoolId: input.schoolId,
-          campaignId: input.campaignId,
-          status: "PAUSED",
-          changedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_meta_ad_paused",
-          targetType: "advertising_campaign",
-          targetId: input.campaignId,
-          metadata: {
-            provider: "meta",
-            status: result.status,
-            explicitConfirmation: true,
-            spendStopped: true,
-          },
-        });
-        return result;
-      }),
-    syncMetaCampaign: advertisingAdminProcedure
-      .input(schoolInput.extend({ campaignId: z.number().int().positive() }))
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.syncMetaAdvertisingCampaign(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "advertising_meta_ad_status_synced",
-          targetType: "advertising_campaign",
-          targetId: input.campaignId,
-          metadata: {
-            provider: "meta",
-            status: result.status,
-            providerStatus: result.providerStatus,
-          },
-        });
-        return result;
-      }),
+    submitForApproval: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await db.requestAdvertisingCampaignApproval(input);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_campaign_submitted_for_approval", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status } });
+      return result;
+    }),
+    approveCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.approveAdvertisingCampaign({ schoolId: input.schoolId, campaignId: input.campaignId, approvedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_campaign_spend_approved", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, explicitConfirmation: true } });
+      return result;
+    }),
+    preparePausedMetaCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.preparePausedMetaCampaign({ schoolId: input.schoolId, campaignId: input.campaignId, launchedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_campaign_prepared_paused", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, externalCampaignPrepared: true, activeAdvertCreated: false } });
+      return result;
+    }),
+    preparePausedMetaDelivery: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.preparePausedMetaDelivery({ schoolId: input.schoolId, campaignId: input.campaignId, preparedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_delivery_prepared_paused", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, externalAdPrepared: true, activeAdvertCreated: false } });
+      return result;
+    }),
+    activateMetaAd: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.setMetaAdvertisingAdStatus({ schoolId: input.schoolId, campaignId: input.campaignId, status: "ACTIVE", changedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_ad_activated", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, explicitConfirmation: true, spendMayBegin: true } });
+      return result;
+    }),
+    pauseMetaAd: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive(), confirmed: z.literal(true) })).mutation(async ({ ctx, input }) => {
+      const result = await db.setMetaAdvertisingAdStatus({ schoolId: input.schoolId, campaignId: input.campaignId, status: "PAUSED", changedBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_ad_paused", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, explicitConfirmation: true, spendStopped: true } });
+      return result;
+    }),
+    syncMetaCampaign: advertisingAdminProcedure.input(schoolInput.extend({ campaignId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await db.syncMetaAdvertisingCampaign(input);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "advertising_meta_ad_status_synced", targetType: "advertising_campaign", targetId: input.campaignId, metadata: { provider: "meta", status: result.status, providerStatus: result.providerStatus } });
+      return result;
+    }),
   }),
 
   aiTutors: router({
-    workspace: aiTutorAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getAiTutorWorkspace(input.schoolId)),
-    create: aiTutorAdminProcedure
-      .input(
-        schoolInput.extend({
-          subjectId: z.number().int().positive(),
-          name: z.string().trim().min(3).max(120),
-          curriculumScope: z.string().trim().min(30).max(3000),
-          allowedLevels: z
-            .array(z.string().trim().min(2).max(80))
-            .min(1)
-            .max(12),
-          supervisorUserId: z.number().int().positive(),
-          dailyQuestionLimit: z.number().int().min(1).max(50).default(20),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.createAiTutor({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "ai_tutor_created",
-          targetType: "ai_tutor",
-          targetId: result.tutorId,
-          metadata: {
-            subjectId: input.subjectId,
-            supervisorUserId: input.supervisorUserId,
-            status: result.status,
-            dailyQuestionLimit: input.dailyQuestionLimit,
-          },
-        });
-        return result;
-      }),
-    setStatus: aiTutorAdminProcedure
-      .input(
-        schoolInput.extend({
-          tutorId: z.number().int().positive(),
-          status: z.enum(["active", "paused", "retired"]),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.setAiTutorStatus(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "ai_tutor_status_changed",
-          targetType: "ai_tutor",
-          targetId: input.tutorId,
-          metadata: { status: input.status },
-        });
-        return result;
-      }),
-    studentHub: aiTutorStudentProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.listStudentAiTutors(input.schoolId, ctx.user.id)
-      ),
-    teacherAnalytics: aiTutorTeacherProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.getTeacherAiTutorAnalytics(input.schoolId, ctx.user.id)
-      ),
-    ask: aiTutorStudentProcedure
-      .input(
-        schoolInput.extend({
-          tutorId: z.number().int().positive(),
-          question: z.string().trim().min(3).max(1800),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const limit = await db.consumeSharedRateLimit({
-          namespace: "ai-tutor",
-          route: "study-question",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 12,
-          windowMs: 10 * 60_000,
-        });
-        if (!limit.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Take a short break and try another tutor question in about ${limit.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.askAiTutor({ ...input, userId: ctx.user.id });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "ai_tutor_study_response",
-          targetType: "ai_tutor",
-          targetId: input.tutorId,
-          metadata: {
-            needsTeacherSupport: result.needsTeacherSupport,
-            escalationReason: result.escalationReason,
-            adaptationEnabled: result.adaptationEnabled,
-            teachingStyle: result.teachingStyle,
-            conversationStored: false,
-          },
-        });
-        return result;
-      }),
-    requestTeacherSupport: aiTutorStudentProcedure
-      .input(schoolInput.extend({ tutorId: z.number().int().positive() }))
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.requestAiTutorEscalation({
-          ...input,
-          userId: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "ai_tutor_teacher_support_requested",
-          targetType: "ai_tutor",
-          targetId: input.tutorId,
-          metadata: { conversationStored: false },
-        });
-        return result;
-      }),
-    submitFeedback: aiTutorStudentProcedure
-      .input(
-        schoolInput.extend({
-          interactionKey: z.string().uuid(),
-          helpfulness: z.enum(["helpful", "partly_helpful", "not_helpful"]),
-          comment: z.string().trim().max(500).optional(),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const limit = await db.consumeSharedRateLimit({
-          namespace: "ai-tutor",
-          route: "response-feedback",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 20,
-          windowMs: 10 * 60_000,
-        });
-        if (!limit.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Please wait about ${limit.retryAfterSeconds} seconds before sharing more tutor feedback.`,
-          });
-        const result = await db.submitAiTutorFeedback({
-          ...input,
-          userId: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "ai_tutor_feedback_submitted",
-          targetType: "ai_tutor_response",
-          targetId: input.interactionKey,
-          metadata: {
-            helpfulness: input.helpfulness,
-            commentStored: Boolean(input.comment?.trim()),
-            conversationStored: false,
-          },
-        });
-        return result;
-      }),
-    setTeachingPreference: aiTutorStudentProcedure
-      .input(
-        schoolInput.extend({
-          tutorId: z.number().int().positive(),
-          adaptationEnabled: z.boolean(),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const result = await db.setAiTutorTeachingPreference({
-          ...input,
-          userId: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "ai_tutor_teaching_preference_changed",
-          targetType: "ai_tutor",
-          targetId: input.tutorId,
-          metadata: {
-            adaptationEnabled: result.adaptationEnabled,
-            teachingStyle: result.teachingStyle,
-            feedbackCommentsUsed: false,
-          },
-        });
-        return result;
-      }),
+    workspace: aiTutorAdminProcedure.input(schoolInput).query(({ input }) => db.getAiTutorWorkspace(input.schoolId)),
+    create: aiTutorAdminProcedure.input(schoolInput.extend({ subjectId: z.number().int().positive(), name: z.string().trim().min(3).max(120), curriculumScope: z.string().trim().min(30).max(3000), allowedLevels: z.array(z.string().trim().min(2).max(80)).min(1).max(12), supervisorUserId: z.number().int().positive(), dailyQuestionLimit: z.number().int().min(1).max(50).default(20) })).mutation(async ({ ctx, input }) => {
+      const result = await db.createAiTutor({ ...input, createdBy: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_created", targetType: "ai_tutor", targetId: result.tutorId, metadata: { subjectId: input.subjectId, supervisorUserId: input.supervisorUserId, status: result.status, dailyQuestionLimit: input.dailyQuestionLimit } });
+      return result;
+    }),
+    setStatus: aiTutorAdminProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive(), status: z.enum(["active", "paused", "retired"]) })).mutation(async ({ ctx, input }) => {
+      const result = await db.setAiTutorStatus(input);
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_status_changed", targetType: "ai_tutor", targetId: input.tutorId, metadata: { status: input.status } });
+      return result;
+    }),
+    studentHub: aiTutorStudentProcedure.input(schoolInput).query(({ ctx, input }) => db.listStudentAiTutors(input.schoolId, ctx.user.id)),
+    teacherAnalytics: aiTutorTeacherProcedure.input(schoolInput).query(({ ctx, input }) => db.getTeacherAiTutorAnalytics(input.schoolId, ctx.user.id)),
+    ask: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive(), question: z.string().trim().min(3).max(1800) })).mutation(async ({ ctx, input }) => {
+      const limit = await db.consumeSharedRateLimit({ namespace: "ai-tutor", route: "study-question", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 12, windowMs: 10 * 60_000 });
+      if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Take a short break and try another tutor question in about ${limit.retryAfterSeconds} seconds.` });
+      const result = await db.askAiTutor({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_study_response", targetType: "ai_tutor", targetId: input.tutorId, metadata: { needsTeacherSupport: result.needsTeacherSupport, escalationReason: result.escalationReason, adaptationEnabled: result.adaptationEnabled, teachingStyle: result.teachingStyle, conversationStored: false } });
+      return result;
+    }),
+    requestTeacherSupport: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const result = await db.requestAiTutorEscalation({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_teacher_support_requested", targetType: "ai_tutor", targetId: input.tutorId, metadata: { conversationStored: false } });
+      return result;
+    }),
+    submitFeedback: aiTutorStudentProcedure.input(schoolInput.extend({ interactionKey: z.string().uuid(), helpfulness: z.enum(["helpful", "partly_helpful", "not_helpful"]), comment: z.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => {
+      const limit = await db.consumeSharedRateLimit({ namespace: "ai-tutor", route: "response-feedback", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 20, windowMs: 10 * 60_000 });
+      if (!limit.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Please wait about ${limit.retryAfterSeconds} seconds before sharing more tutor feedback.` });
+      const result = await db.submitAiTutorFeedback({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_feedback_submitted", targetType: "ai_tutor_response", targetId: input.interactionKey, metadata: { helpfulness: input.helpfulness, commentStored: Boolean(input.comment?.trim()), conversationStored: false } });
+      return result;
+    }),
+    setTeachingPreference: aiTutorStudentProcedure.input(schoolInput.extend({ tutorId: z.number().int().positive(), adaptationEnabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+      const result = await db.setAiTutorTeachingPreference({ ...input, userId: ctx.user.id });
+      await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "ai_tutor_teaching_preference_changed", targetType: "ai_tutor", targetId: input.tutorId, metadata: { adaptationEnabled: result.adaptationEnabled, teachingStyle: result.teachingStyle, feedbackCommentsUsed: false } });
+      return result;
+    }),
   }),
 
   security: router({
-    auditEvents: providerAdminProcedure
-      .input(
-        schoolInput.extend({
-          limit: z.number().int().min(1).max(100).optional(),
-        })
-      )
-      .query(({ input }) =>
-        db.listSecurityAuditEvents(input.schoolId, input.limit)
-      ),
+    auditEvents: providerAdminProcedure.input(schoolInput.extend({ limit: z.number().int().min(1).max(100).optional() })).query(({ input }) => db.listSecurityAuditEvents(input.schoolId, input.limit)),
   }),
 
   dashboard: router({
-    summary: managementProcedure("students.read").query(({ input }) =>
-      db.getDashboardSummary(input.schoolId)
-    ),
+    summary: managementProcedure("students.read").query(({ input }) => db.getDashboardSummary(input.schoolId)),
   }),
 
   onboarding: router({
-    status: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getTenantOnboardingStatus(input.schoolId)),
+    status: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getTenantOnboardingStatus(input.schoolId)),
   }),
 
   operations: router({
-    commandCenter: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.getOperationsCommandCenter(input.schoolId)),
+    commandCenter: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getOperationsCommandCenter(input.schoolId)),
   }),
 
   admissions: router({
-    originOptions: publicProcedure
-      .input(z.object({ state: z.string().max(120).optional() }))
-      .query(({ input }) => ({
-        states: listNigerianOriginStates(),
-        lgas: input.state ? listNigerianLgas(input.state) : [],
-      })),
-    publicSchool: publicProcedure
-      .input(z.object({ shortCode: z.string().min(2).max(32) }))
-      .query(({ input }) => db.getSchoolByCode(input.shortCode)),
+    originOptions: publicProcedure.input(z.object({ state: z.string().max(120).optional() })).query(({ input }) => ({ states: listNigerianOriginStates(), lgas: input.state ? listNigerianLgas(input.state) : [] })),
+    publicSchool: publicProcedure.input(z.object({ shortCode: z.string().min(2).max(32) })).query(({ input }) => db.getSchoolByCode(input.shortCode)),
     extractBiodata: publicProcedure
-      .input(
-        z.object({
-          upload: z.object({
-            base64: z.string().min(4).max(5_700_000),
-            fileName: z.string().min(1).max(180),
-            mimeType: z.enum([
-              "image/jpeg",
-              "image/png",
-              "image/webp",
-              "application/pdf",
-            ]),
-          }),
-        })
-      )
+      .input(z.object({ upload: z.object({ base64: z.string().min(4).max(5_700_000), fileName: z.string().min(1).max(180), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]) }) }))
       .mutation(({ input }) => db.extractBiodataFromDocument(input.upload)),
     publicSubmit: publicProcedure
-      .input(
-        z
-          .object({
-            shortCode: z.string().min(2).max(32),
-            firstName: z.string().min(1).max(120),
-            lastName: z.string().min(1).max(120),
-            guardianName: z.string().min(1).max(255),
-            guardianPhone: z.string().min(5).max(48),
-            guardianEmail: z.string().email().optional(),
-            dateOfBirth: z.string().optional(),
-            gender: z
-              .enum(["female", "male", "other", "prefer_not_to_say"])
-              .optional(),
-            priorSchool: z.string().max(255).optional(),
-            notes: z.string().max(5000).optional(),
-            supplementalData: z
-              .record(z.string().min(1).max(40), z.string().trim().max(1000))
-              .optional(),
-            declarationAccepted: z.boolean().optional(),
-            documents: z
-              .array(
-                z.object({
-                  type: z.enum(["passport_photo", "admission_fee_receipt"]),
-                  fileName: z.string().trim().min(1).max(180),
-                  mimeType: z.enum([
-                    "image/jpeg",
-                    "image/png",
-                    "image/webp",
-                    "application/pdf",
-                  ]),
-                  base64: z.string().min(4).max(5_600_000),
-                })
-              )
-              .max(2)
-              .optional(),
-          })
-          .superRefine((value, ctx) => {
-            const types = value.documents?.map(document => document.type) ?? [];
-            if (new Set(types).size !== types.length)
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["documents"],
-                message:
-                  "Upload only one file for each admissions requirement.",
-              });
-          })
-      )
+      .input(z.object({ shortCode: z.string().min(2).max(32), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), priorSchool: z.string().max(255).optional(), notes: z.string().max(5000).optional(), supplementalData: z.record(z.string().min(1).max(40), z.string().trim().max(1000)).optional(), declarationAccepted: z.boolean().optional(), documents: z.array(z.object({ type: z.enum(["passport_photo", "admission_fee_receipt"]), fileName: z.string().trim().min(1).max(180), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]), base64: z.string().min(4).max(5_600_000) })).max(2).optional() }).superRefine((value, ctx) => { const types = value.documents?.map(document => document.type) ?? []; if (new Set(types).size !== types.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["documents"], message: "Upload only one file for each admissions requirement." }); }))
       .mutation(async ({ input }) => {
         const school = await db.getSchoolByCode(input.shortCode);
-        if (!school)
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "School admissions link was not found.",
-          });
-        const template = school.admissionTemplate ?? {
-          admissionFields: [],
-          requireDeclaration: false,
-        };
-        if (template.requireDeclaration && input.declarationAccepted !== true)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "Please confirm the admissions declaration before submitting.",
-          });
-        const documentTypes = new Set(
-          (input.documents ?? []).map(document => document.type)
-        );
-        if (
-          template.requirePassportPhoto &&
-          !documentTypes.has("passport_photo")
-        )
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "A passport photograph is required by this school.",
-          });
-        if (
-          template.requireAdmissionFeeReceipt &&
-          !documentTypes.has("admission_fee_receipt")
-        )
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "An admission fee receipt is required by this school.",
-          });
+        if (!school) throw new TRPCError({ code: "NOT_FOUND", message: "School admissions link was not found." });
+        const template = school.admissionTemplate ?? { admissionFields: [], requireDeclaration: false };
+        if (template.requireDeclaration && input.declarationAccepted !== true) throw new TRPCError({ code: "BAD_REQUEST", message: "Please confirm the admissions declaration before submitting." });
+        const documentTypes = new Set((input.documents ?? []).map(document => document.type));
+        if (template.requirePassportPhoto && !documentTypes.has("passport_photo")) throw new TRPCError({ code: "BAD_REQUEST", message: "A passport photograph is required by this school." });
+        if (template.requireAdmissionFeeReceipt && !documentTypes.has("admission_fee_receipt")) throw new TRPCError({ code: "BAD_REQUEST", message: "An admission fee receipt is required by this school." });
         const enabledFields = new Set(template.admissionFields);
-        const supplementalData = Object.fromEntries(
-          Object.entries(input.supplementalData ?? {}).filter(
-            ([key, value]) =>
-              enabledFields.has(
-                key as (typeof template.admissionFields)[number]
-              ) &&
-              typeof value === "string" &&
-              value.trim().length > 0
-          )
-        );
-        const origin = validatedNigerianOrigin({
-          stateOfOrigin: enabledFields.has("stateOfOrigin")
-            ? supplementalData.stateOfOrigin
-            : undefined,
-          localGovernmentOfOrigin: enabledFields.has("localGovernmentOfOrigin")
-            ? supplementalData.localGovernmentOfOrigin
-            : undefined,
-        });
+        const supplementalData = Object.fromEntries(Object.entries(input.supplementalData ?? {}).filter(([key, value]) => enabledFields.has(key as (typeof template.admissionFields)[number]) && typeof value === "string" && value.trim().length > 0));
+        const origin = validatedNigerianOrigin({ stateOfOrigin: enabledFields.has("stateOfOrigin") ? supplementalData.stateOfOrigin : undefined, localGovernmentOfOrigin: enabledFields.has("localGovernmentOfOrigin") ? supplementalData.localGovernmentOfOrigin : undefined });
         delete supplementalData.stateOfOrigin;
         delete supplementalData.localGovernmentOfOrigin;
-        if (origin.stateOfOrigin)
-          supplementalData.stateOfOrigin = origin.stateOfOrigin;
-        if (origin.localGovernmentOfOrigin)
-          supplementalData.localGovernmentOfOrigin =
-            origin.localGovernmentOfOrigin;
-        const {
-          shortCode: _shortCode,
-          supplementalData: _supplementalData,
-          declarationAccepted,
-          documents,
-          dateOfBirth: submittedDateOfBirth,
-          gender: submittedGender,
-          priorSchool: submittedPriorSchool,
-          ...application
-        } = input;
-        const dateOfBirth = enabledFields.has("dateOfBirth")
-          ? (supplementalData.dateOfBirth ?? submittedDateOfBirth)
-          : undefined;
-        const gender = enabledFields.has("gender")
-          ? (supplementalData.gender ?? submittedGender)
-          : undefined;
-        const priorSchool = enabledFields.has("priorSchool")
-          ? (supplementalData.priorSchool ?? submittedPriorSchool)
-          : undefined;
-        return db.createPublicApplicationWithDocuments({
-          ...application,
-          schoolId: school.id,
-          dateOfBirth,
-          gender,
-          priorSchool,
-          supplementalData,
-          declarationAccepted: declarationAccepted === true,
-          documents: documents ?? [],
-        });
+        if (origin.stateOfOrigin) supplementalData.stateOfOrigin = origin.stateOfOrigin;
+        if (origin.localGovernmentOfOrigin) supplementalData.localGovernmentOfOrigin = origin.localGovernmentOfOrigin;
+        const { shortCode: _shortCode, supplementalData: _supplementalData, declarationAccepted, documents, dateOfBirth: submittedDateOfBirth, gender: submittedGender, priorSchool: submittedPriorSchool, ...application } = input;
+        const dateOfBirth = enabledFields.has("dateOfBirth") ? supplementalData.dateOfBirth ?? submittedDateOfBirth : undefined;
+        const gender = enabledFields.has("gender") ? supplementalData.gender ?? submittedGender : undefined;
+        const priorSchool = enabledFields.has("priorSchool") ? supplementalData.priorSchool ?? submittedPriorSchool : undefined;
+        return db.createPublicApplicationWithDocuments({ ...application, schoolId: school.id, dateOfBirth, gender, priorSchool, supplementalData, declarationAccepted: declarationAccepted === true, documents: documents ?? [] });
       }),
     list: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          status: z
-            .enum([
-              "submitted",
-              "under_review",
-              "accepted",
-              "declined",
-              "enrolled",
-            ])
-            .optional(),
-          limit: z.number().int().min(1).max(100).optional(),
-        })
-      )
-      .query(({ input }) =>
-        db.listApplications(input.schoolId, input.status, input.limit)
-      ),
+      .input(schoolInput.extend({ status: z.enum(["submitted", "under_review", "accepted", "declined", "enrolled"]).optional(), limit: z.number().int().min(1).max(100).optional() }))
+      .query(({ input }) => db.listApplications(input.schoolId, input.status, input.limit)),
     submit: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          firstName: z.string().min(1).max(120),
-          lastName: z.string().min(1).max(120),
-          guardianName: z.string().min(1).max(255),
-          guardianPhone: z.string().min(5).max(48),
-          guardianEmail: z.string().email().optional(),
-          dateOfBirth: z.string().optional(),
-          gender: z
-            .enum(["female", "male", "other", "prefer_not_to_say"])
-            .optional(),
-          applyingForClassId: z.number().int().positive().optional(),
-          priorSchool: z.string().max(255).optional(),
-          stateOfOrigin: z.string().max(120).optional(),
-          localGovernmentOfOrigin: z.string().max(120).optional(),
-          notes: z.string().max(5000).optional(),
-        })
-      )
-      .mutation(({ input }) => {
-        const origin = validatedNigerianOrigin(input);
-        const {
-          stateOfOrigin: _stateOfOrigin,
-          localGovernmentOfOrigin: _localGovernmentOfOrigin,
-          ...application
-        } = input;
-        return db.createApplication({
-          ...application,
-          supplementalData: Object.fromEntries(
-            Object.entries(origin).filter(([, value]) => Boolean(value))
-          ),
-        });
-      }),
+      .input(schoolInput.extend({ firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), guardianName: z.string().min(1).max(255), guardianPhone: z.string().min(5).max(48), guardianEmail: z.string().email().optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), applyingForClassId: z.number().int().positive().optional(), priorSchool: z.string().max(255).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), notes: z.string().max(5000).optional() }))
+      .mutation(({ input }) => { const origin = validatedNigerianOrigin(input); const { stateOfOrigin: _stateOfOrigin, localGovernmentOfOrigin: _localGovernmentOfOrigin, ...application } = input; return db.createApplication({ ...application, supplementalData: Object.fromEntries(Object.entries(origin).filter(([, value]) => Boolean(value))) }); }),
     review: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          applicationId: z.number().int().positive(),
-          status: z.enum(["under_review", "accepted", "declined"]),
-          decisionNote: z.string().max(5000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ applicationId: z.number().int().positive(), status: z.enum(["under_review", "accepted", "declined"]), decisionNote: z.string().max(5000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.reviewApplication({
-          schoolId: input.schoolId,
-          applicationId: input.applicationId,
-          status: input.status,
-          decisionNote: input.decisionNote,
-          reviewerId: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "admissions_application_reviewed",
-          targetType: "admissions_application",
-          targetId: input.applicationId,
-          metadata: { decision: input.status },
-        });
+        const result = await db.reviewApplication({ schoolId: input.schoolId, applicationId: input.applicationId, status: input.status, decisionNote: input.decisionNote, reviewerId: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_reviewed", targetType: "admissions_application", targetId: input.applicationId, metadata: { decision: input.status } });
         return result;
       }),
-    documents: managementProcedure("students.read")
-      .input(schoolInput.extend({ applicationId: z.number().int().positive() }))
-      .query(({ input }) => db.listAdmissionDocuments(input)),
+    documents: managementProcedure("students.read").input(schoolInput.extend({ applicationId: z.number().int().positive() })).query(({ input }) => db.listAdmissionDocuments(input)),
     uploadDocument: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          applicationId: z.number().int().positive(),
-          label: z.string().min(2).max(160),
-          fileName: z.string().min(1).max(180),
-          mimeType: z.string().min(3).max(120),
-          base64: z.string().min(1).max(7_000_000),
-        })
-      )
+      .input(schoolInput.extend({ applicationId: z.number().int().positive(), label: z.string().min(2).max(160), fileName: z.string().min(1).max(180), mimeType: z.string().min(3).max(120), base64: z.string().min(1).max(7_000_000) }))
       .mutation(({ input }) => db.uploadAdmissionDocument(input)),
     reviewDocument: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          documentId: z.number().int().positive(),
-          status: z.enum(["verified", "rejected"]),
-          reviewNote: z.string().max(2000).optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.reviewAdmissionDocument({ ...input, reviewerId: ctx.user.id })
-      ),
+      .input(schoolInput.extend({ documentId: z.number().int().positive(), status: z.enum(["verified", "rejected"]), reviewNote: z.string().max(2000).optional() }))
+      .mutation(({ ctx, input }) => db.reviewAdmissionDocument({ ...input, reviewerId: ctx.user.id })),
     enrol: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          applicationId: z.number().int().positive(),
-          admissionNo: z.string().min(2).max(64),
-          classId: z.number().int().positive(),
-          sessionId: z.number().int().positive(),
-          admittedOn: z.string().min(10).max(10),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ applicationId: z.number().int().positive(), admissionNo: z.string().min(2).max(64), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
       .mutation(async ({ ctx, input }) => {
-        const { confirmed: _confirmed, ...enrollmentInput } = input;
-        const { admissionLetter, ...enrollment } =
-          await db.enrolApplication(enrollmentInput);
-        let letterDelivery: "sent" | "failed" | "not_sent_no_guardian_email" =
-          "not_sent_no_guardian_email";
+        const { admissionLetter, ...enrollment } = await db.enrolApplication(input);
+        let letterDelivery: "sent" | "failed" | "not_sent_no_guardian_email" = "not_sent_no_guardian_email";
         let messageLogId: number | undefined;
         if (admissionLetter.guardianEmail) {
           const letter = buildAdmissionLetter(admissionLetter);
-          const messageLog = await db.createMessageLog({
-            schoolId: input.schoolId,
-            channel: "email",
-            audience: "guardians",
-            subject: "Admission letter delivery",
-            body: "Admission letter prepared after confirmed enrollment.",
-            recipientCount: 1,
-            createdBy: ctx.user.id,
-          });
+          const messageLog = await db.createMessageLog({ schoolId: input.schoolId, channel: "email", audience: "guardians", subject: "Admission letter delivery", body: "Admission letter prepared after confirmed enrollment.", recipientCount: 1, createdBy: ctx.user.id });
           messageLogId = messageLog.messageId;
           try {
-            const providerMessageId = await sendAdmissionLetterEmail({
-              email: admissionLetter.guardianEmail,
-              ...letter,
-            });
-            await db.updateMessageLogDelivery({
-              schoolId: input.schoolId,
-              messageId: messageLog.messageId,
-              status: "sent",
-              providerMessageId,
-            });
+            const providerMessageId = await sendAdmissionLetterEmail({ email: admissionLetter.guardianEmail, ...letter });
+            await db.updateMessageLogDelivery({ schoolId: input.schoolId, messageId: messageLog.messageId, status: "sent", providerMessageId });
             letterDelivery = "sent";
           } catch {
-            await db.updateMessageLogDelivery({
-              schoolId: input.schoolId,
-              messageId: messageLog.messageId,
-              status: "failed",
-            });
+            await db.updateMessageLogDelivery({ schoolId: input.schoolId, messageId: messageLog.messageId, status: "failed" });
             letterDelivery = "failed";
           }
         }
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "admissions_application_enrolled",
-          targetType: "admissions_application",
-          targetId: input.applicationId,
-          metadata: {
-            outcome: "student_created",
-            biodataTransferred: enrollment.biodataTransferred,
-            guardianLinked: enrollment.guardianLinked,
-            guardianCreated: enrollment.guardianCreated,
-            admissionLetterDelivery: letterDelivery,
-            messageLogCreated: Boolean(messageLogId),
-          },
-        });
-        return {
-          ...enrollment,
-          studentName: admissionLetter.studentName,
-          admissionNo: admissionLetter.admissionNo,
-          letterDelivery,
-        };
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "admissions_application_enrolled", targetType: "admissions_application", targetId: input.applicationId, metadata: { outcome: "student_created", biodataTransferred: enrollment.biodataTransferred, guardianLinked: enrollment.guardianLinked, guardianCreated: enrollment.guardianCreated, admissionLetterDelivery: letterDelivery, messageLogCreated: Boolean(messageLogId) } });
+        return { ...enrollment, letterDelivery };
       }),
   }),
 
   students: router({
-    list: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          search: z.string().max(120).optional(),
-          limit: z.number().int().min(1).max(100).optional(),
-        })
-      )
-      .query(({ input }) =>
-        db.listStudents(input.schoolId, input.search, input.limit)
-      ),
-    migrationPreview: studentMigrationAdminProcedure
-      .input(
-        schoolInput.extend({
-          classId: z.number().int().positive(),
-          sessionId: z.number().int().positive(),
-          rows: z.array(studentMigrationRowInput).min(1).max(100),
-        })
-      )
-      .mutation(({ input }) => db.previewStudentMigration(input)),
+    list: managementProcedure("students.read").input(schoolInput.extend({ search: z.string().max(120).optional(), limit: z.number().int().min(1).max(100).optional() })).query(({ input }) => db.listStudents(input.schoolId, input.search, input.limit)),
+    migrationPreview: studentMigrationAdminProcedure.input(schoolInput.extend({ classId: z.number().int().positive(), sessionId: z.number().int().positive(), rows: z.array(studentMigrationRowInput).min(1).max(100) })).mutation(({ input }) => db.previewStudentMigration(input)),
     migrationImport: studentMigrationAdminProcedure
-      .input(
-        schoolInput.extend({
-          classId: z.number().int().positive(),
-          sessionId: z.number().int().positive(),
-          admittedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-          idempotencyKey: z.string().uuid(),
-          rows: z.array(studentMigrationRowInput).min(1).max(100),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), idempotencyKey: z.string().uuid(), rows: z.array(studentMigrationRowInput).min(1).max(100), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "student-migration",
-          route: "import",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 4,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Student migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "student-migration", route: "import", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Student migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const { confirmed: _confirmed, ...migration } = input;
-        const result = await db.importStudentMigration({
-          ...migration,
-          importedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "student_migration_completed",
-          targetType: "student_migration_batch",
-          targetId: result.batchId,
-          metadata: {
-            studentCount: result.studentCount,
-            guardianCount: result.guardianCount,
-            idempotent: result.idempotent,
-            confirmationRequired: true,
-          },
-        });
+        const result = await db.importStudentMigration({ ...migration, importedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_migration_completed", targetType: "student_migration_batch", targetId: result.batchId, metadata: { studentCount: result.studentCount, guardianCount: result.guardianCount, idempotent: result.idempotent, confirmationRequired: true } });
         return result;
       }),
-    migrationHistory: studentMigrationAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.listStudentMigrationBatches(input.schoolId)),
-    history: managementProcedure("students.read")
-      .input(schoolInput.extend({ studentId: z.number().int().positive() }))
-      .query(({ input }) =>
-        db.getStudentAcademicHistory(input.schoolId, input.studentId)
-      ),
-    record: managementProcedure("students.read")
-      .input(schoolInput.extend({ studentId: z.number().int().positive() }))
-      .query(({ input }) =>
-        db.getStudentEnrollmentRecord(input.schoolId, input.studentId)
-      ),
-    recordEmailReadiness: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          enrollmentId: z.number().int().positive(),
-        })
-      )
-      .query(async ({ input }) => {
-        const record = await db.getStudentEnrollmentRecord(
-          input.schoolId,
-          input.studentId
-        );
-        if (
-          !record ||
-          !record.enrollments.some(
-            enrollment => enrollment.id === input.enrollmentId
-          )
-        )
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Student enrollment record was not found in this school.",
-          });
-        const studentName = [
-          record.student.firstName,
-          record.student.middleName,
-          record.student.lastName,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        const copy = studentRecordEmailCopy({
-          studentName,
-          admissionNo: record.student.admissionNo,
-        });
-        return {
-          sender: await getStudentRecordEmailSenderReadiness(),
-          recipients: studentRecordEmailRecipients(record),
-          copy: { subject: copy.subject, body: copy.text },
-        };
-      }),
-    shareRecordPdf: managementProcedure("students.write")
-      .input(
-        schoolInput
-          .extend({
-            studentId: z.number().int().positive(),
-            enrollmentId: z.number().int().positive(),
-            recipientKind: z.enum(["student", "guardian"]),
-            guardianId: z.number().int().positive().optional(),
-            subject: studentRecordEmailCopyInput.shape.subject,
-            body: studentRecordEmailCopyInput.shape.body,
-            confirmed: z.literal(true),
-          })
-          .superRefine((value, ctx) => {
-            if (value.recipientKind === "guardian" && !value.guardianId)
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["guardianId"],
-                message: "Select a guardian recipient.",
-              });
-            if (value.recipientKind === "student" && value.guardianId)
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["guardianId"],
-                message: "Student delivery cannot target a guardian record.",
-              });
-          })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "student-record-email",
-          route: "share",
-          clientKey: `${input.schoolId}:${ctx.user.id}:${input.studentId}`,
-          limit: 3,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Record email sharing is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const sender = await getStudentRecordEmailSenderReadiness();
-        if (!sender.ready)
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: sender.message,
-          });
-        const record = await db.getStudentEnrollmentRecord(
-          input.schoolId,
-          input.studentId
-        );
-        if (
-          !record ||
-          !record.enrollments.some(
-            enrollment => enrollment.id === input.enrollmentId
-          )
-        )
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Student enrollment record was not found in this school.",
-          });
-        const resolvedRecipient = resolveStudentRecordEmailRecipient(record, {
-          kind: input.recipientKind,
-          guardianId: input.guardianId,
-        });
-        const messageLog = await db.createMessageLog({
-          schoolId: input.schoolId,
-          channel: "email",
-          audience:
-            input.recipientKind === "student" ? "students" : "guardians",
-          subject: "Student record PDF delivery",
-          body: "A protected student profile and enrollment record PDF was prepared for confirmed delivery.",
-          recipientCount: 1,
-          createdBy: ctx.user.id,
-        });
-        try {
-          const copy = normaliseStudentRecordEmailCopy({
-            subject: input.subject,
-            body: input.body,
-          });
-          const providerMessageId = await sendStudentEnrollmentRecordEmail({
-            email: resolvedRecipient.email,
-            record,
-            enrollmentId: input.enrollmentId,
-            copy: { subject: copy.subject, body: copy.text },
-          });
-          await db.updateMessageLogDelivery({
-            schoolId: input.schoolId,
-            messageId: messageLog.messageId,
-            status: "sent",
-            providerMessageId,
-          });
-          await db.recordSecurityAuditEvent({
-            schoolId: input.schoolId,
-            actorUserId: ctx.user.id,
-            eventType: "student_record_pdf_email_submitted",
-            targetType: "student_profile",
-            targetId: input.studentId,
-            metadata: {
-              enrollmentId: input.enrollmentId,
-              recipientKind: input.recipientKind,
-              attachment: "student_enrollment_pdf",
-              confirmationRequired: true,
-            },
-          });
-          return {
-            deliveryState: "submitted" as const,
-            recipient: resolvedRecipient.recipient,
-          };
-        } catch {
-          await db.updateMessageLogDelivery({
-            schoolId: input.schoolId,
-            messageId: messageLog.messageId,
-            status: "failed",
-          });
-          await db.recordSecurityAuditEvent({
-            schoolId: input.schoolId,
-            actorUserId: ctx.user.id,
-            eventType: "student_record_pdf_email_failed",
-            targetType: "student_profile",
-            targetId: input.studentId,
-            metadata: {
-              enrollmentId: input.enrollmentId,
-              recipientKind: input.recipientKind,
-              attachment: "student_enrollment_pdf",
-              confirmationRequired: true,
-            },
-          });
-          throw new TRPCError({
-            code: "BAD_GATEWAY",
-            message:
-              "NSOS could not submit the protected record email. The enrollment was not changed.",
-          });
-        }
-      }),
+    migrationHistory: studentMigrationAdminProcedure.input(schoolInput).query(({ input }) => db.listStudentMigrationBatches(input.schoolId)),
+    history: managementProcedure("students.read").input(schoolInput.extend({ studentId: z.number().int().positive() })).query(({ input }) => db.getStudentAcademicHistory(input.schoolId, input.studentId)),
     create: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          admissionNo: z.string().min(2).max(64),
-          firstName: z.string().min(1).max(120),
-          lastName: z.string().min(1).max(120),
-          middleName: z.string().max(120).optional(),
-          dateOfBirth: z.string().optional(),
-          gender: z
-            .enum(["female", "male", "other", "prefer_not_to_say"])
-            .optional(),
-          email: z.string().email().optional(),
-          phone: z.string().max(48).optional(),
-          stateOfOrigin: z.string().max(120).optional(),
-          localGovernmentOfOrigin: z.string().max(120).optional(),
-          classId: z.number().int().positive(),
-          sessionId: z.number().int().positive(),
-          admittedOn: z.string().min(10).max(10),
-        })
-      )
-      .mutation(({ input }) => {
-        const origin = validatedNigerianOrigin(input);
-        const {
-          localGovernmentOfOrigin: _localGovernmentOfOrigin,
-          ...student
-        } = input;
-        return db.createStudent({
-          ...student,
-          stateOfOrigin: origin.stateOfOrigin,
-          localGovernment: origin.localGovernmentOfOrigin,
-        });
-      }),
+      .input(schoolInput.extend({ admissionNo: z.string().min(2).max(64), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), middleName: z.string().max(120).optional(), dateOfBirth: z.string().optional(), gender: z.enum(["female", "male", "other", "prefer_not_to_say"]).optional(), email: z.string().email().optional(), phone: z.string().max(48).optional(), stateOfOrigin: z.string().max(120).optional(), localGovernmentOfOrigin: z.string().max(120).optional(), classId: z.number().int().positive(), sessionId: z.number().int().positive(), admittedOn: z.string().min(10).max(10) }))
+      .mutation(({ input }) => { const origin = validatedNigerianOrigin(input); const { localGovernmentOfOrigin: _localGovernmentOfOrigin, ...student } = input; return db.createStudent({ ...student, stateOfOrigin: origin.stateOfOrigin, localGovernment: origin.localGovernmentOfOrigin }); }),
     promote: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          toClassId: z.number().int().positive(),
-          sessionId: z.number().int().positive(),
-          note: z.string().max(1000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), toClassId: z.number().int().positive(), sessionId: z.number().int().positive(), note: z.string().max(1000).optional() }))
       .mutation(({ input }) => db.promoteStudent(input)),
     graduate: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          graduationYear: z.number().int().min(2000).max(2100),
-        })
-      )
-      .mutation(({ input }) =>
-        db.graduateStudent(
-          input.schoolId,
-          input.studentId,
-          input.graduationYear
-        )
-      ),
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), graduationYear: z.number().int().min(2000).max(2100) }))
+      .mutation(({ input }) => db.graduateStudent(input.schoolId, input.studentId, input.graduationYear)),
     linkGuardian: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          firstName: z.string().min(1).max(120),
-          lastName: z.string().min(1).max(120),
-          relationship: z.string().min(2).max(80),
-          email: z.string().email().optional(),
-          phone: z.string().max(48).optional(),
-          isPrimary: z.boolean().optional(),
-        })
-      )
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), relationship: z.string().min(2).max(80), email: z.string().email().optional(), phone: z.string().max(48).optional(), isPrimary: z.boolean().optional() }))
       .mutation(({ input }) => db.linkGuardianToStudent(input)),
     guardians: onboardingAdminProcedure
       .input(schoolInput.extend({ studentId: z.number().int().positive() }))
       .query(({ input }) => db.listStudentGuardians(input)),
     updateGuardian: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          guardianId: z.number().int().positive(),
-          firstName: z.string().trim().min(1).max(120),
-          lastName: z.string().trim().max(120),
-          relationship: z.string().trim().min(2).max(80),
-          email: z.string().email().optional(),
-          phone: z.string().trim().max(48).optional(),
-          address: z.string().trim().max(2000).optional(),
-          occupation: z.string().trim().max(160).optional(),
-          isPrimary: z.boolean(),
-        })
-      )
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), guardianId: z.number().int().positive(), firstName: z.string().trim().min(1).max(120), lastName: z.string().trim().max(120), relationship: z.string().trim().min(2).max(80), email: z.string().email().optional(), phone: z.string().trim().max(48).optional(), address: z.string().trim().max(2000).optional(), occupation: z.string().trim().max(160).optional(), isPrimary: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const result = await db.updateStudentGuardian(input);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "student_guardian_updated",
-          targetType: "guardian",
-          targetId: input.guardianId,
-          metadata: {
-            studentId: input.studentId,
-            guardianUpdated: true,
-            primaryContact: input.isPrimary,
-          },
-        });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "student_guardian_updated", targetType: "guardian", targetId: input.guardianId, metadata: { studentId: input.studentId, guardianUpdated: true, primaryContact: input.isPrimary } });
         return result;
       }),
     sendGuardianPortalInvitation: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          guardianId: z.number().int().positive(),
-          origin: z.string().trim().min(1).max(512),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), guardianId: z.number().int().positive(), origin: z.string().trim().min(1).max(512), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "guardian-portal-invitation",
-          route: "send",
-          clientKey: `${input.schoolId}:${ctx.user.id}:${input.guardianId}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `The guardian invitation service is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const invitation = await db.createGuardianPortalInvitationForDelivery({
-          schoolId: input.schoolId,
-          studentId: input.studentId,
-          guardianId: input.guardianId,
-          sentBy: ctx.user.id,
-        });
+        const rate = await db.consumeSharedRateLimit({ namespace: "guardian-portal-invitation", route: "send", clientKey: `${input.schoolId}:${ctx.user.id}:${input.guardianId}`, limit: 5, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `The guardian invitation service is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const invitation = await db.createGuardianPortalInvitationForDelivery({ schoolId: input.schoolId, studentId: input.studentId, guardianId: input.guardianId, sentBy: ctx.user.id });
         try {
-          await sendGuardianPortalInvitationEmail({
-            email: invitation.email,
-            schoolName: invitation.schoolName,
-            guardianName: invitation.guardianName,
-            origin: input.origin,
-          });
-          const result = await db.markGuardianPortalInvitationDelivery({
-            schoolId: input.schoolId,
-            invitationId: invitation.invitationId,
-            status: "sent",
-          });
-          await db.recordSecurityAuditEvent({
-            schoolId: input.schoolId,
-            actorUserId: ctx.user.id,
-            eventType: "guardian_portal_invitation_sent",
-            targetType: "guardian",
-            targetId: input.guardianId,
-            metadata: { invitationSent: true, confirmationRequired: true },
-          });
+          await sendGuardianPortalInvitationEmail({ email: invitation.email, schoolName: invitation.schoolName, guardianName: invitation.guardianName, origin: input.origin });
+          const result = await db.markGuardianPortalInvitationDelivery({ schoolId: input.schoolId, invitationId: invitation.invitationId, status: "sent" });
+          await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "guardian_portal_invitation_sent", targetType: "guardian", targetId: input.guardianId, metadata: { invitationSent: true, confirmationRequired: true } });
           return result;
         } catch (error) {
-          await db.markGuardianPortalInvitationDelivery({
-            schoolId: input.schoolId,
-            invitationId: invitation.invitationId,
-            status: "failed",
-          });
-          throw error;
-        }
-      }),
-    studentPortalInvitations: onboardingAdminProcedure
-      .input(schoolInput.extend({ studentId: z.number().int().positive() }))
-      .query(({ input }) => db.listStudentPortalInvitations(input)),
-    prepareStudentPortalInvitation: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          email: z.string().email(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "student-portal-invitation",
-          route: "prepare",
-          clientKey: `${input.schoolId}:${ctx.user.id}:${input.studentId}`,
-          limit: 5,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Student invitation preparation is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const result = await db.prepareStudentPortalInvitation({
-          schoolId: input.schoolId,
-          studentId: input.studentId,
-          email: input.email,
-          preparedBy: ctx.user.id,
-        });
-        const atIndex = result.email.indexOf("@");
-        const maskedEmail =
-          atIndex > 0
-            ? `${result.email.slice(0, 1)}${"•".repeat(Math.max(2, Math.min(8, atIndex - 1)))}${result.email.slice(atIndex)}`
-            : "registered email";
-        return {
-          invitationId: result.invitationId,
-          status: result.status,
-          maskedEmail,
-          studentName: result.studentName,
-          expiresAt: result.expiresAt,
-        };
-      }),
-    sendStudentPortalInvitation: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          invitationId: z.number().int().positive(),
-          origin: z.string().trim().min(1).max(512),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "student-portal-invitation",
-          route: "send",
-          clientKey: `${input.schoolId}:${ctx.user.id}:${input.invitationId}`,
-          limit: 3,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Student invitation delivery is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
-        const sender = await getStudentRecordEmailSenderReadiness();
-        if (!sender.ready)
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: sender.message,
-          });
-        const invitation = await db.claimStudentPortalInvitationForDelivery({
-          schoolId: input.schoolId,
-          invitationId: input.invitationId,
-        });
-        try {
-          await sendStudentPortalInvitationEmail({
-            email: invitation.email,
-            studentName: invitation.studentName,
-            schoolName: invitation.schoolName,
-            origin: input.origin,
-          });
-          return await db.markStudentPortalInvitationSent({
-            schoolId: input.schoolId,
-            invitationId: input.invitationId,
-            sentBy: ctx.user.id,
-          });
-        } catch (error) {
-          await db.markStudentPortalInvitationDelivery({
-            schoolId: input.schoolId,
-            invitationId: input.invitationId,
-            status: "failed",
-          });
+          await db.markGuardianPortalInvitationDelivery({ schoolId: input.schoolId, invitationId: invitation.invitationId, status: "failed" });
           throw error;
         }
       }),
   }),
 
   academics: router({
-    list: managementProcedure("academics.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listAcademicData(input.schoolId)),
-    migrationPreview: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sessionId: z.number().int().positive(),
-          rows: z.array(academicMigrationRowInput).min(1).max(100),
-        })
-      )
-      .mutation(({ input }) => db.previewAcademicMigration(input)),
+    list: managementProcedure("academics.read").input(schoolInput).query(({ input }) => db.listAcademicData(input.schoolId)),
+    migrationPreview: onboardingAdminProcedure.input(schoolInput.extend({ sessionId: z.number().int().positive(), rows: z.array(academicMigrationRowInput).min(1).max(100) })).mutation(({ input }) => db.previewAcademicMigration(input)),
     migrationImport: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sessionId: z.number().int().positive(),
-          idempotencyKey: z.string().uuid(),
-          rows: z.array(academicMigrationRowInput).min(1).max(100),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ sessionId: z.number().int().positive(), idempotencyKey: z.string().uuid(), rows: z.array(academicMigrationRowInput).min(1).max(100), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "academic-migration",
-          route: "import",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 4,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Academic migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "academic-migration", route: "import", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Academic migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const { confirmed: _confirmed, ...migration } = input;
-        const result = await db.importAcademicMigration({
-          ...migration,
-          importedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "academic_migration_completed",
-          targetType: "academic_migration_batch",
-          targetId: result.batchId,
-          metadata: {
-            classCount: result.classCount,
-            subjectCount: result.subjectCount,
-            idempotent: result.idempotent,
-            confirmationRequired: true,
-          },
-        });
+        const result = await db.importAcademicMigration({ ...migration, importedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "academic_migration_completed", targetType: "academic_migration_batch", targetId: result.batchId, metadata: { classCount: result.classCount, subjectCount: result.subjectCount, idempotent: result.idempotent, confirmationRequired: true } });
         return result;
       }),
-    migrationHistory: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.listAcademicMigrationBatches(input.schoolId)),
-    curriculumTemplates: managementProcedure("academics.read")
-      .input(schoolInput)
-      .query(() => db.getCurriculumTemplateCatalog()),
+    migrationHistory: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listAcademicMigrationBatches(input.schoolId)),
+    curriculumTemplates: managementProcedure("academics.read").input(schoolInput).query(() => db.getCurriculumTemplateCatalog()),
     applyNigerianCurriculumTemplate: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          templateId: z.enum([
-            "basic_primary",
-            "basic_junior_secondary",
-            "senior_secondary_review",
-          ]),
-          classIds: z.array(z.number().int().positive()).min(1).max(50),
-          includeOptional: z.boolean().default(false),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.applyNigerianCurriculumTemplate({ ...input, appliedBy: ctx.user.id })
-      ),
+      .input(schoolInput.extend({ templateId: z.enum(["basic_primary", "basic_junior_secondary", "senior_secondary_review"]), classIds: z.array(z.number().int().positive()).min(1).max(50), includeOptional: z.boolean().default(false) }))
+      .mutation(({ ctx, input }) => db.applyNigerianCurriculumTemplate({ ...input, appliedBy: ctx.user.id })),
     importSchemeOfWork: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          classId: z.number().int().positive(),
-          subjectId: z.number().int().positive(),
-          termId: z.number().int().positive(),
-          fileName: z.string().trim().min(5).max(255),
-          mimeType: z.enum([
-            "text/csv",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          ]),
-          base64: z.string().min(8).max(2_800_000),
-          rows: z
-            .array(
-              z.object({
-                weekNo: z.number().int(),
-                topic: z.string().max(255),
-                objectives: z.string().max(5000).optional(),
-                resources: z.string().max(5000).optional(),
-              })
-            )
-            .min(1)
-            .max(60),
-          replaceExisting: z.boolean().default(false),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.importApprovedSchemeOfWork({ ...input, importedBy: ctx.user.id })
-      ),
-    teacherSchemeReviews: aiTutorTeacherProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.listTeacherSchemeReviews(input.schoolId, ctx.user.id)
-      ),
-    schemeRevisionNotifications: aiTutorTeacherProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.listTeacherSchemeRevisionNotifications(input.schoolId, ctx.user.id)
-      ),
+      .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), termId: z.number().int().positive(), fileName: z.string().trim().min(5).max(255), mimeType: z.enum(["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]), base64: z.string().min(8).max(2_800_000), rows: z.array(z.object({ weekNo: z.number().int(), topic: z.string().max(255), objectives: z.string().max(5000).optional(), resources: z.string().max(5000).optional() })).min(1).max(60), replaceExisting: z.boolean().default(false) }))
+      .mutation(({ ctx, input }) => db.importApprovedSchemeOfWork({ ...input, importedBy: ctx.user.id })),
+    teacherSchemeReviews: aiTutorTeacherProcedure.input(schoolInput).query(({ ctx, input }) => db.listTeacherSchemeReviews(input.schoolId, ctx.user.id)),
+    schemeRevisionNotifications: aiTutorTeacherProcedure.input(schoolInput).query(({ ctx, input }) => db.listTeacherSchemeRevisionNotifications(input.schoolId, ctx.user.id)),
     markSchemeRevisionNotificationRead: aiTutorTeacherProcedure
-      .input(
-        schoolInput.extend({ notificationId: z.number().int().positive() })
-      )
-      .mutation(({ ctx, input }) =>
-        db.markTeacherSchemeRevisionNotificationRead({
-          ...input,
-          userId: ctx.user.id,
-        })
-      ),
+      .input(schoolInput.extend({ notificationId: z.number().int().positive() }))
+      .mutation(({ ctx, input }) => db.markTeacherSchemeRevisionNotificationRead({ ...input, userId: ctx.user.id })),
     setSchemeRevisionNotificationPinned: aiTutorTeacherProcedure
-      .input(
-        schoolInput.extend({
-          notificationId: z.number().int().positive(),
-          pinned: z.boolean(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.setTeacherSchemeRevisionNotificationPinned({
-          ...input,
-          userId: ctx.user.id,
-        })
-      ),
-    schemeRevisionNotificationsForManagement: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) =>
-        db.listSchoolLeaderSchemeRevisionNotifications(input.schoolId)
-      ),
-    expiredSchemeRevisionRecommendationReport: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) =>
-        db.listExpiredBeforeAcknowledgementRecommendationReport(input.schoolId)
-      ),
+      .input(schoolInput.extend({ notificationId: z.number().int().positive(), pinned: z.boolean() }))
+      .mutation(({ ctx, input }) => db.setTeacherSchemeRevisionNotificationPinned({ ...input, userId: ctx.user.id })),
+    schemeRevisionNotificationsForManagement: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listSchoolLeaderSchemeRevisionNotifications(input.schoolId)),
+    expiredSchemeRevisionRecommendationReport: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listExpiredBeforeAcknowledgementRecommendationReport(input.schoolId)),
     setSchemeRevisionNotificationRecommended: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          notificationId: z.number().int().positive(),
-          recommended: z.boolean(),
-          recommendationExpiresAt: z.coerce
-            .date()
-            .optional()
-            .refine(
-              value => !value || value.getTime() > Date.now(),
-              "Recommendation expiry must be in the future."
-            ),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.setSchoolLeaderSchemeRevisionNotificationRecommended({
-          ...input,
-          userId: ctx.user.id,
-        })
-      ),
+      .input(schoolInput.extend({ notificationId: z.number().int().positive(), recommended: z.boolean(), recommendationExpiresAt: z.coerce.date().optional().refine(value => !value || value.getTime() > Date.now(), "Recommendation expiry must be in the future.") }))
+      .mutation(({ ctx, input }) => db.setSchoolLeaderSchemeRevisionNotificationRecommended({ ...input, userId: ctx.user.id })),
     addSchemeRowInlineComment: aiTutorTeacherProcedure
-      .input(
-        schoolInput.extend({
-          rowId: z.number().int().positive(),
-          anchor: z.enum(["topic", "objectives", "resources"]),
-          body: z.string().trim().min(1).max(1200),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.addAssignedSchemeRowInlineComment({
-          ...input,
-          createdByUserId: ctx.user.id,
-        })
-      ),
+      .input(schoolInput.extend({ rowId: z.number().int().positive(), anchor: z.enum(["topic", "objectives", "resources"]), body: z.string().trim().min(1).max(1200) }))
+      .mutation(({ ctx, input }) => db.addAssignedSchemeRowInlineComment({ ...input, createdByUserId: ctx.user.id })),
     reviewSchemeRow: aiTutorTeacherProcedure
-      .input(
-        schoolInput.extend({
-          rowId: z.number().int().positive(),
-          decision: z.enum(["approved", "returned"]),
-          reviewNote: z.string().trim().max(2000).optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.reviewAssignedSchemeRow({ ...input, reviewedByUserId: ctx.user.id })
-      ),
+      .input(schoolInput.extend({ rowId: z.number().int().positive(), decision: z.enum(["approved", "returned"]), reviewNote: z.string().trim().max(2000).optional() }))
+      .mutation(({ ctx, input }) => db.reviewAssignedSchemeRow({ ...input, reviewedByUserId: ctx.user.id })),
     publishApprovedSchemeImport: onboardingAdminProcedure
       .input(schoolInput.extend({ importId: z.number().int().positive() }))
-      .mutation(({ ctx, input }) =>
-        db.publishApprovedSchemeImport({ ...input, publishedBy: ctx.user.id })
-      ),
+      .mutation(({ ctx, input }) => db.publishApprovedSchemeImport({ ...input, publishedBy: ctx.user.id })),
     schemeImportInlineComments: onboardingAdminProcedure
       .input(schoolInput.extend({ importId: z.number().int().positive() }))
-      .query(({ input }) =>
-        db.listSchemeImportInlineComments(input.schoolId, input.importId)
-      ),
+      .query(({ input }) => db.listSchemeImportInlineComments(input.schoolId, input.importId)),
     createSession: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          name: z.string().min(3).max(64),
-          startsOn: z.string().min(10).max(10),
-          endsOn: z.string().min(10).max(10),
-          isCurrent: z.boolean().optional(),
-        })
-      )
+      .input(schoolInput.extend({ name: z.string().min(3).max(64), startsOn: z.string().min(10).max(10), endsOn: z.string().min(10).max(10), isCurrent: z.boolean().optional() }))
       .mutation(({ input }) => db.createAcademicSession(input)),
     createTerm: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          sessionId: z.number().int().positive(),
-          name: z.string().min(3).max(64),
-          startsOn: z.string().min(10).max(10),
-          endsOn: z.string().min(10).max(10),
-          isCurrent: z.boolean().optional(),
-        })
-      )
+      .input(schoolInput.extend({ sessionId: z.number().int().positive(), name: z.string().min(3).max(64), startsOn: z.string().min(10).max(10), endsOn: z.string().min(10).max(10), isCurrent: z.boolean().optional() }))
       .mutation(({ input }) => db.createAcademicTerm(input)),
     createClass: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          name: z.string().min(2).max(120),
-          level: z.string().max(64).optional(),
-          arm: z.string().max(32).optional(),
-          capacity: z.number().int().positive().optional(),
-          sessionId: z.number().int().positive().optional(),
-          classTeacherId: z.number().int().positive().optional(),
-        })
-      )
+      .input(schoolInput.extend({ name: z.string().min(2).max(120), level: z.string().max(64).optional(), arm: z.string().max(32).optional(), capacity: z.number().int().positive().optional(), sessionId: z.number().int().positive().optional(), classTeacherId: z.number().int().positive().optional() }))
       .mutation(({ input }) => db.createClass(input)),
-    setupStandardClasses: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          sessionId: z.number().int().positive(),
-          confirmed: z.literal(true),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const { confirmed: _confirmed, ...setup } = input;
-        const result = await db.setupStandardSchoolClasses(setup);
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "standard_school_classes_setup_completed",
-          targetType: "academic_class_foundation",
-          targetId: input.sessionId,
-          metadata: {
-            createdCount: result.createdCount,
-            skippedCount: result.skippedCount,
-            sessionId: result.sessionId,
-            confirmationRequired: true,
-            subjectsCreated: false,
-          },
-        });
-        return result;
-      }),
     createSubject: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          code: z.string().min(2).max(32),
-          name: z.string().min(2).max(160),
-          departmentId: z.number().int().positive().optional(),
-          description: z.string().max(5000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ code: z.string().min(2).max(32), name: z.string().min(2).max(160), departmentId: z.number().int().positive().optional(), description: z.string().max(5000).optional() }))
       .mutation(({ input }) => db.createSubject(input)),
     assignClassSubject: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          classId: z.number().int().positive(),
-          subjectId: z.number().int().positive(),
-          teacherId: z.number().int().positive().optional(),
-        })
-      )
+      .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), teacherId: z.number().int().positive().optional() }))
       .mutation(({ input }) => db.assignClassSubject(input)),
     saveTimetable: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          classId: z.number().int().positive(),
-          subjectId: z.number().int().positive(),
-          teacherId: z.number().int().positive().optional(),
-          dayOfWeek: z.enum([
-            "monday",
-            "tuesday",
-            "wednesday",
-            "thursday",
-            "friday",
-            "saturday",
-            "sunday",
-          ]),
-          startsAt: z.string().min(4).max(8),
-          endsAt: z.string().min(4).max(8),
-          room: z.string().max(80).optional(),
-        })
-      )
+      .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), teacherId: z.number().int().positive().optional(), dayOfWeek: z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]), startsAt: z.string().min(4).max(8), endsAt: z.string().min(4).max(8), room: z.string().max(80).optional() }))
       .mutation(({ input }) => db.createTimetableEntry(input)),
     createLessonPlan: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          classId: z.number().int().positive(),
-          subjectId: z.number().int().positive(),
-          teacherId: z.number().int().positive(),
-          termId: z.number().int().positive().optional(),
-          weekNo: z.number().int().min(1).max(20),
-          topic: z.string().min(2).max(255),
-          objectives: z.string().max(5000).optional(),
-          resources: z.string().max(5000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ classId: z.number().int().positive(), subjectId: z.number().int().positive(), teacherId: z.number().int().positive(), termId: z.number().int().positive().optional(), weekNo: z.number().int().min(1).max(20), topic: z.string().min(2).max(255), objectives: z.string().max(5000).optional(), resources: z.string().max(5000).optional() }))
       .mutation(({ input }) => db.createLessonPlan(input)),
     createCurriculumMilestone: managementProcedure("academics.write")
-      .input(
-        schoolInput.extend({
-          classSubjectId: z.number().int().positive(),
-          termId: z.number().int().positive().optional(),
-          title: z.string().min(2).max(255),
-          targetWeek: z.number().int().min(1).max(20).optional(),
-        })
-      )
+      .input(schoolInput.extend({ classSubjectId: z.number().int().positive(), termId: z.number().int().positive().optional(), title: z.string().min(2).max(255), targetWeek: z.number().int().min(1).max(20).optional() }))
       .mutation(({ input }) => db.createCurriculumMilestone(input)),
   }),
 
   attendance: router({
-    list: managementProcedure("attendance.read")
-      .input(
-        schoolInput.extend({
-          attendanceDate: z.string().min(10).max(10).optional(),
-          attendeeType: z.enum(["student", "staff"]).optional(),
-        })
-      )
-      .query(({ input }) => db.listAttendance(input.schoolId, input)),
+    list: managementProcedure("attendance.read").input(schoolInput.extend({ attendanceDate: z.string().min(10).max(10).optional(), attendeeType: z.enum(["student", "staff"]).optional() })).query(({ input }) => db.listAttendance(input.schoolId, input)),
     record: managementProcedure("attendance.write")
-      .input(
-        schoolInput.extend({
-          attendeeType: z.enum(["student", "staff"]),
-          studentId: z.number().int().positive().optional(),
-          staffId: z.number().int().positive().optional(),
-          classId: z.number().int().positive().optional(),
-          attendanceDate: z.string().min(10).max(10),
-          status: z.enum(["present", "late", "absent", "excused"]),
-          note: z.string().max(1000).optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.recordAttendance({ ...input, recordedBy: ctx.user.id })
-      ),
-    absenceAlerts: managementProcedure("attendance.read")
-      .input(schoolInput)
-      .query(({ input }) => db.getAbsenceAlerts(input.schoolId)),
+      .input(schoolInput.extend({ attendeeType: z.enum(["student", "staff"]), studentId: z.number().int().positive().optional(), staffId: z.number().int().positive().optional(), classId: z.number().int().positive().optional(), attendanceDate: z.string().min(10).max(10), status: z.enum(["present", "late", "absent", "excused"]), note: z.string().max(1000).optional() }))
+      .mutation(({ ctx, input }) => db.recordAttendance({ ...input, recordedBy: ctx.user.id })),
+    absenceAlerts: managementProcedure("attendance.read").input(schoolInput).query(({ input }) => db.getAbsenceAlerts(input.schoolId)),
   }),
 
   results: router({
-    list: managementProcedure("results.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listResultsData(input.schoolId)),
+    list: managementProcedure("results.read").input(schoolInput).query(({ input }) => db.listResultsData(input.schoolId)),
     createAssessment: managementProcedure("results.write")
-      .input(
-        schoolInput.extend({
-          termId: z.number().int().positive(),
-          classId: z.number().int().positive(),
-          subjectId: z.number().int().positive(),
-          title: z.string().min(2).max(255),
-          assessmentType: z.enum([
-            "assignment",
-            "test",
-            "project",
-            "exam",
-            "practical",
-          ]),
-          maximumScore: z.number().positive(),
-          weight: z.number().positive().max(100).optional(),
-          heldOn: z.string().optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createAssessment({ ...input, createdBy: ctx.user.id })
-      ),
+      .input(schoolInput.extend({ termId: z.number().int().positive(), classId: z.number().int().positive(), subjectId: z.number().int().positive(), title: z.string().min(2).max(255), assessmentType: z.enum(["assignment", "test", "project", "exam", "practical"]), maximumScore: z.number().positive(), weight: z.number().positive().max(100).optional(), heldOn: z.string().optional() }))
+      .mutation(({ ctx, input }) => db.createAssessment({ ...input, createdBy: ctx.user.id })),
     enterScore: managementProcedure("results.write")
-      .input(
-        schoolInput.extend({
-          assessmentId: z.number().int().positive(),
-          studentId: z.number().int().positive(),
-          score: z.number().min(0),
-          comment: z.string().max(1000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ assessmentId: z.number().int().positive(), studentId: z.number().int().positive(), score: z.number().min(0), comment: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
         const assessment = await db.getAssessment(input.assessmentId);
-        if (!assessment || assessment.schoolId !== input.schoolId)
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Assessment not found.",
-          });
-        if (input.score > assessment.maximumScore)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Score cannot exceed the assessment maximum.",
-          });
+        if (!assessment || assessment.schoolId !== input.schoolId) throw new TRPCError({ code: "NOT_FOUND", message: "Assessment not found." });
+        if (input.score > assessment.maximumScore) throw new TRPCError({ code: "BAD_REQUEST", message: "Score cannot exceed the assessment maximum." });
         const scales = await db.listGradeScales(input.schoolId);
-        const percentage = calculatePercentage(
-          input.score,
-          assessment.maximumScore
-        );
-        return db.upsertScore({
-          ...input,
-          enteredBy: ctx.user.id,
-          percentage,
-          grade: resolveGrade(percentage, scales).grade,
-        });
+        const percentage = calculatePercentage(input.score, assessment.maximumScore);
+        return db.upsertScore({ ...input, enteredBy: ctx.user.id, percentage, grade: resolveGrade(percentage, scales).grade });
       }),
     publish: managementProcedure("results.write")
-      .input(
-        schoolInput.extend({
-          termId: z.number().int().positive(),
-          classId: z.number().int().positive(),
-        })
-      )
+      .input(schoolInput.extend({ termId: z.number().int().positive(), classId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.publishResults(
-          input.schoolId,
-          input.termId,
-          input.classId,
-          ctx.user.id
-        );
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "results_published",
-          targetType: "result_publication",
-          targetId: `${input.termId}:${input.classId}`,
-          metadata: { action: "published" },
-        });
+        const result = await db.publishResults(input.schoolId, input.termId, input.classId, ctx.user.id);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "results_published", targetType: "result_publication", targetId: `${input.termId}:${input.classId}`, metadata: { action: "published" } });
         return result;
       }),
     approve: managementProcedure("results.write")
-      .input(
-        schoolInput.extend({
-          termId: z.number().int().positive(),
-          classId: z.number().int().positive(),
-        })
-      )
+      .input(schoolInput.extend({ termId: z.number().int().positive(), classId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.approveResults(
-          input.schoolId,
-          input.termId,
-          input.classId,
-          ctx.user.id
-        );
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "results_approved",
-          targetType: "result_publication",
-          targetId: `${input.termId}:${input.classId}`,
-          metadata: { action: "approved" },
-        });
+        const result = await db.approveResults(input.schoolId, input.termId, input.classId, ctx.user.id);
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "results_approved", targetType: "result_publication", targetId: `${input.termId}:${input.classId}`, metadata: { action: "approved" } });
         return result;
       }),
     reportCard: managementProcedure("results.read")
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          termId: z.number().int().positive(),
-        })
-      )
-      .query(({ input }) =>
-        db.getStudentReportCard(input.schoolId, input.studentId, input.termId)
-      ),
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), termId: z.number().int().positive() }))
+      .query(({ input }) => db.getStudentReportCard(input.schoolId, input.studentId, input.termId)),
   }),
 
   finance: router({
-    list: managementProcedure("finance.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listFinanceData(input.schoolId)),
+    list: managementProcedure("finance.read").input(schoolInput).query(({ input }) => db.listFinanceData(input.schoolId)),
     createBankAccount: providerAdminProcedure
-      .input(
-        schoolInput.extend({
-          bankName: z.string().trim().min(2).max(160),
-          accountName: z.string().trim().min(2).max(160),
-          accountNumber: z.string().min(10).max(24),
-          accountType: z.enum(["current", "savings", "corporate", "other"]),
-          status: z.enum(["draft", "active"]).default("draft"),
-          isPrimary: z.boolean().default(false),
-          paymentReferenceGuidance: z.string().trim().max(255).optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createSchoolBankAccount({ ...input, configuredBy: ctx.user.id })
-      ),
+      .input(schoolInput.extend({ bankName: z.string().trim().min(2).max(160), accountName: z.string().trim().min(2).max(160), accountNumber: z.string().min(10).max(24), accountType: z.enum(["current", "savings", "corporate", "other"]), status: z.enum(["draft", "active"]).default("draft"), isPrimary: z.boolean().default(false), paymentReferenceGuidance: z.string().trim().max(255).optional() }))
+      .mutation(({ ctx, input }) => db.createSchoolBankAccount({ ...input, configuredBy: ctx.user.id })),
     updateBankAccountStatus: providerAdminProcedure
-      .input(
-        schoolInput.extend({
-          bankAccountId: z.number().int().positive(),
-          status: z.enum(["active", "archived"]),
-          isPrimary: z.boolean().optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.updateSchoolBankAccountStatus({
-          ...input,
-          configuredBy: ctx.user.id,
-        })
-      ),
+      .input(schoolInput.extend({ bankAccountId: z.number().int().positive(), status: z.enum(["active", "archived"]), isPrimary: z.boolean().optional() }))
+      .mutation(({ ctx, input }) => db.updateSchoolBankAccountStatus({ ...input, configuredBy: ctx.user.id })),
     createFee: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          name: z.string().min(2).max(255),
-          amount: z.number().positive(),
-          termId: z.number().int().positive().optional(),
-          classId: z.number().int().positive().optional(),
-          mandatory: z.boolean().optional(),
-          dueOn: z.string().optional(),
-        })
-      )
+      .input(schoolInput.extend({ name: z.string().min(2).max(255), amount: z.number().positive(), termId: z.number().int().positive().optional(), classId: z.number().int().positive().optional(), mandatory: z.boolean().optional(), dueOn: z.string().optional() }))
       .mutation(({ input }) => db.createFeeStructure(input)),
     createInvoice: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          termId: z.number().int().positive().optional(),
-          issueDate: z.string().min(10).max(10),
-          dueDate: z.string().optional(),
-          lineItems: z
-            .array(
-              z.object({
-                description: z.string().min(2).max(255),
-                quantity: z.number().int().positive(),
-                unitAmount: z.number().positive(),
-                feeStructureId: z.number().int().positive().optional(),
-              })
-            )
-            .min(1),
-          discount: z.number().min(0).optional(),
-          note: z.string().max(1000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), termId: z.number().int().positive().optional(), issueDate: z.string().min(10).max(10), dueDate: z.string().optional(), lineItems: z.array(z.object({ description: z.string().min(2).max(255), quantity: z.number().int().positive(), unitAmount: z.number().positive(), feeStructureId: z.number().int().positive().optional() })).min(1), discount: z.number().min(0).optional(), note: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.createInvoice({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "invoice_created",
-          targetType: "invoice",
-          targetId: result.invoiceId,
-          metadata: {
-            lineItemCount: input.lineItems.length,
-            invoiceCreated: true,
-          },
-        });
+        const result = await db.createInvoice({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "invoice_created", targetType: "invoice", targetId: result.invoiceId, metadata: { lineItemCount: input.lineItems.length, invoiceCreated: true } });
         return result;
       }),
     recordPayment: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          invoiceId: z.number().int().positive(),
-          amount: z.number().positive(),
-          paidOn: z.string().min(10).max(10),
-          method: z.enum([
-            "cash",
-            "bank_transfer",
-            "card",
-            "pos",
-            "cheque",
-            "other",
-          ]),
-          reference: z.string().max(160).optional(),
-          note: z.string().max(1000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ invoiceId: z.number().int().positive(), amount: z.number().positive(), paidOn: z.string().min(10).max(10), method: z.enum(["cash", "bank_transfer", "card", "pos", "cheque", "other"]), reference: z.string().max(160).optional(), note: z.string().max(1000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.recordPayment({
-          ...input,
-          recordedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "payment_recorded",
-          targetType: "invoice",
-          targetId: input.invoiceId,
-          metadata: { method: input.method, paymentRecorded: true },
-        });
+        const result = await db.recordPayment({ ...input, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "payment_recorded", targetType: "invoice", targetId: input.invoiceId, metadata: { method: input.method, paymentRecorded: true } });
         return result;
       }),
   }),
 
   cashAssurance: router({
-    list: managementProcedure("finance.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listCashAssuranceData(input.schoolId)),
+    list: managementProcedure("finance.read").input(schoolInput).query(({ input }) => db.listCashAssuranceData(input.schoolId)),
     openCase: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          studentId: z.number().int().positive(),
-          invoiceId: z.number().int().positive(),
-          priority: z
-            .enum(["low", "normal", "high", "urgent"])
-            .default("normal"),
-          assignedTo: z.number().int().positive().optional(),
-          nextActionOn: z.string().min(10).max(10).optional(),
-          note: z.string().max(2000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ studentId: z.number().int().positive(), invoiceId: z.number().int().positive(), priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"), assignedTo: z.number().int().positive().optional(), nextActionOn: z.string().min(10).max(10).optional(), note: z.string().max(2000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.openCashAssuranceCase({
-          ...input,
-          openedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_case_opened",
-          targetType: "cash_assurance_case",
-          targetId: result.caseId,
-          metadata: { priority: input.priority, invoiceLinked: true },
-        });
+        const result = await db.openCashAssuranceCase({ ...input, openedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_case_opened", targetType: "cash_assurance_case", targetId: result.caseId, metadata: { priority: input.priority, invoiceLinked: true } });
         return result;
       }),
     recordPromise: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          caseId: z.number().int().positive(),
-          promisedAmount: z.number().positive(),
-          promisedOn: z.string().min(10).max(10),
-          note: z.string().max(2000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), promisedAmount: z.number().positive(), promisedOn: z.string().min(10).max(10), note: z.string().max(2000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.recordCashAssurancePromise({
-          ...input,
-          recordedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_promise_recorded",
-          targetType: "cash_assurance_case",
-          targetId: input.caseId,
-          metadata: { promiseRecorded: true },
-        });
+        const result = await db.recordCashAssurancePromise({ ...input, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_promise_recorded", targetType: "cash_assurance_case", targetId: input.caseId, metadata: { promiseRecorded: true } });
         return result;
       }),
     submitEvidence: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          caseId: z.number().int().positive(),
-          invoiceId: z.number().int().positive(),
-          amountClaimed: z.number().positive(),
-          source: z.enum([
-            "manual_receipt",
-            "bank_reference",
-            "provider_event",
-            "other",
-          ]),
-          providerReference: z.string().max(160).optional(),
-          note: z.string().max(2000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), invoiceId: z.number().int().positive(), amountClaimed: z.number().positive(), source: z.enum(["manual_receipt", "bank_reference", "provider_event", "other"]), providerReference: z.string().max(160).optional(), note: z.string().max(2000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.submitPaymentEvidence({
-          ...input,
-          createdBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_payment_evidence_submitted",
-          targetType: "payment_evidence",
-          targetId: result.evidenceId,
-          metadata: { source: input.source, evidenceSubmitted: true },
-        });
+        const result = await db.submitPaymentEvidence({ ...input, createdBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_payment_evidence_submitted", targetType: "payment_evidence", targetId: result.evidenceId, metadata: { source: input.source, evidenceSubmitted: true } });
         return result;
       }),
     reviewEvidence: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          evidenceId: z.number().int().positive(),
-          status: z.enum(["accepted", "rejected"]),
-          linkedPaymentId: z.number().int().positive().optional(),
-          reviewNote: z.string().max(2000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ evidenceId: z.number().int().positive(), status: z.enum(["accepted", "rejected"]), linkedPaymentId: z.number().int().positive().optional(), reviewNote: z.string().max(2000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.reviewPaymentEvidence({
-          ...input,
-          reviewedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_payment_evidence_reviewed",
-          targetType: "payment_evidence",
-          targetId: input.evidenceId,
-          metadata: { decision: input.status, ledgerChanged: false },
-        });
+        const result = await db.reviewPaymentEvidence({ ...input, reviewedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_payment_evidence_reviewed", targetType: "payment_evidence", targetId: input.evidenceId, metadata: { decision: input.status, ledgerChanged: false } });
         return result;
       }),
     recordDispute: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          caseId: z.number().int().positive(),
-          note: z.string().min(2).max(2000),
-        })
-      )
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), note: z.string().min(2).max(2000) }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.recordCashAssuranceDispute({
-          ...input,
-          recordedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_dispute_recorded",
-          targetType: "cash_assurance_case",
-          targetId: input.caseId,
-          metadata: { remindersPaused: true },
-        });
+        const result = await db.recordCashAssuranceDispute({ ...input, recordedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_dispute_recorded", targetType: "cash_assurance_case", targetId: input.caseId, metadata: { remindersPaused: true } });
         return result;
       }),
     resolveDispute: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          caseId: z.number().int().positive(),
-          note: z.string().max(2000).optional(),
-        })
-      )
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), note: z.string().max(2000).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.resolveCashAssuranceDispute({
-          ...input,
-          resolvedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_dispute_resolved",
-          targetType: "cash_assurance_case",
-          targetId: input.caseId,
-          metadata: { remindersPaused: false },
-        });
+        const result = await db.resolveCashAssuranceDispute({ ...input, resolvedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "cash_assurance_dispute_resolved", targetType: "cash_assurance_case", targetId: input.caseId, metadata: { remindersPaused: false } });
         return result;
       }),
   }),
 
   staff: router({
-    list: managementProcedure("students.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listStaff(input.schoolId)),
-    migrationPreview: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          rows: z.array(staffMigrationRowInput).min(1).max(100),
-        })
-      )
-      .mutation(({ input }) => db.previewStaffMigration(input)),
+    list: managementProcedure("students.read").input(schoolInput).query(({ input }) => db.listStaff(input.schoolId)),
+    migrationPreview: onboardingAdminProcedure.input(schoolInput.extend({ rows: z.array(staffMigrationRowInput).min(1).max(100) })).mutation(({ input }) => db.previewStaffMigration(input)),
     migrationImport: onboardingAdminProcedure
-      .input(
-        schoolInput.extend({
-          idempotencyKey: z.string().uuid(),
-          rows: z.array(staffMigrationRowInput).min(1).max(100),
-          confirmed: z.literal(true),
-        })
-      )
+      .input(schoolInput.extend({ idempotencyKey: z.string().uuid(), rows: z.array(staffMigrationRowInput).min(1).max(100), confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
-        const rate = await db.consumeSharedRateLimit({
-          namespace: "staff-migration",
-          route: "import",
-          clientKey: `${input.schoolId}:${ctx.user.id}`,
-          limit: 4,
-          windowMs: 10 * 60_000,
-        });
-        if (!rate.allowed)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `Staff migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.`,
-          });
+        const rate = await db.consumeSharedRateLimit({ namespace: "staff-migration", route: "import", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 4, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Staff migration is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
         const { confirmed: _confirmed, ...migration } = input;
-        const result = await db.importStaffMigration({
-          ...migration,
-          importedBy: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "staff_migration_completed",
-          targetType: "staff_migration_batch",
-          targetId: result.batchId,
-          metadata: {
-            staffCount: result.staffCount,
-            idempotent: result.idempotent,
-            confirmationRequired: true,
-            accountCreated: false,
-            invitationSent: false,
-          },
-        });
+        const result = await db.importStaffMigration({ ...migration, importedBy: ctx.user.id });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "staff_migration_completed", targetType: "staff_migration_batch", targetId: result.batchId, metadata: { staffCount: result.staffCount, idempotent: result.idempotent, confirmationRequired: true, accountCreated: false, invitationSent: false } });
         return result;
       }),
-    migrationHistory: onboardingAdminProcedure
-      .input(schoolInput)
-      .query(({ input }) => db.listStaffMigrationBatches(input.schoolId)),
+    migrationHistory: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.listStaffMigrationBatches(input.schoolId)),
     create: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          employeeNo: z.string().min(2).max(48),
-          firstName: z.string().min(1).max(120),
-          lastName: z.string().min(1).max(120),
-          jobTitle: z.string().min(2).max(120),
-          departmentId: z.number().int().positive().optional(),
-          email: z.string().email().optional(),
-          phone: z.string().max(48).optional(),
-          employmentType: z
-            .enum(["full_time", "part_time", "contract", "temporary"])
-            .optional(),
-          joinedOn: z.string().optional(),
-        })
-      )
+      .input(schoolInput.extend({ employeeNo: z.string().min(2).max(48), firstName: z.string().min(1).max(120), lastName: z.string().min(1).max(120), jobTitle: z.string().min(2).max(120), departmentId: z.number().int().positive().optional(), email: z.string().email().optional(), phone: z.string().max(48).optional(), employmentType: z.enum(["full_time", "part_time", "contract", "temporary"]).optional(), joinedOn: z.string().optional() }))
       .mutation(({ input }) => db.createStaff(input)),
     createDepartment: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          name: z.string().min(2).max(120),
-          code: z.string().max(24).optional(),
-        })
-      )
+      .input(schoolInput.extend({ name: z.string().min(2).max(120), code: z.string().max(24).optional() }))
       .mutation(({ input }) => db.createDepartment(input)),
     assignDepartment: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          staffId: z.number().int().positive(),
-          departmentId: z.number().int().positive().optional(),
-        })
-      )
-      .mutation(({ input }) =>
-        db.assignStaffDepartment(
-          input.schoolId,
-          input.staffId,
-          input.departmentId
-        )
-      ),
+      .input(schoolInput.extend({ staffId: z.number().int().positive(), departmentId: z.number().int().positive().optional() }))
+      .mutation(({ input }) => db.assignStaffDepartment(input.schoolId, input.staffId, input.departmentId)),
     createDuty: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          staffId: z.number().int().positive(),
-          title: z.string().min(2).max(160),
-          description: z.string().max(5000).optional(),
-          startsOn: z.string().optional(),
-        })
-      )
+      .input(schoolInput.extend({ staffId: z.number().int().positive(), title: z.string().min(2).max(160), description: z.string().max(5000).optional(), startsOn: z.string().optional() }))
       .mutation(({ input }) => db.createStaffDuty(input)),
-    operations: managementProcedure("students.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listStaffOperations(input.schoolId)),
+    operations: managementProcedure("students.read").input(schoolInput).query(({ input }) => db.listStaffOperations(input.schoolId)),
     requestLeave: managementProcedure("students.read")
-      .input(
-        schoolInput.extend({
-          staffId: z.number().int().positive(),
-          leaveType: z.enum([
-            "annual",
-            "sick",
-            "maternity",
-            "paternity",
-            "compassionate",
-            "other",
-          ]),
-          startsOn: z.string().min(10).max(10),
-          endsOn: z.string().min(10).max(10),
-          reason: z.string().min(2).max(5000),
-        })
-      )
+      .input(schoolInput.extend({ staffId: z.number().int().positive(), leaveType: z.enum(["annual", "sick", "maternity", "paternity", "compassionate", "other"]), startsOn: z.string().min(10).max(10), endsOn: z.string().min(10).max(10), reason: z.string().min(2).max(5000) }))
       .mutation(({ input }) => db.createLeaveRequest(input)),
     reviewLeave: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          leaveId: z.number().int().positive(),
-          status: z.enum(["approved", "declined"]),
-          reviewNote: z.string().max(1000).optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.reviewLeaveRequest(
-          input.leaveId,
-          input.status,
-          input.reviewNote,
-          ctx.user.id
-        )
-      ),
+      .input(schoolInput.extend({ leaveId: z.number().int().positive(), status: z.enum(["approved", "declined"]), reviewNote: z.string().max(1000).optional() }))
+      .mutation(({ ctx, input }) => db.reviewLeaveRequest(input.leaveId, input.status, input.reviewNote, ctx.user.id)),
     createPayroll: managementProcedure("finance.write")
-      .input(
-        schoolInput.extend({
-          staffId: z.number().int().positive(),
-          periodLabel: z.string().min(3).max(64),
-          grossPay: z.number().positive(),
-          deductions: z.number().min(0).optional(),
-        })
-      )
+      .input(schoolInput.extend({ staffId: z.number().int().positive(), periodLabel: z.string().min(3).max(64), grossPay: z.number().positive(), deductions: z.number().min(0).optional() }))
       .mutation(({ input }) => db.createPayrollRecord(input)),
     addPerformanceNote: managementProcedure("students.write")
-      .input(
-        schoolInput.extend({
-          staffId: z.number().int().positive(),
-          title: z.string().min(2).max(255),
-          note: z.string().min(2).max(5000),
-          visibility: z.enum(["private", "shared"]).default("private"),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createPerformanceNote({ ...input, authorId: ctx.user.id })
-      ),
+      .input(schoolInput.extend({ staffId: z.number().int().positive(), title: z.string().min(2).max(255), note: z.string().min(2).max(5000), visibility: z.enum(["private", "shared"]).default("private") }))
+      .mutation(({ ctx, input }) => db.createPerformanceNote({ ...input, authorId: ctx.user.id })),
   }),
 
   communications: router({
-    list: managementProcedure("communications.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listAnnouncements(input.schoolId)),
+    list: managementProcedure("communications.read").input(schoolInput).query(({ input }) => db.listAnnouncements(input.schoolId)),
     create: managementProcedure("communications.read")
-      .input(
-        schoolInput.extend({
-          title: z.string().min(3).max(255),
-          body: z.string().min(3).max(10000),
-          audience: z.enum([
-            "everyone",
-            "staff",
-            "students",
-            "guardians",
-            "class",
-          ]),
-          classId: z.number().int().positive().optional(),
-          publish: z.boolean().optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createAnnouncement({ ...input, createdBy: ctx.user.id })
-      ),
+      .input(schoolInput.extend({ title: z.string().min(3).max(255), body: z.string().min(3).max(10000), audience: z.enum(["everyone", "staff", "students", "guardians", "class"]), classId: z.number().int().positive().optional(), publish: z.boolean().optional() }))
+      .mutation(({ ctx, input }) => db.createAnnouncement({ ...input, createdBy: ctx.user.id })),
     publish: managementProcedure("communications.read")
-      .input(
-        schoolInput.extend({ announcementId: z.number().int().positive() })
-      )
+      .input(schoolInput.extend({ announcementId: z.number().int().positive() }))
       .mutation(({ input }) => db.publishAnnouncement(input.announcementId)),
     logBulkMessage: managementProcedure("communications.read")
-      .input(
-        schoolInput.extend({
-          channel: z.enum(["in_app", "email", "sms", "whatsapp"]),
-          audience: z.enum([
-            "everyone",
-            "staff",
-            "students",
-            "guardians",
-            "class",
-          ]),
-          subject: z.string().max(255).optional(),
-          body: z.string().min(2).max(10000),
-          recipientCount: z.number().int().min(0),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        db.createMessageLog({ ...input, createdBy: ctx.user.id })
-      ),
-    history: managementProcedure("communications.read")
-      .input(schoolInput)
-      .query(({ input }) => db.listMessageLogs(input.schoolId)),
+      .input(schoolInput.extend({ channel: z.enum(["in_app", "email", "sms", "whatsapp"]), audience: z.enum(["everyone", "staff", "students", "guardians", "class"]), subject: z.string().max(255).optional(), body: z.string().min(2).max(10000), recipientCount: z.number().int().min(0) }))
+      .mutation(({ ctx, input }) => db.createMessageLog({ ...input, createdBy: ctx.user.id })),
+    history: managementProcedure("communications.read").input(schoolInput).query(({ input }) => db.listMessageLogs(input.schoolId)),
   }),
 
   portal: router({
-    guardian: managementProcedure("portal.read")
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.getGuardianPortal(input.schoolId, ctx.user.id)
-      ),
-    student: managementProcedure("portal.read")
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.getStudentPortal(input.schoolId, ctx.user.id)
-      ),
-    cashAssurance: familyPortalProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.getFamilyCashAssuranceData({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          role: ctx.schoolRole,
-        })
-      ),
-    paymentEvidenceNotifications: familyPortalProcedure
-      .input(schoolInput)
-      .query(({ ctx, input }) =>
-        db.listFamilyPaymentEvidenceNotifications({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          role: ctx.schoolRole,
-        })
-      ),
+    guardian: managementProcedure("portal.read").input(schoolInput).query(({ ctx, input }) => db.getGuardianPortal(input.schoolId, ctx.user.id)),
+    student: managementProcedure("portal.read").input(schoolInput).query(({ ctx, input }) => db.getStudentPortal(input.schoolId, ctx.user.id)),
+    cashAssurance: familyPortalProcedure.input(schoolInput).query(({ ctx, input }) => db.getFamilyCashAssuranceData({ schoolId: input.schoolId, userId: ctx.user.id, role: ctx.schoolRole })),
+    paymentEvidenceNotifications: familyPortalProcedure.input(schoolInput).query(({ ctx, input }) => db.listFamilyPaymentEvidenceNotifications({ schoolId: input.schoolId, userId: ctx.user.id, role: ctx.schoolRole })),
     markPaymentEvidenceNotificationRead: familyPortalProcedure
-      .input(
-        schoolInput.extend({ notificationId: z.number().int().positive() })
-      )
+      .input(schoolInput.extend({ notificationId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.markFamilyPaymentEvidenceNotificationRead({
-          schoolId: input.schoolId,
-          userId: ctx.user.id,
-          role: ctx.schoolRole,
-          notificationId: input.notificationId,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "family_payment_evidence_notification_read",
-          targetType: "payment_evidence",
-          targetId: result.evidenceId,
-          metadata: { notificationAcknowledged: true },
-        });
+        const result = await db.markFamilyPaymentEvidenceNotificationRead({ schoolId: input.schoolId, userId: ctx.user.id, role: ctx.schoolRole, notificationId: input.notificationId });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "family_payment_evidence_notification_read", targetType: "payment_evidence", targetId: result.evidenceId, metadata: { notificationAcknowledged: true } });
         return result;
       }),
     submitPaymentEvidence: familyPortalProcedure
-      .input(
-        schoolInput.extend({
-          caseId: z.number().int().positive(),
-          invoiceId: z.number().int().positive(),
-          amountClaimed: z.number().positive(),
-          claimedPaidOn: z.string().min(10).max(10).optional(),
-          source: z
-            .enum([
-              "manual_receipt",
-              "bank_reference",
-              "provider_event",
-              "other",
-            ])
-            .default("bank_reference"),
-          providerReference: z.string().max(160).optional(),
-          note: z.string().max(2000).optional(),
-          upload: z
-            .object({
-              base64: z.string().min(4).max(7_100_000),
-              fileName: z.string().min(1).max(255),
-              mimeType: z.enum([
-                "image/jpeg",
-                "image/png",
-                "image/webp",
-                "application/pdf",
-              ]),
-            })
-            .optional(),
-        })
-      )
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), invoiceId: z.number().int().positive(), amountClaimed: z.number().positive(), claimedPaidOn: z.string().min(10).max(10).optional(), source: z.enum(["manual_receipt", "bank_reference", "provider_event", "other"]).default("bank_reference"), providerReference: z.string().max(160).optional(), note: z.string().max(2000).optional(), upload: z.object({ base64: z.string().min(4).max(7_100_000), fileName: z.string().min(1).max(255), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]) }).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.submitFamilyPaymentEvidence({
-          ...input,
-          userId: ctx.user.id,
-          role: ctx.schoolRole,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "family_payment_evidence_submitted",
-          targetType: "payment_evidence",
-          targetId: result.evidenceId,
-          metadata: {
-            source: input.source,
-            attachmentIncluded: !!input.upload,
-            ledgerChanged: false,
-          },
-        });
+        const result = await db.submitFamilyPaymentEvidence({ ...input, userId: ctx.user.id, role: ctx.schoolRole });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "family_payment_evidence_submitted", targetType: "payment_evidence", targetId: result.evidenceId, metadata: { source: input.source, attachmentIncluded: !!input.upload, ledgerChanged: false } });
         return result;
       }),
     scanPaymentEvidence: familyPortalProcedure
-      .input(
-        schoolInput.extend({
-          caseId: z.number().int().positive(),
-          invoiceId: z.number().int().positive(),
-          upload: z.object({
-            base64: z.string().min(4).max(7_100_000),
-            fileName: z.string().min(1).max(255),
-            mimeType: z.enum([
-              "image/jpeg",
-              "image/png",
-              "image/webp",
-              "application/pdf",
-            ]),
-          }),
-        })
-      )
+      .input(schoolInput.extend({ caseId: z.number().int().positive(), invoiceId: z.number().int().positive(), upload: z.object({ base64: z.string().min(4).max(7_100_000), fileName: z.string().min(1).max(255), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]) }) }))
       .mutation(async ({ ctx, input }) => {
-        const result = await db.scanFamilyPaymentEvidence({
-          ...input,
-          userId: ctx.user.id,
-          role: ctx.schoolRole,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "family_payment_receipt_scanned",
-          targetType: "cash_assurance_case",
-          targetId: input.caseId,
-          metadata: {
-            fileType: input.upload.mimeType,
-            requiresConfirmation: true,
-            ledgerChanged: false,
-          },
-        });
+        const result = await db.scanFamilyPaymentEvidence({ ...input, userId: ctx.user.id, role: ctx.schoolRole });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "family_payment_receipt_scanned", targetType: "cash_assurance_case", targetId: input.caseId, metadata: { fileType: input.upload.mimeType, requiresConfirmation: true, ledgerChanged: false } });
         return result;
       }),
   }),

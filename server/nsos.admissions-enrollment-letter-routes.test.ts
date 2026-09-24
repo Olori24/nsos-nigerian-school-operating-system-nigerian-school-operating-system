@@ -2,20 +2,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
-  return { ...actual, getSchoolMembership: vi.fn(), enrolApplication: vi.fn(), getStudentEnrollmentRecord: vi.fn(), createMessageLog: vi.fn(), updateMessageLogDelivery: vi.fn(), recordSecurityAuditEvent: vi.fn(), consumeSharedRateLimit: vi.fn() };
+  return { ...actual, getSchoolMembership: vi.fn(), enrolApplication: vi.fn(), createMessageLog: vi.fn(), updateMessageLogDelivery: vi.fn(), recordSecurityAuditEvent: vi.fn() };
 });
 
-vi.mock("./auth", () => ({ sendAdmissionLetterEmail: vi.fn(), sendGuardianPortalInvitationEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn(), getStudentRecordEmailSenderReadiness: vi.fn(), sendStudentEnrollmentRecordEmail: vi.fn() }));
+vi.mock("./auth", () => ({ sendAdmissionLetterEmail: vi.fn(), sendGuardianPortalInvitationEmail: vi.fn(), sendStaffSetupInvitationEmail: vi.fn() }));
 
 import * as db from "./db";
-import { getStudentRecordEmailSenderReadiness, sendAdmissionLetterEmail, sendStudentEnrollmentRecordEmail } from "./auth";
+import { sendAdmissionLetterEmail } from "./auth";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 const owner = { id: 91, openId: "school-owner", name: "School Owner", email: "owner@example.com", loginMethod: "email", role: "user" as const, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() };
 const membership = { id: 1, schoolId: 7, userId: 91, role: "owner", status: "active", createdAt: new Date(), updatedAt: new Date() };
-const enrollment = { studentId: 44, enrollmentId: 55, biodataTransferred: true, guardianLinked: true, guardianCreated: true, admissionLetter: { guardianEmail: "guardian@example.com", guardianName: "Mrs. Okafor", studentName: "Amina Chiamaka Okafor", schoolName: "Greener Future Academy", schoolAddress: "Abeokuta, Ogun State", admissionNo: "GFA/2026/014", className: "Primary 1", sessionName: "2026/2027 Session", admittedOn: "2026-09-01" } };
-const input = { schoolId: 7, applicationId: 32, admissionNo: "GFA/2026/014", classId: 4, sessionId: 3, admittedOn: "2026-09-01", confirmed: true };
+const enrollment = { studentId: 44, biodataTransferred: true, guardianLinked: true, guardianCreated: true, admissionLetter: { guardianEmail: "guardian@example.com", guardianName: "Mrs. Okafor", studentName: "Amina Chiamaka Okafor", schoolName: "Greener Future Academy", schoolAddress: "Abeokuta, Ogun State", admissionNo: "GFA/2026/014", className: "Primary 1", sessionName: "2026/2027 Session", admittedOn: "2026-09-01" } };
+const input = { schoolId: 7, applicationId: 32, admissionNo: "GFA/2026/014", classId: 4, sessionId: 3, admittedOn: "2026-09-01" };
 const caller = () => appRouter.createCaller({ user: owner, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 
 describe("confirmed admission enrollment and letter delivery", () => {
@@ -25,9 +25,6 @@ describe("confirmed admission enrollment and letter delivery", () => {
     vi.mocked(db.enrolApplication).mockResolvedValue(enrollment as any);
     vi.mocked(db.createMessageLog).mockResolvedValue({ messageId: 501 });
     vi.mocked(sendAdmissionLetterEmail).mockResolvedValue("resend-admission-501");
-    vi.mocked(db.consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 0 } as any);
-    vi.mocked(getStudentRecordEmailSenderReadiness).mockResolvedValue({ ready: true, state: "verified", message: "Verified" } as any);
-    vi.mocked(sendStudentEnrollmentRecordEmail).mockResolvedValue("resend-record-501");
   });
 
   it("transfers confirmed enrollment, sends the generated letter, and records a sent delivery audit", async () => {
@@ -58,49 +55,9 @@ describe("confirmed admission enrollment and letter delivery", () => {
     expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ guardianLinked: true, guardianCreated: false }) }));
   });
 
-  it("returns the created student and enrollment record identifiers for the protected post-enrollment view", async () => {
-    await expect(caller().nsos.admissions.enrol(input)).resolves.toMatchObject({ studentId: 44, enrollmentId: 55, studentName: "Amina Chiamaka Okafor", admissionNo: "GFA/2026/014" });
-  });
-
-  it("serves a student record only through the active tenant-scoped student read procedure", async () => {
-    vi.mocked(db.getStudentEnrollmentRecord).mockResolvedValue({ student: { id: 44, schoolId: 7 }, guardians: [], enrollments: [] } as any);
-    await expect(caller().nsos.students.record({ schoolId: 7, studentId: 44 })).resolves.toMatchObject({ student: { id: 44, schoolId: 7 } });
-    expect(db.getStudentEnrollmentRecord).toHaveBeenCalledWith(7, 44);
-  });
-
-  it("lists masked registered record recipients and submits a PDF only after a separate final confirmation", async () => {
-    vi.mocked(db.getStudentEnrollmentRecord).mockResolvedValue({ student: { id: 44, schoolId: 7, email: "student@example.com" }, guardians: [{ id: 12, firstName: "Ngozi", lastName: "Okafor", email: "guardian@example.com", isPrimary: true }], enrollments: [{ id: 55 }] } as any);
-    const subject = "Amina's protected record";
-    const body = "Hello,\n\nPlease keep this protected PDF for your school records.";
-    await expect(caller().nsos.students.recordEmailReadiness({ schoolId: 7, studentId: 44, enrollmentId: 55 })).resolves.toMatchObject({ sender: { ready: true }, recipients: [expect.objectContaining({ kind: "student", maskedEmail: expect.any(String) }), expect.objectContaining({ kind: "guardian", guardianId: 12, maskedEmail: expect.any(String) })], copy: { subject: expect.any(String), body: expect.any(String) } });
-    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "guardian", guardianId: 12, subject, body, confirmed: true })).resolves.toMatchObject({ deliveryState: "submitted", recipient: { kind: "guardian" } });
-    expect(sendStudentEnrollmentRecordEmail).toHaveBeenCalledWith(expect.objectContaining({ email: "guardian@example.com", enrollmentId: 55, copy: { subject, body } }));
-    expect(db.createMessageLog).toHaveBeenCalledWith(expect.objectContaining({ subject: "Student record PDF delivery", body: "A protected student profile and enrollment record PDF was prepared for confirmed delivery." }));
-    const auditText = JSON.stringify(vi.mocked(db.recordSecurityAuditEvent).mock.calls);
-    expect(auditText).toContain("confirmationRequired");
-    expect(auditText).not.toContain(subject);
-    expect(auditText).not.toContain(body);
-  });
-
-  it("rejects a record PDF email request without the required final confirmation", async () => {
-    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "student", subject: "Student record update", body: "This message is long enough for the protected workflow.", confirmed: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(sendStudentEnrollmentRecordEmail).not.toHaveBeenCalled();
-  });
-
-  it("rejects newline-injected subjects before provider delivery", async () => {
-    await expect(caller().nsos.students.shareRecordPdf({ schoolId: 7, studentId: 44, enrollmentId: 55, recipientKind: "student", subject: "Student record\nBcc: attacker@example.test", body: "This message is long enough for the protected workflow.", confirmed: true })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(sendStudentEnrollmentRecordEmail).not.toHaveBeenCalled();
-  });
-
   it("keeps enrollment restricted to active roles with student-write permission", async () => {
     vi.mocked(db.getSchoolMembership).mockResolvedValue({ ...membership, role: "teacher" } as any);
     await expect(caller().nsos.admissions.enrol(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(db.enrolApplication).not.toHaveBeenCalled();
-  });
-
-  it("requires an explicit final enrollment confirmation before any learner or letter workflow begins", async () => {
-    await expect(caller().nsos.admissions.enrol({ ...input, confirmed: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(db.enrolApplication).not.toHaveBeenCalled();
-    expect(sendAdmissionLetterEmail).not.toHaveBeenCalled();
   });
 });

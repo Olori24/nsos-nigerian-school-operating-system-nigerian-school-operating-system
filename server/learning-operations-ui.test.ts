@@ -3,45 +3,18 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
-const workspace = readFileSync(
-  resolve(root, "client/src/components/LearningOperationsWorkspace.tsx"),
-  "utf8"
-);
-const home = readFileSync(
-  resolve(root, "client/src/pages/Home.tsx"),
-  "utf8"
-).replace(/\s+/g, " ");
-const courseStudio = readFileSync(
-  resolve(root, "client/src/components/CourseStudio.tsx"),
-  "utf8"
-).replace(/\s+/g, " ");
-const governance = readFileSync(
-  resolve(root, "client/src/components/LearningDesignGovernance.tsx"),
-  "utf8"
-);
-const crossProviderCurriculum = readFileSync(
-  resolve(root, "client/src/components/CrossProviderCurriculumWorkspace.tsx"),
-  "utf8"
-);
-const nonSchoolCurriculumStart = readFileSync(
-  resolve(root, "client/src/components/NonSchoolCurriculumStart.tsx"),
-  "utf8"
-);
-const evidenceReview = readFileSync(
-  resolve(root, "client/src/components/LearningEvidenceReview.tsx"),
-  "utf8"
-);
-const courseMaterialsDraft = readFileSync(
-  resolve(root, "client/src/components/CourseMaterialsParentEmailDraft.tsx"),
-  "utf8"
-);
+const workspace = readFileSync(resolve(root, "client/src/components/LearningOperationsWorkspace.tsx"), "utf8");
+const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
+const courseStudio = readFileSync(resolve(root, "client/src/components/CourseStudio.tsx"), "utf8");
+const governance = readFileSync(resolve(root, "client/src/components/LearningDesignGovernance.tsx"), "utf8");
+const crossProviderCurriculum = readFileSync(resolve(root, "client/src/components/CrossProviderCurriculumWorkspace.tsx"), "utf8");
+const nonSchoolCurriculumStart = readFileSync(resolve(root, "client/src/components/NonSchoolCurriculumStart.tsx"), "utf8");
+const evidenceReview = readFileSync(resolve(root, "client/src/components/LearningEvidenceReview.tsx"), "utf8");
 
 describe("Learning operations workspace interface", () => {
   it("exposes programme operations only through the owner/admin navigation route", () => {
     expect(home).toContain('{ id: "learning", label: "Programmes"');
-    expect(home).toMatch(
-      /role === "owner" \|\| role === "admin" \?\s*\(?\s*<LearningOperationsWorkspace/
-    );
+    expect(home).toContain('role === "owner" || role === "admin" ? <LearningOperationsWorkspace');
   });
 
   it("keeps programme actions draft-first and confirmation-gated", () => {
@@ -55,59 +28,37 @@ describe("Learning operations workspace interface", () => {
   });
 
   it("provides separate confirmed programme attendance and fee-structure controls without presenting them as invoicing or payment collection", () => {
-    const participation = readFileSync(
-      resolve(root, "client/src/components/ProgramParticipationAndFees.tsx"),
-      "utf8"
-    );
+    const participation = readFileSync(resolve(root, "client/src/components/ProgramParticipationAndFees.tsx"), "utf8");
     expect(participation).toContain("Save programme attendance");
     expect(participation).toContain("Create programme fee draft");
     expect(participation).toContain("Activate internally");
-    expect(participation).toContain(
-      "Invoices, payment collection, and receipt approval stay in the existing finance workflow."
-    );
+    expect(participation).toContain("Invoices, payment collection, and receipt approval stay in the existing finance workflow.");
     expect(participation).toContain("confirmed: true");
   });
 
   it("gives a linked learner only their own programme context and a confirmation-gated internal evidence submission path", () => {
-    const progress = readFileSync(
-      resolve(root, "client/src/components/LearnerProgramProgress.tsx"),
-      "utf8"
-    );
+    const progress = readFileSync(resolve(root, "client/src/components/LearnerProgramProgress.tsx"), "utf8");
     expect(progress).toContain("My programmes");
-    expect(progress).toContain(
-      "This view shows only your own enrolments, internal evidence, and reviewed curriculum progress."
-    );
+    expect(progress).toContain("This view shows only your own enrolments, internal evidence, and reviewed curriculum progress.");
     expect(progress).toContain("pathwayTitle");
     expect(progress).toContain("moduleTitle");
     expect(progress).toContain("Submit evidence for review");
     expect(progress).toContain("confirmed: true");
-    expect(progress).toContain(
-      "Evidence is private to your learning organisation."
-    );
-    expect(progress).toContain(
-      "does not create a certificate or verify a credential"
-    );
-    expect(progress).toContain(
-      "not a grade, certificate, or verified credential"
-    );
-    expect(home).toMatch(
-      /role === "student" &&\s*\(?\s*<LearnerProgramProgress/
-    );
+    expect(progress).toContain("Evidence is private to your learning organisation.");
+    expect(progress).toContain("does not create a certificate or verify a credential");
+    expect(progress).toContain("not a grade, certificate, or verified credential");
+    expect(home).toContain('role === "student" && <LearnerProgramProgress');
   });
 
   it("mounts a protected owner/admin or assigned-instructor evidence review queue without automatic progress or credential action", () => {
     expect(workspace).toContain("<LearningEvidenceReview");
-    expect(home).toMatch(
-      /role === "teacher" \|\| role === "staff" \?\s*\(?\s*<LearningEvidenceReview/
-    );
+    expect(home).toContain('role === "teacher" || role === "staff" ? <LearningEvidenceReview');
     expect(evidenceReview).toContain("Learning evidence review");
     expect(evidenceReview).toContain("Review to accept");
     expect(evidenceReview).toContain("Return for follow-up");
     expect(evidenceReview).toContain("confirmed: true");
     expect(evidenceReview).toContain("Milestone completion was not changed.");
-    expect(evidenceReview).toContain(
-      "does not change milestone progress, completion, grades, certificates, payments, messages, or public records"
-    );
+    expect(evidenceReview).toContain("does not change milestone progress, completion, grades, certificates, payments, messages, or public records");
   });
 
   it("lets a new owner choose a real operating type during first setup without implying automatic records", () => {
@@ -119,57 +70,23 @@ describe("Learning operations workspace interface", () => {
     expect(home).toContain('value="corporate_academy"');
     expect(home).toContain("Vocational training centre");
     expect(home).toContain("Corporate academy");
-    expect(home).toContain(
-      "No staff, learners, fees, contacts, courses, or certificates are created automatically."
-    );
+    expect(home).toContain("No staff, learners, fees, contacts, courses, or certificates are created automatically.");
   });
 
   it("states the hard safety boundaries for accounts, invitations, payments, public courses, and credentials", () => {
-    expect(workspace).toMatch(
-      /does not publish a\s+course,\s+collect payment,\s+create a learner or staff account,\s+send\s+an invitation,\s+issue a certificate/
-    );
+    expect(workspace).toContain("does not publish a course, collect payment, create a learner or staff account, send an invitation, issue a certificate");
     expect(workspace).toContain("No account or invitation was created.");
-    expect(workspace).toContain(
-      "NSOS has not issued or verified a credential."
-    );
-  });
-
-  it("prepares a tenant-scoped parent-materials email draft from real learning records without a delivery, schedule, or contact-export path", () => {
-    expect(workspace).toContain("<CourseMaterialsParentEmailDraft");
-    expect(courseMaterialsDraft).toContain("trpc.nsos.academics.list.useQuery");
-    expect(courseMaterialsDraft).toContain(
-      "trpc.nsos.students.history.useQuery"
-    );
-    expect(courseMaterialsDraft).toContain(
-      "trpc.nsos.students.recordEmailReadiness.useQuery"
-    );
-    expect(courseMaterialsDraft).toContain("Select an active learner");
-    expect(courseMaterialsDraft).toContain("Permitted recipient");
-    expect(courseMaterialsDraft).toContain("maskedEmail");
-    expect(courseMaterialsDraft).toMatch(
-      /A future one-time delivery would still need a separate\s+final confirmation\./
-    );
-    expect(courseMaterialsDraft).toContain(
-      "No email will be sent from this draft."
-    );
-    expect(courseMaterialsDraft).not.toContain("useMutation");
-    expect(courseMaterialsDraft).not.toContain("setInterval");
+    expect(workspace).toContain("NSOS has not issued or verified a credential.");
   });
 
   it("presents curated references and editable pace, support, practice, accessibility, and tutor handoff controls in Course Studio", () => {
     expect(courseStudio).toContain("Evidence and experience design");
     expect(courseStudio).toContain("curatedLearningSources.map");
-    expect(courseStudio).toContain(
-      "They guide an editable outline; they do not prove curriculum approval or accreditation."
-    );
+    expect(courseStudio).toContain("They guide an editable outline; they do not prove curriculum approval or accreditation.");
     expect(courseStudio).toContain("Accessibility or delivery note");
     expect(courseStudio).toContain("Open supervised AI Tutor setup");
-    expect(courseStudio).toContain(
-      "evidenceReferences: draft.evidenceReferences"
-    );
-    expect(courseStudio).toContain(
-      "learningExperience: draft.learningExperience"
-    );
+    expect(courseStudio).toContain("evidenceReferences: draft.evidenceReferences");
+    expect(courseStudio).toContain("learningExperience: draft.learningExperience");
   });
 
   it("mounts controlled institution-source and private-certification controls without a public verification or automatic issue path", () => {
@@ -195,9 +112,7 @@ describe("Learning operations workspace interface", () => {
     expect(crossProviderCurriculum).toContain("custom_learning_path");
     expect(crossProviderCurriculum).toContain("Create pathway draft");
     expect(crossProviderCurriculum).toContain("Create linked module draft");
-    expect(crossProviderCurriculum).toContain(
-      "Existing school subjects, schemes of work, lessons, assessments, and results remain separate and unchanged."
-    );
+    expect(crossProviderCurriculum).toContain("Existing school subjects, schemes of work, lessons, assessments, and results remain separate and unchanged.");
     expect(crossProviderCurriculum).toContain("issue a credential");
   });
 
@@ -210,20 +125,12 @@ describe("Learning operations workspace interface", () => {
     expect(nonSchoolCurriculumStart).toContain("hybrid_learning_provider");
     expect(nonSchoolCurriculumStart).toContain("corporate_academy");
     expect(nonSchoolCurriculumStart).toContain("Workplace capability path");
-    expect(nonSchoolCurriculumStart).toContain(
-      "manager-reviewed development checkpoints"
-    );
+    expect(nonSchoolCurriculumStart).toContain("manager-reviewed development checkpoints");
     expect(nonSchoolCurriculumStart).toContain("Not school academics");
     expect(nonSchoolCurriculumStart).toContain("Open programme curriculum");
-    expect(nonSchoolCurriculumStart).toContain(
-      "This institution will not be asked to create school classes, subjects, terms, a timetable, a scheme of work, or a lesson plan."
-    );
+    expect(nonSchoolCurriculumStart).toContain("This institution will not be asked to create school classes, subjects, terms, a timetable, a scheme of work, or a lesson plan.");
     expect(nonSchoolCurriculumStart).not.toContain("NERDC Basic Education");
-    expect(home).toContain(
-      'item.id === "academics" ? "Curriculum" : item.label'
-    );
-    expect(home).toContain(
-      'group.label === "School life" ? "Learning operations" : group.label'
-    );
+    expect(home).toContain('item.id === "academics" ? "Curriculum" : item.label');
+    expect(home).toContain('group.label === "School life" ? "Learning operations" : group.label');
   });
 });

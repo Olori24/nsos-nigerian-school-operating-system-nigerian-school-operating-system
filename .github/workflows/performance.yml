@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
       staging_url:
-        description: "Approved isolated staging base URL"
+        description: "Approved staging base URL"
         required: true
         type: string
 
@@ -29,6 +29,7 @@ jobs:
       NSOS_LOAD_TEST_CONCURRENCY: "10"
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
       - name: Run bounded read-only workload
         run: node scripts/measure-health-load.mjs

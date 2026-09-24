@@ -11,5 +11,4 @@ export const ENV = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   authEmailFrom: process.env.AUTH_EMAIL_FROM ?? "",
-  appLogo: process.env.VITE_APP_LOGO ?? "",
 };

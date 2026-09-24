@@ -1,139 +1,25 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const enrollmentStation = readFileSync(
-  new URL("../client/src/components/EnrollmentStation.tsx", import.meta.url),
-  "utf8"
-);
-const dbSource = readFileSync(
-  new URL("./db/core.ts", import.meta.url),
-  "utf8"
-).replace(/\s+/g, " ");
-const globalStyles = readFileSync(
-  new URL("../client/src/index.css", import.meta.url),
-  "utf8"
-);
-const dialogSource = readFileSync(
-  new URL("../client/src/components/ui/dialog.tsx", import.meta.url),
-  "utf8"
-);
-const alertDialogSource = readFileSync(
-  new URL("../client/src/components/ui/alert-dialog.tsx", import.meta.url),
-  "utf8"
-);
+const enrollmentStation = readFileSync(new URL("../client/src/components/EnrollmentStation.tsx", import.meta.url), "utf8");
+const dbSource = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
 
 describe("admissions enrollment biodata and letter wiring", () => {
   it("explains the confirmed-enrollment letter trigger to school staff", () => {
-    expect(enrollmentStation).toContain("Enroll an accepted applicant");
-    expect(enrollmentStation).toContain("Review enrollment");
-    expect(enrollmentStation).toContain("Confirm enrollment details");
-    expect(enrollmentStation).toContain("Confirm and create record");
-    expect(enrollmentStation).toContain("confirmed: true");
-    expect(enrollmentStation).toContain("does not collect or record payment");
-    expect(enrollmentStation).toContain("Enrollment recorded");
-    expect(enrollmentStation).toContain("Review the confirmed record");
-    expect(enrollmentStation).toContain("Student profile");
-    expect(enrollmentStation).toContain("Enrollment record");
-    expect(enrollmentStation).toContain("Download record PDF");
-    expect(enrollmentStation).toContain("Email record PDF");
-    expect(enrollmentStation).toContain("Confirm and send PDF");
-    expect(enrollmentStation).toContain("Email subject");
-    expect(enrollmentStation).toContain("Email message");
-    expect(enrollmentStation).toContain("{shareSubject.length}/180");
-    expect(enrollmentStation).toContain("{shareBody.length}/3000");
-    expect(enrollmentStation).toContain("maxLength={180}");
-    expect(enrollmentStation).toContain("maxLength={3000}");
-    expect(enrollmentStation).toContain("emailReadiness.data?.copy");
-    expect(enrollmentStation).toContain("const canSubmitShare");
-    expect(enrollmentStation).toContain("recordEmailReadiness.useQuery");
-    expect(enrollmentStation).toContain("shareRecordPdf.useMutation");
-    expect(enrollmentStation).toContain("confirmed: true");
-    expect(enrollmentStation).toContain(
-      "Download student profile and enrollment record as PDF"
-    );
-    expect(enrollmentStation).toContain("exportStudentRecordPdf");
-    expect(enrollmentStation).toContain("const canExport");
-    expect(enrollmentStation).toContain("trpc.nsos.students.record.useQuery");
-    expect(enrollmentStation).toContain("RecordViewSkeleton");
-    expect(enrollmentStation).toContain('aria-busy="true"');
-    expect(enrollmentStation).toContain(
-      "animate-pulse motion-reduce:animate-none"
-    );
-    expect(enrollmentStation).toContain("Loading the protected");
-    expect(enrollmentStation).toContain("ResolvedRecordDetail");
-    expect(enrollmentStation).toContain("record-detail-fade-in");
-    expect(globalStyles).toContain(".record-detail-fade-in");
-    expect(globalStyles).toContain("record-detail-fade-in 180ms");
-    expect(globalStyles).toContain(
-      "@media (prefers-reduced-motion: no-preference)"
-    );
-    expect(enrollmentStation).toContain("enrollment-completion-dialog");
-    expect(enrollmentStation).toContain(
-      'aria-pressed={recordView === "profile"}'
-    );
-    expect(enrollmentStation).toContain("completedEnrollment.studentName");
-    expect(dialogSource).toContain("z-[90]");
-    expect(dialogSource).toContain("fixed inset-0 z-[90] bg-black/50");
-    expect(dialogSource).toContain("max-h-[calc(100dvh-2rem)]");
-    expect(dialogSource).toContain("overflow-y-auto overscroll-contain");
-    expect(alertDialogSource).toContain("z-[90]");
-    expect(alertDialogSource).toContain("max-h-[calc(100dvh-2rem)]");
-    expect(globalStyles).toContain(".dark .enrollment-completion-dialog");
-    expect(globalStyles).toContain(".dark .text-\\[\\#0f5c4f\\]");
-    expect(globalStyles).toContain(".dark .text-\\[\\#176145\\]");
-    expect(globalStyles).toContain(
-      ".dark .enrollment-completion-dialog .bg-\\[\\#fbfdfb\\]"
-    );
-    expect(globalStyles).toContain(
-      ".dark .enrollment-completion-dialog .text-\\[\\#264338\\]"
-    );
-    expect(globalStyles).toContain(
-      ".dark .enrollment-completion-dialog .text-\\[\\#5f7469\\]"
-    );
-    expect(globalStyles).toContain(
-      ".dark .enrollment-completion-dialog .text-\\[\\#884b42\\]"
-    );
+    expect(enrollmentStation).toContain("Enroll & send admission letter");
+    expect(enrollmentStation).toContain("approved admission biodata");
     expect(enrollmentStation).toContain("not_sent_no_guardian_email");
-    expect(enrollmentStation).toContain(
-      "guardian record was created and linked"
-    );
+    expect(enrollmentStation).toContain("guardian record was created and linked");
   });
 
   it("maps approved admission biodata into the student profile rather than discarding it", () => {
-    expect(dbSource).toContain(
-      "middleName: supplement.middleName?.trim() || null"
-    );
-    expect(dbSource).toContain(
-      "address: supplement.residentialAddress?.trim() || null"
-    );
-    expect(dbSource).toContain(
-      "medicalNotes: supplement.medicalHistory?.trim() || null"
-    );
+    expect(dbSource).toContain("middleName: supplement.middleName?.trim() || null");
+    expect(dbSource).toContain("address: supplement.residentialAddress?.trim() || null");
+    expect(dbSource).toContain("medicalNotes: supplement.medicalHistory?.trim() || null");
     expect(dbSource).toContain("stateOfOrigin");
     expect(dbSource).toContain("localGovernment");
     expect(dbSource).toContain("eq(guardians.schoolId, input.schoolId)");
-    expect(dbSource).toContain("await db.insert(studentGuardians).values({");
-    expect(dbSource).toContain("guardianId");
-    expect(dbSource).toContain("isPrimary: true");
-    expect(dbSource).toContain('relationship: "Parent/Guardian"');
-    expect(dbSource).toContain("getStudentEnrollmentRecord");
-    expect(dbSource).toContain("eq(studentProfiles.schoolId, schoolId)");
-  });
-
-  it("keeps shared fixed-color workspace surfaces, text, borders, and state copy legible in dark mode", () => {
-    expect(globalStyles).toContain('.dark [class*="bg-[#f"]');
-    expect(globalStyles).toContain('.dark [class*="bg-[#e"]');
-    expect(globalStyles).toContain('.dark [class*="bg-[#d"]');
-    expect(globalStyles).toContain('.dark [class*="text-[#1"]');
-    expect(globalStyles).toContain('.dark [class*="text-[#2"]');
-    expect(globalStyles).toContain('.dark [class*="text-[#5"]');
-    expect(globalStyles).toContain('.dark [class*="text-[#6"]');
-    expect(globalStyles).toContain('.dark [class*="border-[#b"]');
-    expect(globalStyles).toContain('.dark [class*="border-[#c"]');
-    expect(globalStyles).toContain(".dark .text-\\[\\#8a5a12\\]");
-    expect(globalStyles).toContain(".dark .text-\\[\\#a13e38\\]");
-    expect(globalStyles).toContain(".dark input");
-    expect(globalStyles).toContain(".dark select");
-    expect(globalStyles).toContain(".dark textarea");
+    expect(dbSource).toContain("await db.insert(studentGuardians).values({ studentId, guardianId, isPrimary: true })");
+    expect(dbSource).toContain("relationship: \"Parent/Guardian\"");
   });
 });

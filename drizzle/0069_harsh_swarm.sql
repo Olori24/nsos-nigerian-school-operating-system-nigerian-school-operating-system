@@ -1,1 +1,0 @@
-ALTER TABLE `emailVerificationTokens` ADD `redirectOrigin` varchar(512) NOT NULL;

@@ -10,20 +10,9 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerSmsWebhookRoutes } from "../webhooks";
-import {
-  createRateLimitMiddleware,
-  requireSameOriginForMutations,
-  securityHeadersMiddleware,
-} from "../security";
-import {
-  livenessResponse,
-  requiredProductionEnvironmentErrors,
-  requestObservabilityMiddleware,
-  unexpectedErrorObservabilityMiddleware,
-  writeOperationalEvent,
-} from "../observability";
+import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
+import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
-import { registerPublicDiscoveryRoutes } from "../public-discovery";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -46,78 +35,23 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const environmentErrors = requiredProductionEnvironmentErrors(ENV);
-  if (environmentErrors.length)
-    throw new Error(
-      `NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`
-    );
+  if (environmentErrors.length) throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
   const app = express();
   const server = createServer(app);
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   app.use(requestObservabilityMiddleware());
   app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
-  app.get("/healthz", (_request, response) => {
-    response.set("Cache-Control", "no-store");
-    response.status(200).json(livenessResponse());
-  });
-  app.use("/api", (req, res, next) => {
-    res.set("Cache-Control", "no-store");
-    next();
-  });
-  app.use(
-    "/api",
-    createRateLimitMiddleware({
-      namespace: "api",
-      limit: 240,
-      windowMs: 60_000,
-    })
-  );
+  app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+  app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
   app.use("/api/trpc", requireSameOriginForMutations());
-  app.use(
-    "/api/trpc",
-    createRateLimitMiddleware({
-      namespace: "public-admissions",
-      limit: 30,
-      windowMs: 10 * 60_000,
-      matcher: path => path.includes("nsos.admissions.publicSubmit"),
-    })
-  );
-  app.use(
-    "/api/trpc",
-    createRateLimitMiddleware({
-      namespace: "biodata-document-extraction",
-      limit: 8,
-      windowMs: 10 * 60_000,
-      matcher: path => path.includes("nsos.admissions.extractBiodata"),
-    })
-  );
-  app.use(
-    "/api/trpc",
-    createRateLimitMiddleware({
-      namespace: "live-provider-action",
-      limit: 6,
-      windowMs: 10 * 60_000,
-      matcher: path => path.includes("nsos.providers.sendTestSms"),
-    })
-  );
-  app.use(
-    "/api/trpc",
-    createRateLimitMiddleware({
-      namespace: "family-receipt-scan",
-      limit: 12,
-      windowMs: 10 * 60_000,
-      matcher: path => path.includes("nsos.portal.scanPaymentEvidence"),
-    })
-  );
+  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "public-admissions", limit: 30, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.publicSubmit") }));
+  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "lead-capture", limit: 8, windowMs: 15 * 60_000, matcher: path => path.includes("nsos.leads.capture") }));
+  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "biodata-document-extraction", limit: 8, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.extractBiodata") }));
+  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "live-provider-action", limit: 6, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.providers.sendTestSms") }));
+  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "family-receipt-scan", limit: 12, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.portal.scanPaymentEvidence") }));
   app.use("/api/auth/email/request", requireSameOriginForMutations());
-  app.use(
-    "/api/auth/email/request",
-    createRateLimitMiddleware({
-      namespace: "passwordless-email",
-      limit: 5,
-      windowMs: 10 * 60_000,
-    })
-  );
+  app.use("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }));
   registerSmsWebhookRoutes(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "10mb" }));
@@ -126,7 +60,6 @@ async function startServer() {
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
   registerOAuthRoutes(app);
-  registerPublicDiscoveryRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",
@@ -141,7 +74,6 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
-  app.use(unexpectedErrorObservabilityMiddleware());
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
@@ -151,10 +83,7 @@ async function startServer() {
   }
 
   server.listen(port, () => {
-    writeOperationalEvent("info", "server_started", {
-      port,
-      production: ENV.isProduction,
-    });
+    writeOperationalEvent("info", "server_started", { port, production: ENV.isProduction });
   });
 }
 

@@ -3,7 +3,6 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { ENV } from "./env";
-import * as db from "../db";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -46,19 +45,11 @@ export const adminProcedure = t.procedure.use(
   }),
 );
 
-export function isConfiguredPlatformOwner(openId: string | undefined) {
-  return Boolean(ENV.ownerOpenId && openId === ENV.ownerOpenId);
-}
-
-export async function hasPlatformOwnerAccess(user: { id: number; openId: string }) {
-  return isConfiguredPlatformOwner(user.openId) || (typeof db.hasActivePlatformOwnerIdentityLink === "function" && await db.hasActivePlatformOwnerIdentityLink(user.id));
-}
-
 export const platformOwnerProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
     if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-    if (!await hasPlatformOwnerAccess(ctx.user)) {
+    if (!ENV.ownerOpenId || ctx.user.openId !== ENV.ownerOpenId) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Only the configured NSOS platform owner can manage platform subscriptions and billing." });
     }
     return next({ ctx: { ...ctx, user: ctx.user } });

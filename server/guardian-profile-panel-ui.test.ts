@@ -1,14 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const panel = readFileSync(
-  new URL("../client/src/components/GuardianProfilePanel.tsx", import.meta.url),
-  "utf8"
-);
-const home = readFileSync(
-  new URL("../client/src/pages/Home.tsx", import.meta.url),
-  "utf8"
-);
+const panel = readFileSync(new URL("../client/src/components/GuardianProfilePanel.tsx", import.meta.url), "utf8");
+const home = readFileSync(new URL("../client/src/pages/Home.tsx", import.meta.url), "utf8");
 
 describe("guardian profile panel interface", () => {
   it("shows linked guardian review fields and a controlled edit action", () => {
@@ -24,10 +18,6 @@ describe("guardian profile panel interface", () => {
   });
 
   it("places the panel in the student workspace only for owner and administrator roles", () => {
-    expect(home).toContain('role === "owner" || role === "admin"');
-    expect(home).toContain('id="student-guardian-review"');
-    expect(home).toContain("<GuardianProfilePanel");
-    expect(home).toContain('id="student-portal-access"');
-    expect(home).toContain("<StudentPortalAccessPanel");
+    expect(home).toContain('{(role === "owner" || role === "admin") && <div id="student-guardian-review"><GuardianProfilePanel');
   });
 });

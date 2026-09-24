@@ -24,7 +24,7 @@
 | Public health workload A | 50 requests, 10 concurrent, 0 errors, 5.22 requests/sec, p50 674.60 ms, p95 6,167.79 ms, p99 6,479.51 ms | **MEASURED** | Read-only health route only; likely includes a cold or proxy path. Not representative of authenticated business operations. |
 | Public health workload B | 50 requests, 10 concurrent, 0 errors, 7.36 requests/sec, p50 665.50 ms, p95 3,429.42 ms, p99 3,483.14 ms | **MEASURED** | Immediate repeat improved the tail but remained slow for a minimal endpoint. |
 | Automated regression suite | 48 files, 177 tests passed | **MEASURED** | Broad application policy coverage; not capacity proof. |
-| Typecheck and production build | Passed | **MEASURED** | The pre-splitting primary Vite entry was 2,247.69 kB (517.95 kB gzip). Route-level lazy loading, deferred rich Copilot rendering, and the deferred autofill panel reduced the current primary entry to 645.27 kB (193.65 kB gzip); the build warning still remains for chunks above 500 kB. |
+| Typecheck and production build | Passed | **MEASURED** | Build generated a main client bundle of approximately 2.1 MB before gzip; bundling warning remains. |
 
 ## Security and journey evidence
 
@@ -39,18 +39,15 @@ Live responses exposed `Strict-Transport-Security`, enforced CSP, `X-Frame-Optio
 | External authentication | Added a 10-second deadline to Resend email, Google token, and Google userinfo requests. Timeout failures return controlled errors rather than holding a request indefinitely. | Timeout regression tests passed. |
 | AI provider resilience | Added a fresh 30-second abort deadline for every AI-provider retry attempt. | LLM resilience test passed. |
 | Autoscaled database access | Replaced implicit database-client creation with a bounded per-pod MySQL pool: five connections, five idle maximum, keepalive, and a queue capped at 20. | Database-pool resilience test and TypeScript validation passed. |
-| Public route delivery | Lazily loaded the dashboard, public-admissions, school-website, domain-school-website, and not-found pages behind an accessible route fallback. | The primary Vite entry reduced from 2,247.69 kB to 662.02 kB (70.5%); gzip reduced from 517.95 kB to 196.80 kB (62.0%). |
-| Rich Copilot rendering | Deferred Streamdown and its Mermaid diagram capability until an assistant reply needs rich rendering, with a local accessible loading state and plain-text recovery display. | The emitted Mermaid chunk reduced from 1,462.31 kB to 510.40 kB (65.0%); gzip reduced from 293.88 kB to 155.36 kB (47.1%). |
-| Internal document autofill | Deferred the global `BiodataDocumentAutofill` panel until the existing admission/student target event is raised, with an accessible fallback; its reviewed payload and apply event are unchanged. | The panel is now a 15.18 kB (3.23 kB gzip) on-demand chunk. The primary entry reduced from 662.00 kB to 645.27 kB (2.5%), and gzip from 196.77 kB to 193.65 kB (1.5%). |
 
 ## Verified scale risks and remaining blockers
 
 1. **100K capacity is untested.** There is no safe, realistic staging environment with production-like data volume, no authenticated workload benchmark, and no 100 → 1K → 5K progression. The highest directly exercised workload was **50 read-only health requests at 10 concurrent requests**.
 2. **Database query shape needs a scale programme.** Several list and aggregation helpers return whole-school datasets or construct views through in-memory joins. Their impact cannot be quantified against the tiny live dataset, but they require pagination, query-plan review, and volume testing before a 100K claim.
-3. **Observability is incomplete.** NSOS now emits correlation-safe request-completion and unexpected-error events with an opaque request ID, method, query-free path, status, bounded outcome category (`success`, `redirect`, `client_error`, or `server_error`), duration, and error type only. Current evidence still does not include production CPU, memory, database connection saturation, query latency, queue depth, worker utilisation, distributed traces, alert routing, or a measured service-level baseline.
+3. **Observability is incomplete.** Current evidence does not include production CPU, memory, database connection saturation, query latency, queue depth, worker utilisation, distributed traces, or alert routing. Structured application logs exist in places, but there is no measured service-level baseline.
 4. **Latency needs investigation.** The two bounded health measurements had p95 values of 6,167.79 ms and 3,429.42 ms. They are insufficient to diagnose the cause, but they do not support a low-latency 100K conclusion.
 5. **Customer journey coverage is partial.** Public sign-in choice and invalid-input handling were exercised. A complete fresh-user journey through an actual email inbox or Google identity, school creation, onboarding, persisted operational action, logout, and return login was not safely completed during this audit because it would require authorised test identities and real provider delivery.
-6. **Frontend delivery still needs optimisation.** Route-level lazy loading, deferred rich Copilot rendering, and global autofill-panel deferral reduced the primary entry to 645.27 kB before gzip. The lazy dashboard page chunk is 954.46 kB and the Mermaid chunk remains 510.40 kB; all continue to trigger the build-size warning. Bundle analysis, further feature-level splitting, and representative mobile-network measurement should precede acquisition campaigns.
+6. **Frontend delivery needs optimisation.** The production build warns that the main JavaScript bundle exceeds 500 kB after minification. Route-level lazy loading and bundle analysis should precede acquisition campaigns.
 7. **Cost model is unknown.** No current provider bills, negotiated database limits, delivery-provider unit costs, traffic profile, retention policy, or AI-usage envelope were available. A 1K/10K/50K/100K operating-cost estimate would be speculative and is therefore not included.
 
 ## Required path to a verified 100K target
@@ -58,7 +55,7 @@ Live responses exposed `Strict-Transport-Security`, enforced CSP, `X-Frame-Optio
 1. Create a separately authorised staging environment with production-equivalent database settings, observability, and anonymised or user-supplied test data; do not copy live learner or family data.
 2. Define workload mixes for registration, sign-in, school onboarding, admissions submission, dashboard reads, attendance, finance, and AI/document operations. Run progressive tests from 100 through 100,000 users while recording p50/p95/p99, errors, CPU/memory, database connections, query latency, and provider limits.
 3. Add pagination and query-level load tests to whole-school list and aggregation endpoints before raising concurrency.
-4. Extend the current structured request/error events with externally retained metrics for error rates, latency histograms, database-pool saturation, external-provider timeout counts, and alerting. Add a safe dependency readiness check with short timeouts.
+4. Instrument structured request logs, error rates, latency histograms, database pool saturation, external-provider timeout counts, and alerting. Add a safe dependency readiness check with short timeouts.
 5. Split the largest client routes and re-measure mobile load and Core Web Vitals on representative Nigerian network conditions.
 
 ## Final answer to the audit question

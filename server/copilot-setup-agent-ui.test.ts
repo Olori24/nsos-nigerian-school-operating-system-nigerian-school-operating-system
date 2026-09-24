@@ -3,63 +3,39 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
-const copilot = readFileSync(
-  resolve(root, "client/src/components/NsosCopilot.tsx"),
-  "utf8"
-);
-const agent = readFileSync(
-  resolve(root, "client/src/components/CopilotSetupAgent.tsx"),
-  "utf8"
-);
-const planner = readFileSync(
-  resolve(root, "client/src/components/AiSetupPlanner.tsx"),
-  "utf8"
-);
-const websiteAgent = readFileSync(
-  resolve(root, "client/src/components/WebsiteSetupAgent.tsx"),
-  "utf8"
-);
+const copilot = readFileSync(resolve(root, "client/src/components/NsosCopilot.tsx"), "utf8");
+const agent = readFileSync(resolve(root, "client/src/components/CopilotSetupAgent.tsx"), "utf8");
+const planner = readFileSync(resolve(root, "client/src/components/AiSetupPlanner.tsx"), "utf8");
+const websiteAgent = readFileSync(resolve(root, "client/src/components/WebsiteSetupAgent.tsx"), "utf8");
 const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 
 describe("NSOS Copilot setup agent interface", () => {
   it("hands owner/admin setup goals into the direct Automation Desk instead of trapping users in a fragmented preparation panel", () => {
     expect(copilot).toContain('onNavigate("automation")');
     expect(copilot).toContain("nsos-automation-desk-request");
-    expect(copilot).toContain(
-      "Your goal is ready in Automation Desk for a short reviewed job."
-    );
+    expect(copilot).toContain("Your goal is ready in Automation Desk for a short reviewed job.");
     expect(agent).toContain('role === "owner" || role === "admin"');
-    expect(agent).toContain(
-      "The setup agent is available to the school owner and administrators."
-    );
+    expect(agent).toContain("The setup agent is available to the school owner and administrators.");
   });
 
   it("requires real academic inputs and an explicit confirmation before invoking the execution mutation", () => {
     expect(agent).toContain("The agent will not create placeholder classes.");
-    expect(agent).toContain(
-      "I confirm these are school-approved academic details."
-    );
+    expect(agent).toContain("I confirm these are school-approved academic details.");
     expect(agent).toContain("confirmed: true");
     expect(agent).toContain("Apply approved setup");
   });
 
   it("makes safe handoffs for setup areas that require school-provided people, finance, or publication information", () => {
     expect(agent).toContain("Open workspace");
-    expect(agent).toContain(
-      "never invents staff, learners, bank accounts, provider credentials, or public content"
-    );
+    expect(agent).toContain("never invents staff, learners, bank accounts, provider credentials, or public content");
   });
 
   it("stages staff invitations and finance data with distinct explicit delivery and activation approvals", () => {
     expect(agent).toContain("Prepare invitation draft");
-    expect(agent).toContain(
-      "I approve sending this invitation to the named school email."
-    );
+    expect(agent).toContain("I approve sending this invitation to the named school email.");
     expect(agent).toContain("Send approved invitation");
     expect(agent).toContain("Save inactive finance draft");
-    expect(agent).toContain(
-      "I give final school approval to activate this fee structure."
-    );
+    expect(agent).toContain("I give final school approval to activate this fee structure.");
     expect(agent).toContain("Activate approved fee");
     expect(agent).toContain("Approval note");
     expect(agent).toContain("approvalNote: activationNote.trim() || undefined");
@@ -78,26 +54,18 @@ describe("NSOS Copilot setup agent interface", () => {
     expect(websiteAgent).toContain("Build editable draft");
     expect(websiteAgent).toContain("Nothing has been published or saved yet.");
     expect(websiteAgent).toContain("Confirm and save draft");
-    expect(websiteAgent).toContain(
-      "No publication, message sending, domain change, image generation, or data invention occurs here."
-    );
+    expect(websiteAgent).toContain("No publication, message sending, domain change, image generation, or data invention occurs here.");
   });
 
   it("presents the Institution Copilot as a prompt-led handoff into a reviewable job and remediates priority static workspace controls", () => {
-    expect(copilot).toContain("NSOS Guide");
+    expect(copilot).toContain("NSOS Institution Copilot");
     expect(copilot).toContain("Describe what you want to build or operate.");
     expect(copilot).toContain("Help me build or refine my institution.");
     expect(copilot).toContain("Review preparation");
-    expect(copilot).toMatch(
-      /Setup goals can\s+continue in Automation Desk as a visible\s+reviewed job/
-    );
+    expect(copilot).toContain("Setup goals can continue in Automation Desk as a visible reviewed job");
     expect(home).toContain('selectView("communications")');
-    expect(home).not.toContain(
-      "All operational alerts appear here as you record attendance, results, payments, and approvals."
-    );
-    expect(home).not.toContain(
-      "School configuration is managed through your NSOS owner workspace."
-    );
+    expect(home).not.toContain("All operational alerts appear here as you record attendance, results, payments, and approvals.");
+    expect(home).not.toContain("School configuration is managed through your NSOS owner workspace.");
     expect(home).toContain("student-guardian-review");
     expect(home).toContain("redirectLegacyProfileControl");
   });

@@ -3,248 +3,56 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./_core/llm", () => ({ invokeLLM: vi.fn() }));
 
 import { invokeLLM } from "./_core/llm";
-import {
-  buildCourseStudioDraft,
-  buildGuidedCourseStudioDraft,
-} from "./courseStudio";
+import { buildCourseStudioDraft } from "./courseStudio";
 
-const request = {
-  brief:
-    "Create a practical introductory digital design course for young adults.",
-  audience: "Young adults beginning digital design",
-  operatingType: "vocational_institute" as const,
-  deliveryMode: "blended" as const,
-  durationPreference: "Six weeks",
-  evidenceReferences: [
-    {
-      id: "curated:nerdc_basic_education",
-      title: "NERDC Basic Education Curriculum",
-      organisation: "Nigerian Educational Research and Development Council",
-      sourceUrl: "https://nerdc.gov.ng/basic-education-curriculum/",
-      category: "official_curriculum" as const,
-      allowedUse:
-        "Use as an optional editable planning reference; review local requirements separately.",
-    },
-  ],
-  learningExperience: {
-    learningPace: "guided" as const,
-    supportStyle: "worked_examples" as const,
-    practiceMode: "guided_practice" as const,
-    accessibilityNote: "Use mobile-friendly short steps.",
-  },
-};
+const request = { brief: "Create a practical introductory digital design course for young adults.", audience: "Young adults beginning digital design", operatingType: "vocational_institute" as const, deliveryMode: "blended" as const, durationPreference: "Six weeks", evidenceReferences: [{ id: "curated:nerdc_basic_education", title: "NERDC Basic Education Curriculum", organisation: "Nigerian Educational Research and Development Council", sourceUrl: "https://nerdc.gov.ng/basic-education-curriculum/", category: "official_curriculum" as const, allowedUse: "Use as an optional editable planning reference; review local requirements separately." }], learningExperience: { learningPace: "guided" as const, supportStyle: "worked_examples" as const, practiceMode: "guided_practice" as const, accessibilityNote: "Use mobile-friendly short steps." } };
 
 const validPlan = {
   courseTitle: "Digital design foundation",
-  courseSummary:
-    "A practical internal course outline that introduces approved design concepts through supervised discussion and guided practice.",
+  courseSummary: "A practical internal course outline that introduces approved design concepts through supervised discussion and guided practice.",
   deliveryMode: "blended",
   durationLabel: "Six weeks",
-  tutorBrief:
-    "Configure a supervised tutor only after a human defines the organisation-approved design scope, intended levels, and teacher escalation route.",
+  tutorBrief: "Configure a supervised tutor only after a human defines the organisation-approved design scope, intended levels, and teacher escalation route.",
   modules: [
-    {
-      title: "Design basics",
-      description:
-        "Introduce approved concepts and safe learning routines through supervised instruction.",
-      learningType: "topic",
-      milestones: [
-        {
-          title: "Review design vocabulary",
-          description:
-            "A human instructor checks that the learner can discuss the approved vocabulary.",
-        },
-      ],
-    },
-    {
-      title: "Guided design practice",
-      description:
-        "Use non-graded practice activities and instructor feedback in the approved delivery context.",
-      learningType: "practice",
-      milestones: [
-        {
-          title: "Review practice activity",
-          description:
-            "A human instructor reviews participation and agrees an appropriate next step.",
-        },
-      ],
-    },
+    { title: "Design basics", description: "Introduce approved concepts and safe learning routines through supervised instruction.", learningType: "topic", milestones: [{ title: "Review design vocabulary", description: "A human instructor checks that the learner can discuss the approved vocabulary." }] },
+    { title: "Guided design practice", description: "Use non-graded practice activities and instructor feedback in the approved delivery context.", learningType: "practice", milestones: [{ title: "Review practice activity", description: "A human instructor reviews participation and agrees an appropriate next step." }] },
   ],
   materials: [
-    {
-      title: "Facilitator guide",
-      materialType: "facilitator_guide",
-      modulePosition: 1,
-      content:
-        "State the approved goal, introduce the learning boundaries, invite questions, and direct learners to a supervising instructor when support is needed.",
-    },
-    {
-      title: "Lesson guide",
-      materialType: "lesson_guide",
-      modulePosition: 1,
-      content:
-        "Explain the approved concept in plain language, use an approved example, and invite learners to restate it before asking a supervising instructor for support.",
-    },
-    {
-      title: "Practice prompt",
-      materialType: "practice_activity",
-      modulePosition: 2,
-      content:
-        "Invite a short, non-graded design practice activity and use a human instructor review rather than automatic scoring or completion.",
-    },
-    {
-      title: "Knowledge check",
-      materialType: "knowledge_check",
-      modulePosition: 2,
-      content:
-        "Use two low-stakes reflection questions and instructor discussion only; do not calculate a score, grade, result, completion, or credential.",
-    },
+    { title: "Facilitator guide", materialType: "facilitator_guide", modulePosition: 1, content: "State the approved goal, introduce the learning boundaries, invite questions, and direct learners to a supervising instructor when support is needed." },
+    { title: "Lesson guide", materialType: "lesson_guide", modulePosition: 1, content: "Explain the approved concept in plain language, use an approved example, and invite learners to restate it before asking a supervising instructor for support." },
+    { title: "Practice prompt", materialType: "practice_activity", modulePosition: 2, content: "Invite a short, non-graded design practice activity and use a human instructor review rather than automatic scoring or completion." },
+    { title: "Knowledge check", materialType: "knowledge_check", modulePosition: 2, content: "Use two low-stakes reflection questions and instructor discussion only; do not calculate a score, grade, result, completion, or credential." },
   ],
-  setupRecommendation:
-    "Review the internal programme draft, then use the existing protected activation workflow when the organisation is ready.",
-  limitations: [
-    "This is an internal draft and does not confirm curriculum approval or qualification.",
-    "No learner, payment, message, publication, or credential action is created from this plan.",
-  ],
+  setupRecommendation: "Review the internal programme draft, then use the existing protected activation workflow when the organisation is ready.",
+  limitations: ["This is an internal draft and does not confirm curriculum approval or qualification.", "No learner, payment, message, publication, or credential action is created from this plan."],
 };
 
 describe("NSOS Course Studio", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns a review-first AI draft with bounded materials and strips unsupported claims", async () => {
-    vi.mocked(invokeLLM).mockResolvedValue({
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              ...validPlan,
-              courseTitle: "Accredited Digital Design Foundation",
-              courseSummary:
-                "A guaranteed and accredited practical internal course outline that introduces approved design concepts through supervised discussion and guided practice.",
-            }),
-          },
-        },
-      ],
-    } as any);
+    vi.mocked(invokeLLM).mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ ...validPlan, courseTitle: "Accredited Digital Design Foundation", courseSummary: "A guaranteed and accredited practical internal course outline that introduces approved design concepts through supervised discussion and guided practice." }) } }] } as any);
     const draft = await buildCourseStudioDraft(request);
-    expect(draft).toEqual(
-      expect.objectContaining({
-        source: "ai",
-        requiresConfirmation: true,
-        deliveryMode: "blended",
-      })
-    );
+    expect(draft).toEqual(expect.objectContaining({ source: "ai", requiresConfirmation: true, deliveryMode: "blended" }));
     expect(draft.modules).toHaveLength(2);
     expect(draft.materials).toHaveLength(4);
-    expect(draft.materials.map(item => item.materialType)).toEqual(
-      expect.arrayContaining(["lesson_guide", "knowledge_check"])
-    );
-    expect(`${draft.courseTitle} ${draft.courseSummary}`).not.toMatch(
-      /accredited|guaranteed/i
-    );
+    expect(draft.materials.map(item => item.materialType)).toEqual(expect.arrayContaining(["lesson_guide", "knowledge_check"]));
+    expect(`${draft.courseTitle} ${draft.courseSummary}`).not.toMatch(/accredited|guaranteed/i);
     expect(draft.limitations.join(" ")).toMatch(/No learner|No learner/i);
     expect(draft.evidenceReferences).toEqual(request.evidenceReferences);
     expect(draft.learningExperience).toEqual(request.learningExperience);
-    expect(JSON.stringify(vi.mocked(invokeLLM).mock.calls[0]?.[0])).toContain(
-      "never calculate a score, grade, pass/fail result, progress change, completion, or credential"
-    );
+    expect(JSON.stringify(vi.mocked(invokeLLM).mock.calls[0]?.[0])).toContain("never calculate a score, grade, pass/fail result, progress change, completion, or credential");
   });
 
   it("falls back to a bounded, reviewable plan when model output is invalid", async () => {
-    vi.mocked(invokeLLM).mockResolvedValue({
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              ...validPlan,
-              materials: [{ ...validPlan.materials[0], modulePosition: 99 }],
-            }),
-          },
-        },
-      ],
-    } as any);
+    vi.mocked(invokeLLM).mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ ...validPlan, materials: [{ ...validPlan.materials[0], modulePosition: 99 }] }) } }] } as any);
     const draft = await buildCourseStudioDraft(request);
     expect(draft.source).toBe("guided");
     expect(draft.requiresConfirmation).toBe(true);
     expect(draft.materials.length).toBeGreaterThanOrEqual(2);
-    expect(draft.materials.map(item => item.materialType)).toEqual(
-      expect.arrayContaining([
-        "lesson_guide",
-        "knowledge_check",
-        "revision_sheet",
-      ])
-    );
-    expect(draft.limitations.join(" ")).toMatch(
-      /No programme, material, tutor, enrolment/i
-    );
+    expect(draft.materials.map(item => item.materialType)).toEqual(expect.arrayContaining(["lesson_guide", "knowledge_check", "revision_sheet"]));
+    expect(draft.limitations.join(" ")).toMatch(/No programme, material, tutor, enrolment/i);
     expect(draft.evidenceReferences).toEqual(request.evidenceReferences);
     expect(draft.learningExperience).toEqual(request.learningExperience);
-  });
-
-  it("builds the deterministic guided draft without contacting a model provider", () => {
-    const draft = buildGuidedCourseStudioDraft(request);
-
-    expect(draft).toEqual(
-      expect.objectContaining({
-        source: "guided",
-        requiresConfirmation: true,
-        deliveryMode: "blended",
-      })
-    );
-    expect(draft.modules.length).toBeGreaterThanOrEqual(2);
-    expect(draft.materials.length).toBeGreaterThanOrEqual(2);
-    expect(vi.mocked(invokeLLM)).not.toHaveBeenCalled();
-  });
-
-  it("builds an editable eight-week Coding for Beginners progression without contacting a model provider", () => {
-    const draft = buildGuidedCourseStudioDraft({
-      ...request,
-      brief:
-        "Coding for Beginners with programming logic, web basics, and a guided capstone.",
-      audience: "Beginner learners",
-      deliveryMode: "live_online",
-      durationPreference: "8 weeks from 4 September",
-    });
-
-    expect(draft).toEqual(
-      expect.objectContaining({
-        courseTitle: "Coding for Beginners",
-        source: "guided",
-        requiresConfirmation: true,
-        deliveryMode: "live_online",
-      })
-    );
-    expect(draft.modules).toHaveLength(8);
-    expect(draft.modules.map(module => module.title)).toEqual(
-      expect.arrayContaining([
-        "Week 1 — Coding orientation and digital setup",
-        "Week 8 — Guided mini-project and human review",
-      ])
-    );
-    expect(draft.materials).toHaveLength(8);
-    expect(draft.materials.map(material => material.modulePosition)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8,
-    ]);
-    expect(draft.limitations.join(" ")).toMatch(
-      /No programme, material, tutor, enrolment/i
-    );
-    expect(vi.mocked(invokeLLM)).not.toHaveBeenCalled();
-  });
-
-  it("recognizes the approved word-form Eight weeks duration without contacting a model provider", () => {
-    const draft = buildGuidedCourseStudioDraft({
-      ...request,
-      brief:
-        "Coding for Beginners with programming logic, web basics, and a guided capstone.",
-      audience: "Beginner learners",
-      deliveryMode: "live_online",
-      durationPreference:
-        "Eight weeks · 4 September to 29 October · Monday and Wednesday 4–6 pm; Saturday 11 am–1 pm WAT",
-    });
-
-    expect(draft.courseTitle).toBe("Coding for Beginners");
-    expect(draft.modules).toHaveLength(8);
-    expect(draft.materials).toHaveLength(8);
-    expect(vi.mocked(invokeLLM)).not.toHaveBeenCalled();
   });
 });

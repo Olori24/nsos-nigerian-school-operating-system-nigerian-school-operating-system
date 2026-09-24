@@ -1,33 +1,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  nextTheme,
-  normaliseTheme,
-  NSOS_THEME_STORAGE_KEY,
-} from "../client/src/lib/themePreference";
+import { nextTheme, normaliseTheme, NSOS_THEME_STORAGE_KEY } from "../client/src/lib/themePreference";
 
 const projectRoot = resolve(import.meta.dirname, "..");
-const appSource = readFileSync(
-  resolve(projectRoot, "client/src/App.tsx"),
-  "utf8"
-);
-const styles = readFileSync(
-  resolve(projectRoot, "client/src/index.css"),
-  "utf8"
-);
-const previewDialog = readFileSync(
-  resolve(projectRoot, "client/src/components/BiodataPreviewDialog.tsx"),
-  "utf8"
-);
-const dashboardAppearance = readFileSync(
-  resolve(projectRoot, "client/src/components/DashboardAppearanceSettings.tsx"),
-  "utf8"
-);
-const homeSource = readFileSync(
-  resolve(projectRoot, "client/src/pages/Home.tsx"),
-  "utf8"
-).replace(/\s+/g, " ");
+const appSource = readFileSync(resolve(projectRoot, "client/src/App.tsx"), "utf8");
+const styles = readFileSync(resolve(projectRoot, "client/src/index.css"), "utf8");
+const previewDialog = readFileSync(resolve(projectRoot, "client/src/components/BiodataPreviewDialog.tsx"), "utf8");
+const dashboardAppearance = readFileSync(resolve(projectRoot, "client/src/components/DashboardAppearanceSettings.tsx"), "utf8");
+const homeSource = readFileSync(resolve(projectRoot, "client/src/pages/Home.tsx"), "utf8");
 
 describe("biodata dark-mode preference", () => {
   it("normalizes a persistent theme preference safely and switches both directions", () => {
@@ -39,9 +20,7 @@ describe("biodata dark-mode preference", () => {
   });
 
   it("mounts a persistent switchable theme and covers preview, recovery, validation, and clear-form low-light states", () => {
-    expect(appSource).toContain(
-      '<ThemeProvider defaultTheme="light" switchable>'
-    );
+    expect(appSource).toContain('<ThemeProvider defaultTheme="light" switchable>');
     expect(appSource).toContain("BiodataThemeToggle");
     expect(styles).toContain(".dark .biodata-draft-notice");
     expect(styles).toContain(".dark .biodata-field-feedback");
@@ -52,23 +31,14 @@ describe("biodata dark-mode preference", () => {
   });
 
   it("exposes a persistent accessible dark-mode control in owner/admin dashboard settings", () => {
-    expect(homeSource).toContain(
-      'import { DashboardAppearanceSettings } from "@/components/DashboardAppearanceSettings"'
-    );
+    expect(homeSource).toContain('import { DashboardAppearanceSettings } from "@/components/DashboardAppearanceSettings"');
     expect(homeSource).toContain("<DashboardAppearanceSettings />");
-    expect(homeSource).toMatch(/document\s*\.\s*getElementById\(/);
-    expect(homeSource).toContain('"dashboard-appearance-settings"');
+    expect(homeSource).toContain('document.getElementById("dashboard-appearance-settings")');
     expect(dashboardAppearance).toContain("Dashboard appearance");
-    expect(dashboardAppearance).toContain(
-      "This preference is saved on this device"
-    );
+    expect(dashboardAppearance).toContain("This preference is saved on this device");
     expect(dashboardAppearance).toContain("aria-pressed={isDark}");
     expect(dashboardAppearance).toContain("Use dark mode");
     expect(dashboardAppearance).toContain("Use light mode");
-    expect(dashboardAppearance).toContain("admin-theme-surface");
-    expect(dashboardAppearance).toContain("motion-safe:duration-[220ms]");
-    expect(styles).toContain(".nsos-theme-scope .admin-theme-surface *");
-    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
     expect(styles).toContain(".dark .app-grid");
     expect(styles).toContain(".dark .text-\\[\\#294d3d\\]");
   });

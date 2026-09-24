@@ -16,13 +16,20 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, typecheck, migration, deterministic test, and build
+    name: Lint, typecheck, migration, test, and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       DATABASE_URL: mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos
-      # Live sender health remains a separately approved provider check.
-      RUN_LIVE_PROVIDER_TESTS: "false"
+      JWT_SECRET: ci-test-jwt-secret
+      APP_SECRET: ci-test-application-secret
+      OAUTH_SERVER_URL: https://auth.test.local
+      GOOGLE_CLIENT_ID: ci-test-google-client-id
+      GOOGLE_CLIENT_SECRET: ci-test-google-client-secret
+      RESEND_API_KEY: ci-test-resend-api-key
+      AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>"
+      BUILT_IN_FORGE_API_KEY: ci-test-forge-api-key
+      OPENAI_API_KEY: ci-test-openai-api-key
     services:
       mysql:
         image: mysql:8.4

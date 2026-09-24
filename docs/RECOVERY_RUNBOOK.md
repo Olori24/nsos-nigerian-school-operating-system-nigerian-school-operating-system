@@ -1,17 +1,38 @@
 # NSOS Recovery Runbook
 
-**Evidence status:** This is an operational runbook, not evidence that backups, restore testing, or disaster recovery targets are complete.
+## Recovery objective
 
-## Required recovery evidence
+Restore an isolated NSOS staging environment from a known-good database backup without touching production data.
 
-| Area                      | Evidence required before claiming readiness                                                                                    |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Database                  | Backup schedule, retention, integrity evidence, an isolated restore rehearsal, measured recovery time, and outcome validation. |
-| Object storage            | Object inventory, backup/replication approach, restoration test, and access-control validation.                                |
-| Schema                    | Replayable migrations with journal and compatibility checks against an isolated target.                                        |
-| Secrets and configuration | An owner-controlled recovery inventory without secret values, rotation procedure, and post-restore verification.               |
-| Operations                | Named abort authority, incident log, recovery steps, communication path, and final sign-off.                                   |
+## Required evidence before production launch
 
-## Safety boundary
+- automated/scheduled database backup is configured at the hosting layer
+- retention policy is documented
+- backup integrity is verified
+- a restore has been rehearsed on isolated staging
+- restore duration is measured
+- application migrations are replayable
+- object-storage recovery is documented
+- secrets/configuration recovery is documented without storing secrets in Git
+- owner/operator sign-off is recorded
 
-Recovery rehearsals must use an isolated environment, synthetic or expressly authorized data, non-production providers, no real recipients, and an explicit deletion boundary. Never run a destructive restore or production workload as a documentation exercise.
+## Restore procedure
+
+1. Freeze high-impact staging mutations.
+2. Provision a clean isolated database.
+3. Restore the selected backup.
+4. Apply the exact NSOS migration state.
+5. Verify tenant count and key table integrity.
+6. Verify authentication and tenant isolation.
+7. Verify critical read paths.
+8. Verify file/object references.
+9. Record restore duration and anomalies.
+10. Release the staging freeze only after verification.
+
+## Production safety
+
+Never rehearse restore directly against production. Production recovery requires a separately approved incident procedure and an explicit change window.
+
+## Exit criteria
+
+A recovery drill passes only when the restored environment can boot, authenticate, preserve tenant boundaries, execute critical read paths, and demonstrate that the application and database migration state are compatible.

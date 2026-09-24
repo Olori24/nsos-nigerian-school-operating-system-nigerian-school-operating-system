@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { invokeLLM, LLM_REQUEST_TIMEOUT_MS } from "./_core/llm";
+import { ENV } from "./_core/env";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -10,6 +11,7 @@ describe("LLM request resilience", () => {
   it("attaches a fresh bounded abort signal to an AI-provider request", async () => {
     const providerFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }));
     vi.stubGlobal("fetch", providerFetch);
+    ENV.forgeApiKey = "nsos-vitest-forge-api-key";
 
     await invokeLLM({ messages: [{ role: "user", content: "health check" }] });
 

@@ -2,8 +2,6 @@
 
 **Status:** Not executed. This runbook defines the evidence required before any 50,000-user capacity statement.
 
-**Prerequisite verification, 26 August 2026:** The dedicated target-safety regression passed, and a direct unapproved probe invocation stopped before sending a request because `NSOS_LOAD_TEST_APPROVED` was absent. No staging URL, synthetic dataset, provider call, or load workload was used. The runbook remains unexecuted and capacity remains **UNKNOWN**.
-
 > **Safety boundary:** Load tests must run only against an isolated staging deployment with synthetic schools, memberships, learners, guardians, invoices, documents, and provider credentials. They must not call live SMS, email, payment, DNS, storage, or AI-provider accounts unless a dedicated non-production provider environment is explicitly configured.
 
 ## Required environment evidence

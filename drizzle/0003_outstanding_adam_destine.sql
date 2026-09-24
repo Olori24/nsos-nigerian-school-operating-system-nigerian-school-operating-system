@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS `staffDuties` (
 	CONSTRAINT `staffDuties_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS `staffDuty_school_idx` ON `staffDuties` (`schoolId`);--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS `staffDuty_staff_idx` ON `staffDuties` (`staffId`);
+CREATE INDEX `staffDuty_school_idx` ON `staffDuties` (`schoolId`);--> statement-breakpoint
+CREATE INDEX `staffDuty_staff_idx` ON `staffDuties` (`staffId`);

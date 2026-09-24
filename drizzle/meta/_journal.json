@@ -456,55 +456,6 @@
       "when": 1787552371502,
       "tag": "0064_windy_brother_voodoo",
       "breakpoints": true
-    },
-    {
-      "idx": 65,
-      "version": "5",
-      "when": 1787792856757,
-      "tag": "0065_misty_ezekiel",
-      "breakpoints": true
-    },
-    {
-      "idx": 66,
-      "version": "5",
-      "when": 1787796018612,
-      "tag": "0066_absurd_nextwave",
-      "breakpoints": true
-    },
-    {
-      "idx": 67,
-      "version": "5",
-      "when": 1788057568445,
-      "tag": "0067_motionless_oracle",
-      "breakpoints": true
-    },
-    {
-      "idx": 68,
-      "version": "5",
-      "when": 1788131115283,
-      "tag": "0068_adorable_boomerang",
-      "breakpoints": true
-    },
-    {
-      "idx": 69,
-      "version": "5",
-      "when": 1788131172890,
-      "tag": "0069_harsh_swarm",
-      "breakpoints": true
-    },
-    {
-      "idx": 70,
-      "version": "5",
-      "when": 1788132798161,
-      "tag": "0070_simple_anthem",
-      "breakpoints": true
-    },
-    {
-      "idx": 71,
-      "version": "5",
-      "when": 1788822122949,
-      "tag": "0071_slim_gwen_stacy",
-      "breakpoints": true
     }
   ]
 }
