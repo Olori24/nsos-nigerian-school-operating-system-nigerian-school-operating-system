@@ -162,7 +162,7 @@ export const nsosRouter = router({
           return await sendNsosLeadEvent(input);
         } catch (error) {
           throw new TRPCError({
-            code: "SERVICE_UNAVAILABLE",
+            code: "INTERNAL_SERVER_ERROR",
             message: error instanceof Error ? error.message : "Lead capture is temporarily unavailable. Please try again.",
           });
         }
