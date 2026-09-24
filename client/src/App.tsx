@@ -14,9 +14,10 @@ import Home from "./pages/Home";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
+import LeadCapture from "./pages/LeadCapture";
 
 function isNsosPlatformHost(hostname: string) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
 }
 
 function Router() {
@@ -24,6 +25,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/start" component={LeadCapture} />
       <Route path="/apply/:shortCode" component={PublicAdmissions} />
       <Route path="/school/:shortCode" component={SchoolWebsite} />
       <Route path="/404" component={NotFound} />
