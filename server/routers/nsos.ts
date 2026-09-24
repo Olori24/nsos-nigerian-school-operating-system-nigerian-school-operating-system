@@ -17,6 +17,7 @@ import { calculatePercentage, resolveGrade } from "../grade-calculations";
 import { listNigerianLgas, listNigerianOriginStates, normaliseNigerianOrigin } from "../nigerianOrigin";
 import { can, isManagementRole, schoolRoles, type SchoolRole } from "../roles";
 import { platformOwnerProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { sendNsosLeadEvent } from "../resendLead";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
@@ -147,6 +148,28 @@ const staffMigrationRowInput = z.object({ sourceRow: z.number().int().positive()
 const academicMigrationRowInput = z.object({ sourceRow: z.number().int().positive(), kind: z.string().max(16), name: z.string().max(160), code: z.string().max(32).optional(), level: z.string().max(64).optional(), arm: z.string().max(32).optional(), capacity: z.union([z.string().max(8), z.number().int().positive()]).optional(), description: z.string().max(5000).optional() });
 
 export const nsosRouter = router({
+  leads: router({
+    capture: publicProcedure
+      .input(z.object({
+        firstName: z.string().trim().min(1).max(80),
+        email: z.string().trim().toLowerCase().email().max(320),
+        schoolName: z.string().trim().max(180).optional(),
+        leadSource: z.string().trim().max(120).default("nsos.top/start"),
+        consent: z.literal(true),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          return await sendNsosLeadEvent(input);
+        } catch (error) {
+          throw new TRPCError({
+            code: "SERVICE_UNAVAILABLE",
+            message: error instanceof Error ? error.message : "Lead capture is temporarily unavailable. Please try again.",
+          });
+        }
+      }),
+  }),
+
+
   schools: router({
     list: protectedProcedure.query(({ ctx }) => db.listUserSchools(ctx.user.id)),
     create: protectedProcedure
