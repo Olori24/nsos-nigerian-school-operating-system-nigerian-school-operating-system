@@ -2233,7 +2233,7 @@ export async function getSchoolOperatorWorkspace(schoolId: number) {
     getOperationsCommandCenter(schoolId),
     listSchoolOperatorInsights(schoolId),
     getAcademyLaunchReadiness(schoolId),
-    (async () => (await database()).select({ value: sql<number>\`count(*)\` }).from(automationJobs).where(and(eq(automationJobs.schoolId, schoolId), eq(automationJobs.status, "failed"))))(),
+    (async () => (await database()).select({ value: sql<number>`count(*)` }).from(automationJobs).where(and(eq(automationJobs.schoolId, schoolId), eq(automationJobs.status, "failed"))))(),
   ]);
   const healthSignals = buildSchoolOperatorHealthSignals({
     attendanceRate: dashboard.attendanceRate,
