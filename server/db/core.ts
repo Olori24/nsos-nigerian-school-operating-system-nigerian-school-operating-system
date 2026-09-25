@@ -2081,7 +2081,7 @@ export function buildSchoolOperatorTrendInsight(input: {
   const relativeDelta = Number(((delta / Math.abs(input.previous)) * 100).toFixed(2));
   const threshold = input.threshold ?? 5;
   const concernDelta = input.higherIsConcern === false ? -relativeDelta : relativeDelta;
-  if (Math.abs(delta) < threshold || concernDelta <= 0) return null;
+  if (Math.abs(concernDelta) < threshold || concernDelta <= 0) return null;
   const direction = delta < 0 ? "fell" : "rose";
   const unitLabel = input.unit === "percentage_points" ? " percentage points" : input.unit === "count" ? "" : "%";
   const displayedDelta = input.unit === "percent" ? relativeDelta : delta;
@@ -2095,7 +2095,7 @@ export function buildSchoolOperatorTrendInsight(input: {
     evidence: {
       metric: input.metric,
       value: input.recent,
-      source,
+      source: input.source,
     },
     actionDestination: input.actionDestination,
   };
