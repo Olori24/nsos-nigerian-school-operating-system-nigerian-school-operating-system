@@ -2062,9 +2062,49 @@ export async function getAcademyLaunchReadiness(schoolId: number) {
   return deriveAcademyLaunchReadiness({ profileConfigured: Boolean(profile?.mission && profile?.targetLearners), programCount: Number(programs[0]?.value ?? 0), moduleCount: Number(modules[0]?.value ?? 0), materialCount: Number(materials[0]?.value ?? 0), activeTutorCount: activeTutors.length, websitePublished: Boolean(website[0]?.published), admissionsEnabled: Boolean(website[0]?.admissionsEnabled), paymentProviderReady: Boolean(payment?.status === "ready" && payment.hasCredentials), emailSenderNeedsVerification: email.managedSenderNeedsVerification, emailFailedCount: email.failedCount, activeCertificationPolicyCount: Number(activePolicies[0]?.value ?? 0) });
 }
 
+export type SchoolOperatorTrendInsight = SchoolOperatorInsightInput | null;
+
+export function buildSchoolOperatorTrendInsight(input: {
+  insightType: SchoolOperatorInsightInput["insightType"];
+  metric: string;
+  recent: number;
+  previous: number;
+  source: string;
+  actionDestination: string;
+  title: string;
+  unit?: "percentage_points" | "percent";
+  higherIsConcern?: boolean;
+  threshold?: number;
+}) : SchoolOperatorTrendInsight {
+  if (!Number.isFinite(input.recent) || !Number.isFinite(input.previous) || input.previous === 0) return null;
+  const delta = Number((input.recent - input.previous).toFixed(2));
+  const threshold = input.threshold ?? 5;
+  const concernDelta = input.higherIsConcern === false ? -delta : delta;
+  if (Math.abs(delta) < threshold || concernDelta <= 0) return null;
+  const direction = delta < 0 ? "fell" : "rose";
+  const unitLabel = input.unit === "percentage_points" ? " percentage points" : "%";
+  const severity: SchoolOperatorInsightInput["severity"] = concernDelta >= threshold * 2 ? "attention" : "review";
+  return {
+    insightType: input.insightType,
+    severity,
+    dedupeKey: `trend-${input.metric}`,
+    title: input.title,
+    detail: `${input.metric.replaceAll("_", " ")} ${direction} by ${Math.abs(delta)}${unitLabel} versus the previous comparison window. Review the underlying records before taking action.`,
+    evidence: {
+      metric: input.metric,
+      value: input.recent,
+      source,
+    },
+    actionDestination: input.actionDestination,
+  };
+}
+
 export async function refreshSchoolOperatorInsights(schoolId: number) {
   const db = await database();
-  const [dashboard, onboarding, commandCenter, programs, activeEnrollments, completedEnrollments, certificates, failedJobs, submittedEvidence, returnedEvidence, website] = await Promise.all([
+  const now = new Date();
+  const recentStart = new Date(now.getTime() - 30 * 86_400_000);
+  const previousStart = new Date(now.getTime() - 60 * 86_400_000);
+  const [dashboard, onboarding, commandCenter, programs, activeEnrollments, completedEnrollments, certificates, failedJobs, submittedEvidence, returnedEvidence, website, recentAttendance, previousAttendance, recentAcademics, previousAcademics, recentAdmissions, previousAdmissions] = await Promise.all([
     getDashboardSummary(schoolId),
     getTenantOnboardingStatus(schoolId),
     getOperationsCommandCenter(schoolId),
@@ -2076,6 +2116,12 @@ export async function refreshSchoolOperatorInsights(schoolId: number) {
     db.select({ value: sql<number>`count(*)` }).from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId), eq(programMilestoneEvidenceSubmissions.status, "submitted"))),
     db.select({ value: sql<number>`count(*)` }).from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId), eq(programMilestoneEvidenceSubmissions.status, "reviewed_returned"))),
     db.select({ published: schoolWebsites.published }).from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1),
+    db.select({ present: sql<number>`COALESCE(SUM(CASE WHEN ${attendanceRecords.status} IN ('present','late') THEN 1 ELSE 0 END),0)`, total: sql<number>`COUNT(*)` }).from(attendanceRecords).where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.attendeeType, "student"), sql`${attendanceRecords.attendanceDate} >= ${recentStart}`, sql`${attendanceRecords.attendanceDate} < ${now}`)),
+    db.select({ present: sql<number>`COALESCE(SUM(CASE WHEN ${attendanceRecords.status} IN ('present','late') THEN 1 ELSE 0 END),0)`, total: sql<number>`COUNT(*)` }).from(attendanceRecords).where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.attendeeType, "student"), sql`${attendanceRecords.attendanceDate} >= ${previousStart}`, sql`${attendanceRecords.attendanceDate} < ${recentStart}`)),
+    db.select({ average: sql<number>`COALESCE(AVG((CAST(${scores.score} AS DECIMAL(12,4)) / NULLIF(${assessments.maximumScore},0))*100),0)`, count: sql<number>`COUNT(*)` }).from(scores).innerJoin(assessments, eq(scores.assessmentId, assessments.id)).where(and(eq(scores.schoolId, schoolId), eq(assessments.schoolId, schoolId), eq(assessments.status, "published"), sql`${assessments.heldOn} >= ${recentStart}`, sql`${assessments.heldOn} < ${now}`)),
+    db.select({ average: sql<number>`COALESCE(AVG((CAST(${scores.score} AS DECIMAL(12,4)) / NULLIF(${assessments.maximumScore},0))*100),0)`, count: sql<number>`COUNT(*)` }).from(scores).innerJoin(assessments, eq(scores.assessmentId, assessments.id)).where(and(eq(scores.schoolId, schoolId), eq(assessments.schoolId, schoolId), eq(assessments.status, "published"), sql`${assessments.heldOn} >= ${previousStart}`, sql`${assessments.heldOn} < ${recentStart}`)),
+    db.select({ total: sql<number>`COUNT(*)` }).from(admissionsApplications).where(and(eq(admissionsApplications.schoolId, schoolId), sql`${admissionsApplications.submittedAt} >= ${recentStart}`, sql`${admissionsApplications.submittedAt} < ${now}`)),
+    db.select({ total: sql<number>`COUNT(*)` }).from(admissionsApplications).where(and(eq(admissionsApplications.schoolId, schoolId), sql`${admissionsApplications.submittedAt} >= ${previousStart}`, sql`${admissionsApplications.submittedAt} < ${recentStart}`)),
   ]);
   const programmeCount = Number(programs[0]?.value ?? 0);
   const activeEnrollmentCount = Number(activeEnrollments[0]?.value ?? 0);
@@ -2085,7 +2131,19 @@ export async function refreshSchoolOperatorInsights(schoolId: number) {
   const submittedEvidenceCount = Number(submittedEvidence[0]?.value ?? 0);
   const returnedEvidenceCount = Number(returnedEvidence[0]?.value ?? 0);
   const websitePublished = Boolean(website[0]?.published);
+  const recentAttendanceRate = Number(recentAttendance[0]?.total ?? 0) > 0 ? Number(((Number(recentAttendance[0]?.present ?? 0) / Number(recentAttendance[0]?.total ?? 1)) * 100).toFixed(2)) : 0;
+  const previousAttendanceRate = Number(previousAttendance[0]?.total ?? 0) > 0 ? Number(((Number(previousAttendance[0]?.present ?? 0) / Number(previousAttendance[0]?.total ?? 1)) * 100).toFixed(2)) : 0;
+  const recentAcademicAverage = Number(recentAcademics[0]?.count ?? 0) > 0 ? Number(recentAcademics[0]?.average ?? 0) : 0;
+  const previousAcademicAverage = Number(previousAcademics[0]?.count ?? 0) > 0 ? Number(previousAcademics[0]?.average ?? 0) : 0;
+  const recentAdmissionCount = Number(recentAdmissions[0]?.total ?? 0);
+  const previousAdmissionCount = Number(previousAdmissions[0]?.total ?? 0);
   const signals: SchoolOperatorInsightInput[] = [];
+  const trendInsights = [
+    buildSchoolOperatorTrendInsight({ insightType: "health", metric: "attendance_rate_30d", recent: recentAttendanceRate, previous: previousAttendanceRate, source: "attendance_records", actionDestination: "attendance", title: "Attendance trend needs review", unit: "percentage_points", higherIsConcern: false, threshold: 3 }),
+    buildSchoolOperatorTrendInsight({ insightType: "learning", metric: "published_assessment_average_30d", recent: recentAcademicAverage, previous: previousAcademicAverage, source: "published_scores", actionDestination: "results", title: "Published assessment performance shifted", unit: "percentage_points", higherIsConcern: false, threshold: 5 }),
+    buildSchoolOperatorTrendInsight({ insightType: "admissions", metric: "admission_submissions_30d", recent: recentAdmissionCount, previous: previousAdmissionCount, source: "admissions_applications", actionDestination: "admissions", title: "Admissions enquiry volume shifted", unit: "percent", higherIsConcern: false, threshold: Math.max(1, previousAdmissionCount * 0.25) }),
+  ].filter((item): item is SchoolOperatorInsightInput => Boolean(item));
+  signals.push(...trendInsights);
   if (onboarding.completionPercent < 100) signals.push({ insightType: "readiness", severity: "attention", dedupeKey: "onboarding-incomplete", title: "Institution setup still needs review", detail: `${onboarding.completedSteps} of ${onboarding.totalSteps} readiness steps are complete. Review the next protected setup step before treating the institution as launch-ready.`, evidence: { metric: "onboarding_completion_percent", value: onboarding.completionPercent, source: "tenant_onboarding" }, actionDestination: onboarding.nextStep?.destination ?? "overview" });
   if (programmeCount === 0) signals.push({ insightType: "learning", severity: "attention", dedupeKey: "no-programmes", title: "No internal learning programme is ready", detail: "Prepare a private learning foundation in School Builder or Course Studio, then review activation separately.", evidence: { metric: "learning_programme_count", value: 0, source: "learning_programmes" }, actionDestination: "learning" });
   else if (activeEnrollmentCount === 0) signals.push({ insightType: "lifecycle", severity: "info", dedupeKey: "no-active-enrolments", title: "Programmes have no active learner enrolments", detail: "Review admissions and enrolment readiness. NSOS cannot infer demand, contact people, or enrol learners automatically.", evidence: { metric: "active_programme_enrolments", value: 0, source: "program_enrolments" }, actionDestination: "admissions" });
