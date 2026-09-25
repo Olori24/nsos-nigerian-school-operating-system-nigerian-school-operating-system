@@ -2072,24 +2072,26 @@ export function buildSchoolOperatorTrendInsight(input: {
   source: string;
   actionDestination: string;
   title: string;
-  unit?: "percentage_points" | "percent";
+  unit?: "percentage_points" | "percent" | "count";
   higherIsConcern?: boolean;
   threshold?: number;
 }) : SchoolOperatorTrendInsight {
   if (!Number.isFinite(input.recent) || !Number.isFinite(input.previous) || input.previous === 0) return null;
   const delta = Number((input.recent - input.previous).toFixed(2));
+  const relativeDelta = Number(((delta / Math.abs(input.previous)) * 100).toFixed(2));
   const threshold = input.threshold ?? 5;
-  const concernDelta = input.higherIsConcern === false ? -delta : delta;
+  const concernDelta = input.higherIsConcern === false ? -relativeDelta : relativeDelta;
   if (Math.abs(delta) < threshold || concernDelta <= 0) return null;
   const direction = delta < 0 ? "fell" : "rose";
-  const unitLabel = input.unit === "percentage_points" ? " percentage points" : "%";
+  const unitLabel = input.unit === "percentage_points" ? " percentage points" : input.unit === "count" ? "" : "%";
+  const displayedDelta = input.unit === "percent" ? relativeDelta : delta;
   const severity: SchoolOperatorInsightInput["severity"] = concernDelta >= threshold * 2 ? "attention" : "review";
   return {
     insightType: input.insightType,
     severity,
     dedupeKey: `trend-${input.metric}`,
     title: input.title,
-    detail: `${input.metric.replaceAll("_", " ")} ${direction} by ${Math.abs(delta)}${unitLabel} versus the previous comparison window. Review the underlying records before taking action.`,
+    detail: `${input.metric.replaceAll("_", " ")} ${direction} by ${Math.abs(displayedDelta)}${unitLabel} versus the previous comparison window. Review the underlying records before taking action.`,
     evidence: {
       metric: input.metric,
       value: input.recent,
