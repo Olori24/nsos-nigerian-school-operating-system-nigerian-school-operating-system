@@ -1,6 +1,6 @@
 import type { Express, Request } from "express";
 import { randomUUID } from "node:crypto";
-import * as db from "../db";
+import * as db from "./db";
 
 function clientIp(req: Request) {
   const forwarded = req.headers["x-forwarded-for"];
