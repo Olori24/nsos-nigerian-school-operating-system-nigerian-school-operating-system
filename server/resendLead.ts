@@ -1,6 +1,6 @@
 import { ENV } from "./_core/env";
 
-const RESEND_EVENTS_URL = "https://api.resend.com/events";
+const RESEND_EVENTS_URL = "https://api.resend.com/events/send";
 const LEAD_EVENT = "nsos.lead.created";
 
 export type NsosLeadEvent = {
@@ -35,10 +35,18 @@ export async function sendNsosLeadEvent(input: NsosLeadEvent) {
     signal: AbortSignal.timeout(8_000),
   });
 
-  const payload = await response.json().catch(() => null) as { id?: string; message?: string; error?: string } | null;
+  const payload = (await response.json().catch(() => null)) as {
+    id?: string;
+    message?: string;
+    error?: string;
+  } | null;
 
   if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || "Resend could not start the lead automation.");
+    throw new Error(
+      payload?.message ||
+        payload?.error ||
+        "Resend could not start the lead automation."
+    );
   }
 
   return { eventId: payload?.id ?? null };
