@@ -9,6 +9,15 @@ const theme = readFileSync(resolve(root, "client/src/contexts/ThemeContext.tsx")
 const css = readFileSync(resolve(root, "client/src/index.css"), "utf8");
 
 describe("school website publishing and theme presentation", () => {
+  it("exposes school-owned visual direction controls in Website Studio", () => {
+    expect(studio).toContain("Visual direction");
+    expect(studio).toContain("modern");
+    expect(studio).toContain("academic");
+    expect(studio).toContain("community");
+    expect(studio).toContain('visualTheme: site.visualTheme ?? "modern"');
+    expect(studio).toContain("visualTheme: form.visualTheme");
+  });
+
   it("routes verified custom-domain visitors through the public domain resolver", () => {
     expect(app).toContain('import DomainSchoolWebsite from "./pages/DomainSchoolWebsite"');
     expect(app).toContain("isNsosPlatformHost");
