@@ -18,7 +18,7 @@ describe("school website live preview", () => {
     expect(studio).toContain('import { SchoolWebsitePreview, type WebsitePreviewSection } from "@/pages/SchoolWebsite"');
     expect(studio).toContain("Live website preview");
     expect(studio).toContain("Draft-safe preview");
-    expect(studio).toContain("<SchoolWebsitePreview school={config.data.school} website={form} admissionsEnabled={form.admissionsEnabled} highlightedSection={previewHighlight} />");
+    expect(studio).toContain("<SchoolWebsitePreview school={config.data.school} website={{ ...form, websiteContent: websiteContentFromForm(form) }} admissionsEnabled={form.admissionsEnabled} highlightedSection={previewHighlight} />");
     expect(studio).toContain("max-h-[780px] overflow-y-auto");
   });
 

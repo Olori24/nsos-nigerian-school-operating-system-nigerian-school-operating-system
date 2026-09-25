@@ -705,6 +705,16 @@ export const platformBillingRecords = mysqlTable(
   table => ({ invoiceNoUnique: uniqueIndex("platformBilling_invoice_no_unique").on(table.invoiceNo), schoolIndex: index("platformBilling_school_idx").on(table.schoolId), statusIndex: index("platformBilling_status_idx").on(table.status) }),
 );
 
+export type SchoolWebsiteContent = {
+  about?: string;
+  principalName?: string;
+  principalTitle?: string;
+  principalMessage?: string;
+  programmes?: string[];
+  faqs?: Array<{ question: string; answer: string }>;
+  socialLinks?: Array<{ label: string; url: string }>;
+};
+
 export const schoolWebsites = mysqlTable(
   "schoolWebsites",
   {
@@ -723,6 +733,7 @@ export const schoolWebsites = mysqlTable(
     logoMediaId: int("logoMediaId"),
     heroMediaId: int("heroMediaId"),
     visualTheme: mysqlEnum("visualTheme", ["modern", "academic", "community"]).notNull().default("modern"),
+    websiteContent: json("websiteContent").$type<SchoolWebsiteContent | null>(),
     published: boolean("published").notNull().default(false),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
