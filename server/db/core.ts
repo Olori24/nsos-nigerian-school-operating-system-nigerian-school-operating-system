@@ -1788,7 +1788,7 @@ export async function createDraftFeesFromTemplate(input: { schoolId: number; ter
   return { createdCount: newRows.length, status: "draft" as const };
 }
 
-export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; logoMediaId?: number | null; heroMediaId?: number | null; visualTheme?: "modern" | "academic" | "community"; published?: boolean }) {
+export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; logoMediaId?: number | null; heroMediaId?: number | null; visualTheme?: "modern" | "academic" | "community"; websiteContent?: import("../../drizzle/schema/core").SchoolWebsiteContent | null; published?: boolean }) {
   const db = await database();
   const customDomain = normaliseDomain(input.customDomain);
   if (customDomain && !isValidCustomDomain(customDomain)) throw new Error("Enter a valid domain name without a protocol or path.");
@@ -1797,7 +1797,8 @@ export async function saveSchoolWebsite(input: { schoolId: number; headline?: st
   const domainVerificationToken = customDomain ? (!domainChanged && existing?.domainVerificationToken ? existing.domainVerificationToken : crypto.randomUUID().replace(/-/g, "")) : null;
   const domainStatus = customDomain ? (domainChanged ? "pending" as const : existing?.domainStatus ?? "pending" as const) : "not_configured" as const;
   const media = await selectedWebsiteMedia(input.schoolId, input);
-  const values = { ...input, ...media, customDomain, domainVerificationToken, domainStatus };
+  const { websiteContent, ...websiteInput } = input;
+  const values = { ...websiteInput, ...media, websiteContent: websiteContent ?? existing?.websiteContent ?? null, customDomain, domainVerificationToken, domainStatus };
   await db.insert(schoolWebsites).values(values).onDuplicateKeyUpdate({ set: values });
   return getSchoolWebsite(input.schoolId);
 }
