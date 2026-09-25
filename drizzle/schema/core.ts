@@ -1956,7 +1956,7 @@ export const affiliateConversions = mysqlTable(
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
     commissionAmount: decimal("commissionAmount", { precision: 12, scale: 2 }).notNull().default("0.00"),
     currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
-    status: mysqlEnum("status", ["pending", "approved", "reversed"]).notNull().default("pending"),
+    status: mysqlEnum("status", ["pending", "approved", "paid", "reversed"]).notNull().default("pending"),
     occurredAt: timestamp("occurredAt").notNull(),
     approvedAt: timestamp("approvedAt"),
     approvedBy: int("approvedBy"),
