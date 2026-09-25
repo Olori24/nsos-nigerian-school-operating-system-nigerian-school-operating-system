@@ -1889,6 +1889,117 @@ export const aiTutorTeachingPreferences = mysqlTable(
   table => ({ studentTutor: uniqueIndex("aiTutorTeachingPreference_student_tutor_unique").on(table.studentId, table.tutorId), schoolTutor: index("aiTutorTeachingPreference_school_tutor_idx").on(table.schoolId, table.tutorId) }),
 );
 
+export const affiliatePartners = mysqlTable(
+  "affiliatePartners",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    code: varchar("code", { length: 48 }).notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    destinationUrl: varchar("destinationUrl", { length: 2048 }).notNull(),
+    status: mysqlEnum("status", ["active", "paused", "archived"]).notNull().default("active"),
+    commissionType: mysqlEnum("commissionType", ["percentage", "fixed"]).notNull().default("percentage"),
+    commissionValue: decimal("commissionValue", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+    attributionDays: int("attributionDays").notNull().default(30),
+    termsVersion: varchar("termsVersion", { length: 64 }),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ codeUnique: uniqueIndex("affiliatePartner_code_unique").on(table.code), statusIndex: index("affiliatePartner_status_idx").on(table.status) }),
+);
+
+export const affiliateClicks = mysqlTable(
+  "affiliateClicks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    partnerId: int("partnerId").notNull(),
+    clickId: varchar("clickId", { length: 64 }).notNull(),
+    ipHash: varchar("ipHash", { length: 64 }),
+    userAgentHash: varchar("userAgentHash", { length: 64 }),
+    referrer: varchar("referrer", { length: 2048 }),
+    landingPath: varchar("landingPath", { length: 2048 }),
+    utmSource: varchar("utmSource", { length: 160 }),
+    utmMedium: varchar("utmMedium", { length: 160 }),
+    utmCampaign: varchar("utmCampaign", { length: 160 }),
+    utmContent: varchar("utmContent", { length: 160 }),
+    utmTerm: varchar("utmTerm", { length: 160 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ clickIdUnique: uniqueIndex("affiliateClick_click_id_unique").on(table.clickId), partnerCreated: index("affiliateClick_partner_created_idx").on(table.partnerId, table.createdAt) }),
+);
+
+export const affiliateLeads = mysqlTable(
+  "affiliateLeads",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    partnerId: int("partnerId").notNull(),
+    clickId: varchar("clickId", { length: 64 }),
+    emailHash: varchar("emailHash", { length: 64 }).notNull(),
+    leadSource: varchar("leadSource", { length: 120 }),
+    consentedAt: timestamp("consentedAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ partnerEmail: uniqueIndex("affiliateLead_partner_email_unique").on(table.partnerId, table.emailHash), clickIndex: index("affiliateLead_click_idx").on(table.clickId), partnerCreated: index("affiliateLead_partner_created_idx").on(table.partnerId, table.createdAt) }),
+);
+
+export const affiliateConversions = mysqlTable(
+  "affiliateConversions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    partnerId: int("partnerId").notNull(),
+    leadId: int("leadId"),
+    clickId: varchar("clickId", { length: 64 }),
+    externalReference: varchar("externalReference", { length: 160 }).notNull(),
+    eventType: varchar("eventType", { length: 80 }).notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    commissionAmount: decimal("commissionAmount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+    status: mysqlEnum("status", ["pending", "approved", "reversed"]).notNull().default("pending"),
+    occurredAt: timestamp("occurredAt").notNull(),
+    approvedAt: timestamp("approvedAt"),
+    approvedBy: int("approvedBy"),
+    note: text("note"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ externalReferenceUnique: uniqueIndex("affiliateConversion_external_ref_unique").on(table.externalReference), partnerStatus: index("affiliateConversion_partner_status_idx").on(table.partnerId, table.status), partnerOccurred: index("affiliateConversion_partner_occurred_idx").on(table.partnerId, table.occurredAt) }),
+);
+
+export const affiliatePayouts = mysqlTable(
+  "affiliatePayouts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    partnerId: int("partnerId").notNull(),
+    periodStart: date("periodStart").notNull(),
+    periodEnd: date("periodEnd").notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull().default("0.00"),
+    currency: varchar("currency", { length: 8 }).notNull().default("NGN"),
+    status: mysqlEnum("status", ["pending", "approved", "paid", "void"]).notNull().default("pending"),
+    paymentReference: varchar("paymentReference", { length: 160 }),
+    note: text("note"),
+    createdBy: int("createdBy").notNull(),
+    approvedBy: int("approvedBy"),
+    paidAt: timestamp("paidAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ partnerPeriod: uniqueIndex("affiliatePayout_partner_period_unique").on(table.partnerId, table.periodStart, table.periodEnd), partnerStatus: index("affiliatePayout_partner_status_idx").on(table.partnerId, table.status) }),
+);
+
+export const affiliatePayoutItems = mysqlTable(
+  "affiliatePayoutItems",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    payoutId: int("payoutId").notNull(),
+    conversionId: int("conversionId").notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({ payoutConversion: uniqueIndex("affiliatePayoutItem_payout_conversion_unique").on(table.payoutId, table.conversionId) }),
+);
+
 export const securityAuditEvents = mysqlTable(
   "securityAuditEvents",
   {
