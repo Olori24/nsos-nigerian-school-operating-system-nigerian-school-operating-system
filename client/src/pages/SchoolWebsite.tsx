@@ -55,9 +55,7 @@ export function SchoolWebsiteLayout({ site, preview = false, highlightedSection 
     <header className={`sticky top-0 z-20 backdrop-blur-xl ${theme.header}`}>
       <div className={`mx-auto flex max-w-7xl items-center justify-between gap-6 px-5 py-4 sm:px-8 ${previewOutline("brand")}`} data-preview-section="brand">
         <a href="#top" className="flex min-w-0 items-center gap-3">
-          {website.logoUrl
-            ? <img src={website.logoUrl} alt={`${school.name} logo`} className="h-11 w-11 rounded-2xl border border-black/5 bg-white object-contain p-1.5 shadow-sm" />
-            : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white shadow-lg" style={{ backgroundColor: brand }}><GraduationCap className="h-5 w-5" /></span>}
+          {website.logoUrl ? <img src={website.logoUrl} alt={`${school.name} logo`} className="h-11 w-11 rounded-2xl border border-black/5 bg-white object-contain p-1.5 shadow-sm" /> : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white shadow-lg" style={{ backgroundColor: brand }}><GraduationCap className="h-5 w-5" /></span>}
           <div className="min-w-0"><p className="truncate text-sm font-bold tracking-[-.01em]">{school.name}</p><p className="mt-0.5 text-[9px] font-bold uppercase tracking-[.16em] text-[#758079]">{school.state ?? "Nigeria"}</p></div>
         </a>
         <nav className="hidden items-center gap-6 text-xs font-semibold text-[#5d6b64] md:flex" aria-label="School website">
