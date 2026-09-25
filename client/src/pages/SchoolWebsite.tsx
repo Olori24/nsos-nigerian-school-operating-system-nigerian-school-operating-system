@@ -9,7 +9,7 @@ type PublicSchoolSite = {
   website: { headline?: string | null; introduction?: string | null; primaryColor?: string | null; campusLocation?: string | null; contactPhone?: string | null; contactEmail?: string | null; logoUrl?: string | null; heroUrl?: string | null; visualTheme?: "modern" | "academic" | "community" | null; websiteContent?: { about?: string; principalName?: string; principalTitle?: string; principalMessage?: string; programmes?: string[]; faqs?: Array<{ question: string; answer: string }>; socialLinks?: Array<{ label: string; url: string }> } | null };
   admissionsUrl?: string | null;
 };
-type WebsitePreviewInput = { headline?: string; introduction?: string; primaryColor?: string; campusLocation?: string; contactPhone?: string; contactEmail?: string; logoUrl?: string | null; heroUrl?: string | null; visualTheme?: "modern" | "academic" | "community" | null };
+type WebsitePreviewInput = { headline?: string; introduction?: string; primaryColor?: string; campusLocation?: string; contactPhone?: string; contactEmail?: string; logoUrl?: string | null; heroUrl?: string | null; visualTheme?: "modern" | "academic" | "community" | null; websiteContent?: PublicSchoolSite["website"]["websiteContent"] };
 export type WebsitePreviewSection = "brand" | "hero" | "about" | "principal" | "programmes" | "faqs" | "contact" | "location" | "admissions";
 
 export default function SchoolWebsite() {
