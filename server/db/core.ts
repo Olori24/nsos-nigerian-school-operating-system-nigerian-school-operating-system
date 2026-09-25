@@ -617,6 +617,7 @@ export async function createAffiliatePayout(input: { partnerId: number; periodSt
   const payoutId = Number(payoutResult[0].insertId);
   for (const conversion of approved) {
     await db.insert(affiliatePayoutItems).values({ payoutId, conversionId: conversion.id, amount: conversion.commissionAmount });
+    await db.update(affiliateConversions).set({ status: "paid" }).where(and(eq(affiliateConversions.id, conversion.id), eq(affiliateConversions.status, "approved")));
   }
   return (await db.select().from(affiliatePayouts).where(eq(affiliatePayouts.id, payoutId)).limit(1))[0];
 }
@@ -632,6 +633,10 @@ export async function updateAffiliatePayoutStatus(input: { id: number; status: "
   if (input.status === "approved" && payout.status !== "pending") throw new Error("Only pending payouts can be approved.");
   if (input.status === "paid" && payout.status !== "approved") throw new Error("Only approved payouts can be marked paid.");
   if (input.status === "void" && payout.status === "paid") throw new Error("Paid payouts cannot be voided.");
+  if (input.status === "void" && payout.status !== "void") {
+    const items = await db.select({ conversionId: affiliatePayoutItems.conversionId }).from(affiliatePayoutItems).where(eq(affiliatePayoutItems.payoutId, input.id));
+    for (const item of items) await db.update(affiliateConversions).set({ status: "approved" }).where(and(eq(affiliateConversions.id, item.conversionId), eq(affiliateConversions.status, "paid")));
+  }
   await db.update(affiliatePayouts).set({
     status: input.status,
     approvedBy: input.approvedBy ?? payout.approvedBy,
