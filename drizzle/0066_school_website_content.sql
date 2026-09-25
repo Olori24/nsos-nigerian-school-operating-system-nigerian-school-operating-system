@@ -1,0 +1,1 @@
+ALTER TABLE `schoolWebsites` ADD `websiteContent` json;

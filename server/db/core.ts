@@ -10,6 +10,12 @@ import {
   automationJobEvents,
   automationJobs,
   advertisingCampaigns,
+  affiliateClicks,
+  affiliateConversions,
+  affiliateLeads,
+  affiliatePartners,
+  affiliatePayoutItems,
+  affiliatePayouts,
   aiTutorEscalations,
   aiTutorFeedback,
   aiTutorInteractions,
@@ -377,6 +383,274 @@ export function getSmsDeliveryWebhookUrls(schoolId: number) {
     twilio: `${NSOS_WEBHOOK_ORIGIN}/api/webhooks/sms/twilio${query}`,
   };
 }
+
+
+function affiliateCode(value: string) {
+  const code = value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{2,47}$/.test(code)) throw new Error("Affiliate code must be 3-48 characters and contain only letters, numbers, hyphens, or underscores.");
+  return code;
+}
+
+function affiliateDestination(value: string) {
+  const url = new URL(value.trim());
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Affiliate destination must use HTTP or HTTPS.");
+  return url.toString();
+}
+
+function affiliateHash(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function parseAffiliateCookie(cookieHeader: string | undefined) {
+  const match = cookieHeader?.split(";").map(value => value.trim()).find(value => value.startsWith("nsos_affiliate_click="));
+  return match ? decodeURIComponent(match.slice("nsos_affiliate_click=".length)).slice(0, 64) : null;
+}
+
+export function getAffiliateClickCookie(cookieHeader: string | undefined) {
+  return parseAffiliateCookie(cookieHeader);
+}
+
+export async function createAffiliatePartner(input: {
+  code: string;
+  name: string;
+  destinationUrl: string;
+  commissionType: "percentage" | "fixed";
+  commissionValue: string;
+  currency?: string;
+  attributionDays?: number;
+  termsVersion?: string;
+  createdBy: number;
+}) {
+  const db = await database();
+  const code = affiliateCode(input.code);
+  const destinationUrl = affiliateDestination(input.destinationUrl);
+  const commissionValue = Number(input.commissionValue);
+  if (!Number.isFinite(commissionValue) || commissionValue < 0) throw new Error("Commission value must be zero or greater.");
+  if (input.commissionType === "percentage" && commissionValue > 100) throw new Error("Percentage commission cannot exceed 100.");
+  const attributionDays = Math.min(Math.max(input.attributionDays ?? 30, 1), 180);
+  const result = await db.insert(affiliatePartners).values({
+    code,
+    name: input.name.trim().slice(0, 160),
+    destinationUrl,
+    status: "active",
+    commissionType: input.commissionType,
+    commissionValue: commissionValue.toFixed(2),
+    currency: (input.currency ?? "NGN").trim().toUpperCase().slice(0, 8),
+    attributionDays,
+    termsVersion: input.termsVersion?.trim().slice(0, 64) || null,
+    createdBy: input.createdBy,
+  });
+  return getAffiliatePartnerById(Number(result[0].insertId));
+}
+
+export async function getAffiliatePartnerById(id: number) {
+  return (await (await database()).select().from(affiliatePartners).where(eq(affiliatePartners.id, id)).limit(1))[0] ?? null;
+}
+
+export async function getAffiliatePartnerByCode(code: string) {
+  return (await (await database()).select().from(affiliatePartners).where(and(eq(affiliatePartners.code, affiliateCode(code)), eq(affiliatePartners.status, "active"))).limit(1))[0] ?? null;
+}
+
+export async function listAffiliatePartners() {
+  return (await database()).select().from(affiliatePartners).orderBy(desc(affiliatePartners.createdAt));
+}
+
+export async function updateAffiliatePartner(input: {
+  id: number;
+  name?: string;
+  destinationUrl?: string;
+  status?: "active" | "paused" | "archived";
+  commissionType?: "percentage" | "fixed";
+  commissionValue?: string;
+  currency?: string;
+  attributionDays?: number;
+  termsVersion?: string | null;
+}) {
+  const db = await database();
+  const existing = await getAffiliatePartnerById(input.id);
+  if (!existing) throw new Error("Affiliate partner not found.");
+  const set: Record<string, unknown> = {};
+  if (input.name !== undefined) set.name = input.name.trim().slice(0, 160);
+  if (input.destinationUrl !== undefined) set.destinationUrl = affiliateDestination(input.destinationUrl);
+  if (input.status !== undefined) set.status = input.status;
+  if (input.commissionType !== undefined) set.commissionType = input.commissionType;
+  if (input.commissionValue !== undefined) {
+    const value = Number(input.commissionValue);
+    if (!Number.isFinite(value) || value < 0) throw new Error("Commission value must be zero or greater.");
+    const type = input.commissionType ?? existing.commissionType;
+    if (type === "percentage" && value > 100) throw new Error("Percentage commission cannot exceed 100.");
+    set.commissionValue = value.toFixed(2);
+  }
+  if (input.currency !== undefined) set.currency = input.currency.trim().toUpperCase().slice(0, 8);
+  if (input.attributionDays !== undefined) set.attributionDays = Math.min(Math.max(input.attributionDays, 1), 180);
+  if (input.termsVersion !== undefined) set.termsVersion = input.termsVersion?.trim().slice(0, 64) || null;
+  if (Object.keys(set).length) await db.update(affiliatePartners).set(set).where(eq(affiliatePartners.id, input.id));
+  return getAffiliatePartnerById(input.id);
+}
+
+export async function recordAffiliateClick(input: {
+  partnerId: number;
+  clickId: string;
+  ip?: string;
+  userAgent?: string;
+  referrer?: string;
+  landingPath?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+}) {
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner || partner.status !== "active") throw new Error("Affiliate partner is unavailable.");
+  const clickId = input.clickId.trim().slice(0, 64);
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(clickId)) throw new Error("Invalid affiliate click identifier.");
+  await (await database()).insert(affiliateClicks).values({
+    partnerId: input.partnerId,
+    clickId,
+    ipHash: input.ip ? affiliateHash(input.ip) : null,
+    userAgentHash: input.userAgent ? affiliateHash(input.userAgent) : null,
+    referrer: input.referrer?.slice(0, 2048) || null,
+    landingPath: input.landingPath?.slice(0, 2048) || null,
+    utmSource: input.utmSource?.slice(0, 160) || null,
+    utmMedium: input.utmMedium?.slice(0, 160) || null,
+    utmCampaign: input.utmCampaign?.slice(0, 160) || null,
+    utmContent: input.utmContent?.slice(0, 160) || null,
+    utmTerm: input.utmTerm?.slice(0, 160) || null,
+  }).onDuplicateKeyUpdate({ set: { partnerId: input.partnerId } });
+  return { clickId, destinationUrl: partner.destinationUrl, attributionDays: partner.attributionDays };
+}
+
+export async function getAffiliateClickById(clickId: string) {
+  return (await (await database()).select({ click: affiliateClicks, partner: affiliatePartners })
+    .from(affiliateClicks)
+    .innerJoin(affiliatePartners, eq(affiliateClicks.partnerId, affiliatePartners.id))
+    .where(and(eq(affiliateClicks.clickId, clickId), eq(affiliatePartners.status, "active")))
+    .limit(1))[0] ?? null;
+}
+
+export async function recordAffiliateLead(input: {
+  partnerId: number;
+  clickId?: string | null;
+  email: string;
+  leadSource?: string;
+  consentedAt?: Date;
+}) {
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner || partner.status !== "active") return null;
+  const emailHash = affiliateHash(normaliseAuthEmail(input.email));
+  const db = await database();
+  await db.insert(affiliateLeads).values({
+    partnerId: partner.id,
+    clickId: input.clickId?.slice(0, 64) || null,
+    emailHash,
+    leadSource: input.leadSource?.slice(0, 120) || null,
+    consentedAt: input.consentedAt ?? new Date(),
+  }).onDuplicateKeyUpdate({ set: { clickId: input.clickId?.slice(0, 64) || null, leadSource: input.leadSource?.slice(0, 120) || null, updatedAt: new Date() } });
+  return (await db.select().from(affiliateLeads).where(and(eq(affiliateLeads.partnerId, partner.id), eq(affiliateLeads.emailHash, emailHash))).limit(1))[0] ?? null;
+}
+
+function calculateAffiliateCommission(partner: typeof affiliatePartners.$inferSelect, amount: number) {
+  const value = Number(partner.commissionValue);
+  return partner.commissionType === "percentage" ? Number((amount * value / 100).toFixed(2)) : Number(value.toFixed(2));
+}
+
+export async function recordAffiliateConversion(input: {
+  partnerId: number;
+  leadId?: number | null;
+  clickId?: string | null;
+  externalReference: string;
+  eventType: string;
+  amount: number;
+  occurredAt?: Date;
+  note?: string;
+}) {
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner) throw new Error("Affiliate partner not found.");
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error("Conversion amount must be zero or greater.");
+  const commissionAmount = calculateAffiliateCommission(partner, input.amount);
+  const db = await database();
+  const existing = (await db.select().from(affiliateConversions).where(eq(affiliateConversions.externalReference, input.externalReference.trim().slice(0, 160))).limit(1))[0];
+  if (existing) return existing;
+  const result = await db.insert(affiliateConversions).values({
+    partnerId: partner.id,
+    leadId: input.leadId ?? null,
+    clickId: input.clickId?.slice(0, 64) || null,
+    externalReference: input.externalReference.trim().slice(0, 160),
+    eventType: input.eventType.trim().slice(0, 80),
+    amount: input.amount.toFixed(2),
+    commissionAmount: commissionAmount.toFixed(2),
+    currency: partner.currency,
+    status: "pending",
+    occurredAt: input.occurredAt ?? new Date(),
+    note: input.note?.slice(0, 2000) || null,
+  });
+  return (await db.select().from(affiliateConversions).where(eq(affiliateConversions.id, Number(result[0].insertId))).limit(1))[0];
+}
+
+export async function approveAffiliateConversion(id: number, approvedBy: number) {
+  const db = await database();
+  await db.update(affiliateConversions).set({ status: "approved", approvedBy, approvedAt: new Date() }).where(and(eq(affiliateConversions.id, id), eq(affiliateConversions.status, "pending")));
+  return (await db.select().from(affiliateConversions).where(eq(affiliateConversions.id, id)).limit(1))[0] ?? null;
+}
+
+export async function createAffiliatePayout(input: { partnerId: number; periodStart: string; periodEnd: string; createdBy: number; note?: string }) {
+  const db = await database();
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner) throw new Error("Affiliate partner not found.");
+  const start = asDate(input.periodStart);
+  const end = asDate(input.periodEnd);
+  if (!start || !end || start > end) throw new Error("Payout period is invalid.");
+  const approved = await db.select().from(affiliateConversions).where(and(eq(affiliateConversions.partnerId, partner.id), eq(affiliateConversions.status, "approved"), sql`${affiliateConversions.occurredAt} >= ${start}`, sql`${affiliateConversions.occurredAt} < ${new Date(end.getTime() + 86_400_000)}`));
+  const amount = approved.reduce((sum, item) => sum + Number(item.commissionAmount), 0);
+  if (amount <= 0) throw new Error("No approved affiliate commissions are available for this period.");
+  const payoutResult = await db.insert(affiliatePayouts).values({
+    partnerId: partner.id,
+    periodStart: start,
+    periodEnd: end,
+    amount: amount.toFixed(2),
+    currency: partner.currency,
+    status: "pending",
+    createdBy: input.createdBy,
+    note: input.note?.slice(0, 2000) || null,
+  });
+  const payoutId = Number(payoutResult[0].insertId);
+  for (const conversion of approved) {
+    await db.insert(affiliatePayoutItems).values({ payoutId, conversionId: conversion.id, amount: conversion.commissionAmount });
+    await db.update(affiliateConversions).set({ status: "paid" }).where(and(eq(affiliateConversions.id, conversion.id), eq(affiliateConversions.status, "approved")));
+  }
+  return (await db.select().from(affiliatePayouts).where(eq(affiliatePayouts.id, payoutId)).limit(1))[0];
+}
+
+export async function listAffiliatePayouts() {
+  return (await database()).select().from(affiliatePayouts).orderBy(desc(affiliatePayouts.createdAt));
+}
+
+export async function updateAffiliatePayoutStatus(input: { id: number; status: "approved" | "paid" | "void"; approvedBy?: number; paymentReference?: string; note?: string }) {
+  const db = await database();
+  const payout = (await db.select().from(affiliatePayouts).where(eq(affiliatePayouts.id, input.id)).limit(1))[0];
+  if (!payout) throw new Error("Affiliate payout not found.");
+  if (input.status === "approved" && payout.status !== "pending") throw new Error("Only pending payouts can be approved.");
+  if (input.status === "paid" && payout.status !== "approved") throw new Error("Only approved payouts can be marked paid.");
+  if (input.status === "void" && payout.status === "paid") throw new Error("Paid payouts cannot be voided.");
+  if (input.status === "void" && payout.status !== "void") {
+    const items = await db.select({ conversionId: affiliatePayoutItems.conversionId }).from(affiliatePayoutItems).where(eq(affiliatePayoutItems.payoutId, input.id));
+    for (const item of items) await db.update(affiliateConversions).set({ status: "approved" }).where(and(eq(affiliateConversions.id, item.conversionId), eq(affiliateConversions.status, "paid")));
+  }
+  await db.update(affiliatePayouts).set({
+    status: input.status,
+    approvedBy: input.approvedBy ?? payout.approvedBy,
+    paymentReference: input.paymentReference?.slice(0, 160) || payout.paymentReference,
+    note: input.note?.slice(0, 2000) ?? payout.note,
+    paidAt: input.status === "paid" ? new Date() : payout.paidAt,
+  }).where(eq(affiliatePayouts.id, input.id));
+  return (await db.select().from(affiliatePayouts).where(eq(affiliatePayouts.id, input.id)).limit(1))[0];
+}
+
+export async function listAffiliateConversions(partnerId?: number) {
+  return (await database()).select().from(affiliateConversions).where(partnerId ? eq(affiliateConversions.partnerId, partnerId) : undefined).orderBy(desc(affiliateConversions.occurredAt)).limit(500);
+}
+
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
@@ -1514,7 +1788,7 @@ export async function createDraftFeesFromTemplate(input: { schoolId: number; ter
   return { createdCount: newRows.length, status: "draft" as const };
 }
 
-export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; logoMediaId?: number | null; heroMediaId?: number | null; visualTheme?: "modern" | "academic" | "community"; published?: boolean }) {
+export async function saveSchoolWebsite(input: { schoolId: number; headline?: string; introduction?: string; primaryColor?: string; contactEmail?: string; contactPhone?: string; campusLocation?: string; customDomain?: string; admissionsEnabled?: boolean; logoMediaId?: number | null; heroMediaId?: number | null; visualTheme?: "modern" | "academic" | "community"; websiteContent?: import("../../drizzle/schema/core").SchoolWebsiteContent | null; published?: boolean }) {
   const db = await database();
   const customDomain = normaliseDomain(input.customDomain);
   if (customDomain && !isValidCustomDomain(customDomain)) throw new Error("Enter a valid domain name without a protocol or path.");
@@ -1523,7 +1797,8 @@ export async function saveSchoolWebsite(input: { schoolId: number; headline?: st
   const domainVerificationToken = customDomain ? (!domainChanged && existing?.domainVerificationToken ? existing.domainVerificationToken : crypto.randomUUID().replace(/-/g, "")) : null;
   const domainStatus = customDomain ? (domainChanged ? "pending" as const : existing?.domainStatus ?? "pending" as const) : "not_configured" as const;
   const media = await selectedWebsiteMedia(input.schoolId, input);
-  const values = { ...input, ...media, customDomain, domainVerificationToken, domainStatus };
+  const { websiteContent, ...websiteInput } = input;
+  const values = { ...websiteInput, ...media, websiteContent: websiteContent ?? existing?.websiteContent ?? null, customDomain, domainVerificationToken, domainStatus };
   await db.insert(schoolWebsites).values(values).onDuplicateKeyUpdate({ set: values });
   return getSchoolWebsite(input.schoolId);
 }
@@ -1552,12 +1827,34 @@ export async function getPublicSchoolWebsite(shortCode: string) {
   return publicWebsiteResponse(row);
 }
 
+export function isNsosSchoolSubdomain(value: string) {
+  const normalised = normaliseDomain(value);
+  if (!normalised || !normalised.endsWith(".nsos.top")) return false;
+  const label = normalised.slice(0, -".nsos.top".length);
+  if (label === "www") return false;
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label);
+}
+
+export function nsosSchoolSubdomainForShortCode(shortCode: string) {
+  const label = shortCode.trim().toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) return null;
+  return label + ".nsos.top";
+}
+
 export async function getPublicSchoolWebsiteByDomain(domain: string) {
   const db = await database();
   const normalised = normaliseDomain(domain);
   if (!normalised) return undefined;
-  const row = (await db.select({ school: schools, website: schoolWebsites }).from(schoolWebsites).innerJoin(schools, eq(schoolWebsites.schoolId, schools.id)).where(and(eq(schoolWebsites.customDomain, normalised), eq(schoolWebsites.domainStatus, "active"), eq(schoolWebsites.published, true))).limit(1))[0];
-  return row && isActivePublishedDomain(row.website) ? publicWebsiteResponse(row) : undefined;
+
+  const customRow = (await db.select({ school: schools, website: schoolWebsites }).from(schoolWebsites).innerJoin(schools, eq(schoolWebsites.schoolId, schools.id)).where(and(eq(schoolWebsites.customDomain, normalised), eq(schoolWebsites.domainStatus, "active"), eq(schoolWebsites.published, true))).limit(1))[0];
+  if (customRow && isActivePublishedDomain(customRow.website)) return publicWebsiteResponse(customRow);
+
+  // NSOS-owned school subdomains are resolved by the school short code. This keeps
+  // school sites on the nsos.top namespace without requiring per-school custom-domain
+  // verification records or storing a duplicate domain for every tenant.
+  if (!isNsosSchoolSubdomain(normalised)) return undefined;
+  const shortCode = normalised.slice(0, -".nsos.top".length).toUpperCase();
+  return getPublicSchoolWebsite(shortCode);
 }
 
 export async function getSchoolMembership(userId: number, schoolId: number) {
@@ -1652,6 +1949,7 @@ export async function getDashboardSummary(schoolId: number) {
 
 export type InstitutionOperatingProfileInput = { mission?: string; targetLearners?: string; brandTone?: string; teachingPhilosophy?: string; curriculumStrategy?: string; pricingApproach?: string; policyNotes?: string; operatingGoals?: string };
 export type SchoolOperatorInsightInput = { insightType: "readiness" | "learning" | "admissions" | "revenue" | "lifecycle" | "health" | "certificate"; severity: "info" | "attention" | "review"; dedupeKey: string; title: string; detail: string; evidence: { metric: string; value: number; comparison?: string; source: string }; actionDestination?: string };
+export type SchoolOperatorInsight = typeof schoolOperatorInsights.$inferSelect;
 export type SchoolOperatorWorkflowPreferenceInput = { reviewFocus: "balanced" | "learning" | "admissions" | "revenue" | "operational_readiness"; reviewCadence: "daily" | "weekly" | "monthly"; evidenceDetail: "concise" | "standard"; showDismissedInsights: boolean };
 
 const operatorProfileDefault = { mission: null, targetLearners: null, brandTone: null, teachingPhilosophy: null, curriculumStrategy: null, pricingApproach: null, policyNotes: null, operatingGoals: null };
@@ -1788,9 +2086,52 @@ export async function getAcademyLaunchReadiness(schoolId: number) {
   return deriveAcademyLaunchReadiness({ profileConfigured: Boolean(profile?.mission && profile?.targetLearners), programCount: Number(programs[0]?.value ?? 0), moduleCount: Number(modules[0]?.value ?? 0), materialCount: Number(materials[0]?.value ?? 0), activeTutorCount: activeTutors.length, websitePublished: Boolean(website[0]?.published), admissionsEnabled: Boolean(website[0]?.admissionsEnabled), paymentProviderReady: Boolean(payment?.status === "ready" && payment.hasCredentials), emailSenderNeedsVerification: email.managedSenderNeedsVerification, emailFailedCount: email.failedCount, activeCertificationPolicyCount: Number(activePolicies[0]?.value ?? 0) });
 }
 
+export type SchoolOperatorTrendInsight = SchoolOperatorInsightInput | null;
+
+export function buildSchoolOperatorTrendInsight(input: {
+  insightType: SchoolOperatorInsightInput["insightType"];
+  metric: string;
+  recent: number;
+  previous: number;
+  source: string;
+  actionDestination: string;
+  title: string;
+  unit?: "percentage_points" | "percent" | "count";
+  higherIsConcern?: boolean;
+  threshold?: number;
+}) : SchoolOperatorTrendInsight {
+  if (!Number.isFinite(input.recent) || !Number.isFinite(input.previous) || input.previous === 0) return null;
+  const delta = Number((input.recent - input.previous).toFixed(2));
+  const relativeDelta = Number(((delta / Math.abs(input.previous)) * 100).toFixed(2));
+  const threshold = input.threshold ?? 5;
+  const concernDelta = input.higherIsConcern === false ? -relativeDelta : relativeDelta;
+  if (Math.abs(concernDelta) < threshold || concernDelta <= 0) return null;
+  const direction = delta < 0 ? "fell" : "rose";
+  const unitLabel = input.unit === "percentage_points" ? " percentage points" : input.unit === "count" ? "" : "%";
+  const displayedDelta = input.unit === "percent" ? relativeDelta : delta;
+  const severity: SchoolOperatorInsightInput["severity"] = concernDelta >= threshold * 2 ? "attention" : "review";
+  return {
+    insightType: input.insightType,
+    severity,
+    dedupeKey: `trend-${input.metric}`,
+    title: input.title,
+    detail: `${input.metric.replaceAll("_", " ")} ${direction} by ${Math.abs(displayedDelta)}${unitLabel} versus the previous comparison window. Review the underlying records before taking action.`,
+    evidence: {
+      metric: input.metric,
+      value: input.recent,
+      comparison: `previous_window=${input.previous};delta=${delta};relative_delta=${relativeDelta}%`,
+      source: input.source,
+    },
+    actionDestination: input.actionDestination,
+  };
+}
+
 export async function refreshSchoolOperatorInsights(schoolId: number) {
   const db = await database();
-  const [dashboard, onboarding, commandCenter, programs, activeEnrollments, completedEnrollments, certificates, failedJobs, submittedEvidence, returnedEvidence, website] = await Promise.all([
+  const now = new Date();
+  const recentStart = new Date(now.getTime() - 30 * 86_400_000);
+  const previousStart = new Date(now.getTime() - 60 * 86_400_000);
+  const [dashboard, onboarding, commandCenter, programs, activeEnrollments, completedEnrollments, certificates, failedJobs, submittedEvidence, returnedEvidence, website, recentAttendance, previousAttendance, recentAcademics, previousAcademics, recentAdmissions, previousAdmissions] = await Promise.all([
     getDashboardSummary(schoolId),
     getTenantOnboardingStatus(schoolId),
     getOperationsCommandCenter(schoolId),
@@ -1802,6 +2143,12 @@ export async function refreshSchoolOperatorInsights(schoolId: number) {
     db.select({ value: sql<number>`count(*)` }).from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId), eq(programMilestoneEvidenceSubmissions.status, "submitted"))),
     db.select({ value: sql<number>`count(*)` }).from(programMilestoneEvidenceSubmissions).where(and(eq(programMilestoneEvidenceSubmissions.schoolId, schoolId), eq(programMilestoneEvidenceSubmissions.status, "reviewed_returned"))),
     db.select({ published: schoolWebsites.published }).from(schoolWebsites).where(eq(schoolWebsites.schoolId, schoolId)).limit(1),
+    db.select({ present: sql<number>`COALESCE(SUM(CASE WHEN ${attendanceRecords.status} IN ('present','late') THEN 1 ELSE 0 END),0)`, total: sql<number>`COUNT(*)` }).from(attendanceRecords).where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.attendeeType, "student"), sql`${attendanceRecords.attendanceDate} >= ${recentStart}`, sql`${attendanceRecords.attendanceDate} < ${now}`)),
+    db.select({ present: sql<number>`COALESCE(SUM(CASE WHEN ${attendanceRecords.status} IN ('present','late') THEN 1 ELSE 0 END),0)`, total: sql<number>`COUNT(*)` }).from(attendanceRecords).where(and(eq(attendanceRecords.schoolId, schoolId), eq(attendanceRecords.attendeeType, "student"), sql`${attendanceRecords.attendanceDate} >= ${previousStart}`, sql`${attendanceRecords.attendanceDate} < ${recentStart}`)),
+    db.select({ average: sql<number>`COALESCE(AVG((CAST(${scores.score} AS DECIMAL(12,4)) / NULLIF(${assessments.maximumScore},0))*100),0)`, count: sql<number>`COUNT(*)` }).from(scores).innerJoin(assessments, eq(scores.assessmentId, assessments.id)).where(and(eq(scores.schoolId, schoolId), eq(assessments.schoolId, schoolId), eq(assessments.status, "published"), sql`${assessments.heldOn} >= ${recentStart}`, sql`${assessments.heldOn} < ${now}`)),
+    db.select({ average: sql<number>`COALESCE(AVG((CAST(${scores.score} AS DECIMAL(12,4)) / NULLIF(${assessments.maximumScore},0))*100),0)`, count: sql<number>`COUNT(*)` }).from(scores).innerJoin(assessments, eq(scores.assessmentId, assessments.id)).where(and(eq(scores.schoolId, schoolId), eq(assessments.schoolId, schoolId), eq(assessments.status, "published"), sql`${assessments.heldOn} >= ${previousStart}`, sql`${assessments.heldOn} < ${recentStart}`)),
+    db.select({ total: sql<number>`COUNT(*)` }).from(admissionsApplications).where(and(eq(admissionsApplications.schoolId, schoolId), sql`${admissionsApplications.submittedAt} >= ${recentStart}`, sql`${admissionsApplications.submittedAt} < ${now}`)),
+    db.select({ total: sql<number>`COUNT(*)` }).from(admissionsApplications).where(and(eq(admissionsApplications.schoolId, schoolId), sql`${admissionsApplications.submittedAt} >= ${previousStart}`, sql`${admissionsApplications.submittedAt} < ${recentStart}`)),
   ]);
   const programmeCount = Number(programs[0]?.value ?? 0);
   const activeEnrollmentCount = Number(activeEnrollments[0]?.value ?? 0);
@@ -1811,7 +2158,19 @@ export async function refreshSchoolOperatorInsights(schoolId: number) {
   const submittedEvidenceCount = Number(submittedEvidence[0]?.value ?? 0);
   const returnedEvidenceCount = Number(returnedEvidence[0]?.value ?? 0);
   const websitePublished = Boolean(website[0]?.published);
+  const recentAttendanceRate = Number(recentAttendance[0]?.total ?? 0) > 0 ? Number(((Number(recentAttendance[0]?.present ?? 0) / Number(recentAttendance[0]?.total ?? 1)) * 100).toFixed(2)) : 0;
+  const previousAttendanceRate = Number(previousAttendance[0]?.total ?? 0) > 0 ? Number(((Number(previousAttendance[0]?.present ?? 0) / Number(previousAttendance[0]?.total ?? 1)) * 100).toFixed(2)) : 0;
+  const recentAcademicAverage = Number(recentAcademics[0]?.count ?? 0) > 0 ? Number(recentAcademics[0]?.average ?? 0) : 0;
+  const previousAcademicAverage = Number(previousAcademics[0]?.count ?? 0) > 0 ? Number(previousAcademics[0]?.average ?? 0) : 0;
+  const recentAdmissionCount = Number(recentAdmissions[0]?.total ?? 0);
+  const previousAdmissionCount = Number(previousAdmissions[0]?.total ?? 0);
   const signals: SchoolOperatorInsightInput[] = [];
+  const trendInsights = [
+    buildSchoolOperatorTrendInsight({ insightType: "health", metric: "attendance_rate_30d", recent: recentAttendanceRate, previous: previousAttendanceRate, source: "attendance_records", actionDestination: "attendance", title: "Attendance trend needs review", unit: "percentage_points", higherIsConcern: false, threshold: 3 }),
+    buildSchoolOperatorTrendInsight({ insightType: "learning", metric: "published_assessment_average_30d", recent: recentAcademicAverage, previous: previousAcademicAverage, source: "published_scores", actionDestination: "results", title: "Published assessment performance shifted", unit: "percentage_points", higherIsConcern: false, threshold: 5 }),
+    buildSchoolOperatorTrendInsight({ insightType: "admissions", metric: "admission_submissions_30d", recent: recentAdmissionCount, previous: previousAdmissionCount, source: "admissions_applications", actionDestination: "admissions", title: "Admissions enquiry volume shifted", unit: "percent", higherIsConcern: false, threshold: Math.max(1, previousAdmissionCount * 0.25) }),
+  ].filter((item): item is SchoolOperatorInsightInput => Boolean(item));
+  signals.push(...trendInsights);
   if (onboarding.completionPercent < 100) signals.push({ insightType: "readiness", severity: "attention", dedupeKey: "onboarding-incomplete", title: "Institution setup still needs review", detail: `${onboarding.completedSteps} of ${onboarding.totalSteps} readiness steps are complete. Review the next protected setup step before treating the institution as launch-ready.`, evidence: { metric: "onboarding_completion_percent", value: onboarding.completionPercent, source: "tenant_onboarding" }, actionDestination: onboarding.nextStep?.destination ?? "overview" });
   if (programmeCount === 0) signals.push({ insightType: "learning", severity: "attention", dedupeKey: "no-programmes", title: "No internal learning programme is ready", detail: "Prepare a private learning foundation in School Builder or Course Studio, then review activation separately.", evidence: { metric: "learning_programme_count", value: 0, source: "learning_programmes" }, actionDestination: "learning" });
   else if (activeEnrollmentCount === 0) signals.push({ insightType: "lifecycle", severity: "info", dedupeKey: "no-active-enrolments", title: "Programmes have no active learner enrolments", detail: "Review admissions and enrolment readiness. NSOS cannot infer demand, contact people, or enrol learners automatically.", evidence: { metric: "active_programme_enrolments", value: 0, source: "program_enrolments" }, actionDestination: "admissions" });
@@ -1836,9 +2195,168 @@ export async function dismissSchoolOperatorInsight(input: { schoolId: number; in
   return listSchoolOperatorInsights(input.schoolId);
 }
 
+export type SchoolOperatorHealthSignal = {
+  id: string;
+  label: string;
+  status: "healthy" | "watch" | "attention";
+  value: number;
+  unit: "percent" | "count" | "currency";
+  detail: string;
+  source: string;
+  actionDestination: string;
+};
+
+export function buildSchoolOperatorHealthSignals(input: {
+  attendanceRate: number;
+  pendingAdmissions: number;
+  outstanding: number;
+  failedEmailCount: number;
+  failedAutomationJobs: number;
+  onboardingCompletionPercent: number;
+}): SchoolOperatorHealthSignal[] {
+  return [
+    { id: "attendance", label: "Attendance", status: input.attendanceRate >= 90 ? "healthy" : input.attendanceRate >= 80 ? "watch" : "attention", value: input.attendanceRate, unit: "percent", detail: input.attendanceRate > 0 ? "Current student attendance rate from recorded attendance." : "No current attendance records are available.", source: "attendance_records", actionDestination: "attendance" },
+    { id: "admissions", label: "Admissions", status: input.pendingAdmissions === 0 ? "healthy" : input.pendingAdmissions <= 5 ? "watch" : "attention", value: input.pendingAdmissions, unit: "count", detail: input.pendingAdmissions === 0 ? "No submitted or under-review applications are waiting." : "Applications are waiting for protected admissions review.", source: "admissions_applications", actionDestination: "admissions" },
+    { id: "finance", label: "Finance", status: input.outstanding === 0 ? "healthy" : "attention", value: input.outstanding, unit: "currency", detail: input.outstanding === 0 ? "No outstanding invoice value is currently recorded." : "Outstanding invoice value is present and requires finance review.", source: "invoices", actionDestination: "finance" },
+    { id: "communications", label: "Communications", status: input.failedEmailCount === 0 ? "healthy" : "attention", value: input.failedEmailCount, unit: "count", detail: input.failedEmailCount === 0 ? "No recorded tenant email delivery failures." : "Recorded email delivery failures require configuration review.", source: "email_service_readiness", actionDestination: "communications" },
+    { id: "automation", label: "Automation", status: input.failedAutomationJobs === 0 ? "healthy" : "attention", value: input.failedAutomationJobs, unit: "count", detail: input.failedAutomationJobs === 0 ? "No failed automation jobs are recorded." : "Failed automation jobs require manual review.", source: "automation_jobs", actionDestination: "automation" },
+    { id: "setup", label: "Institution setup", status: input.onboardingCompletionPercent >= 100 ? "healthy" : input.onboardingCompletionPercent >= 80 ? "watch" : "attention", value: input.onboardingCompletionPercent, unit: "percent", detail: input.onboardingCompletionPercent >= 100 ? "Core onboarding readiness is complete." : "The institution still has onboarding readiness steps to review.", source: "tenant_onboarding", actionDestination: "overview" },
+  ];
+}
+
+export type SchoolOperatorAttentionItem = SchoolOperatorInsight & { priority: number };
+
+export function prioritizeSchoolOperatorInsights(
+  insights: SchoolOperatorInsight[],
+  focus: "balanced" | "learning" | "admissions" | "revenue" | "operational_readiness" = "balanced",
+) {
+  const focusTypes: Record<typeof focus, string[]> = {
+    balanced: [],
+    learning: ["learning", "lifecycle", "certificate"],
+    admissions: ["admissions"],
+    revenue: ["revenue"],
+    operational_readiness: ["readiness", "health"],
+  };
+  const severityWeight: Record<SchoolOperatorInsight["severity"], number> = { attention: 60, review: 45, info: 20 };
+  return insights
+    .filter(insight => insight.status === "open")
+    .map(insight => ({
+      ...insight,
+      priority: severityWeight[insight.severity] + (focusTypes[focus].includes(insight.insightType) ? 20 : 0) + (insight.actionDestination ? 10 : 0),
+    }))
+    .sort((a, b) => b.priority - a.priority || b.generatedAt.getTime() - a.generatedAt.getTime());
+}
+
+export type SchoolOperatorQuestionResult = {
+  question: string;
+  answer: string;
+  confidence: "high" | "limited";
+  evidence: Array<{ metric: string; value: number | string; source: string }>;
+  suggestedDestination?: string;
+  limitations: string[];
+};
+
+export type SchoolOperatorQuestionTopic =
+  | "attendance"
+  | "admissions"
+  | "finance"
+  | "health"
+  | "attention"
+  | "onboarding"
+  | "academic"
+  | "general";
+
+export function resolveSchoolOperatorQuestionTopic(question: string): SchoolOperatorQuestionTopic {
+  const normalized = question.trim().toLowerCase();
+  if (/(attendance|present|absent|late)/.test(normalized)) return "attendance";
+  if (/(admission|applicant|application)/.test(normalized)) return "admissions";
+  if (/(fee|finance|revenue|money|outstanding|invoice)/.test(normalized)) return "finance";
+  if (/(health|healthy|status|doing|operating state)/.test(normalized)) return "health";
+  if (/(attention|urgent|priority|needs.*review|review)/.test(normalized)) return "attention";
+  if (/(setup|onboard|ready|launch)/.test(normalized)) return "onboarding";
+  if (/(academic|assessment|score|result|learning|performance)/.test(normalized)) return "academic";
+  return "general";
+}
+
+export async function answerSchoolOperatorQuestion(input: { schoolId: number; question: string }) : Promise<SchoolOperatorQuestionResult> {
+  const question = input.question.trim().slice(0, 500);
+  if (!question) throw new Error("Ask a question about the school's current operating state.");
+  const workspace = await getSchoolOperatorWorkspace(input.schoolId);
+  const normalized = question.toLowerCase();
+  const evidence = (workspace.insights.filter(item => item.status === "open").slice(0, 3).map(item => ({
+    metric: item.evidence.metric,
+    value: item.evidence.value,
+    source: item.evidence.source,
+  })));
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "attendance") {
+    return { question, answer: `The current recorded attendance rate is ${workspace.dashboard.attendanceRate}%. This is calculated from the school's current attendance records; it is not a prediction about individual learners.`, confidence: "high", evidence: [{ metric: "attendance_rate", value: workspace.dashboard.attendanceRate, source: "attendance_records" }], suggestedDestination: "attendance", limitations: ["The answer reflects recorded attendance data available to NSOS."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "admissions") {
+    return { question, answer: `There are ${workspace.dashboard.pendingAdmissions} pending admissions in the current school dashboard. Review them in the protected admissions workspace before taking action.`, confidence: "high", evidence: [{ metric: "pending_admissions", value: workspace.dashboard.pendingAdmissions, source: "admissions_applications" }], suggestedDestination: "admissions", limitations: ["This is a current aggregate count, not an admissions prediction or recommendation."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "finance") {
+    return { question, answer: `The current recorded outstanding value is ${new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(workspace.dashboard.outstanding)}. NSOS does not initiate collection or payment actions from School Intelligence.`, confidence: "high", evidence: [{ metric: "outstanding", value: workspace.dashboard.outstanding, source: "invoices" }], suggestedDestination: "finance", limitations: ["This is the current recorded invoice aggregate; it is not a cash-flow forecast."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "health") {
+    const attention = workspace.healthSignals.filter(signal => signal.status === "attention").map(signal => signal.label);
+    const watch = workspace.healthSignals.filter(signal => signal.status === "watch").map(signal => signal.label);
+    const answer = attention.length ? `Current School Health has ${attention.length} area${attention.length === 1 ? "" : "s"} requiring review: ${attention.join(", ")}.${watch.length ? ` Watch areas: ${watch.join(", ")}.` : ""}` : watch.length ? `No School Health area is currently marked for attention. Watch areas: ${watch.join(", ")}.` : "No School Health area is currently marked for attention or watch.";
+    return { question, answer, confidence: "high", evidence: workspace.healthSignals.map(signal => ({ metric: signal.id, value: signal.value, source: signal.source })), suggestedDestination: attention.length ? (workspace.healthSignals.find(signal => signal.status === "attention")?.actionDestination ?? "overview") : "overview", limitations: ["Health signals are aggregate review cues, not ratings or predictions."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "attention") {
+    const queue = workspace.attentionQueue.slice(0, 5);
+    const answer = queue.length ? `The current attention queue contains ${queue.length} surfaced open item${queue.length === 1 ? "" : "s"}. The highest-priority item is “${queue[0].title}”. Review it in its protected workspace; NSOS will not execute the action from this answer.` : "There are no open School Intelligence items currently in the attention queue.";
+    return { question, answer, confidence: "high", evidence: queue.map(item => ({ metric: item.evidence.metric, value: item.evidence.value, source: item.evidence.source })), suggestedDestination: queue[0]?.actionDestination ?? "overview", limitations: ["Priority is a deterministic review ordering, not a prediction of harm or outcome."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "onboarding") {
+    return { question, answer: `Institution onboarding is ${workspace.onboarding.completionPercent}% complete. Academy launch readiness currently has ${workspace.launchReadiness.summary.ready} ready, ${workspace.launchReadiness.summary.warning} warning, and ${workspace.launchReadiness.summary.blocked} blocked checks.`, confidence: "high", evidence: [{ metric: "onboarding_completion_percent", value: workspace.onboarding.completionPercent, source: "tenant_onboarding" }, { metric: "launch_ready_checks", value: workspace.launchReadiness.summary.ready, source: "academy_launch_readiness" }], suggestedDestination: "overview", limitations: ["Readiness checks describe configuration evidence only; they are not an approval to launch publicly."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "academic") {
+    const academic = workspace.insights.find(item => item.evidence.metric === "published_assessment_average_30d");
+    return { question, answer: academic ? academic.detail : "NSOS does not currently have enough published assessment comparison data to answer that question. No academic outcome should be inferred from the absence of an insight.", confidence: academic ? "high" : "limited", evidence: academic ? [{ metric: academic.evidence.metric, value: academic.evidence.value, source: academic.evidence.source }] : evidence, suggestedDestination: "learning", limitations: ["NSOS does not infer individual learner performance or risk from aggregate data."] };
+  }
+  return { question, answer: "I can answer from the current School Intelligence evidence on attendance, admissions, finance, School Health, attention items, onboarding/readiness, and published assessment trends. Ask a specific question in one of those areas.", confidence: "limited", evidence, suggestedDestination: "overview", limitations: ["This version deliberately avoids free-form guessing and unsupported claims."] };
+}
+
 export async function getSchoolOperatorWorkspace(schoolId: number) {
-  const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness] = await Promise.all([getInstitutionOperatingProfile(schoolId), getSchoolOperatorWorkflowPreferences(schoolId), getDashboardSummary(schoolId), getTenantOnboardingStatus(schoolId), getOperationsCommandCenter(schoolId), listSchoolOperatorInsights(schoolId), getAcademyLaunchReadiness(schoolId)]);
-  return { profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness, source: "deterministic-v1" as const, limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."] };
+  const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness, failedAutomation] = await Promise.all([
+    getInstitutionOperatingProfile(schoolId),
+    getSchoolOperatorWorkflowPreferences(schoolId),
+    getDashboardSummary(schoolId),
+    getTenantOnboardingStatus(schoolId),
+    getOperationsCommandCenter(schoolId),
+    listSchoolOperatorInsights(schoolId),
+    getAcademyLaunchReadiness(schoolId),
+    (async () => (await database()).select({ value: sql<number>`count(*)` }).from(automationJobs).where(and(eq(automationJobs.schoolId, schoolId), eq(automationJobs.status, "failed"))))(),
+  ]);
+  const healthSignals = buildSchoolOperatorHealthSignals({
+    attendanceRate: dashboard.attendanceRate,
+    pendingAdmissions: dashboard.pendingAdmissions,
+    outstanding: dashboard.outstanding,
+    failedEmailCount: commandCenter.communications.email.failedCount,
+    failedAutomationJobs: Number(failedAutomation[0]?.value ?? 0),
+    onboardingCompletionPercent: onboarding.completionPercent,
+  });
+  const attentionQueue = prioritizeSchoolOperatorInsights(insights, workflowPreferences.reviewFocus);
+  return {
+    profile,
+    workflowPreferences,
+    dashboard,
+    onboarding,
+    commandCenter,
+    insights,
+    attentionQueue,
+    healthSignals,
+    reviewSummary: {
+      open: insights.filter(item => item.status === "open").length,
+      attention: insights.filter(item => item.status === "open" && item.severity === "attention").length,
+      review: insights.filter(item => item.status === "open" && item.severity === "review").length,
+      generatedAt: insights.reduce((latest, item) => item.generatedAt > latest ? item.generatedAt : latest, new Date(0)),
+    },
+    launchReadiness,
+    source: "deterministic-v2" as const,
+    limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "Health signals are aggregate review cues, not ratings or predictions.", "Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."],
+  };
 }
 
 export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: number; executedBy: number; sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean }) {
