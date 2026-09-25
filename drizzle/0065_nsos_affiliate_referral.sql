@@ -57,7 +57,7 @@ CREATE TABLE `affiliateConversions` (
 	`amount` decimal(12,2) NOT NULL DEFAULT '0.00',
 	`commissionAmount` decimal(12,2) NOT NULL DEFAULT '0.00',
 	`currency` varchar(8) NOT NULL DEFAULT 'NGN',
-	`status` enum('pending','approved','reversed') NOT NULL DEFAULT 'pending',
+	`status` enum('pending','approved','paid','reversed') NOT NULL DEFAULT 'pending',
 	`occurredAt` timestamp NOT NULL,
 	`approvedAt` timestamp,
 	`approvedBy` int,
