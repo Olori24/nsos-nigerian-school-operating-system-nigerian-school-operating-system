@@ -10,6 +10,12 @@ import {
   automationJobEvents,
   automationJobs,
   advertisingCampaigns,
+  affiliateClicks,
+  affiliateConversions,
+  affiliateLeads,
+  affiliatePartners,
+  affiliatePayoutItems,
+  affiliatePayouts,
   aiTutorEscalations,
   aiTutorFeedback,
   aiTutorInteractions,
@@ -377,6 +383,261 @@ export function getSmsDeliveryWebhookUrls(schoolId: number) {
     twilio: `${NSOS_WEBHOOK_ORIGIN}/api/webhooks/sms/twilio${query}`,
   };
 }
+
+
+function affiliateCode(value: string) {
+  const code = value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{2,47}$/.test(code)) throw new Error("Affiliate code must be 3-48 characters and contain only letters, numbers, hyphens, or underscores.");
+  return code;
+}
+
+function affiliateDestination(value: string) {
+  const url = new URL(value.trim());
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Affiliate destination must use HTTP or HTTPS.");
+  return url.toString();
+}
+
+function affiliateHash(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function parseAffiliateCookie(cookieHeader: string | undefined) {
+  const match = cookieHeader?.split(";").map(value => value.trim()).find(value => value.startsWith("nsos_affiliate_click="));
+  return match ? decodeURIComponent(match.slice("nsos_affiliate_click=".length)).slice(0, 64) : null;
+}
+
+export function getAffiliateClickCookie(cookieHeader: string | undefined) {
+  return parseAffiliateCookie(cookieHeader);
+}
+
+export async function createAffiliatePartner(input: {
+  code: string;
+  name: string;
+  destinationUrl: string;
+  commissionType: "percentage" | "fixed";
+  commissionValue: string;
+  currency?: string;
+  attributionDays?: number;
+  termsVersion?: string;
+  createdBy: number;
+}) {
+  const db = await database();
+  const code = affiliateCode(input.code);
+  const destinationUrl = affiliateDestination(input.destinationUrl);
+  const commissionValue = Number(input.commissionValue);
+  if (!Number.isFinite(commissionValue) || commissionValue < 0) throw new Error("Commission value must be zero or greater.");
+  if (input.commissionType === "percentage" && commissionValue > 100) throw new Error("Percentage commission cannot exceed 100.");
+  const attributionDays = Math.min(Math.max(input.attributionDays ?? 30, 1), 180);
+  const result = await db.insert(affiliatePartners).values({
+    code,
+    name: input.name.trim().slice(0, 160),
+    destinationUrl,
+    status: "active",
+    commissionType: input.commissionType,
+    commissionValue: commissionValue.toFixed(2),
+    currency: (input.currency ?? "NGN").trim().toUpperCase().slice(0, 8),
+    attributionDays,
+    termsVersion: input.termsVersion?.trim().slice(0, 64) || null,
+    createdBy: input.createdBy,
+  });
+  return getAffiliatePartnerById(Number(result[0].insertId));
+}
+
+export async function getAffiliatePartnerById(id: number) {
+  return (await (await database()).select().from(affiliatePartners).where(eq(affiliatePartners.id, id)).limit(1))[0] ?? null;
+}
+
+export async function getAffiliatePartnerByCode(code: string) {
+  return (await (await database()).select().from(affiliatePartners).where(and(eq(affiliatePartners.code, affiliateCode(code)), eq(affiliatePartners.status, "active"))).limit(1))[0] ?? null;
+}
+
+export async function listAffiliatePartners() {
+  return (await database()).select().from(affiliatePartners).orderBy(desc(affiliatePartners.createdAt));
+}
+
+export async function updateAffiliatePartner(input: {
+  id: number;
+  name?: string;
+  destinationUrl?: string;
+  status?: "active" | "paused" | "archived";
+  commissionType?: "percentage" | "fixed";
+  commissionValue?: string;
+  currency?: string;
+  attributionDays?: number;
+  termsVersion?: string | null;
+}) {
+  const db = await database();
+  const existing = await getAffiliatePartnerById(input.id);
+  if (!existing) throw new Error("Affiliate partner not found.");
+  const set: Record<string, unknown> = {};
+  if (input.name !== undefined) set.name = input.name.trim().slice(0, 160);
+  if (input.destinationUrl !== undefined) set.destinationUrl = affiliateDestination(input.destinationUrl);
+  if (input.status !== undefined) set.status = input.status;
+  if (input.commissionType !== undefined) set.commissionType = input.commissionType;
+  if (input.commissionValue !== undefined) {
+    const value = Number(input.commissionValue);
+    if (!Number.isFinite(value) || value < 0) throw new Error("Commission value must be zero or greater.");
+    const type = input.commissionType ?? existing.commissionType;
+    if (type === "percentage" && value > 100) throw new Error("Percentage commission cannot exceed 100.");
+    set.commissionValue = value.toFixed(2);
+  }
+  if (input.currency !== undefined) set.currency = input.currency.trim().toUpperCase().slice(0, 8);
+  if (input.attributionDays !== undefined) set.attributionDays = Math.min(Math.max(input.attributionDays, 1), 180);
+  if (input.termsVersion !== undefined) set.termsVersion = input.termsVersion?.trim().slice(0, 64) || null;
+  if (Object.keys(set).length) await db.update(affiliatePartners).set(set).where(eq(affiliatePartners.id, input.id));
+  return getAffiliatePartnerById(input.id);
+}
+
+export async function recordAffiliateClick(input: {
+  partnerId: number;
+  clickId: string;
+  ip?: string;
+  userAgent?: string;
+  referrer?: string;
+  landingPath?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+}) {
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner || partner.status !== "active") throw new Error("Affiliate partner is unavailable.");
+  const clickId = input.clickId.trim().slice(0, 64);
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(clickId)) throw new Error("Invalid affiliate click identifier.");
+  await (await database()).insert(affiliateClicks).values({
+    partnerId: input.partnerId,
+    clickId,
+    ipHash: input.ip ? affiliateHash(input.ip) : null,
+    userAgentHash: input.userAgent ? affiliateHash(input.userAgent) : null,
+    referrer: input.referrer?.slice(0, 2048) || null,
+    landingPath: input.landingPath?.slice(0, 2048) || null,
+    utmSource: input.utmSource?.slice(0, 160) || null,
+    utmMedium: input.utmMedium?.slice(0, 160) || null,
+    utmCampaign: input.utmCampaign?.slice(0, 160) || null,
+    utmContent: input.utmContent?.slice(0, 160) || null,
+    utmTerm: input.utmTerm?.slice(0, 160) || null,
+  }).onDuplicateKeyUpdate({ set: { partnerId: input.partnerId } });
+  return { clickId, destinationUrl: partner.destinationUrl, attributionDays: partner.attributionDays };
+}
+
+export async function recordAffiliateLead(input: {
+  partnerId: number;
+  clickId?: string | null;
+  email: string;
+  leadSource?: string;
+  consentedAt?: Date;
+}) {
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner || partner.status !== "active") return null;
+  const emailHash = affiliateHash(normaliseAuthEmail(input.email));
+  const db = await database();
+  await db.insert(affiliateLeads).values({
+    partnerId: partner.id,
+    clickId: input.clickId?.slice(0, 64) || null,
+    emailHash,
+    leadSource: input.leadSource?.slice(0, 120) || null,
+    consentedAt: input.consentedAt ?? new Date(),
+  }).onDuplicateKeyUpdate({ set: { clickId: input.clickId?.slice(0, 64) || null, leadSource: input.leadSource?.slice(0, 120) || null, updatedAt: new Date() } });
+  return (await db.select().from(affiliateLeads).where(and(eq(affiliateLeads.partnerId, partner.id), eq(affiliateLeads.emailHash, emailHash))).limit(1))[0] ?? null;
+}
+
+function calculateAffiliateCommission(partner: typeof affiliatePartners.$inferSelect, amount: number) {
+  const value = Number(partner.commissionValue);
+  return partner.commissionType === "percentage" ? Number((amount * value / 100).toFixed(2)) : Number(value.toFixed(2));
+}
+
+export async function recordAffiliateConversion(input: {
+  partnerId: number;
+  leadId?: number | null;
+  clickId?: string | null;
+  externalReference: string;
+  eventType: string;
+  amount: number;
+  occurredAt?: Date;
+  note?: string;
+}) {
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner) throw new Error("Affiliate partner not found.");
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error("Conversion amount must be zero or greater.");
+  const commissionAmount = calculateAffiliateCommission(partner, input.amount);
+  const db = await database();
+  const existing = (await db.select().from(affiliateConversions).where(eq(affiliateConversions.externalReference, input.externalReference.trim().slice(0, 160))).limit(1))[0];
+  if (existing) return existing;
+  const result = await db.insert(affiliateConversions).values({
+    partnerId: partner.id,
+    leadId: input.leadId ?? null,
+    clickId: input.clickId?.slice(0, 64) || null,
+    externalReference: input.externalReference.trim().slice(0, 160),
+    eventType: input.eventType.trim().slice(0, 80),
+    amount: input.amount.toFixed(2),
+    commissionAmount: commissionAmount.toFixed(2),
+    currency: partner.currency,
+    status: "pending",
+    occurredAt: input.occurredAt ?? new Date(),
+    note: input.note?.slice(0, 2000) || null,
+  });
+  return (await db.select().from(affiliateConversions).where(eq(affiliateConversions.id, Number(result[0].insertId))).limit(1))[0];
+}
+
+export async function approveAffiliateConversion(id: number, approvedBy: number) {
+  const db = await database();
+  await db.update(affiliateConversions).set({ status: "approved", approvedBy, approvedAt: new Date() }).where(and(eq(affiliateConversions.id, id), eq(affiliateConversions.status, "pending")));
+  return (await db.select().from(affiliateConversions).where(eq(affiliateConversions.id, id)).limit(1))[0] ?? null;
+}
+
+export async function createAffiliatePayout(input: { partnerId: number; periodStart: string; periodEnd: string; createdBy: number; note?: string }) {
+  const db = await database();
+  const partner = await getAffiliatePartnerById(input.partnerId);
+  if (!partner) throw new Error("Affiliate partner not found.");
+  const start = asDate(input.periodStart);
+  const end = asDate(input.periodEnd);
+  if (!start || !end || start > end) throw new Error("Payout period is invalid.");
+  const approved = await db.select().from(affiliateConversions).where(and(eq(affiliateConversions.partnerId, partner.id), eq(affiliateConversions.status, "approved"), sql`${affiliateConversions.occurredAt} >= ${start}`, sql`${affiliateConversions.occurredAt} < ${new Date(end.getTime() + 86_400_000)}`));
+  const amount = approved.reduce((sum, item) => sum + Number(item.commissionAmount), 0);
+  if (amount <= 0) throw new Error("No approved affiliate commissions are available for this period.");
+  const payoutResult = await db.insert(affiliatePayouts).values({
+    partnerId: partner.id,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    amount: amount.toFixed(2),
+    currency: partner.currency,
+    status: "pending",
+    createdBy: input.createdBy,
+    note: input.note?.slice(0, 2000) || null,
+  });
+  const payoutId = Number(payoutResult[0].insertId);
+  for (const conversion of approved) {
+    await db.insert(affiliatePayoutItems).values({ payoutId, conversionId: conversion.id, amount: conversion.commissionAmount });
+  }
+  return (await db.select().from(affiliatePayouts).where(eq(affiliatePayouts.id, payoutId)).limit(1))[0];
+}
+
+export async function listAffiliatePayouts() {
+  return (await database()).select().from(affiliatePayouts).orderBy(desc(affiliatePayouts.createdAt));
+}
+
+export async function updateAffiliatePayoutStatus(input: { id: number; status: "approved" | "paid" | "void"; approvedBy?: number; paymentReference?: string; note?: string }) {
+  const db = await database();
+  const payout = (await db.select().from(affiliatePayouts).where(eq(affiliatePayouts.id, input.id)).limit(1))[0];
+  if (!payout) throw new Error("Affiliate payout not found.");
+  if (input.status === "approved" && payout.status !== "pending") throw new Error("Only pending payouts can be approved.");
+  if (input.status === "paid" && payout.status !== "approved") throw new Error("Only approved payouts can be marked paid.");
+  if (input.status === "void" && payout.status === "paid") throw new Error("Paid payouts cannot be voided.");
+  await db.update(affiliatePayouts).set({
+    status: input.status,
+    approvedBy: input.approvedBy ?? payout.approvedBy,
+    paymentReference: input.paymentReference?.slice(0, 160) || payout.paymentReference,
+    note: input.note?.slice(0, 2000) ?? payout.note,
+    paidAt: input.status === "paid" ? new Date() : payout.paidAt,
+  }).where(eq(affiliatePayouts.id, input.id));
+  return (await db.select().from(affiliatePayouts).where(eq(affiliatePayouts.id, input.id)).limit(1))[0];
+}
+
+export async function listAffiliateConversions(partnerId?: number) {
+  return (await database()).select().from(affiliateConversions).where(partnerId ? eq(affiliateConversions.partnerId, partnerId) : undefined).orderBy(desc(affiliateConversions.occurredAt)).limit(500);
+}
+
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
