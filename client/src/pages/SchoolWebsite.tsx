@@ -6,11 +6,11 @@ import { useRoute } from "wouter";
 type SiteQuery = { data?: PublicSchoolSite; isLoading: boolean };
 type PublicSchoolSite = {
   school: { name: string; shortCode?: string; state?: string | null };
-  website: { headline?: string | null; introduction?: string | null; primaryColor?: string | null; campusLocation?: string | null; contactPhone?: string | null; contactEmail?: string | null; logoUrl?: string | null; heroUrl?: string | null; visualTheme?: "modern" | "academic" | "community" | null };
+  website: { headline?: string | null; introduction?: string | null; primaryColor?: string | null; campusLocation?: string | null; contactPhone?: string | null; contactEmail?: string | null; logoUrl?: string | null; heroUrl?: string | null; visualTheme?: "modern" | "academic" | "community" | null; websiteContent?: { about?: string; principalName?: string; principalTitle?: string; principalMessage?: string; programmes?: string[]; faqs?: Array<{ question: string; answer: string }>; socialLinks?: Array<{ label: string; url: string }> } | null };
   admissionsUrl?: string | null;
 };
 type WebsitePreviewInput = { headline?: string; introduction?: string; primaryColor?: string; campusLocation?: string; contactPhone?: string; contactEmail?: string; logoUrl?: string | null; heroUrl?: string | null; visualTheme?: "modern" | "academic" | "community" | null };
-export type WebsitePreviewSection = "brand" | "hero" | "contact" | "location" | "admissions";
+export type WebsitePreviewSection = "brand" | "hero" | "about" | "principal" | "programmes" | "faqs" | "contact" | "location" | "admissions";
 
 export default function SchoolWebsite() {
   const [, params] = useRoute("/school/:shortCode");
@@ -107,6 +107,10 @@ export function SchoolWebsiteLayout({ site, preview = false, highlightedSection 
       </div>
     </section>
 
+    {website.websiteContent?.about && <section className={`border-t border-[#e0e7e1] bg-white/80 ${previewOutline("about")}`} data-preview-section="about"><div className="mx-auto max-w-5xl px-5 py-16 sm:px-8 sm:py-24"><p className="text-[10px] font-bold uppercase tracking-[.18em]" style={{ color: brand }}>About the school</p><h2 className="mt-3 text-3xl font-semibold tracking-[-.045em] text-[#1c3028]">What this school stands for</h2><p className="mt-6 max-w-4xl whitespace-pre-line text-base leading-8 text-[#5f6d66]">{website.websiteContent.about}</p></div></section>}
+    {website.websiteContent?.principalMessage && <section className={`border-t border-[#e0e7e1] bg-[#f8faf7] ${previewOutline("principal")}`} data-preview-section="principal"><div className="mx-auto max-w-5xl px-5 py-16 sm:px-8 sm:py-24"><p className="text-[10px] font-bold uppercase tracking-[.18em]" style={{ color: brand }}>A message from school leadership</p><blockquote className="mt-5 max-w-4xl text-2xl font-medium leading-10 tracking-[-.025em] text-[#24372f] sm:text-3xl">“{website.websiteContent.principalMessage}”</blockquote>{website.websiteContent.principalName && <p className="mt-6 text-sm font-bold text-[#31463d]">{website.websiteContent.principalName}{website.websiteContent.principalTitle ? `, ${website.websiteContent.principalTitle}` : ""}</p>}</div></section>}
+    {!!website.websiteContent?.programmes?.length && <section className={`border-t border-[#e0e7e1] bg-white ${previewOutline("programmes")}`} data-preview-section="programmes"><div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-24"><p className="text-[10px] font-bold uppercase tracking-[.18em]" style={{ color: brand }}>Academics & programmes</p><h2 className="mt-3 text-3xl font-semibold tracking-[-.045em] text-[#1c3028]">What learners can explore</h2><div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{website.websiteContent.programmes.map((programme, index) => <div key={programme + index} className="rounded-2xl border border-[#e0e7e1] bg-[#fafcf9] p-6"><span className="text-xs font-bold" style={{ color: brand }}>0{index + 1}</span><p className="mt-5 text-lg font-semibold text-[#2b4036]">{programme}</p></div>)}</div></div></section>}
+    {!!website.websiteContent?.faqs?.length && <section className={`border-t border-[#e0e7e1] bg-[#f8faf7] ${previewOutline("faqs")}`} data-preview-section="faqs"><div className="mx-auto max-w-5xl px-5 py-16 sm:px-8 sm:py-24"><p className="text-[10px] font-bold uppercase tracking-[.18em]" style={{ color: brand }}>Questions families ask</p><div className="mt-8 divide-y divide-[#dfe7e1] rounded-2xl border border-[#dfe7e1] bg-white">{website.websiteContent.faqs.map((faq, index) => <details key={faq.question + index} className="p-5"><summary className="cursor-pointer text-sm font-bold text-[#2b4036]">{faq.question}</summary><p className="mt-3 max-w-3xl text-sm leading-7 text-[#65736c]">{faq.answer}</p></details>)}</div></div></section>}
     <section id="admissions" className={`mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28 ${previewOutline("admissions")}`} data-preview-section="admissions">
       <div className="grid overflow-hidden rounded-[2rem] bg-[#132c24] text-white shadow-[0_30px_80px_rgba(17,45,36,.16)] lg:grid-cols-[1fr_.8fr]">
         <div className="p-8 sm:p-12 lg:p-16">
@@ -139,7 +143,7 @@ export function SchoolWebsiteLayout({ site, preview = false, highlightedSection 
 
     <footer className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-10 text-xs text-[#758079] sm:flex-row sm:items-center sm:justify-between sm:px-8">
       <span>Powered by NSOS · Nigerian School Operating System</span>
-      <span>{school.name}</span>
+      <span className="flex flex-wrap gap-3">{website.websiteContent?.socialLinks?.map(link => <a key={link.label} href={link.url} target="_blank" rel="noreferrer" className="font-semibold hover:text-[#31463d]">{link.label}</a>)}</span>
     </footer>
   </main>;
 }
