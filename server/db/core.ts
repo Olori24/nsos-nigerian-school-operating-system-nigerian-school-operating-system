@@ -1826,12 +1826,34 @@ export async function getPublicSchoolWebsite(shortCode: string) {
   return publicWebsiteResponse(row);
 }
 
+export function isNsosSchoolSubdomain(value: string) {
+  const normalised = normaliseDomain(value);
+  if (!normalised || !normalised.endsWith(".nsos.top")) return false;
+  const label = normalised.slice(0, -".nsos.top".length);
+  if (label === "www") return false;
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label);
+}
+
+export function nsosSchoolSubdomainForShortCode(shortCode: string) {
+  const label = shortCode.trim().toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) return null;
+  return label + ".nsos.top";
+}
+
 export async function getPublicSchoolWebsiteByDomain(domain: string) {
   const db = await database();
   const normalised = normaliseDomain(domain);
   if (!normalised) return undefined;
-  const row = (await db.select({ school: schools, website: schoolWebsites }).from(schoolWebsites).innerJoin(schools, eq(schoolWebsites.schoolId, schools.id)).where(and(eq(schoolWebsites.customDomain, normalised), eq(schoolWebsites.domainStatus, "active"), eq(schoolWebsites.published, true))).limit(1))[0];
-  return row && isActivePublishedDomain(row.website) ? publicWebsiteResponse(row) : undefined;
+
+  const customRow = (await db.select({ school: schools, website: schoolWebsites }).from(schoolWebsites).innerJoin(schools, eq(schoolWebsites.schoolId, schools.id)).where(and(eq(schoolWebsites.customDomain, normalised), eq(schoolWebsites.domainStatus, "active"), eq(schoolWebsites.published, true))).limit(1))[0];
+  if (customRow && isActivePublishedDomain(customRow.website)) return publicWebsiteResponse(customRow);
+
+  // NSOS-owned school subdomains are resolved by the school short code. This keeps
+  // school sites on the nsos.top namespace without requiring per-school custom-domain
+  // verification records or storing a duplicate domain for every tenant.
+  if (!isNsosSchoolSubdomain(normalised)) return undefined;
+  const shortCode = normalised.slice(0, -".nsos.top".length).toUpperCase();
+  return getPublicSchoolWebsite(shortCode);
 }
 
 export async function getSchoolMembership(userId: number, schoolId: number) {
