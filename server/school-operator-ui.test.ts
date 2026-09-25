@@ -6,6 +6,14 @@ const home = readFileSync(new URL("../client/src/pages/Home.tsx", import.meta.ur
 const db = readFileSync(new URL("./db/core.ts", import.meta.url), "utf8");
 
 describe("School Operator interface", () => {
+  it("surfaces a concise owner morning brief from current operational records", () => {
+    expect(operator).toContain("Owner Morning Brief");
+    expect(operator).toContain("Start with what matters today.");
+    expect(operator).toContain("action{morningActions.length === 1 ? "" : "s"} surfaced");
+    expect(operator).toContain("A short action list built from the school's current records.");
+    expect(operator).toContain("No immediate exception surfaced.");
+  });
+
   it("makes School Operator owner/admin-only and available in the command center navigation", () => {
     expect(home).toContain('"school-operator"');
     expect(home).toContain('label: "School Operator"');
