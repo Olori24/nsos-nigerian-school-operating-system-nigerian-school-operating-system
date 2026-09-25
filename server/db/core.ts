@@ -2095,6 +2095,7 @@ export function buildSchoolOperatorTrendInsight(input: {
     evidence: {
       metric: input.metric,
       value: input.recent,
+      comparison: `previous_window=${input.previous};delta=${delta};relative_delta=${relativeDelta}%`,
       source: input.source,
     },
     actionDestination: input.actionDestination,
@@ -2170,9 +2171,97 @@ export async function dismissSchoolOperatorInsight(input: { schoolId: number; in
   return listSchoolOperatorInsights(input.schoolId);
 }
 
+export type SchoolOperatorHealthSignal = {
+  id: string;
+  label: string;
+  status: "healthy" | "watch" | "attention";
+  value: number;
+  unit: "percent" | "count" | "currency";
+  detail: string;
+  source: string;
+  actionDestination: string;
+};
+
+export function buildSchoolOperatorHealthSignals(input: {
+  attendanceRate: number;
+  pendingAdmissions: number;
+  outstanding: number;
+  failedEmailCount: number;
+  failedAutomationJobs: number;
+  onboardingCompletionPercent: number;
+}): SchoolOperatorHealthSignal[] {
+  return [
+    { id: "attendance", label: "Attendance", status: input.attendanceRate >= 90 ? "healthy" : input.attendanceRate >= 80 ? "watch" : "attention", value: input.attendanceRate, unit: "percent", detail: input.attendanceRate > 0 ? "Current student attendance rate from recorded attendance." : "No current attendance records are available.", source: "attendance_records", actionDestination: "attendance" },
+    { id: "admissions", label: "Admissions", status: input.pendingAdmissions === 0 ? "healthy" : input.pendingAdmissions <= 5 ? "watch" : "attention", value: input.pendingAdmissions, unit: "count", detail: input.pendingAdmissions === 0 ? "No submitted or under-review applications are waiting." : "Applications are waiting for protected admissions review.", source: "admissions_applications", actionDestination: "admissions" },
+    { id: "finance", label: "Finance", status: input.outstanding === 0 ? "healthy" : "attention", value: input.outstanding, unit: "currency", detail: input.outstanding === 0 ? "No outstanding invoice value is currently recorded." : "Outstanding invoice value is present and requires finance review.", source: "invoices", actionDestination: "finance" },
+    { id: "communications", label: "Communications", status: input.failedEmailCount === 0 ? "healthy" : "attention", value: input.failedEmailCount, unit: "count", detail: input.failedEmailCount === 0 ? "No recorded tenant email delivery failures." : "Recorded email delivery failures require configuration review.", source: "email_service_readiness", actionDestination: "communications" },
+    { id: "automation", label: "Automation", status: input.failedAutomationJobs === 0 ? "healthy" : "attention", value: input.failedAutomationJobs, unit: "count", detail: input.failedAutomationJobs === 0 ? "No failed automation jobs are recorded." : "Failed automation jobs require manual review.", source: "automation_jobs", actionDestination: "automation" },
+    { id: "setup", label: "Institution setup", status: input.onboardingCompletionPercent >= 100 ? "healthy" : input.onboardingCompletionPercent >= 80 ? "watch" : "attention", value: input.onboardingCompletionPercent, unit: "percent", detail: input.onboardingCompletionPercent >= 100 ? "Core onboarding readiness is complete." : "The institution still has onboarding readiness steps to review.", source: "tenant_onboarding", actionDestination: "overview" },
+  ];
+}
+
+export type SchoolOperatorAttentionItem = SchoolOperatorInsight & { priority: number };
+
+export function prioritizeSchoolOperatorInsights(
+  insights: SchoolOperatorInsight[],
+  focus: "balanced" | "learning" | "admissions" | "revenue" | "operational_readiness" = "balanced",
+) {
+  const focusTypes: Record<typeof focus, string[]> = {
+    balanced: [],
+    learning: ["learning", "lifecycle", "certificate"],
+    admissions: ["admissions"],
+    revenue: ["revenue"],
+    operational_readiness: ["readiness", "health"],
+  };
+  const severityWeight: Record<SchoolOperatorInsight["severity"], number> = { attention: 60, review: 45, info: 20 };
+  return insights
+    .filter(insight => insight.status === "open")
+    .map(insight => ({
+      ...insight,
+      priority: severityWeight[insight.severity] + (focusTypes[focus].includes(insight.insightType) ? 20 : 0) + (insight.actionDestination ? 10 : 0),
+    }))
+    .sort((a, b) => b.priority - a.priority || b.generatedAt.getTime() - a.generatedAt.getTime());
+}
+
 export async function getSchoolOperatorWorkspace(schoolId: number) {
-  const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness] = await Promise.all([getInstitutionOperatingProfile(schoolId), getSchoolOperatorWorkflowPreferences(schoolId), getDashboardSummary(schoolId), getTenantOnboardingStatus(schoolId), getOperationsCommandCenter(schoolId), listSchoolOperatorInsights(schoolId), getAcademyLaunchReadiness(schoolId)]);
-  return { profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness, source: "deterministic-v1" as const, limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."] };
+  const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness, failedAutomation] = await Promise.all([
+    getInstitutionOperatingProfile(schoolId),
+    getSchoolOperatorWorkflowPreferences(schoolId),
+    getDashboardSummary(schoolId),
+    getTenantOnboardingStatus(schoolId),
+    getOperationsCommandCenter(schoolId),
+    listSchoolOperatorInsights(schoolId),
+    getAcademyLaunchReadiness(schoolId),
+    (async () => (await database()).select({ value: sql<number>\`count(*)\` }).from(automationJobs).where(and(eq(automationJobs.schoolId, schoolId), eq(automationJobs.status, "failed"))))(),
+  ]);
+  const healthSignals = buildSchoolOperatorHealthSignals({
+    attendanceRate: dashboard.attendanceRate,
+    pendingAdmissions: dashboard.pendingAdmissions,
+    outstanding: dashboard.outstanding,
+    failedEmailCount: commandCenter.communications.email.failedCount,
+    failedAutomationJobs: Number(failedAutomation[0]?.value ?? 0),
+    onboardingCompletionPercent: onboarding.completionPercent,
+  });
+  const attentionQueue = prioritizeSchoolOperatorInsights(insights, workflowPreferences.reviewFocus);
+  return {
+    profile,
+    workflowPreferences,
+    dashboard,
+    onboarding,
+    commandCenter,
+    insights,
+    attentionQueue,
+    healthSignals,
+    reviewSummary: {
+      open: insights.filter(item => item.status === "open").length,
+      attention: insights.filter(item => item.status === "open" && item.severity === "attention").length,
+      review: insights.filter(item => item.status === "open" && item.severity === "review").length,
+      generatedAt: insights.reduce((latest, item) => item.generatedAt > latest ? item.generatedAt : latest, new Date(0)),
+    },
+    launchReadiness,
+    source: "deterministic-v2" as const,
+    limitations: ["Insights use current tenant-scoped aggregate records, not forecasts or individual risk labels.", "Health signals are aggregate review cues, not ratings or predictions.", "Workflow preferences only shape this private review experience; they cannot remove confirmation gates, role checks, rate limits, or action boundaries.", "NSOS does not send messages, change academics, finance, ownership, credentials, or public settings from this workspace."],
+  };
 }
 
 export async function runCopilotSetupAgentAcademicFoundation(input: { schoolId: number; executedBy: number; sessionName: string; sessionStartsOn: string; sessionEndsOn: string; termName: string; termStartsOn: string; termEndsOn: string; classes: Array<{ name: string; level?: string }>; templateId: "basic_primary" | "basic_junior_secondary" | "senior_secondary_review"; includeOptional: boolean }) {
