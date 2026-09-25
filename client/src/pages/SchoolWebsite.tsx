@@ -86,7 +86,7 @@ export function SchoolWebsiteLayout({ site, preview = false, highlightedSection 
           </div>
         </div>
         <div className="relative">
-          {website.heroUrl && <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white p-2 shadow-[0_30px_80px_rgba(22,68,46,.16)]"><img src={website.heroUrl} alt="School-provided website hero" className="aspect-[4/3] w-full rounded-[1.5rem] object-cover" /></div>}
+          {website.heroUrl && <img src={website.heroUrl} alt="School-provided website hero" className="aspect-[4/3] w-full rounded-[1.5rem] border-8 border-white object-cover shadow-[0_30px_80px_rgba(22,68,46,.16)]" />}
           {!website.heroUrl && <div className="relative min-h-[340px] overflow-hidden rounded-[2rem] border border-white/80 bg-white p-3 shadow-[0_30px_80px_rgba(22,68,46,.12)]">
             <div className="absolute inset-3 rounded-[1.5rem]" style={{ background: `linear-gradient(145deg, ${brand} 0%, #173a30 55%, #0b211b 100%)` }} />
             <div className="relative flex min-h-[340px] flex-col justify-end rounded-[1.5rem] p-8 text-white">
