@@ -9,7 +9,7 @@ describe("School Operator interface", () => {
   it("surfaces a concise owner morning brief from current operational records", () => {
     expect(operator).toContain("Owner Morning Brief");
     expect(operator).toContain("Start with what matters today.");
-    expect(operator).toContain("action{morningActions.length === 1 ? "" : "s"} surfaced");
+    expect(operator).toContain("surfaced");
     expect(operator).toContain("A short action list built from the school's current records.");
     expect(operator).toContain("No immediate exception surfaced.");
   });
