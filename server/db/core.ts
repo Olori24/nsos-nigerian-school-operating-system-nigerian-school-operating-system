@@ -521,6 +521,14 @@ export async function recordAffiliateClick(input: {
   return { clickId, destinationUrl: partner.destinationUrl, attributionDays: partner.attributionDays };
 }
 
+export async function getAffiliateClickById(clickId: string) {
+  return (await (await database()).select({ click: affiliateClicks, partner: affiliatePartners })
+    .from(affiliateClicks)
+    .innerJoin(affiliatePartners, eq(affiliateClicks.partnerId, affiliatePartners.id))
+    .where(and(eq(affiliateClicks.clickId, clickId), eq(affiliatePartners.status, "active")))
+    .limit(1))[0] ?? null;
+}
+
 export async function recordAffiliateLead(input: {
   partnerId: number;
   clickId?: string | null;
