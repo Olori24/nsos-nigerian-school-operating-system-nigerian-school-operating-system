@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSchoolOperatorHealthSignals, buildSchoolOperatorTrendInsight, prioritizeSchoolOperatorInsights } from "./db/core";
+import { buildSchoolOperatorHealthSignals, buildSchoolOperatorTrendInsight, prioritizeSchoolOperatorInsights, resolveSchoolOperatorQuestionTopic } from "./db/core";
 
 describe("NSOS evidence-based school intelligence trends", () => {
   it("flags a material attendance decline as an attention insight", () => {
@@ -116,5 +116,24 @@ describe("NSOS School Intelligence v2 command centre", () => { // v2 verificatio
     expect(queue).toHaveLength(2);
     expect(queue[0].id).toBe(1);
     expect(queue[0].priority).toBeGreaterThan(queue[1].priority);
+  });
+});
+
+
+describe("NSOS Ask My School v3", () => {
+  it("routes supported operator questions deterministically", () => {
+    expect(resolveSchoolOperatorQuestionTopic("Why is attendance falling?")).toBe("attendance");
+    expect(resolveSchoolOperatorQuestionTopic("How many admissions are pending?")).toBe("admissions");
+    expect(resolveSchoolOperatorQuestionTopic("What fees are outstanding?")).toBe("finance");
+    expect(resolveSchoolOperatorQuestionTopic("How is the school doing?")).toBe("health");
+    expect(resolveSchoolOperatorQuestionTopic("What needs my attention right now?")).toBe("attention");
+    expect(resolveSchoolOperatorQuestionTopic("Are we ready to launch?")).toBe("onboarding");
+    expect(resolveSchoolOperatorQuestionTopic("How are assessment results performing?")).toBe("academic");
+  });
+
+  it("falls back to a limited topic instead of guessing", () => {
+    expect(resolveSchoolOperatorQuestionTopic("Tell me something about the school")).toBe("general");
+    expect(resolveSchoolOperatorQuestionTopic("")).toBe("general");
+    expect(resolveSchoolOperatorQuestionTopic("   ")).toBe("general");
   });
 });

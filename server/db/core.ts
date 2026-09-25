@@ -2224,6 +2224,77 @@ export function prioritizeSchoolOperatorInsights(
     .sort((a, b) => b.priority - a.priority || b.generatedAt.getTime() - a.generatedAt.getTime());
 }
 
+export type SchoolOperatorQuestionResult = {
+  question: string;
+  answer: string;
+  confidence: "high" | "limited";
+  evidence: Array<{ metric: string; value: number | string; source: string }>;
+  suggestedDestination?: string;
+  limitations: string[];
+};
+
+export type SchoolOperatorQuestionTopic =
+  | "attendance"
+  | "admissions"
+  | "finance"
+  | "health"
+  | "attention"
+  | "onboarding"
+  | "academic"
+  | "general";
+
+export function resolveSchoolOperatorQuestionTopic(question: string): SchoolOperatorQuestionTopic {
+  const normalized = question.trim().toLowerCase();
+  if (/(attendance|present|absent|late)/.test(normalized)) return "attendance";
+  if (/(admission|applicant|application)/.test(normalized)) return "admissions";
+  if (/(fee|finance|revenue|money|outstanding|invoice)/.test(normalized)) return "finance";
+  if (/(health|healthy|status|doing|operating state)/.test(normalized)) return "health";
+  if (/(attention|urgent|priority|needs.*review|review)/.test(normalized)) return "attention";
+  if (/(setup|onboard|ready|launch)/.test(normalized)) return "onboarding";
+  if (/(academic|assessment|score|result|learning|performance)/.test(normalized)) return "academic";
+  return "general";
+}
+
+export async function answerSchoolOperatorQuestion(input: { schoolId: number; question: string }) : Promise<SchoolOperatorQuestionResult> {
+  const question = input.question.trim().slice(0, 500);
+  if (!question) throw new Error("Ask a question about the school's current operating state.");
+  const workspace = await getSchoolOperatorWorkspace(input.schoolId);
+  const normalized = question.toLowerCase();
+  const evidence = (workspace.insights.filter(item => item.status === "open").slice(0, 3).map(item => ({
+    metric: item.evidence.metric,
+    value: item.evidence.value,
+    source: item.evidence.source,
+  })));
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "attendance") {
+    return { question, answer: `The current recorded attendance rate is ${workspace.dashboard.attendanceRate}%. This is calculated from the school's current attendance records; it is not a prediction about individual learners.`, confidence: "high", evidence: [{ metric: "attendance_rate", value: workspace.dashboard.attendanceRate, source: "attendance_records" }], suggestedDestination: "attendance", limitations: ["The answer reflects recorded attendance data available to NSOS."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "admissions") {
+    return { question, answer: `There are ${workspace.dashboard.pendingAdmissions} pending admissions in the current school dashboard. Review them in the protected admissions workspace before taking action.`, confidence: "high", evidence: [{ metric: "pending_admissions", value: workspace.dashboard.pendingAdmissions, source: "admissions_applications" }], suggestedDestination: "admissions", limitations: ["This is a current aggregate count, not an admissions prediction or recommendation."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "finance") {
+    return { question, answer: `The current recorded outstanding value is ${new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(workspace.dashboard.outstanding)}. NSOS does not initiate collection or payment actions from School Intelligence.`, confidence: "high", evidence: [{ metric: "outstanding", value: workspace.dashboard.outstanding, source: "invoices" }], suggestedDestination: "finance", limitations: ["This is the current recorded invoice aggregate; it is not a cash-flow forecast."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "health") {
+    const attention = workspace.healthSignals.filter(signal => signal.status === "attention").map(signal => signal.label);
+    const watch = workspace.healthSignals.filter(signal => signal.status === "watch").map(signal => signal.label);
+    const answer = attention.length ? `Current School Health has ${attention.length} area${attention.length === 1 ? "" : "s"} requiring review: ${attention.join(", ")}.${watch.length ? ` Watch areas: ${watch.join(", ")}.` : ""}` : watch.length ? `No School Health area is currently marked for attention. Watch areas: ${watch.join(", ")}.` : "No School Health area is currently marked for attention or watch.";
+    return { question, answer, confidence: "high", evidence: workspace.healthSignals.map(signal => ({ metric: signal.id, value: signal.value, source: signal.source })), suggestedDestination: attention.length ? (workspace.healthSignals.find(signal => signal.status === "attention")?.actionDestination ?? "overview") : "overview", limitations: ["Health signals are aggregate review cues, not ratings or predictions."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "attention") {
+    const queue = workspace.attentionQueue.slice(0, 5);
+    const answer = queue.length ? `The current attention queue contains ${queue.length} surfaced open item${queue.length === 1 ? "" : "s"}. The highest-priority item is “${queue[0].title}”. Review it in its protected workspace; NSOS will not execute the action from this answer.` : "There are no open School Intelligence items currently in the attention queue.";
+    return { question, answer, confidence: "high", evidence: queue.map(item => ({ metric: item.evidence.metric, value: item.evidence.value, source: item.evidence.source })), suggestedDestination: queue[0]?.actionDestination ?? "overview", limitations: ["Priority is a deterministic review ordering, not a prediction of harm or outcome."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "onboarding") {
+    return { question, answer: `Institution onboarding is ${workspace.onboarding.completionPercent}% complete. Academy launch readiness currently has ${workspace.launchReadiness.summary.ready} ready, ${workspace.launchReadiness.summary.warning} warning, and ${workspace.launchReadiness.summary.blocked} blocked checks.`, confidence: "high", evidence: [{ metric: "onboarding_completion_percent", value: workspace.onboarding.completionPercent, source: "tenant_onboarding" }, { metric: "launch_ready_checks", value: workspace.launchReadiness.summary.ready, source: "academy_launch_readiness" }], suggestedDestination: "overview", limitations: ["Readiness checks describe configuration evidence only; they are not an approval to launch publicly."] };
+  }
+  if (resolveSchoolOperatorQuestionTopic(normalized) === "academic") {
+    const academic = workspace.insights.find(item => item.evidence.metric === "published_assessment_average_30d");
+    return { question, answer: academic ? academic.detail : "NSOS does not currently have enough published assessment comparison data to answer that question. No academic outcome should be inferred from the absence of an insight.", confidence: academic ? "high" : "limited", evidence: academic ? [{ metric: academic.evidence.metric, value: academic.evidence.value, source: academic.evidence.source }] : evidence, suggestedDestination: "learning", limitations: ["NSOS does not infer individual learner performance or risk from aggregate data."] };
+  }
+  return { question, answer: "I can answer from the current School Intelligence evidence on attendance, admissions, finance, School Health, attention items, onboarding/readiness, and published assessment trends. Ask a specific question in one of those areas.", confidence: "limited", evidence, suggestedDestination: "overview", limitations: ["This version deliberately avoids free-form guessing and unsupported claims."] };
+}
+
 export async function getSchoolOperatorWorkspace(schoolId: number) {
   const [profile, workflowPreferences, dashboard, onboarding, commandCenter, insights, launchReadiness, failedAutomation] = await Promise.all([
     getInstitutionOperatingProfile(schoolId),
