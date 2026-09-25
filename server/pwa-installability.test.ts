@@ -1,12 +1,30 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const html = readFileSync(new URL("../client/index.html", import.meta.url), "utf8");
-const manifest = readFileSync(new URL("../client/public/manifest.webmanifest", import.meta.url), "utf8");
-const worker = readFileSync(new URL("../client/public/sw.js", import.meta.url), "utf8");
-const bootstrap = readFileSync(new URL("../client/src/main.tsx", import.meta.url), "utf8");
-const prompt = readFileSync(new URL("../client/src/components/InstallNSOSPrompt.tsx", import.meta.url), "utf8");
-const updatePrompt = readFileSync(new URL("../client/src/components/NSOSUpdatePrompt.tsx", import.meta.url), "utf8");
+const html = readFileSync(
+  new URL("../client/index.html", import.meta.url),
+  "utf8"
+);
+const manifest = readFileSync(
+  new URL("../client/public/manifest.webmanifest", import.meta.url),
+  "utf8"
+);
+const worker = readFileSync(
+  new URL("../client/public/sw.js", import.meta.url),
+  "utf8"
+);
+const bootstrap = readFileSync(
+  new URL("../client/src/main.tsx", import.meta.url),
+  "utf8"
+);
+const prompt = readFileSync(
+  new URL("../client/src/components/InstallNSOSPrompt.tsx", import.meta.url),
+  "utf8"
+);
+const updatePrompt = readFileSync(
+  new URL("../client/src/components/NSOSUpdatePrompt.tsx", import.meta.url),
+  "utf8"
+);
 
 describe("NSOS installable web app", () => {
   it("exposes standalone app metadata and the original app icon", () => {
@@ -25,17 +43,18 @@ describe("NSOS installable web app", () => {
   });
 
   it("uses an offline shell without caching NSOS API responses", () => {
+    expect(worker).toContain('const CACHE_NAME = "nsos-shell-v4"');
     expect(worker).toContain('"/offline.html"');
     expect(worker).toContain('url.pathname.startsWith("/api/")');
-    expect(worker).toContain("request.mode === \"navigate\"");
+    expect(worker).toContain('request.mode === "navigate"');
     expect(worker).toContain('"/icons/nsos-icon-512.png"');
   });
 
   it("lets an installed user refresh an update instead of silently replacing the active app", () => {
     expect(worker).toContain('event.data?.type === "NSOS_SKIP_WAITING"');
     expect(worker).not.toContain("then(() => self.skipWaiting())");
-    expect(updatePrompt).toContain('navigator.serviceWorker.getRegistration()');
-    expect(updatePrompt).toContain('registration.update()');
+    expect(updatePrompt).toContain("navigator.serviceWorker.getRegistration()");
+    expect(updatePrompt).toContain("registration.update()");
     expect(updatePrompt).toContain('"controllerchange"');
     expect(updatePrompt).toContain('type: "NSOS_SKIP_WAITING"');
     expect(updatePrompt).toContain("Refresh NSOS");
