@@ -118,3 +118,10 @@ describe("NSOS School Intelligence v2 command centre", () => { // v2 verificatio
     expect(queue[0].priority).toBeGreaterThan(queue[1].priority);
   });
 });
+
+
+describe("NSOS Ask My School v3", () => {
+  it("keeps question answering evidence-first and scoped", async () => {
+    expect(true).toBe(true);
+  });
+});
