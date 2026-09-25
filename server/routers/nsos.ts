@@ -159,6 +159,19 @@ export const nsosRouter = router({
       }))
       .mutation(async ({ input }) => {
         try {
+          const clickId = db.getAffiliateClickCookie(ctx.req.headers.cookie);
+          if (clickId) {
+            const attribution = await db.getAffiliateClickById(clickId);
+            if (attribution) {
+              await db.recordAffiliateLead({
+                partnerId: attribution.partner.id,
+                clickId,
+                email: input.email,
+                leadSource: input.leadSource,
+                consentedAt: new Date(),
+              });
+            }
+          }
           return await sendNsosLeadEvent(input);
         } catch (error) {
           throw new TRPCError({
@@ -169,6 +182,74 @@ export const nsosRouter = router({
       }),
   }),
 
+
+  affiliates: router({
+    partners: router({
+      list: platformOwnerProcedure.query(() => db.listAffiliatePartners()),
+      create: platformOwnerProcedure
+        .input(z.object({
+          code: z.string().trim().min(3).max(48),
+          name: z.string().trim().min(2).max(160),
+          destinationUrl: z.string().url().max(2048),
+          commissionType: z.enum(["percentage", "fixed"]),
+          commissionValue: z.string().regex(/^\\d+(?:\\.\\d{1,2})?$/),
+          currency: z.string().trim().min(3).max(8).default("NGN"),
+          attributionDays: z.number().int().min(1).max(180).default(30),
+          termsVersion: z.string().trim().max(64).optional(),
+        }))
+        .mutation(({ ctx, input }) => db.createAffiliatePartner({ ...input, createdBy: ctx.user.id })),
+      update: platformOwnerProcedure
+        .input(z.object({
+          id: z.number().int().positive(),
+          name: z.string().trim().min(2).max(160).optional(),
+          destinationUrl: z.string().url().max(2048).optional(),
+          status: z.enum(["active", "paused", "archived"]).optional(),
+          commissionType: z.enum(["percentage", "fixed"]).optional(),
+          commissionValue: z.string().regex(/^\\d+(?:\\.\\d{1,2})?$/).optional(),
+          currency: z.string().trim().min(3).max(8).optional(),
+          attributionDays: z.number().int().min(1).max(180).optional(),
+          termsVersion: z.string().trim().max(64).nullable().optional(),
+        }))
+        .mutation(({ input }) => db.updateAffiliatePartner(input)),
+    }),
+    conversions: router({
+      list: platformOwnerProcedure.input(z.object({ partnerId: z.number().int().positive().optional() }).optional()).query(({ input }) => db.listAffiliateConversions(input?.partnerId)),
+      record: platformOwnerProcedure
+        .input(z.object({
+          partnerId: z.number().int().positive(),
+          leadId: z.number().int().positive().optional(),
+          clickId: z.string().max(64).optional(),
+          externalReference: z.string().trim().min(2).max(160),
+          eventType: z.string().trim().min(2).max(80),
+          amount: z.number().min(0).max(1_000_000_000),
+          occurredAt: z.string().datetime().optional(),
+          note: z.string().max(2000).optional(),
+        }))
+        .mutation(({ input }) => db.recordAffiliateConversion({ ...input, occurredAt: input.occurredAt ? new Date(input.occurredAt) : undefined })),
+      approve: platformOwnerProcedure
+        .input(z.object({ id: z.number().int().positive() }))
+        .mutation(({ ctx, input }) => db.approveAffiliateConversion(input.id, ctx.user.id)),
+    }),
+    payouts: router({
+      list: platformOwnerProcedure.query(() => db.listAffiliatePayouts()),
+      create: platformOwnerProcedure
+        .input(z.object({
+          partnerId: z.number().int().positive(),
+          periodStart: z.string().date(),
+          periodEnd: z.string().date(),
+          note: z.string().max(2000).optional(),
+        }))
+        .mutation(({ ctx, input }) => db.createAffiliatePayout({ ...input, createdBy: ctx.user.id })),
+      updateStatus: platformOwnerProcedure
+        .input(z.object({
+          id: z.number().int().positive(),
+          status: z.enum(["approved", "paid", "void"]),
+          paymentReference: z.string().trim().max(160).optional(),
+          note: z.string().max(2000).optional(),
+        }))
+        .mutation(({ ctx, input }) => db.updateAffiliatePayoutStatus({ ...input, approvedBy: ctx.user.id })),
+    }),
+  }),
 
   schools: router({
     list: protectedProcedure.query(({ ctx }) => db.listUserSchools(ctx.user.id)),
