@@ -16,6 +16,10 @@ describe("school website publishing and theme presentation", () => {
     expect(studio).toContain("community");
     expect(studio).toContain('visualTheme: site.visualTheme ?? "modern"');
     expect(studio).toContain("visualTheme: form.visualTheme");
+    expect(studio).toContain("School story & content");
+    expect(studio).toContain("websiteContent:");
+    expect(studio).toContain("Programmes / learning areas");
+    expect(studio).toContain("FAQs — one per line: Question | Answer");
   });
 
   it("routes verified custom-domain visitors through the public domain resolver", () => {
