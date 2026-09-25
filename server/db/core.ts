@@ -1830,6 +1830,7 @@ export function isNsosSchoolSubdomain(value: string) {
   const normalised = normaliseDomain(value);
   if (!normalised || !normalised.endsWith(".nsos.top")) return false;
   const label = normalised.slice(0, -".nsos.top".length);
+  if (label === "www") return false;
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label);
 }
 
