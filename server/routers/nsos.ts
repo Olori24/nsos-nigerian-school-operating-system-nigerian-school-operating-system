@@ -630,6 +630,15 @@ export const nsosRouter = router({
 
   schoolOperator: router({
     workspace: onboardingAdminProcedure.input(schoolInput).query(({ input }) => db.getSchoolOperatorWorkspace(input.schoolId)),
+    ask: onboardingAdminProcedure
+      .input(schoolInput.extend({ question: z.string().trim().min(2).max(500) }))
+      .query(async ({ ctx, input }) => {
+        const rate = await db.consumeSharedRateLimit({ namespace: "nsos-school-operator", route: "ask", clientKey: `${input.schoolId}:${ctx.user.id}`, limit: 20, windowMs: 10 * 60_000 });
+        if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Ask My School is taking a short break. Try again in about ${rate.retryAfterSeconds} seconds.` });
+        const result = await db.answerSchoolOperatorQuestion({ schoolId: input.schoolId, question: input.question });
+        await db.recordSecurityAuditEvent({ schoolId: input.schoolId, actorUserId: ctx.user.id, eventType: "school_operator_question_answered", targetType: "school_operator", metadata: { questionLength: input.question.length, confidence: result.confidence, evidenceCount: result.evidence.length, freeFormGeneration: false, publicAction: false, messageSent: false, paymentAction: false, academicChanged: false, credentialIssued: false } });
+        return result;
+      }),
     refresh: onboardingAdminProcedure
       .input(schoolInput.extend({ confirmed: z.literal(true) }))
       .mutation(async ({ ctx, input }) => {
