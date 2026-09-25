@@ -1926,6 +1926,7 @@ export async function getDashboardSummary(schoolId: number) {
 
 export type InstitutionOperatingProfileInput = { mission?: string; targetLearners?: string; brandTone?: string; teachingPhilosophy?: string; curriculumStrategy?: string; pricingApproach?: string; policyNotes?: string; operatingGoals?: string };
 export type SchoolOperatorInsightInput = { insightType: "readiness" | "learning" | "admissions" | "revenue" | "lifecycle" | "health" | "certificate"; severity: "info" | "attention" | "review"; dedupeKey: string; title: string; detail: string; evidence: { metric: string; value: number; comparison?: string; source: string }; actionDestination?: string };
+export type SchoolOperatorInsight = typeof schoolOperatorInsights.$inferSelect;
 export type SchoolOperatorWorkflowPreferenceInput = { reviewFocus: "balanced" | "learning" | "admissions" | "revenue" | "operational_readiness"; reviewCadence: "daily" | "weekly" | "monthly"; evidenceDetail: "concise" | "standard"; showDismissedInsights: boolean };
 
 const operatorProfileDefault = { mission: null, targetLearners: null, brandTone: null, teachingPhilosophy: null, curriculumStrategy: null, pricingApproach: null, policyNotes: null, operatingGoals: null };
