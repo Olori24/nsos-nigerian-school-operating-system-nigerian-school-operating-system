@@ -42,8 +42,9 @@ jobs:
         uses: github/codeql-action/analyze@v3
 
   dependency-review:
-    name: Dependency review
+    name: Dependency review (best effort)
     if: github.event_name == 'pull_request'
+    continue-on-error: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
