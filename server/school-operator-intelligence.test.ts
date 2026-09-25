@@ -73,7 +73,7 @@ describe("NSOS evidence-based school intelligence trends", () => {
 });
 
 
-describe("NSOS School Intelligence v2 command centre", () => {
+describe("NSOS School Intelligence v2 command centre", () => { // v2 verification
   it("includes comparison provenance on material trend evidence", () => {
     const insight = buildSchoolOperatorTrendInsight({
       insightType: "health",
