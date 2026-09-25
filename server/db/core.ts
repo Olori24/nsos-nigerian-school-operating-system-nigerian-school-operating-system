@@ -606,8 +606,8 @@ export async function createAffiliatePayout(input: { partnerId: number; periodSt
   if (amount <= 0) throw new Error("No approved affiliate commissions are available for this period.");
   const payoutResult = await db.insert(affiliatePayouts).values({
     partnerId: partner.id,
-    periodStart: input.periodStart,
-    periodEnd: input.periodEnd,
+    periodStart: start,
+    periodEnd: end,
     amount: amount.toFixed(2),
     currency: partner.currency,
     status: "pending",
