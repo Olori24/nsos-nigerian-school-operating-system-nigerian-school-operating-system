@@ -157,7 +157,7 @@ export const nsosRouter = router({
         leadSource: z.string().trim().max(120).default("nsos.top/start"),
         consent: z.literal(true),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
           const clickId = db.getAffiliateClickCookie(ctx.req.headers.cookie);
           if (clickId) {
