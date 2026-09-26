@@ -1,0 +1,28 @@
+name: Build NSOS logo PNG
+
+on:
+  push:
+    paths:
+      - "client/public/icons/nsos-logo-email.svg"
+      - ".github/workflows/build-nsos-logo.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render PNG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          convert -background none client/public/icons/nsos-logo-email.svg -resize 512x512 client/public/icons/nsos-icon-512-generated.png
+      - name: Commit generated PNG
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/public/icons/nsos-icon-512-generated.png
+          git diff --cached --quiet || git commit -m "build: render NSOS email logo PNG"
+          git push
