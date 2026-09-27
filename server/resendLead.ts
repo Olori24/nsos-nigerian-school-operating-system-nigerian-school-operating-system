@@ -3,6 +3,8 @@ import { ENV } from "./_core/env";
 const RESEND_EVENTS_URL = "https://api.resend.com/events/send";
 const LEAD_EVENT = "nsos.lead.created";
 const HIGH_INTENT_EVENT = "nsos.lead.high_intent";
+const SCHOOL_SETUP_STARTED_EVENT = "nsos.school.setup_started";
+const SCHOOL_ACTIVATED_EVENT = "nsos.school.activated";
 
 type NsosEventInput = { email: string; payload?: Record<string, unknown> };
 
@@ -47,6 +49,34 @@ export async function sendNsosHighIntentEvent(input: NsosHighIntentEvent) {
     payload: {
       intent_action: input.action,
       intent_source: input.source ?? "nsos.top/start",
+    },
+  });
+}
+export type NsosSchoolLifecycleEvent = {
+  email: string;
+  firstName?: string;
+  schoolName: string;
+  schoolId: number;
+};
+
+export async function sendNsosSchoolSetupStartedEvent(input: NsosSchoolLifecycleEvent) {
+  return sendNsosEvent(SCHOOL_SETUP_STARTED_EVENT, {
+    email: input.email,
+    payload: {
+      first_name: input.firstName ?? "",
+      school_name: input.schoolName,
+      school_id: input.schoolId,
+    },
+  });
+}
+
+export async function sendNsosSchoolActivatedEvent(input: NsosSchoolLifecycleEvent) {
+  return sendNsosEvent(SCHOOL_ACTIVATED_EVENT, {
+    email: input.email,
+    payload: {
+      first_name: input.firstName ?? "",
+      school_name: input.schoolName,
+      school_id: input.schoolId,
     },
   });
 }
