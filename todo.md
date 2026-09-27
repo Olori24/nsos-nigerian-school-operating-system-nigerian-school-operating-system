@@ -353,3 +353,14 @@
 - [x] Implement the highest-value connected academy setup and owner-review gaps identified by the audit, reusing existing Institution Builder, Course Studio, File-to-School, AI Tutor, School Operator, and Command Centre workflows rather than creating mock surfaces.
 - [x] Strengthen the requested AI academy roles, tutoring, course-generation, student-success, AI-cost, and launch-readiness controls only where a safe owner-approved and tenant-isolated implementation gap is verified.
 - [ ] Validate the end-to-end reference-academy readiness path using no real people, payments, certificates, messages, or provider-side changes; publish a PASS/FAIL/BLOCKED launch scorecard, checkpoint, and synchronize GitHub.
+
+## School Success Loop and final mobile/brand verification — 2026-09-27
+
+- [x] Integrate the tenant-scoped, evidence-first School Success Loop into School Operator; preserve protected handoffs, no autonomous consequential actions, and architecture documentation for retention, parent communications, admissions CRM, institutional memory, weekly brief, and annual-cycle layers.
+- [x] Correct the mobile floating theme control evidenced by the supplied screenshots: compact accessible icon at phone widths, safe-area positioning, lower stacking priority than document/install overlays, and full labelled control on larger screens.
+- [x] Restore native NSOS Guide visible branding for the floating assistant; remove stale visible Institution Copilot/Copilot labels while preserving internal implementation names and protected behavior.
+- [x] Invalidate the installed-app shell cache from v3 to v4 so stale mobile and Guide bundles are replaced.
+- [x] Validate 121 Vitest files, 445 passing tests, 2 intentional skips, TypeScript, lint, production build, formatting, and diff checks.
+- [x] Verify GitHub main at `2709c9a`, managed checkpoint `2709c9aa`, `https://nsos.top` HTTPS 200, `www.nsos.top` 301 to `nsos.top`, final production bundle markers `NSOS Guide`/`Open NSOS Guide`, and no stale visible Copilot markers.
+- [x] Read-only school website aggregate: 4 website records, 2 published websites, 0 active custom domains, 0 pending custom domains. No data mutation, email, payment, invitation, or provider-side action was performed.
+- [x] Publish the factual CTO readiness report with measured, inspected, blocked, and unknown controls; preserve the separate open gates for authorized end-to-end journeys, synthetic staging, recovery, observability, and capacity evidence.
