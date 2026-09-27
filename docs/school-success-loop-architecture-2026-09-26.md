@@ -6,9 +6,13 @@
 ## Delivery status
 
 - **Code complete:** the School Operator now includes an evidence-first School Success Loop surface built from the existing tenant-scoped workspace payload.
-- **CI/source verification:** pending final merge-conflict resolution and validation in this checkout.
-- **Deployed:** not claimed in this record until the verified checkpoint is published.
-- **Live verified:** not claimed in this record until the required public and school-route checks pass.
+- **CI/source verification:** 121 Vitest files passed with 445 tests passing and 2 intentional skips. TypeScript, lint, production build, formatting, and diff checks also passed.
+- **Deployed:** managed checkpoint `2709c9aa` was published to the existing NSOS project, followed by the tracker/readiness checkpoint `02b038ad`.
+- **Live verified:** `https://nsos.top/` returned HTTPS 200, `https://www.nsos.top/` returned an HTTPS 301 to the platform root, and one published school route returned HTTPS 200. The focused School Success Loop, School Operator, website routing, and draft-preview suite passed 27/27.
+
+The read-only website aggregate observed four website records, two published websites, and no active or pending custom domains. The platform's custom-domain architecture remains present and covered by route regression tests, but this release does not claim that a school-owned subdomain is currently configured.
+
+The public website route initially returned a 500 response because the managed database lacked the tracked nullable `schoolWebsites.websiteContent` column. The reviewed additive migration was applied, after which the public API returned 200 and the published OAE Academy page rendered. The serializer was also corrected to return a minimum-necessary public allowlist rather than internal website or domain-verification fields. The change did not alter website content, DNS, MX, sender configuration, provider settings, or school records.
 
 ## Retention principle
 
