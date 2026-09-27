@@ -80,3 +80,12 @@ export async function sendNsosSchoolActivatedEvent(input: NsosSchoolLifecycleEve
     },
   });
 }
+export async function sendNsosSchoolActivityEvent(input: { email: string; schoolId: number; activityType?: string }) {
+  return sendNsosEvent("nsos.school.activity", {
+    email: input.email,
+    payload: {
+      school_id: input.schoolId,
+      activity_type: input.activityType ?? "school_operator_workspace_opened",
+    },
+  });
+}
