@@ -40,7 +40,7 @@ import {
   publicProcedure,
   router,
 } from "../_core/trpc";
-import { sendNsosHighIntentEvent, sendNsosLeadEvent } from "../resendLead";
+import { sendNsosHighIntentEvent, sendNsosLeadEvent, sendNsosSchoolSetupStartedEvent, sendNsosSchoolActivatedEvent } from "../resendLead";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
@@ -713,13 +713,26 @@ export const nsosRouter = router({
           phone: z.string().max(48).optional(),
         })
       )
-      .mutation(({ ctx, input }) =>
-        db.createSchool({
+      .mutation(async ({ ctx, input }) => {
+        const school = await db.createSchool({
           ...input,
           shortCode: input.shortCode.trim().toUpperCase(),
           createdBy: ctx.user.id,
-        })
-      ),
+        });
+        if (ctx.user.email) {
+          try {
+            await sendNsosSchoolSetupStartedEvent({
+              email: ctx.user.email,
+              firstName: ctx.user.name?.split(/\s+/)[0],
+              schoolName: school.name,
+              schoolId: school.id,
+            });
+          } catch (error) {
+            console.warn("[NSOS lifecycle] setup-started email failed", error);
+          }
+        }
+        return school;
+      }),
     context: protectedProcedure
       .input(schoolInput)
       .query(async ({ ctx, input }) => {
@@ -4266,6 +4279,40 @@ export const nsosRouter = router({
     status: onboardingAdminProcedure
       .input(schoolInput)
       .query(({ input }) => db.getTenantOnboardingStatus(input.schoolId)),
+    syncLifecycle: onboardingAdminProcedure
+      .input(schoolInput)
+      .mutation(async ({ ctx, input }) => {
+        const status = await db.getTenantOnboardingStatus(input.schoolId);
+        if (status.completionPercent !== 100) {
+          return { activated: false, completionPercent: status.completionPercent };
+        }
+        const existing = await db.listSecurityAuditEvents(input.schoolId, 100);
+        if (existing.some(event => event.eventType === "school_activation_email_triggered")) {
+          return { activated: false, completionPercent: 100, alreadyTriggered: true };
+        }
+        if (!ctx.user.email) return { activated: false, completionPercent: 100, skipped: true };
+        const school = await db.getSchoolContext(input.schoolId, ctx.schoolRole as SchoolRole);
+        try {
+          await sendNsosSchoolActivatedEvent({
+            email: ctx.user.email,
+            firstName: ctx.user.name?.split(/\s+/)[0],
+            schoolName: school.school.name,
+            schoolId: input.schoolId,
+          });
+          await db.recordSecurityAuditEvent({
+            schoolId: input.schoolId,
+            actorUserId: ctx.user.id,
+            eventType: "school_activation_email_triggered",
+            targetType: "school",
+            targetId: input.schoolId,
+            metadata: { completionPercent: 100, emailTriggered: true },
+          });
+          return { activated: true, completionPercent: 100 };
+        } catch (error) {
+          console.warn("[NSOS lifecycle] activation email failed", error);
+          return { activated: false, completionPercent: 100, deliveryFailed: true };
+        }
+      }),
   }),
 
   operations: router({
