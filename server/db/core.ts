@@ -1816,8 +1816,35 @@ export async function verifySchoolWebsiteDomain(schoolId: number) {
   return getSchoolWebsite(schoolId);
 }
 
+export function publicSchoolWebsitePayload(
+  row: { school: typeof schools.$inferSelect; website: typeof schoolWebsites.$inferSelect },
+  media: { logoUrl: string | null; heroUrl: string | null },
+) {
+  return {
+    school: {
+      name: row.school.name,
+      shortCode: row.school.shortCode,
+      state: row.school.state,
+    },
+    website: {
+      headline: row.website.headline,
+      introduction: row.website.introduction,
+      primaryColor: row.website.primaryColor,
+      contactEmail: row.website.contactEmail,
+      contactPhone: row.website.contactPhone,
+      campusLocation: row.website.campusLocation,
+      admissionsEnabled: row.website.admissionsEnabled,
+      visualTheme: row.website.visualTheme,
+      websiteContent: row.website.websiteContent,
+      logoUrl: media.logoUrl,
+      heroUrl: media.heroUrl,
+    },
+    admissionsUrl: row.website.admissionsEnabled ? `/apply/${row.school.shortCode}` : null,
+  };
+}
+
 async function publicWebsiteResponse(row: { school: typeof schools.$inferSelect; website: typeof schoolWebsites.$inferSelect }) {
-  return { ...row, website: { ...row.website, ...(await publicSelectedWebsiteMedia(row.school.id, row.website)) }, admissionsUrl: row.website.admissionsEnabled ? `/apply/${row.school.shortCode}` : null };
+  return publicSchoolWebsitePayload(row, await publicSelectedWebsiteMedia(row.school.id, row.website));
 }
 
 export async function getPublicSchoolWebsite(shortCode: string) {
