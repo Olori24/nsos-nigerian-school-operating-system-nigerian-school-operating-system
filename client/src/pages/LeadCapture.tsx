@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { ArrowRight, CheckCircle2, Loader2, Mail, School } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, School, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
@@ -8,14 +8,21 @@ export default function LeadCapture() {
   const [email, setEmail] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [consent, setConsent] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
   const capture = trpc.nsos.leads.capture.useMutation({
     onSuccess: () => {
+      setSubmittedEmail(email);
       toast.success("You're on the NSOS list.");
       setFirstName("");
       setEmail("");
       setSchoolName("");
       setConsent(false);
     },
+    onError: error => toast.error(error.message),
+  });
+
+  const intent = trpc.nsos.leads.highIntent.useMutation({
+    onSuccess: () => toast.success("Walkthrough interest recorded. We'll follow up with you."),
     onError: error => toast.error(error.message),
   });
 
@@ -48,6 +55,7 @@ export default function LeadCapture() {
           </section>
 
           <section className="rounded-[1.4rem] border border-white/12 bg-white/[.07] p-6 shadow-2xl backdrop-blur-sm sm:p-7">
+            {!submittedEmail ? <>
             <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#dcefe1] text-[#123b31]"><School className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Get the NSOS walkthrough</p><p className="mt-1 text-xs text-white/45">Leave your details and we'll keep you updated.</p></div></div>
             <form onSubmit={submit} className="mt-6 grid gap-3">
               <label className="grid gap-1.5 text-xs font-semibold text-white/75"><span>First name</span><input required maxLength={80} value={firstName} onChange={e => setFirstName(e.target.value)} className="h-11 rounded-xl border border-white/12 bg-white/[.08] px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-[#b8e3c1]" placeholder="Your first name" /></label>
@@ -57,6 +65,15 @@ export default function LeadCapture() {
               <button disabled={capture.isPending || !consent} className="mt-2 flex h-12 items-center justify-center gap-2 rounded-xl bg-[#dcefe1] px-4 text-sm font-bold text-[#123b31] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60">{capture.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}{capture.isPending ? "Joining…" : "Get the NSOS walkthrough"}<ArrowRight className="h-4 w-4" /></button>
             </form>
             <p className="mt-4 text-[10px] leading-4 text-white/30">Your details are used for NSOS communications. No password is created by this form.</p>
+            </> : <div className="py-6">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#dcefe1] text-[#123b31]"><Sparkles className="h-6 w-6" /></div>
+              <p className="mt-5 text-xl font-semibold">You're in.</p>
+              <p className="mt-2 text-sm leading-6 text-white/60">Your NSOS welcome email is on its way. If you want a product walkthrough, tell us now so your interest gets routed into the priority follow-up sequence.</p>
+              <button type="button" disabled={intent.isPending} onClick={() => intent.mutate({ email: submittedEmail })} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#dcefe1] px-4 text-sm font-bold text-[#123b31] hover:bg-white disabled:opacity-60">
+                {intent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {intent.isPending ? "Routing…" : "Request a walkthrough"} <ArrowRight className="h-4 w-4" />
+              </button>
+              <p className="mt-3 text-[10px] leading-4 text-white/30">This adds your email to the NSOS high-intent follow-up. You can unsubscribe at any time.</p>
+            </div>}
           </section>
         </div>
       </div>
