@@ -90,3 +90,12 @@ Before calling this work deployed, verify:
 6. HTTPS/TLS and responsive rendering at mobile and desktop sizes;
 7. existing school website editor, draft, and publish workflow;
 8. no change to email DNS/MX records.
+
+
+## Public school website privacy verification — 2026-09-27
+
+The public website serializer now uses an explicit response allowlist rather than spreading tenant database rows into anonymous responses. Public responses expose only school identity needed by the public site and explicitly approved website presentation/contact content.
+
+Excluded from anonymous responses include tenant identifiers, custom domains, DNS verification tokens, internal domain/publication status, internal school metadata, and unrelated operational fields. Public media is represented by the resolved logo/hero URLs rather than internal media identifiers.
+
+Regression coverage is maintained in `server/public-website-privacy.test.ts`, including forbidden-field assertions and the public admissions route contract. The change is isolated to serialization; database schema and tenant records are unchanged.
