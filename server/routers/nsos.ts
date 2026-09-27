@@ -724,8 +724,8 @@ export const nsosRouter = router({
             await sendNsosSchoolSetupStartedEvent({
               email: ctx.user.email,
               firstName: ctx.user.name?.split(/\s+/)[0],
-              schoolName: school.name,
-              schoolId: school.id,
+              schoolName: input.name,
+              schoolId: school.schoolId,
             });
           } catch (error) {
             console.warn("[NSOS lifecycle] setup-started email failed", error);
