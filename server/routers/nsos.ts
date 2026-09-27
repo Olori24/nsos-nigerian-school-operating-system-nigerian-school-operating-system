@@ -40,7 +40,7 @@ import {
   publicProcedure,
   router,
 } from "../_core/trpc";
-import { sendNsosLeadEvent } from "../resendLead";
+import { sendNsosHighIntentEvent, sendNsosLeadEvent } from "../resendLead";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
@@ -570,6 +570,18 @@ export const nsosRouter = router({
               error instanceof Error
                 ? error.message
                 : "Lead capture is temporarily unavailable. Please try again.",
+          });
+        }
+      }),
+    highIntent: publicProcedure
+      .input(z.object({ email: z.string().trim().toLowerCase().email().max(320) }))
+      .mutation(async ({ input }) => {
+        try {
+          return await sendNsosHighIntentEvent({ email: input.email, action: "walkthrough_requested", source: "nsos.top/start" });
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error instanceof Error ? error.message : "Walkthrough routing is temporarily unavailable. Please try again.",
           });
         }
       }),
