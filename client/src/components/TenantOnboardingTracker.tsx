@@ -28,14 +28,14 @@ const celebrationConfetti = [
 export function TenantOnboardingTracker({ schoolId, onNavigate }: Props) {
   const onboarding = trpc.nsos.onboarding.status.useQuery({ schoolId });
   const data = onboarding.data;
-  const lifecycle = trpc.nsos.onboarding.syncLifecycle.useMutation();
+  const { mutate: syncLifecycle, isPending: lifecycleSyncPending } = trpc.nsos.onboarding.syncLifecycle.useMutation();
   const [celebrationDismissed, setCelebrationDismissed] = useState(true);
 
   useEffect(() => {
-    if (data?.completionPercent === 100 && !lifecycle.isPending) {
-      lifecycle.mutate({ schoolId });
+    if (data?.completionPercent === 100 && !lifecycleSyncPending) {
+      syncLifecycle({ schoolId });
     }
-  }, [data?.completionPercent, schoolId]);
+  }, [data?.completionPercent, schoolId, lifecycleSyncPending, syncLifecycle]);
 
   useEffect(() => {
     if (data?.completionPercent !== 100) {
