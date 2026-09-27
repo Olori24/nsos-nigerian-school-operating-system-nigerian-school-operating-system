@@ -40,7 +40,7 @@ import {
   publicProcedure,
   router,
 } from "../_core/trpc";
-import { sendNsosHighIntentEvent, sendNsosLeadEvent, sendNsosSchoolSetupStartedEvent, sendNsosSchoolActivatedEvent } from "../resendLead";
+import { sendNsosHighIntentEvent, sendNsosLeadEvent, sendNsosSchoolSetupStartedEvent, sendNsosSchoolActivatedEvent, sendNsosSchoolActivityEvent } from "../resendLead";
 
 const schoolInput = z.object({ schoolId: z.number().int().positive() });
 const roleInput = z.enum(schoolRoles);
@@ -2407,7 +2407,21 @@ export const nsosRouter = router({
   schoolOperator: router({
     workspace: onboardingAdminProcedure
       .input(schoolInput)
-      .query(({ input }) => db.getSchoolOperatorWorkspace(input.schoolId)),
+      .query(async ({ ctx, input }) => {
+        const workspace = await db.getSchoolOperatorWorkspace(input.schoolId);
+        if (ctx.user.email) {
+          try {
+            await sendNsosSchoolActivityEvent({
+              email: ctx.user.email,
+              schoolId: input.schoolId,
+              activityType: "school_operator_workspace_opened",
+            });
+          } catch (error) {
+            console.warn("[NSOS lifecycle] activity event failed", error);
+          }
+        }
+        return workspace;
+      }),
     ask: onboardingAdminProcedure
       .input(
         schoolInput.extend({ question: z.string().trim().min(2).max(500) })
