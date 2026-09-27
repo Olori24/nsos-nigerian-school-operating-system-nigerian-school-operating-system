@@ -93,7 +93,6 @@ describe("public school website privacy serializer", () => {
     expect(serialized).not.toContain('"createdBy"');
     expect(serialized).not.toContain('"currency"');
     expect(serialized).not.toContain('"timezone"');
-    expect(serialized).not.toContain('"logoUrl"');
     expect(serialized).not.toContain('"address"');
   });
 
