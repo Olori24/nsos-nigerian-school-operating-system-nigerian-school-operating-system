@@ -1,0 +1,13 @@
+# Gitleaks policy for NSOS test fixtures
+# These files contain deterministic UUID-shaped idempotencyKey fixture values.
+# They are test data, not credentials or service tokens.
+
+title = "NSOS Gitleaks Configuration"
+
+[allowlist]
+description = "Allow deterministic idempotencyKey UUID fixtures in migration route tests"
+paths = [
+  '''server/nsos\.academic-migration-routes\.test\.ts''',
+  '''server/nsos\.staff-migration-routes\.test\.ts''',
+  '''server/nsos\.student-migration-routes\.test\.ts'''
+]
