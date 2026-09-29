@@ -15,9 +15,9 @@ export function isComposioConfigured(): boolean {
 }
 
 export function buildComposioRequest(action: ComposioAction) {
+  if (!action.toolSlug) throw new Error("Composio tool slug is required.");
   const userId = action.userId ?? ENV.composioUserId;
   if (!userId) throw new Error("Composio user ID is not configured.");
-  if (!action.toolSlug) throw new Error("Composio tool slug is required.");
 
   const version = action.version ?? ENV.composioToolVersion;
   const body: Record<string, unknown> = {
