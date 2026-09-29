@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 1,
+  "academy": {
+    "slug": "oae-online-academy",
+    "name": "OAE Online Academy",
+    "descriptor": "Learn to build, automate, and operate software with AI.",
+    "operatingType": "online_training_provider",
+    "deliveryMode": "self_paced",
+    "status": "internal_draft"
+  },
+  "programmes": [
+    {
+      "slug": "ai-assisted-engineering-foundations",
+      "title": "AI-Assisted Engineering Foundations",
+      "level": "beginner_to_early_practitioner",
+      "courses": [
+        {
+          "slug": "from-prompting-to-engineering",
+          "title": "From Prompting to Engineering",
+          "modules": [
+            "What AI-assisted engineering means",
+            "Context before prompting",
+            "Requirements and acceptance criteria",
+            "Planning before implementation",
+            "Human review and responsibility",
+            "Mini project: engineering brief"
+          ]
+        },
+        {
+          "slug": "git-repositories-engineering-context",
+          "title": "Git, Repositories & Engineering Context",
+          "modules": [
+            "Repository anatomy",
+            "Branches, commits, and diffs",
+            "Reading a codebase",
+            "Finding relevant files",
+            "Mapping dependencies",
+            "Mini project: repository orientation report"
+          ]
+        },
+        {
+          "slug": "testing-verification",
+          "title": "Testing & Verification",
+          "modules": [
+            "Why running is not verification",
+            "Unit, integration, and UI checks",
+            "Regression thinking",
+            "Failure reproduction",
+            "Build, type, and lint gates",
+            "Mini project: verification checklist"
+          ]
+        },
+        {
+          "slug": "responsible-ai-engineering",
+          "title": "Engineering with AI Responsibly",
+          "modules": [
+            "AI strengths and failure modes",
+            "Hallucinated APIs and dependencies",
+            "Untrusted external content",
+            "Secrets and sensitive information",
+            "Human approval boundaries",
+            "Mini project: AI engineering safety policy"
+          ]
+        }
+      ],
+      "capstone": "Build a small feature, document the requirement, show the plan, implement with AI assistance, run verification, and explain the final change."
+    },
+    {
+      "slug": "oae-core-workflow",
+      "title": "OAE Core Workflow",
+      "level": "intermediate",
+      "courses": [
+        {
+          "slug": "repository-intelligence",
+          "title": "Repository Intelligence",
+          "modules": [
+            "Repository mapping",
+            "File relevance analysis",
+            "Dependency tracing",
+            "Architecture orientation",
+            "Change-surface analysis",
+            "Evidence-backed implementation planning"
+          ]
+        },
+        {
+          "slug": "engineering-analysis",
+          "title": "Engineering Analysis",
+          "modules": [
+            "Requirement decomposition",
+            "Risk identification",
+            "Implementation options",
+            "Trade-off analysis",
+            "Acceptance criteria",
+            "Change verification"
+          ]
+        },
+        {
+          "slug": "dead-code-dependency-analysis",
+          "title": "Dead Code & Dependency Analysis",
+          "modules": [
+            "Unused code",
+            "Dependency relationships",
+            "Safe cleanup planning",
+            "Regression protection",
+            "Change impact analysis",
+            "Audit project"
+          ]
+        },
+        {
+          "slug": "bootstrap-app-scaffolding",
+          "title": "Bootstrap & App Scaffolding",
+          "modules": [
+            "Project structure",
+            "Technology selection",
+            "Application boundaries",
+            "Environment configuration",
+            "Test-first scaffolding",
+            "Verification gates"
+          ]
+        }
+      ],
+      "capstone": "Audit an unfamiliar repository, propose a safe change, implement a bounded improvement, and produce verification evidence."
+    },
+    {
+      "slug": "autonomous-engineering",
+      "title": "Autonomous Engineering",
+      "level": "intermediate_to_advanced",
+      "courses": [
+        {
+          "slug": "agentic-engineering-loops",
+          "title": "Agentic Engineering Loops",
+          "modules": [
+            "Requirement intake",
+            "Context collection",
+            "Planning",
+            "Implementation",
+            "Evaluation",
+            "Correction and verification"
+          ]
+        },
+        {
+          "slug": "spec-driven-development",
+          "title": "Spec-Driven Development",
+          "modules": [
+            "Writing specifications",
+            "Lifecycle states",
+            "Acceptance criteria",
+            "Implementation boundaries",
+            "Verification evidence",
+            "Traceability"
+          ]
+        },
+        {
+          "slug": "evaluator-optimizer-loops",
+          "title": "Evaluator-Optimizer Loops",
+          "modules": [
+            "Evaluator design",
+            "Objective checks",
+            "Subjective review boundaries",
+            "Iteration limits",
+            "Anti-slop mechanisms",
+            "Human review"
+          ]
+        },
+        {
+          "slug": "multi-agent-engineering",
+          "title": "Multi-Agent Engineering",
+          "modules": [
+            "Specialist roles",
+            "Task decomposition",
+            "Fan-out/fan-in",
+            "Isolated work",
+            "Handoffs",
+            "Failure handling"
+          ]
+        },
+        {
+          "slug": "human-oversight-governance",
+          "title": "Human Oversight & Governance",
+          "modules": [
+            "Approval gates",
+            "Rollback",
+            "Audit trails",
+            "Explainability",
+            "Protected actions",
+            "Consequential-change controls"
+          ]
+        }
+      ],
+      "capstone": "Design and demonstrate an autonomous engineering workflow with explicit human approval gates and a verification trail."
+    },
+    {
+      "slug": "ai-automation-agent-systems",
+      "title": "AI Automation & Agent Systems",
+      "level": "intermediate",
+      "courses": [
+        {
+          "slug": "workflow-automation-fundamentals",
+          "title": "Workflow Automation Fundamentals",
+          "modules": [
+            "Triggers",
+            "State",
+            "Actions",
+            "Conditions",
+            "Retries",
+            "Observability"
+          ]
+        },
+        {
+          "slug": "apis-webhooks-events",
+          "title": "APIs, Webhooks & Events",
+          "modules": [
+            "HTTP fundamentals",
+            "API contracts",
+            "Authentication boundaries",
+            "Webhooks",
+            "Event-driven workflows",
+            "Failure handling"
+          ]
+        },
+        {
+          "slug": "ai-agents-tool-use",
+          "title": "AI Agents and Tool Use",
+          "modules": [
+            "Agent roles",
+            "Tool boundaries",
+            "Structured outputs",
+            "Context control",
+            "Tool errors",
+            "Safe execution"
+          ]
+        },
+        {
+          "slug": "human-in-the-loop-automation",
+          "title": "Human-in-the-Loop Automation",
+          "modules": [
+            "Approval design",
+            "Escalation",
+            "Protected actions",
+            "Auditability",
+            "Fallbacks",
+            "Review queues"
+          ]
+        },
+        {
+          "slug": "monitoring-failures-recovery",
+          "title": "Monitoring, Failures & Recovery",
+          "modules": [
+            "Logs",
+            "Alerts",
+            "Failure classification",
+            "Retries",
+            "Rollback",
+            "Recovery exercises"
+          ]
+        }
+      ],
+      "capstone": "Automate one legitimate workflow from trigger through proposal, approval, execution, and verification."
+    },
+    {
+      "slug": "oae-builder-lab",
+      "title": "OAE Builder Lab",
+      "level": "advanced_project_led",
+      "courses": [
+        {
+          "slug": "problem-definition",
+          "title": "Problem Definition",
+          "modules": [
+            "User problem",
+            "Scope",
+            "Constraints",
+            "Acceptance criteria",
+            "Risk register",
+            "Evidence plan"
+          ]
+        },
+        {
+          "slug": "architecture-and-specification",
+          "title": "Architecture & Specification",
+          "modules": [
+            "System boundaries",
+            "Data flow",
+            "Interfaces",
+            "Specifications",
+            "Dependencies",
+            "Review"
+          ]
+        },
+        {
+          "slug": "implementation-and-verification",
+          "title": "Implementation & Verification",
+          "modules": [
+            "Build loop",
+            "Testing",
+            "Debugging",
+            "Review",
+            "Security checks",
+            "Verification evidence"
+          ]
+        },
+        {
+          "slug": "documentation-and-demonstration",
+          "title": "Documentation & Demonstration",
+          "modules": [
+            "Technical documentation",
+            "User explanation",
+            "Known limitations",
+            "Demo design",
+            "Retrospective",
+            "Next iteration"
+          ]
+        }
+      ],
+      "capstone": "Ship a small, documented, tested, and explainable OAE-assisted project."
+    }
+  ],
+  "standardMaterials": [
+    "facilitator_guide",
+    "learner_orientation",
+    "lesson_guide",
+    "practice_activity",
+    "knowledge_check",
+    "project_brief",
+    "reflection_prompt",
+    "revision_sheet",
+    "resource_checklist",
+    "verification_checklist",
+    "capstone_submission_template"
+  ],
+  "tutor": {
+    "name": "OAE Study Assistant",
+    "purpose": "Explain academy material, guide practice, encourage verification, and escalate when human review is needed.",
+    "responsePattern": [
+      "understand",
+      "explain",
+      "example",
+      "practice",
+      "verify",
+      "escalate"
+    ],
+    "prohibitedActions": [
+      "grade high-stakes work",
+      "mark completion",
+      "alter learner records",
+      "issue credentials",
+      "make admissions decisions",
+      "make finance decisions",
+      "request secrets",
+      "expose other learners' data"
+    ]
+  }
+}
