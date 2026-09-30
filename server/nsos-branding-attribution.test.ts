@@ -13,6 +13,14 @@ function visibleSource(directory: string): string[] {
 }
 
 describe("NSOS interface branding", () => {
+  it("uses the supplied NSOS Digital School Operations artwork in the app brand", () => {
+    const homeSource = readFileSync(resolve(clientRoot, "pages/Home.tsx"), "utf8");
+    expect(homeSource).toContain(
+      'src="/manus-storage/1000033458_785cbbbc.png"',
+    );
+    expect(homeSource).toContain("Digital School Operations");
+  });
+
   it("does not include third-party made-by or powered-by attribution text in the managed interface", () => {
     const source = visibleSource(clientRoot).join("\n");
     expect(source).not.toMatch(/made by\s+manus/i);
