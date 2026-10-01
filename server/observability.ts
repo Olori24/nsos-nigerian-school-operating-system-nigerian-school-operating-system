@@ -1,8 +1,26 @@
 import { randomUUID } from "node:crypto";
-import type { Request, RequestHandler, Response } from "express";
+import type { Request, RequestHandler } from "express";
 
 const SLOW_REQUEST_MS = 2_000;
 const requestIdPattern = /^[A-Za-z0-9_-]{8,96}$/;
+
+type ResourceSnapshot = {
+  rssMb: number;
+  heapUsedMb: number;
+  heapTotalMb: number;
+  externalMb: number;
+};
+
+function resourceSnapshot(): ResourceSnapshot {
+  const memory = process.memoryUsage();
+  const toMb = (bytes: number) => Number((bytes / 1024 / 1024).toFixed(2));
+  return {
+    rssMb: toMb(memory.rss),
+    heapUsedMb: toMb(memory.heapUsed),
+    heapTotalMb: toMb(memory.heapTotal),
+    externalMb: toMb(memory.external),
+  };
+}
 
 export function requestIdFor(value: string | undefined) {
   return value && requestIdPattern.test(value) ? value : randomUUID();
@@ -20,9 +38,14 @@ export function writeOperationalEvent(level: "info" | "warn" | "error", event: s
   else console.info(line);
 }
 
-export function requestObservabilityMiddleware(options: { now?: () => number; log?: typeof writeOperationalEvent } = {}): RequestHandler {
+export function requestObservabilityMiddleware(options: {
+  now?: () => number;
+  log?: typeof writeOperationalEvent;
+  resource?: () => ResourceSnapshot;
+} = {}): RequestHandler {
   const now = options.now ?? (() => Date.now());
   const log = options.log ?? writeOperationalEvent;
+  const readResource = options.resource ?? resourceSnapshot;
   return (request, response, next) => {
     const requestId = requestIdFor(request.get("x-request-id") ?? undefined);
     const startedAt = now();
@@ -31,7 +54,15 @@ export function requestObservabilityMiddleware(options: { now?: () => number; lo
       const durationMs = Math.max(0, Math.round(now() - startedAt));
       const statusCode = response.statusCode;
       const level = statusCode >= 500 ? "error" : durationMs >= SLOW_REQUEST_MS ? "warn" : "info";
-      log(level, "http_request_completed", { requestId, method: request.method, path: safeRequestPath(request), statusCode, durationMs, slow: durationMs >= SLOW_REQUEST_MS });
+      log(level, "http_request_completed", {
+        requestId,
+        method: request.method,
+        path: safeRequestPath(request),
+        statusCode,
+        durationMs,
+        slow: durationMs >= SLOW_REQUEST_MS,
+        ...readResource(),
+      });
     });
     next();
   };
