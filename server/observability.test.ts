@@ -9,17 +9,30 @@ describe("production observability controls", () => {
     expect(safeRequestPath({ baseUrl: "/api", path: "/trpc/nsos.portal?token=secret" } as any)).toBe("/api/trpc/nsos.portal");
   });
 
-  it("records only correlation, method, path, status, and duration on completion", () => {
+  it("records correlation, method, path, status, duration, and resource telemetry on completion", () => {
     const response = Object.assign(new EventEmitter(), { statusCode: 503, set: vi.fn() });
     const request = { method: "POST", baseUrl: "/api", path: "/trpc/nsos.finance.save", get: vi.fn(() => "trace-12345678") };
     const log = vi.fn();
+    const resource = vi.fn(() => ({ rssMb: 120.5, heapUsedMb: 80.25, heapTotalMb: 128, externalMb: 4.75 }));
     const next = vi.fn();
     let current = 100;
-    requestObservabilityMiddleware({ now: () => current, log: log as any })(request as any, response as any, next);
+    requestObservabilityMiddleware({ now: () => current, log: log as any, resource })(request as any, response as any, next);
     current = 2_275;
     response.emit("finish");
     expect(response.set).toHaveBeenCalledWith("X-Request-ID", "trace-12345678");
-    expect(log).toHaveBeenCalledWith("error", "http_request_completed", { requestId: "trace-12345678", method: "POST", path: "/api/trpc/nsos.finance.save", statusCode: 503, durationMs: 2175, slow: true });
+    expect(resource).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith("error", "http_request_completed", {
+      requestId: "trace-12345678",
+      method: "POST",
+      path: "/api/trpc/nsos.finance.save",
+      statusCode: 503,
+      durationMs: 2175,
+      slow: true,
+      rssMb: 120.5,
+      heapUsedMb: 80.25,
+      heapTotalMb: 128,
+      externalMb: 4.75,
+    });
   });
 
   it("fails production startup only when a core runtime secret or connection setting is absent", () => {
