@@ -1,4 +1,5 @@
 import { performance } from "node:perf_hooks";
+import { mkdir, writeFile } from "node:fs/promises";
 import { boundedInteger, safeStagingHealthTarget } from "./loadTargetSafety.mjs";
 
 const totalRequests = boundedInteger(process.env.NSOS_LOAD_TEST_REQUESTS, 50, 200);
@@ -36,7 +37,7 @@ latencies.sort((a, b) => a - b);
 const percentile = (fraction) => latencies[Math.min(latencies.length - 1, Math.ceil(latencies.length * fraction) - 1)] ?? 0;
 const elapsedMs = performance.now() - started;
 
-console.log(JSON.stringify({
+const evidence = {
   label: "MEASURED: approved isolated staging read-only health-check workload",
   target: stagingTarget.pathname,
   totalRequests,
@@ -46,4 +47,10 @@ console.log(JSON.stringify({
   errorRatePercent: Number(((failures / totalRequests) * 100).toFixed(2)),
   requestsPerSecond: Number((totalRequests / (elapsedMs / 1000)).toFixed(2)),
   latencyMs: { p50: Number(percentile(0.5).toFixed(2)), p95: Number(percentile(0.95).toFixed(2)), p99: Number(percentile(0.99).toFixed(2)) },
-}, null, 2));
+};
+
+const serialized = JSON.stringify(evidence, null, 2);
+await mkdir("artifacts/load", { recursive: true });
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+await writeFile(`artifacts/load/health-load-${stamp}.json`, `${serialized}\n`, "utf8");
+console.log(serialized);
