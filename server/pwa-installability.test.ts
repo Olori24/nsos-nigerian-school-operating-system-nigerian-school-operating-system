@@ -25,6 +25,10 @@ const updatePrompt = readFileSync(
   new URL("../client/src/components/NSOSUpdatePrompt.tsx", import.meta.url),
   "utf8"
 );
+const staticServer = readFileSync(
+  new URL("../server/_core/vite.ts", import.meta.url),
+  "utf8"
+);
 
 describe("NSOS installable web app", () => {
   it("exposes standalone app metadata and the supplied NSOS app icon", () => {
@@ -43,11 +47,13 @@ describe("NSOS installable web app", () => {
   });
 
   it("uses an offline shell without caching NSOS API responses", () => {
-    expect(worker).toContain('const CACHE_NAME = "nsos-shell-v5"');
+    expect(worker).toContain('const CACHE_NAME = "nsos-shell-v6"');
     expect(worker).toContain('"/offline.html"');
     expect(worker).toContain('url.pathname.startsWith("/api/")');
     expect(worker).toContain('request.mode === "navigate"');
     expect(worker).toContain('"/icons/nsos-icon-512.png"');
+    expect(staticServer).toContain('path.basename(filePath) === "sw.js"');
+    expect(staticServer).toContain('Cache-Control", "no-store, no-cache, must-revalidate"');
   });
 
   it("lets an installed user refresh an update instead of silently replacing the active app", () => {
