@@ -141,6 +141,7 @@ export function databasePoolOptions(uri: string) {
     queueLimit: DB_POOL_QUEUE_LIMIT,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
+    ...(ENV.isProduction ? { ssl: { rejectUnauthorized: true } } : {}),
   };
 }
 
@@ -4113,12 +4114,56 @@ export async function listAcademicMigrationBatches(schoolId: number) {
   return (await database()).select({ id: academicMigrationBatches.id, rowCount: academicMigrationBatches.rowCount, classCount: academicMigrationBatches.classCount, subjectCount: academicMigrationBatches.subjectCount, status: academicMigrationBatches.status, completedAt: academicMigrationBatches.completedAt, createdAt: academicMigrationBatches.createdAt }).from(academicMigrationBatches).where(eq(academicMigrationBatches.schoolId, schoolId)).orderBy(desc(academicMigrationBatches.createdAt)).limit(12);
 }
 export const createDepartment = async (input: { schoolId: number; name: string; code?: string }) => (await database()).insert(departments).values(input);
-export async function assignStaffDepartment(schoolId: number, staffId: number, departmentId: number | undefined) { await (await database()).update(staffProfiles).set({ departmentId: departmentId ?? null }).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.id, staffId))); return { success: true }; }
-export const createStaffDuty = async (input: { schoolId: number; staffId: number; title: string; description?: string; startsOn?: string }) => (await database()).insert(staffDuties).values({ ...input, startsOn: asDate(input.startsOn) });
-export const createLeaveRequest = async (input: Record<string, unknown>) => (await database()).insert(leaveRequests).values(input as typeof leaveRequests.$inferInsert);
-export async function reviewLeaveRequest(leaveId: number, status: "approved" | "declined", reviewNote: string | undefined, reviewedBy: number) { await (await database()).update(leaveRequests).set({ status, reviewNote: reviewNote ?? null, reviewedBy }).where(eq(leaveRequests.id, leaveId)); return { success: true }; }
-export async function createPayrollRecord(input: { schoolId: number; staffId: number; periodLabel: string; grossPay: number; deductions?: number }) { const deductions = input.deductions ?? 0; return (await database()).insert(payrollRecords).values({ ...input, grossPay: String(input.grossPay), deductions: String(deductions), netPay: String(input.grossPay - deductions) }); }
-export async function createPerformanceNote(input: { schoolId: number; staffId: number; authorId: number; title: string; note: string; visibility: "private" | "shared" }) { return (await database()).insert(performanceNotes).values(input); }
+async function ensureStaffBelongsToSchool(schoolId: number, staffId: number) {
+  const row = (await database()).select({ id: staffProfiles.id }).from(staffProfiles).where(and(eq(staffProfiles.id, staffId), eq(staffProfiles.schoolId, schoolId))).limit(1);
+  if (!(await row)[0]) throw new Error("The selected staff member does not belong to this school.");
+}
+
+async function ensureDepartmentBelongsToSchool(schoolId: number, departmentId: number | undefined) {
+  if (departmentId === undefined) return;
+  const row = (await database()).select({ id: departments.id }).from(departments).where(and(eq(departments.id, departmentId), eq(departments.schoolId, schoolId))).limit(1);
+  if (!(await row)[0]) throw new Error("The selected department does not belong to this school.");
+}
+
+async function ensureAnnouncementBelongsToSchool(schoolId: number, announcementId: number) {
+  const row = (await database()).select({ id: announcements.id }).from(announcements).where(and(eq(announcements.id, announcementId), eq(announcements.schoolId, schoolId))).limit(1);
+  if (!(await row)[0]) throw new Error("The announcement does not belong to this school.");
+}
+
+async function ensureLeaveBelongsToSchool(schoolId: number, leaveId: number) {
+  const row = (await database()).select({ id: leaveRequests.id }).from(leaveRequests).where(and(eq(leaveRequests.id, leaveId), eq(leaveRequests.schoolId, schoolId))).limit(1);
+  if (!(await row)[0]) throw new Error("The leave request does not belong to this school.");
+}
+
+export async function assignStaffDepartment(schoolId: number, staffId: number, departmentId: number | undefined) {
+  await ensureStaffBelongsToSchool(schoolId, staffId);
+  await ensureDepartmentBelongsToSchool(schoolId, departmentId);
+  await (await database()).update(staffProfiles).set({ departmentId: departmentId ?? null }).where(and(eq(staffProfiles.schoolId, schoolId), eq(staffProfiles.id, staffId)));
+  return { success: true };
+}
+export const createStaffDuty = async (input: { schoolId: number; staffId: number; title: string; description?: string; startsOn?: string }) => {
+  await ensureStaffBelongsToSchool(input.schoolId, input.staffId);
+  return (await database()).insert(staffDuties).values({ ...input, startsOn: asDate(input.startsOn) });
+};
+export const createLeaveRequest = async (input: { schoolId: number; staffId: number; leaveType: "annual" | "sick" | "maternity" | "paternity" | "compassionate" | "other"; startsOn: string; endsOn: string; reason: string }) => {
+  await ensureStaffBelongsToSchool(input.schoolId, input.staffId);
+  return (await database()).insert(leaveRequests).values({ ...input, startsOn: asDate(input.startsOn)!, endsOn: asDate(input.endsOn)! });
+};
+export async function reviewLeaveRequest(schoolId: number, leaveId: number, status: "approved" | "declined", reviewNote: string | undefined, reviewedBy: number) {
+  await ensureLeaveBelongsToSchool(schoolId, leaveId);
+  await (await database()).update(leaveRequests).set({ status, reviewNote: reviewNote ?? null, reviewedBy }).where(and(eq(leaveRequests.id, leaveId), eq(leaveRequests.schoolId, schoolId)));
+  return { success: true };
+}
+export async function createPayrollRecord(input: { schoolId: number; staffId: number; periodLabel: string; grossPay: number; deductions?: number }) {
+  await ensureStaffBelongsToSchool(input.schoolId, input.staffId);
+  const deductions = input.deductions ?? 0;
+  if (deductions > input.grossPay) throw new Error("Deductions cannot exceed gross pay.");
+  return (await database()).insert(payrollRecords).values({ ...input, grossPay: String(input.grossPay), deductions: String(deductions), netPay: String(input.grossPay - deductions) });
+}
+export async function createPerformanceNote(input: { schoolId: number; staffId: number; authorId: number; title: string; note: string; visibility: "private" | "shared" }) {
+  await ensureStaffBelongsToSchool(input.schoolId, input.staffId);
+  return (await database()).insert(performanceNotes).values(input);
+}
 export async function listStaffOperations(schoolId: number) {
   const db = await database();
   const [leaves, payroll, notes, departmentRows, duties] = await Promise.all([
@@ -4136,7 +4181,11 @@ async function listFamilyPortalAnnouncements(schoolId: number, audience: "guardi
   return (await database()).select().from(announcements).where(and(eq(announcements.schoolId, schoolId), eq(announcements.status, "published"), inArray(announcements.audience, ["everyone", audience]))).orderBy(desc(announcements.publishedAt), desc(announcements.createdAt));
 }
 export async function createAnnouncement(input: { schoolId: number; title: string; body: string; audience: "everyone" | "staff" | "students" | "guardians" | "class"; classId?: number; publish?: boolean; createdBy: number }) { const now = new Date(); const result = await (await database()).insert(announcements).values({ ...input, classId: input.classId, status: input.publish ? "published" : "draft", publishedAt: input.publish ? now : null }); return { announcementId: Number(result[0].insertId) }; }
-export async function publishAnnouncement(announcementId: number) { await (await database()).update(announcements).set({ status: "published", publishedAt: new Date() }).where(eq(announcements.id, announcementId)); return { success: true }; }
+export async function publishAnnouncement(schoolId: number, announcementId: number) {
+  await ensureAnnouncementBelongsToSchool(schoolId, announcementId);
+  await (await database()).update(announcements).set({ status: "published", publishedAt: new Date() }).where(and(eq(announcements.id, announcementId), eq(announcements.schoolId, schoolId)));
+  return { success: true };
+}
 export async function createMessageLog(input: { schoolId: number; channel: "in_app" | "email" | "sms" | "whatsapp"; audience: "everyone" | "staff" | "students" | "guardians" | "class"; subject?: string; body: string; recipientCount: number; providerMessageId?: string; createdBy: number }) {
   const db = await database();
   const isInApp = input.channel === "in_app";

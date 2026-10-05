@@ -68,9 +68,8 @@ export function createRateLimitMiddleware(input: { namespace: string; limit: num
 }
 
 export function isTrustedMutationOrigin(origin: string | undefined, protocol: string, host: string | undefined) {
-  if (!origin) return true;
-  if (!host) return false;
-  return origin === `${protocol}://${host}`;
+  if (!origin || !host) return false;
+  return origin === protocol + "://" + host;
 }
 
 export function requireSameOriginForMutations(): RequestHandler {

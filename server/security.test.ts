@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildContentSecurityPolicy, createRateLimitMiddleware, getSecurityHeaders, isTrustedMutationOrigin } from "./security";
 import { sanitizeSecurityAuditMetadata } from "./db";
+import { requiredProductionEnvironmentErrors } from "./observability";
 
 describe("NSOS security hardening rules", () => {
   it("builds a conservative production browser-security header baseline", () => {
@@ -22,9 +23,16 @@ describe("NSOS security hardening rules", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("requires production session secrets to be at least 32 characters", () => {
+    const base = { isProduction: true, appId: "app", databaseUrl: "mysql://db", oAuthServerUrl: "https://auth.example" };
+    expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "short" })).toContain("JWT_SECRET is required in production.");
+    expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "12345678901234567890123456789012" })).not.toContain("JWT_SECRET is required in production.");
+  });
+
   it("allows same-origin state changes and redacts sensitive audit metadata", () => {
     expect(isTrustedMutationOrigin("https://nsos-system-uhkdscaf.manus.space", "https", "nsos-system-uhkdscaf.manus.space")).toBe(true);
     expect(isTrustedMutationOrigin("https://attacker.example", "https", "nsos-system-uhkdscaf.manus.space")).toBe(false);
+    expect(isTrustedMutationOrigin(undefined, "https", "nsos-system-uhkdscaf.manus.space")).toBe(false);
     expect(sanitizeSecurityAuditMetadata({ provider: "termii", apiKey: "secret", recipientPhone: "2348031234567", deliveryTracking: "pending" })).toEqual({ provider: "termii", apiKey: "[REDACTED]", recipientPhone: "[REDACTED]", deliveryTracking: "pending" });
     expect(sanitizeSecurityAuditMetadata({ approvalNote: "Reviewed against the approved termly fee schedule." })).toEqual({ approvalNote: "Reviewed against the approved termly fee schedule." });
   });

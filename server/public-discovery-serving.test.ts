@@ -50,7 +50,7 @@ describe("public discovery file serving", () => {
   });
 
   it("serves static assets before the SPA fallback", () => {
-    const staticMiddleware = staticServerSource.indexOf("app.use(express.static(distPath))");
+    const staticMiddleware = staticServerSource.indexOf("express.static(distPath");
     const spaFallback = staticServerSource.indexOf('app.use("*", (_req, res) =>');
 
     expect(staticMiddleware).toBeGreaterThanOrEqual(0);
