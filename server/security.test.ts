@@ -22,6 +22,13 @@ describe("NSOS security hardening rules", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("requires production session secrets to be at least 32 characters", () => {
+    const { requiredProductionEnvironmentErrors } = require("./observability") as typeof import("./observability");
+    const base = { isProduction: true, appId: "app", databaseUrl: "mysql://db", oAuthServerUrl: "https://auth.example" };
+    expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "short" })).toContain("JWT_SECRET is required in production.");
+    expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "12345678901234567890123456789012" })).not.toContain("JWT_SECRET is required in production.");
+  });
+
   it("allows same-origin state changes and redacts sensitive audit metadata", () => {
     expect(isTrustedMutationOrigin("https://nsos-system-uhkdscaf.manus.space", "https", "nsos-system-uhkdscaf.manus.space")).toBe(true);
     expect(isTrustedMutationOrigin("https://attacker.example", "https", "nsos-system-uhkdscaf.manus.space")).toBe(false);
