@@ -4147,7 +4147,7 @@ export const createStaffDuty = async (input: { schoolId: number; staffId: number
 };
 export const createLeaveRequest = async (input: { schoolId: number; staffId: number; leaveType: "annual" | "sick" | "maternity" | "paternity" | "compassionate" | "other"; startsOn: string; endsOn: string; reason: string }) => {
   await ensureStaffBelongsToSchool(input.schoolId, input.staffId);
-  return (await database()).insert(leaveRequests).values(input);
+  return (await database()).insert(leaveRequests).values({ ...input, startsOn: asDate(input.startsOn)!, endsOn: asDate(input.endsOn)! });
 };
 export async function reviewLeaveRequest(schoolId: number, leaveId: number, status: "approved" | "declined", reviewNote: string | undefined, reviewedBy: number) {
   await ensureLeaveBelongsToSchool(schoolId, leaveId);
