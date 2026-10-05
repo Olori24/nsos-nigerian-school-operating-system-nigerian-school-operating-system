@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildContentSecurityPolicy, createRateLimitMiddleware, getSecurityHeaders, isTrustedMutationOrigin } from "./security";
 import { sanitizeSecurityAuditMetadata } from "./db";
+import { requiredProductionEnvironmentErrors } from "./observability";
 
 describe("NSOS security hardening rules", () => {
   it("builds a conservative production browser-security header baseline", () => {
@@ -23,7 +24,6 @@ describe("NSOS security hardening rules", () => {
   });
 
   it("requires production session secrets to be at least 32 characters", () => {
-    const { requiredProductionEnvironmentErrors } = require("./observability") as typeof import("./observability");
     const base = { isProduction: true, appId: "app", databaseUrl: "mysql://db", oAuthServerUrl: "https://auth.example" };
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "short" })).toContain("JWT_SECRET is required in production.");
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "12345678901234567890123456789012" })).not.toContain("JWT_SECRET is required in production.");
