@@ -5767,6 +5767,7 @@ export const nsosRouter = router({
       )
       .mutation(({ ctx, input }) =>
         db.reviewLeaveRequest(
+          input.schoolId,
           input.leaveId,
           input.status,
           input.reviewNote,
@@ -5824,7 +5825,7 @@ export const nsosRouter = router({
       .input(
         schoolInput.extend({ announcementId: z.number().int().positive() })
       )
-      .mutation(({ input }) => db.publishAnnouncement(input.announcementId)),
+      .mutation(({ input }) => db.publishAnnouncement(input.schoolId, input.announcementId)),
     logBulkMessage: managementProcedure("communications.read")
       .input(
         schoolInput.extend({
