@@ -5802,7 +5802,7 @@ export const nsosRouter = router({
     list: managementProcedure("communications.read")
       .input(schoolInput)
       .query(({ input }) => db.listAnnouncements(input.schoolId)),
-    create: managementProcedure("communications.read")
+    create: managementProcedure("communications.write")
       .input(
         schoolInput.extend({
           title: z.string().min(3).max(255),
@@ -5821,7 +5821,7 @@ export const nsosRouter = router({
       .mutation(({ ctx, input }) =>
         db.createAnnouncement({ ...input, createdBy: ctx.user.id })
       ),
-    publish: managementProcedure("communications.read")
+    publish: managementProcedure("communications.write")
       .input(
         schoolInput.extend({ announcementId: z.number().int().positive() })
       )
