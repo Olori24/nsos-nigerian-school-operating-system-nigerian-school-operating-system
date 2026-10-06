@@ -43,6 +43,8 @@ jobs:
 
   dependency-review:
     name: Dependency review (requires GitHub Dependency Graph)
+    # Blocked until the repository owner enables GitHub Dependency Graph in Settings > Security analysis.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
