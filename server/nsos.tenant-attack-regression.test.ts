@@ -8,6 +8,7 @@ vi.mock("./db", () => ({
   reviewLeaveRequest: vi.fn(),
   createPayrollRecord: vi.fn(),
   createPerformanceNote: vi.fn(),
+  createAnnouncement: vi.fn(),
   publishAnnouncement: vi.fn(),
 }));
 
