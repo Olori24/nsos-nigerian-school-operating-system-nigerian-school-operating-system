@@ -101,11 +101,20 @@ describe("NSOS adversarial tenant-boundary regression", () => {
       schoolId: 1, staffId: 901, periodLabel: "October 2026", grossPay: 250000,
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
+    await expect(caller().nsos.communications.create({
+      schoolId: 1,
+      title: "Staff should not publish",
+      body: "This write must remain management-only.",
+      audience: "everyone",
+      publish: true,
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
     await expect(caller().nsos.communications.publish({
       schoolId: 1, announcementId: 601,
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     expect(db.createPayrollRecord).not.toHaveBeenCalled();
+    expect(db.createAnnouncement).not.toHaveBeenCalled();
     expect(db.publishAnnouncement).not.toHaveBeenCalled();
   });
 });
