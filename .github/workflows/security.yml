@@ -43,9 +43,6 @@ jobs:
 
   dependency-review:
     name: Dependency review (requires GitHub Dependency Graph)
-    # GitHub does not expose the repository Dependency Graph setting to workflow expressions.
-    # Keep this check skipped until the repository owner enables Dependency Graph; CodeQL and secret scanning remain blocking security gates.
-    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
