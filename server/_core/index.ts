@@ -81,7 +81,7 @@ async function startServer() {
 
   const rawPort = (process.env.PORT ?? "3000").trim();
   const preferredPort = Number(rawPort);
-  if (!/^\\d+$/.test(rawPort) || !Number.isInteger(preferredPort) || preferredPort < 1 || preferredPort > 65535) {
+  if (!/^\d+$/.test(rawPort) || !Number.isInteger(preferredPort) || preferredPort < 1 || preferredPort > 65535) {
     throw new Error("PORT must be a valid TCP port between 1 and 65535.");
   }
 
