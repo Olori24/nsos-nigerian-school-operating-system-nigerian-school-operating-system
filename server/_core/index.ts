@@ -42,6 +42,9 @@ async function startServer() {
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   app.use(requestObservabilityMiddleware());
+  app.get("/healthz", (_request, response) => {
+    response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
+  });
   app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
   app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
