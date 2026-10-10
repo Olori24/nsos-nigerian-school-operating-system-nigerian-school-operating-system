@@ -14,6 +14,7 @@ import { registerAffiliateRoutes } from "../affiliateRoutes";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
 import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
+import { parseConfiguredPort } from "./port";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -43,6 +44,9 @@ async function startServer() {
   app.disable("x-powered-by");
   app.use(requestObservabilityMiddleware());
   app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
+  app.get("/healthz", (_request, response) => {
+    response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
+  });
   app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
   app.use("/api/trpc", requireSameOriginForMutations());
@@ -79,16 +83,32 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const preferredPort = parseConfiguredPort(process.env.PORT);
 
-  if (port !== preferredPort) {
+  // Managed production platforms route traffic to the exact PORT they provide.
+  // Silently choosing another port makes the process appear healthy while the
+  // platform health check and incoming traffic continue targeting the old port.
+  // Port fallback is only useful during local development.
+  const port = ENV.isProduction ? preferredPort : await findAvailablePort(preferredPort);
+
+  if (!ENV.isProduction && port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  server.on("error", error => {
+    writeOperationalEvent("error", "server_listen_failed", {
+      port,
+      code: "code" in error && typeof error.code === "string" ? error.code : "UNKNOWN",
+    });
+    process.exitCode = 1;
+  });
 
   server.listen(port, () => {
     writeOperationalEvent("info", "server_started", { port, production: ENV.isProduction });
   });
 }
 
-startServer().catch(console.error);
+startServer().catch(error => {
+  console.error("NSOS startup failed", error);
+  process.exitCode = 1;
+});
