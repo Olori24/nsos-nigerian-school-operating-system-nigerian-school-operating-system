@@ -79,12 +79,28 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const preferredPort = Number.parseInt(process.env.PORT || "3000", 10);
+  if (!Number.isInteger(preferredPort) || preferredPort < 1 || preferredPort > 65535) {
+    throw new Error("PORT must be a valid TCP port between 1 and 65535.");
+  }
 
-  if (port !== preferredPort) {
+  // Managed production platforms route traffic to the exact PORT they provide.
+  // Silently choosing another port makes the process appear healthy while the
+  // platform health check and incoming traffic continue targeting the old port.
+  // Port fallback is only useful during local development.
+  const port = ENV.isProduction ? preferredPort : await findAvailablePort(preferredPort);
+
+  if (!ENV.isProduction && port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  server.on("error", error => {
+    writeOperationalEvent("error", "server_listen_failed", {
+      port,
+      code: "code" in error && typeof error.code === "string" ? error.code : "UNKNOWN",
+    });
+    process.exitCode = 1;
+  });
 
   server.listen(port, () => {
     writeOperationalEvent("info", "server_started", { port, production: ENV.isProduction });
