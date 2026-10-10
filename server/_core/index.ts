@@ -14,6 +14,7 @@ import { registerAffiliateRoutes } from "../affiliateRoutes";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
 import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
+import { parseConfiguredPort } from "./port";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -82,11 +83,7 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const rawPort = (process.env.PORT ?? "3000").trim();
-  const preferredPort = Number(rawPort);
-  if (!/^\d+$/.test(rawPort) || !Number.isInteger(preferredPort) || preferredPort < 1 || preferredPort > 65535) {
-    throw new Error("PORT must be a valid TCP port between 1 and 65535.");
-  }
+  const preferredPort = parseConfiguredPort(process.env.PORT);
 
   // Managed production platforms route traffic to the exact PORT they provide.
   // Silently choosing another port makes the process appear healthy while the
