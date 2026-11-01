@@ -1,3 +1,6 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
+import { PostHog } from "posthog-node";
 import { ENV } from "./env";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
@@ -212,6 +215,79 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
+type AiObservabilityContext = {
+  distinctId: string;
+  traceId: string;
+};
+
+const aiObservabilityContext = new AsyncLocalStorage<AiObservabilityContext>();
+const aiSessionId = `server-${randomUUID()}`;
+const posthog = ENV.posthogKey && ENV.posthogHost
+  ? new PostHog(ENV.posthogKey, { host: ENV.posthogHost, privacyMode: false })
+  : undefined;
+
+export function withAiObservabilityContext<T>(
+  distinctId: string,
+  callback: () => Promise<T>
+): Promise<T> {
+  return aiObservabilityContext.run({ distinctId, traceId: randomUUID() }, callback);
+}
+
+const getAiObservabilityContext = (): AiObservabilityContext =>
+  aiObservabilityContext.getStore() ?? { traceId: randomUUID(), distinctId: "" };
+
+const captureAiGeneration = ({
+  context,
+  payload,
+  model,
+  maxTokens,
+  result,
+  latency,
+  httpStatus,
+  error,
+}: {
+  context: AiObservabilityContext;
+  payload: Record<string, unknown>;
+  model?: string;
+  maxTokens?: number;
+  result?: InvokeResult;
+  latency: number;
+  httpStatus?: number;
+  error?: Error;
+}) => {
+  if (!posthog) {
+    if (!ENV.isProduction) {
+      const variable = ENV.posthogKey ? "VITE_POSTHOG_HOST" : "VITE_POSTHOG_KEY";
+      console.error(new Error(`${variable} variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once ${variable} is configured`));
+    }
+    return;
+  }
+
+  posthog.capture({
+    distinctId: context.distinctId || context.traceId,
+    event: "$ai_generation",
+    properties: {
+      $ai_trace_id: context.traceId,
+      $ai_session_id: aiSessionId,
+      $ai_model: result?.model || model || "unknown",
+      $ai_provider: "forge",
+      $ai_input: payload.messages,
+      $ai_input_tokens: result?.usage?.prompt_tokens,
+      $ai_output_choices: result?.choices.map(choice => ({
+        role: choice.message.role,
+        content: choice.message.content,
+      })),
+      $ai_output_tokens: result?.usage?.completion_tokens,
+      $ai_latency: latency,
+      $ai_http_status: httpStatus,
+      $ai_max_tokens: maxTokens,
+      $ai_tools: payload.tools,
+      $ai_is_error: Boolean(error),
+      ...(error ? { $ai_error: error.message } : {}),
+    },
+  });
+};
+
 const resolveApiUrl = () =>
   ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
@@ -406,23 +482,50 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  const observabilityContext = getAiObservabilityContext();
+  const startedAt = performance.now();
+  let response: Response | undefined;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
+  try {
+    response = await fetchWithBackoff(resolveApiUrl(), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${ENV.forgeApiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      );
+    }
+
+    const result = (await response.json()) as InvokeResult;
+    captureAiGeneration({
+      context: observabilityContext,
+      payload,
+      model,
+      maxTokens: resolvedMaxTokens,
+      result,
+      latency: (performance.now() - startedAt) / 1000,
+      httpStatus: response.status,
+    });
+    return result;
+  } catch (error) {
+    captureAiGeneration({
+      context: observabilityContext,
+      payload,
+      model,
+      maxTokens: resolvedMaxTokens,
+      latency: (performance.now() - startedAt) / 1000,
+      httpStatus: response?.status,
+      error: error instanceof Error ? error : new Error("LLM invoke failed"),
+    });
+    throw error;
   }
-
-  return (await response.json()) as InvokeResult;
 }
 
 export type ModelInfo = {

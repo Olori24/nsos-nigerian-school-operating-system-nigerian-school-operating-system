@@ -7,11 +7,17 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import { assertJsonTrpcResponse } from "./lib/apiResponseRecovery";
+import { posthogLog } from "./lib/posthogLogger";
 import "./index.css";
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(error => console.warn("[PWA] Service worker registration failed", error));
+    navigator.serviceWorker.register("/sw.js")
+      .then(() => posthogLog.info("service_worker_registered", { runtime: "browser" }))
+      .catch(error => {
+        console.warn("[PWA] Service worker registration failed", error);
+        posthogLog.warn("service_worker_registration_failed", { runtime: "browser" });
+      });
   }, { once: true });
 }
 
@@ -33,6 +39,7 @@ queryClient.getQueryCache().subscribe(event => {
     const error = event.query.state.error;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Query Error]", error);
+    posthogLog.error("api_query_failed", { transport: "trpc" });
   }
 });
 
@@ -41,6 +48,7 @@ queryClient.getMutationCache().subscribe(event => {
     const error = event.mutation.state.error;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Mutation Error]", error);
+    posthogLog.error("api_mutation_failed", { transport: "trpc" });
   }
 });
 
@@ -71,3 +79,5 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+posthogLog.info("web_client_rendered", { entrypoint: "main" });

@@ -13,6 +13,7 @@ export function buildContentSecurityPolicy(isProduction: boolean) {
     "form-action 'self'",
     "manifest-src 'self'",
     "script-src 'self' https:",
+    "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https:",
     "font-src 'self' data: https://fonts.gstatic.com",

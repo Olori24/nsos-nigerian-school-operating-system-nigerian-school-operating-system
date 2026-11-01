@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
+import posthog from "@/lib/posthog";
 import { Building2, Check, ChevronDown, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ export function InstitutionSwitcher({ institutions, activeInstitutionId, onSwitc
   const current = institutions.find(item => item.id === activeInstitutionId) ?? institutions[0];
   const create = trpc.nsos.schools.create.useMutation({
     onSuccess: async result => {
+      posthog.capture("institution_created", { operating_type: form.operatingType });
       await onCreated(result.schoolId);
       setForm({ name: "", shortCode: "", state: "Ogun", operatingType: "school" });
       setCreateOpen(false);

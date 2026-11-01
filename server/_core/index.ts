@@ -14,6 +14,7 @@ import { registerAffiliateRoutes } from "../affiliateRoutes";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
 import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
+import { initializePostHogLogs, posthogLog } from "./posthogLogs";
 import { parseConfiguredPort } from "./port";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -38,6 +39,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const environmentErrors = requiredProductionEnvironmentErrors(ENV);
   if (environmentErrors.length) throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
+  initializePostHogLogs();
   const app = express();
   const server = createServer(app);
   app.set("trust proxy", 1);
@@ -96,15 +98,15 @@ async function startServer() {
   }
 
   server.on("error", error => {
-    writeOperationalEvent("error", "server_listen_failed", {
-      port,
-      code: "code" in error && typeof error.code === "string" ? error.code : "UNKNOWN",
-    });
+    const code = "code" in error && typeof error.code === "string" ? error.code : "UNKNOWN";
+    writeOperationalEvent("error", "server_listen_failed", { port, code });
+    posthogLog("error", "server_listener_failed", { port, code });
     process.exitCode = 1;
   });
 
   server.listen(port, () => {
     writeOperationalEvent("info", "server_started", { port, production: ENV.isProduction });
+    posthogLog("info", "server_listener_ready", { port, production: ENV.isProduction });
   });
 }
 

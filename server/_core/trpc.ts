@@ -3,6 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { ENV } from "./env";
+import { withAiObservabilityContext } from "./llm";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -18,12 +19,14 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
-  return next({
-    ctx: {
-      ...ctx,
-      user: ctx.user,
-    },
-  });
+  return withAiObservabilityContext(String(ctx.user.id), () =>
+    next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+      },
+    })
+  );
 });
 
 export const protectedProcedure = t.procedure.use(requireUser);

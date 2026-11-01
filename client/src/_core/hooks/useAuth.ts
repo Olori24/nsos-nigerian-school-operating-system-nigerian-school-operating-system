@@ -1,7 +1,10 @@
 import { startLogin } from "@/const";
+import posthog from "@/lib/posthog";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+
+let identifiedUserId: string | null = null;
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -41,10 +44,27 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       // The session is HttpOnly cookie-based; no authentication token is
       // stored in browser storage.
+      posthog.reset();
+      identifiedUserId = null;
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
     }
   }, [logoutMutation, utils]);
+
+  useEffect(() => {
+    const user = meQuery.data;
+    if (!user) return;
+
+    const distinctId = String(user.id);
+    if (identifiedUserId === distinctId) return;
+
+    if (identifiedUserId !== null) posthog.reset();
+    posthog.identify(distinctId, {
+      email: user.email ?? undefined,
+      name: user.name ?? undefined,
+    });
+    identifiedUserId = distinctId;
+  }, [meQuery.data]);
 
   const state = useMemo(() => {
     localStorage.setItem(
