@@ -7,8 +7,8 @@ export const isPostHogConfigured = Boolean(posthogKey && posthogHost);
 if (!isPostHogConfigured) {
   if (import.meta.env.DEV) {
     const missingVariable = posthogKey ? "VITE_POSTHOG_HOST" : "VITE_POSTHOG_KEY";
-    throw new Error(
-      `${missingVariable} variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once ${missingVariable} is configured`,
+    console.warn(
+      `${missingVariable} is not configured; PostHog capture is disabled until both VITE_POSTHOG_KEY and VITE_POSTHOG_HOST are set.`,
     );
   }
 } else {
