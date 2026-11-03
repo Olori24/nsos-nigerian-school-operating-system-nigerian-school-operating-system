@@ -1,18 +1,18 @@
 import "dotenv/config";
 import express from "express";
+import path from "node:path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic } from "./vite";
+import { serveStatic } from "./static";
 import { registerSmsWebhookRoutes } from "../webhooks";
 import { registerAffiliateRoutes } from "../affiliateRoutes";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
 import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware } from "../observability";
 import { ENV } from "./env";
-import path from "node:path";
 
 export function createApplication(options: { serveStatic?: boolean; spaFallback?: boolean } = {}) {
   const environmentErrors = requiredProductionEnvironmentErrors(ENV);
