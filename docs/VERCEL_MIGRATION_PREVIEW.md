@@ -45,7 +45,7 @@ Draft PR: https://github.com/Olori24/nsos-nigerian-school-operating-system-niger
 - Prettier formatting check: passed.
 - TypeScript typecheck, including root index.ts: passed.
 - Database migration validation against the CI-only MySQL service: passed.
-- Full Vitest suite: 128 test files passed, 2 skipped; 479 tests passed, 2 skipped.
+- Full Vitest suite: 128 test files passed, 2 skipped; 477 tests passed, 2 skipped.
 - Vercel asset-staging production build (pnpm build:vercel): passed.
 - CodeQL analysis: passed.
 - Gitleaks secret scan: passed.
