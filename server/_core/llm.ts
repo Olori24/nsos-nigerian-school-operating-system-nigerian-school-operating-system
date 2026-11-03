@@ -223,7 +223,7 @@ type AiObservabilityContext = {
 const aiObservabilityContext = new AsyncLocalStorage<AiObservabilityContext>();
 const aiSessionId = `server-${randomUUID()}`;
 const posthog = ENV.posthogKey && ENV.posthogHost
-  ? new PostHog(ENV.posthogKey, { host: ENV.posthogHost, privacyMode: false })
+  ? new PostHog(ENV.posthogKey, { host: ENV.posthogHost, privacyMode: true })
   : undefined;
 
 export function withAiObservabilityContext<T>(
@@ -271,19 +271,13 @@ const captureAiGeneration = ({
       $ai_session_id: aiSessionId,
       $ai_model: result?.model || model || "unknown",
       $ai_provider: "forge",
-      $ai_input: payload.messages,
       $ai_input_tokens: result?.usage?.prompt_tokens,
-      $ai_output_choices: result?.choices.map(choice => ({
-        role: choice.message.role,
-        content: choice.message.content,
-      })),
       $ai_output_tokens: result?.usage?.completion_tokens,
       $ai_latency: latency,
       $ai_http_status: httpStatus,
       $ai_max_tokens: maxTokens,
       $ai_tools: payload.tools,
       $ai_is_error: Boolean(error),
-      ...(error ? { $ai_error: error.message } : {}),
     },
   });
 };
