@@ -27,10 +27,11 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  const app = createApplication({ serveStatic: ENV.isProduction });
+  const isDevelopment = process.env.NODE_ENV === "development";
+  const app = createApplication({ serveStatic: !isDevelopment });
   const server = createServer(app);
 
-  if (process.env.NODE_ENV === "development") {
+  if (isDevelopment) {
     await setupVite(app, server);
   }
 
