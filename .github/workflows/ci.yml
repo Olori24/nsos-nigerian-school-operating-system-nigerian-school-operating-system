@@ -52,7 +52,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           package-manager-cache: false
 
       - name: Enable Corepack
@@ -85,4 +85,4 @@ jobs:
         run: pnpm test
 
       - name: Build production bundle
-        run: pnpm build
+        run: pnpm build:vercel
