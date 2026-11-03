@@ -80,7 +80,7 @@ export function createApplication(options: { serveStatic?: boolean; spaFallback?
         pathName === "/manus-storage" ||
         pathName.startsWith("/manus-storage/");
 
-      if (isServerRoute) {
+      if (isServerRoute || !["GET", "HEAD"].includes(req.method)) {
         return res.status(404).json({ error: "Route not found." });
       }
 
