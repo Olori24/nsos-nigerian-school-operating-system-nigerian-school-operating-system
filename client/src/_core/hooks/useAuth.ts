@@ -53,7 +53,14 @@ export function useAuth(options?: UseAuthOptions) {
 
   useEffect(() => {
     const user = meQuery.data;
-    if (!user) return;
+    if (!user) {
+      // Clear a stale analytics identity only after a successful unauthenticated response.
+      if (meQuery.isSuccess && meQuery.data === null && identifiedUserId !== null) {
+        posthog.reset();
+        identifiedUserId = null;
+      }
+      return;
+    }
 
     const distinctId = String(user.id);
     if (identifiedUserId === distinctId) return;
