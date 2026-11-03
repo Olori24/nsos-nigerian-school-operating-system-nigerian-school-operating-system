@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import posthog from "@/lib/posthog";
 import { AlertTriangle, BookOpenCheck, Loader2, MessageCircleQuestion, ShieldCheck, UserRoundCheck } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
@@ -13,6 +14,11 @@ export function StudentAiTutorHub({ schoolId }: { schoolId: number }) {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const ask = trpc.nsos.aiTutors.ask.useMutation({
     onSuccess: result => {
+      posthog.capture("ai_tutor_response_received", {
+        needs_teacher_support: result.needsTeacherSupport,
+        adaptation_enabled: result.adaptationEnabled,
+        teaching_style: result.teachingStyle,
+      });
       setResponse(result);
       setHelpfulness("");
       setFeedbackComment("");
@@ -26,7 +32,7 @@ export function StudentAiTutorHub({ schoolId }: { schoolId: number }) {
     onError: error => toast.error(error.message),
   });
   const feedback = trpc.nsos.aiTutors.submitFeedback.useMutation({
-    onSuccess: () => { setFeedbackSubmitted(true); toast.success("Thank you. Your feedback helps the school review this tutor’s usefulness."); },
+    onSuccess: () => { posthog.capture("ai_tutor_feedback_submitted", { helpfulness }); setFeedbackSubmitted(true); toast.success("Thank you. Your feedback helps the school review this tutor’s usefulness."); },
     onError: error => toast.error(error.message),
   });
   const teachingPreference = trpc.nsos.aiTutors.setTeachingPreference.useMutation({

@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, Mail, School, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import posthog from "@/lib/posthog";
 
 export default function LeadCapture() {
   const [firstName, setFirstName] = useState("");
@@ -11,6 +12,7 @@ export default function LeadCapture() {
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
   const capture = trpc.nsos.leads.capture.useMutation({
     onSuccess: () => {
+      posthog.capture("lead_submitted");
       setSubmittedEmail(email);
       toast.success("You're on the NSOS list.");
       setFirstName("");
@@ -22,7 +24,10 @@ export default function LeadCapture() {
   });
 
   const intent = trpc.nsos.leads.highIntent.useMutation({
-    onSuccess: () => toast.success("Walkthrough interest recorded. We'll follow up with you."),
+    onSuccess: () => {
+      posthog.capture("walkthrough_requested");
+      toast.success("Walkthrough interest recorded. We'll follow up with you.");
+    },
     onError: error => toast.error(error.message),
   });
 

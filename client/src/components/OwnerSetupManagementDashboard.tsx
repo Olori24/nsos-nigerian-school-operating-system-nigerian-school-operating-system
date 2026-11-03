@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import posthog from "@/lib/posthog";
 import { AlertTriangle, CheckCircle2, Clock3, Loader2, Mail, Send, ShieldCheck, UserRoundPlus, WalletCards } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ export function OwnerSetupManagementDashboard({ schoolId }: { schoolId: number }
   ]);
   const sendInvitation = trpc.nsos.setupAgent.sendStaffInvitation.useMutation({
     onSuccess: () => {
+      posthog.capture("staff_invitation_sent");
       toast.success("Staff invitation sent. The recipient must complete verified email sign-in before access is linked.");
       setInvitationId(null);
       setInvitationConfirmed(false);
@@ -47,6 +49,7 @@ export function OwnerSetupManagementDashboard({ schoolId }: { schoolId: number }
   });
   const activateDraft = trpc.nsos.setupAgent.activateFinanceDraft.useMutation({
     onSuccess: () => {
+      posthog.capture("fee_structure_activated");
       toast.success("Fee structure activated after owner approval.");
       setFeeStructureId(null); setFeeConfirmed(false); setFeeApprovalNote("");
       refresh();

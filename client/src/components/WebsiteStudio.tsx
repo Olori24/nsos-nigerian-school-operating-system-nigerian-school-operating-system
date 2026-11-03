@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import posthog from "@/lib/posthog";
 import { CheckCircle2, Copy, ExternalLink, Globe2, Loader2, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -25,7 +26,7 @@ export function WebsiteStudio({ schoolId }: { schoolId: number }) {
   if (!config.data) return null;
   const site = config.data.website;
   const submit = (event: FormEvent) => { event.preventDefault(); save.mutate({ schoolId, ...form, headline: form.headline || undefined, introduction: form.introduction || undefined, contactEmail: form.contactEmail || undefined, contactPhone: form.contactPhone || undefined, campusLocation: form.campusLocation || undefined, customDomain: form.customDomain || undefined, visualTheme: form.visualTheme, websiteContent: { about: form.about || undefined, principalName: form.principalName || undefined, principalTitle: form.principalTitle || undefined, principalMessage: form.principalMessage || undefined, programmes: form.programmes.split("\n").map(value => value.trim()).filter(Boolean), faqs: form.faqs.split("\n").map(value => { const [question, ...answer] = value.split("|"); return { question: question.trim(), answer: answer.join("|").trim() }; }).filter(value => value.question && value.answer), socialLinks: form.socialLinks.split("\n").map(value => { const [label, ...url] = value.split("|"); return { label: label.trim(), url: url.join("|").trim() }; }).filter(value => value.label && value.url) }, }); };
-  const publish = () => save.mutate({ schoolId, ...form, headline: form.headline || undefined, introduction: form.introduction || undefined, contactEmail: form.contactEmail || undefined, contactPhone: form.contactPhone || undefined, campusLocation: form.campusLocation || undefined, customDomain: form.customDomain || undefined, published: true });
+  const publish = () => save.mutate({ schoolId, ...form, headline: form.headline || undefined, introduction: form.introduction || undefined, contactEmail: form.contactEmail || undefined, contactPhone: form.contactPhone || undefined, campusLocation: form.campusLocation || undefined, customDomain: form.customDomain || undefined, published: true }, { onSuccess: () => posthog.capture("website_published") });
   const unpublish = () => save.mutate({ schoolId, ...form, headline: form.headline || undefined, introduction: form.introduction || undefined, contactEmail: form.contactEmail || undefined, contactPhone: form.contactPhone || undefined, campusLocation: form.campusLocation || undefined, customDomain: form.customDomain || undefined, published: false });
   const copy = async (text: string, message: string) => { await navigator.clipboard.writeText(text); toast.success(message); };
   const expectedRecord = site.domainVerificationToken ? `nsos-site-verification=${site.domainVerificationToken}` : "Save a custom domain to generate a verification record.";

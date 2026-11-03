@@ -12,6 +12,7 @@ import { isAdmissionBiodataReady } from "@/lib/biodataCompletion";
 import { validateCompletedValue, validateDate, validateEmail, validateName, validatePhone, validationControlClass, type InlineValidation } from "@/lib/inlineValidation";
 import { originLgaLoadPresentation } from "@/lib/originPresentation";
 import { trpc } from "@/lib/trpc";
+import posthog from "@/lib/posthog";
 import { useFormCompletionTimestamp } from "@/hooks/useFormCompletionTimestamp";
 import { ArrowUpRight, CheckCircle2, Loader2, School } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
@@ -133,7 +134,15 @@ export default function PublicAdmissions() {
   const submitApplication = (event: FormEvent) => {
     event.preventDefault();
     submit.mutate({ shortCode, ...form, guardianEmail: form.guardianEmail || undefined, priorSchool: supplementalData.priorSchool || undefined, dateOfBirth: supplementalData.dateOfBirth || undefined, gender: supplementalData.gender as "female" | "male" | "other" | "prefer_not_to_say" | undefined, notes: form.notes || undefined, supplementalData, declarationAccepted, documents }, {
-      onSuccess: result => { publicDraft.clearDraft(); setDocuments([]); setApplicationNo(result.applicationId); },
+      onSuccess: result => {
+        posthog.capture("public_admission_submitted", {
+          has_declaration: declarationAccepted,
+          document_count: documents.length,
+        });
+        publicDraft.clearDraft();
+        setDocuments([]);
+        setApplicationNo(result.applicationId);
+      },
     });
   };
 
