@@ -37,14 +37,34 @@ Draft PR: https://github.com/Olori24/nsos-nigerian-school-operating-system-niger
 - Deployments: none
 - Domains: none
 
-## Remaining verification gates
+## Verification evidence and remaining gates
 
-1. Obtain passing CI evidence for lint, formatting, typecheck, database migrations, full tests, and Vercel asset staging.
-2. Configure preview-only credentials for a separate non-production database and object-storage bucket. Required core runtime settings include VITE_APP_ID, JWT_SECRET (at least 32 characters), DATABASE_URL, and OAUTH_SERVER_URL. Additional feature-specific provider credentials must remain test-only or disabled.
-3. Confirm database connection pooling and cold-start behavior under Vercel's runtime.
-4. Smoke-test the actual protected preview: SPA deep links, health endpoint, tRPC, OAuth callback, passwordless auth, Termii raw-body signature validation, Twilio form signature validation, storage authorization, uploads, rate limits, security headers, and tenant isolation.
-5. Review function size and runtime logs. The preview must not send live SMS/email, create real payment transactions, or write to production data.
-6. Only after all evidence is clean should preview deployments be enabled.
+### Passed on the migration branch
+
+- GitHub Actions lint: passed.
+- Prettier formatting check: passed.
+- TypeScript typecheck, including root index.ts: passed.
+- Database migration validation against the CI-only MySQL service: passed.
+- Full Vitest suite: 128 test files passed, 2 skipped; 479 tests passed, 2 skipped.
+- Vercel asset-staging production build (pnpm build:vercel): passed.
+- CodeQL analysis: passed.
+- Gitleaks secret scan: passed.
+- Dependency review: skipped because GitHub Dependency Graph is not enabled.
+
+### Blocking issues before any preview deployment
+
+1. **Vercel request-body limit conflicts with existing uploads.** Vercel Functions have a 4.5 MB request and response payload limit. NSOS currently sends document content as Base64 inside tRPC JSON:
+   - Biodata auto-fill accepts a file up to 4 MB, then Base64-encodes it. A 4 MB file becomes approximately 5.33 MB before JSON overhead.
+   - Public admissions submissions send up to two Base64 documents in one request; the server accepts up to 5.6 MB Base64 per document.
+   - These existing flows can exceed Vercel's 4.5 MB function request limit and return 413 before Express middleware runs.
+   - Required design: move large document transfers to short-lived, signed direct-to-object-storage uploads, then submit only verified object references to the API. Keep tenant/school scoping, MIME and byte-size validation, one-time upload authorization, orphan cleanup, and upload rate limits.
+   - Biodata auto-fill currently promises the document is not stored by NSOS. Do not silently route it through persistent storage. Any temporary-object design must guarantee deletion/expiry and be reflected accurately in the privacy notice before implementation.
+2. **Production dependency audit is still failing.** The unchanged dependency tree reports 9 findings: 1 critical, 6 high, 1 moderate, and 1 low. Findings include DOMPurify, follow-redirects, Zod, body-parser, and qs. No dependency upgrades were made as part of this hosting migration. Resolve these in a separately reviewed dependency-security change before release.
+3. Configure preview-only credentials for a separate non-production database and object-storage bucket. Required core runtime settings include VITE_APP_ID, JWT_SECRET (at least 32 characters), DATABASE_URL, and OAUTH_SERVER_URL. Storage-backed features also need isolated BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY credentials. Do not reuse production secrets.
+4. Confirm database connection pooling and cold-start behavior under Vercel's runtime, and place the function near the isolated database region.
+5. Smoke-test the actual protected preview: SPA deep links, health endpoint, tRPC, OAuth callback, passwordless auth, Termii raw-body signature validation, Twilio form signature validation, storage authorization, uploads, rate limits, security headers, and tenant isolation.
+6. Review function size and runtime logs. The preview must not send live SMS/email, create real payment transactions, or write to production data.
+7. Only after all evidence is clean should preview deployments be enabled.
 
 ## Data and operational safeguards
 
