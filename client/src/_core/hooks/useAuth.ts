@@ -59,10 +59,8 @@ export function useAuth(options?: UseAuthOptions) {
     if (identifiedUserId === distinctId) return;
 
     if (identifiedUserId !== null) posthog.reset();
-    posthog.identify(distinctId, {
-      email: user.email ?? undefined,
-      name: user.name ?? undefined,
-    });
+    // Keep analytics identity pseudonymous; do not send email or name to PostHog.
+    posthog.identify(distinctId);
     identifiedUserId = distinctId;
   }, [meQuery.data]);
 
