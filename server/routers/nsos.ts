@@ -597,7 +597,7 @@ export const nsosRouter = router({
             name: z.string().trim().min(2).max(160),
             destinationUrl: z.string().url().max(2048),
             commissionType: z.enum(["percentage", "fixed"]),
-            commissionValue: z.string().regex(/^\\d+(?:\\.\\d{1,2})?$/),
+            commissionValue: z.string().regex(/^\d+(?:\\.\d{1,2})?$/),
             currency: z.string().trim().min(3).max(8).default("NGN"),
             attributionDays: z.number().int().min(1).max(180).default(30),
             termsVersion: z.string().trim().max(64).optional(),
@@ -616,7 +616,7 @@ export const nsosRouter = router({
             commissionType: z.enum(["percentage", "fixed"]).optional(),
             commissionValue: z
               .string()
-              .regex(/^\\d+(?:\\.\\d{1,2})?$/)
+              .regex(/^\d+(?:\\.\d{1,2})?$/)
               .optional(),
             currency: z.string().trim().min(3).max(8).optional(),
             attributionDays: z.number().int().min(1).max(180).optional(),
@@ -5489,8 +5489,8 @@ export const nsosRouter = router({
         triggerType: z.enum(["invoice_due", "overdue", "promise_due", "evidence_received"]),
         channel: z.enum(["in_app", "email", "sms", "whatsapp"]),
         template: z.string().trim().min(1).max(2000),
-        quietHoursStart: z.string().regex(/^(?:[01]\\d|2[0-3]):[0-5]\\d$/),
-        quietHoursEnd: z.string().regex(/^(?:[01]\\d|2[0-3]):[0-5]\\d$/),
+        quietHoursStart: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+        quietHoursEnd: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
         timezone: z.literal("Africa/Lagos").default("Africa/Lagos"),
       }))
       .mutation(async ({ ctx, input }) => {
