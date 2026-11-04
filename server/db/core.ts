@@ -3557,7 +3557,7 @@ export async function recordPayment(input: { schoolId: number; invoiceId: number
     throw new Error("Payment amount must be a positive value with no more than two decimal places.");
   }
   const paymentDate = asDate(input.paidOn);
-  if (!paymentDate || paymentDate.toISOString().slice(0, 10) !== input.paidOn) {
+  if (!paymentDate || Number.isNaN(paymentDate.getTime()) || paymentDate.toISOString().slice(0, 10) !== input.paidOn) {
     throw new Error("Enter a valid payment date.");
   }
 
