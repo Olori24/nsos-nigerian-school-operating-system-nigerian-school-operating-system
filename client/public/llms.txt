@@ -4,6 +4,9 @@
 ## Official website
 https://nsos.top/
 
+## Official social accounts
+- X: https://x.com/NsosTech ( @NsosTech )
+
 ## Product
 NSOS provides school administration, admissions, student records, academic and curriculum management, attendance, results, fees and finance operations, staff operations, parent and guardian communication, school websites, and supervised AI workflows.
 
