@@ -123,7 +123,7 @@ import { storagePut } from "../storage";
 import { deriveTenantOnboardingStatus } from "../tenantOnboarding";
 import { getNigerianCurriculumTemplate, type NigerianCurriculumTemplateId, listNigerianCurriculumTemplates } from "../nigerianCurriculum";
 import { MAX_SCHEME_FILE_BYTES, normaliseReviewedSchemeRows, safeSchemeFileName, type ReviewedSchemeRow } from "../schemeOfWork";
-import { withRateLimitConnection } from "./db.rate-limit-connection";
+import { withRateLimitConnection } from "../db.rate-limit-connection";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
