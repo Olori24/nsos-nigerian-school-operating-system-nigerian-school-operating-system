@@ -1,8 +1,8 @@
 # Cash Assurance Phase 2 — Implementation Contract
 
-**Status:** Engineering contract / branch preparation  
+**Status:** Contract plus first supervised reminder runtime increment under draft PR #55  
 **Issue:** #52  
-**Branch:** `feat/cash-assurance-reminder-governance`  
+**Implementation branch:** `feat/cash-assurance-reminder-runtime` (stacked on dependency remediation)  
 **Production status:** Not implemented or activated by this document.
 
 This contract narrows Phase 2 to a supervised, provider-aware reminder workflow. It extends the existing Cash Assurance Phase 1 case/evidence/promise/dispute workflows and must not create a second finance ledger.
@@ -14,7 +14,19 @@ This contract narrows Phase 2 to a supervised, provider-aware reminder workflow.
 - `client/src/components/CashAssuranceWorkbench.tsx`: current finance workbench already reads the Cash Assurance data and exposes case, promise, evidence, and dispute workflows.
 - The earlier product specification names `reminderPolicies` and `reminderRuns`, but those reminder tables are not present in the inspected schema excerpt. They must be added as a new additive migration, not assumed to exist.
 
-## 2. Data model to implement
+## 2. Data model and implementation status
+
+The first runtime increment adds both tables through additive migration `0067_cash_assurance_reminders.sql`: 
+- `reminderPolicies`: tenant-owned, versioned policy configuration. `requiresApproval` is always persisted as true.
+- `reminderRuns`: tenant-owned proposal and approval lifecycle, with unique `(schoolId,idempotencyKey)` and queue/case indexes.
+
+The current API/UI increment supports finance-only policy list/save/archive, reminder queue listing, case-linked proposal creation, explicit approval, and cancellation. Proposals are deduplicated per school/case/policy/template-version/Africa-Lagos calendar day. Trigger checks verify due invoices, overdue invoices, open due promises, or pending evidence against the selected case. Proposed runs retain the policy version and cannot be approved if that policy has changed or is no longer active.
+
+Only `in_app` policies may be activated in this increment. Email, SMS, and WhatsApp policies may be drafted but cannot be activated until provider and sender readiness is verified. Approval records a state only and returns `dispatchEnabled: false`.
+
+The following fields remain reserved for later reviewed increments: recipient resolution, message log linkage, provider scheduling/submission, delivery callbacks, bounded retries, and delivered/failed lifecycle transitions. No provider is invoked by this increment.
+
+### Required schema fields
 
 ### `reminderPolicies`
 
