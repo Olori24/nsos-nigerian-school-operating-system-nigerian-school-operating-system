@@ -1,12 +1,14 @@
 import type { Express, Request, Response } from "express";
 import { EdtefApiError, requestEdtefJson } from "./edtef";
 
-const ALLOWED_FILTERS = ["state", "lga", "ownership", "gender", "boarding", "page", "per_page"] as const;
+const STATE_SLUGS = new Set(["abia", "adamawa", "akwa-ibom", "anambra", "bauchi", "bayelsa", "benue", "borno", "cross-river", "delta", "ebonyi", "edo", "ekiti", "enugu", "fct", "gombe", "imo", "jigawa", "kaduna", "kano", "katsina", "kebbi", "kogi", "kwara", "lagos", "nasarawa", "niger", "ogun", "ondo", "osun", "oyo", "plateau", "rivers", "sokoto", "taraba", "yobe", "zamfara"]);
+const ENUM_FILTERS = {
+  ownership: new Set(["federal", "state", "private", "mission", "community"]),
+  gender: new Set(["mixed", "boys", "girls"]),
+  boarding: new Set(["day", "boarding", "day_and_boarding"]),
+} as const;
+const ALLOWED_FILTERS = ["state", "lga", "ownership", "gender", "boarding", "q", "page", "limit"] as const;
 const ATTRIBUTION = { name: "EDTEF school directory (edtef.org)", url: "https://edtef.org" };
-
-function queryValue(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
 
 function sendError(error: unknown, response: Response) {
   if (error instanceof EdtefApiError) {
@@ -35,17 +37,22 @@ export function registerEdtefRoutes(app: Express) {
   app.get("/api/edtef/schools", route(request => {
     const query = new URLSearchParams();
     for (const name of ALLOWED_FILTERS) {
-      const value = queryValue(request.query[name]);
+      const raw = request.query[name];
+      if (raw === undefined) continue;
+      if (typeof raw !== "string") throw new EdtefApiError(`Invalid ${name} filter.`, 400);
+      const value = raw.trim();
       if (!value) continue;
-      if (value.length > 100) throw new EdtefApiError(`Invalid ${name} filter.`, 400);
-      if (name === "page" || name === "per_page") {
+      if (value.length > 80) throw new EdtefApiError(`Invalid ${name} filter.`, 400);
+      if (name === "state" && !STATE_SLUGS.has(value)) throw new EdtefApiError("Invalid state filter.", 400);
+      if (name in ENUM_FILTERS && !ENUM_FILTERS[name as keyof typeof ENUM_FILTERS].has(value as never)) {
+        throw new EdtefApiError(`Invalid ${name} filter.`, 400);
+      }
+      if (name === "page" || name === "limit") {
         const parsed = Number(value);
-        if (!Number.isInteger(parsed) || parsed < 1 || parsed > (name === "page" ? 10_000 : 100)) {
+        const maximum = name === "page" ? 10_000 : 200;
+        if (!/^\\d+$/.test(value) || !Number.isInteger(parsed) || parsed < 1 || parsed > maximum) {
           throw new EdtefApiError(`Invalid ${name} filter.`, 400);
         }
-      }
-      if (name === "boarding" && !["true", "false", "1", "0"].includes(value.toLowerCase())) {
-        throw new EdtefApiError("Invalid boarding filter.", 400);
       }
       query.set(name, value);
     }
@@ -54,7 +61,7 @@ export function registerEdtefRoutes(app: Express) {
 
   app.get("/api/edtef/schools/:id", route(request => {
     const id = request.params.id;
-    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new EdtefApiError("Invalid school identifier.", 400);
+    if (!/^sch_[a-f0-9]{12}$/.test(id)) throw new EdtefApiError("Invalid school identifier.", 400);
     return requestEdtefJson(`directory/v1/schools/${id}`);
   }));
 }
