@@ -41,7 +41,10 @@ export function registerEdtefRoutes(app: Express) {
       if (raw === undefined) continue;
       if (typeof raw !== "string") throw new EdtefApiError(`Invalid ${name} filter.`, 400);
       const value = raw.trim();
-      if (!value) continue;
+      if (!value) {
+        if (name === "page" || name === "limit") throw new EdtefApiError(`Invalid ${name} filter.`, 400);
+        continue;
+      }
       if (value.length > 80) throw new EdtefApiError(`Invalid ${name} filter.`, 400);
       if (name === "state" && !STATE_SLUGS.has(value)) throw new EdtefApiError("Invalid state filter.", 400);
       if (name in ENUM_FILTERS && !ENUM_FILTERS[name as keyof typeof ENUM_FILTERS].has(value as never)) {
