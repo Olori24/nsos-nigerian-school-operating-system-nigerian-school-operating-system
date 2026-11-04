@@ -340,6 +340,13 @@ export async function consumeSharedRateLimit(input: { namespace: string; route: 
   const bucketMaterial = input.namespace + ":" + input.route + ":" + input.clientKey + ":" + windowStartedAt;
   const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
   const connection = await rateLimitDatabasePool().getConnection();
+  let connectionDestroyed = false;
+  const destroyTimedOutConnection = (error: unknown) => {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "PROTOCOL_SEQUENCE_TIMEOUT") {
+      connectionDestroyed = true;
+      connection.destroy();
+    }
+  };
   try {
     await connection.query(
       {
@@ -365,15 +372,18 @@ export async function consumeSharedRateLimit(input: { namespace: string; route: 
           },
           [new Date(now)],
         );
-      } catch {
+      } catch (error) {
+        destroyTimedOutConnection(error);
         // Opportunistic cleanup must not fail a successfully counted request.
-        // A mysql2 query timeout destroys this connection; the pool replaces it.
       }
     }
     const count = Number(bucket?.count ?? input.limit + 1);
     return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+  } catch (error) {
+    destroyTimedOutConnection(error);
+    throw error;
   } finally {
-    connection.release();
+    if (!connectionDestroyed) connection.release();
   }
 }
 
