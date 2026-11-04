@@ -97,6 +97,15 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
     ]);
     expect(edits.map(edit => edit.templateVersion).sort()).toEqual([2, 3]);
 
+    await expect(proposeCashAssuranceReminder({
+      schoolId,
+      caseId,
+      policyId: initialPolicy.policyId,
+      actorUserId: 2_147_483_648,
+    })).rejects.toThrow();
+    const rolledBackProposal = await db!.select().from(reminderRuns).where(eq(reminderRuns.schoolId, schoolId));
+    expect(rolledBackProposal).toHaveLength(0);
+
     const [proposal, duplicate] = await Promise.all([
       proposeCashAssuranceReminder({
         schoolId,
@@ -175,6 +184,13 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
       policyId: secondPolicy.policyId,
       actorUserId,
     });
+    await expect(cancelCashAssuranceReminder({
+      schoolId,
+      runId: pending.runId,
+      actorUserId: 2_147_483_648,
+    })).rejects.toThrow();
+    const pendingAfterRollback = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, pending.runId)).limit(1))[0];
+    expect(pendingAfterRollback.status).toBe("proposed");
     await cancelCashAssuranceReminder({ schoolId, runId: pending.runId, actorUserId });
     const cancelled = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, pending.runId)).limit(1))[0];
     expect(cancelled.status).toBe("cancelled");
