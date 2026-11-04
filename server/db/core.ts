@@ -127,6 +127,7 @@ import { MAX_SCHEME_FILE_BYTES, normaliseReviewedSchemeRows, safeSchemeFileName,
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
+let _rateLimitPool: Pool | null = null;
 
 export const DB_POOL_CONNECTION_LIMIT = 5;
 export const DB_POOL_QUEUE_LIMIT = 20;
@@ -143,6 +144,33 @@ export function databasePoolOptions(uri: string) {
     keepAliveInitialDelay: 0,
     ...(ENV.isProduction ? { ssl: { rejectUnauthorized: true } } : {}),
   };
+}
+
+export const RATE_LIMIT_DB_CONNECT_TIMEOUT_MS = 3_000;
+export const RATE_LIMIT_DB_QUERY_TIMEOUT_MS = 3_000;
+
+/**
+ * Isolated, fail-fast pool for shared rate-limit accounting. Saturation rejects
+ * immediately; connectTimeout bounds new sockets; mysql2 query timeouts destroy
+ * the timed-out connection instead of leaving an uncancelled query in flight.
+ */
+export function rateLimitDatabasePoolOptions(uri: string) {
+  return {
+    ...databasePoolOptions(uri),
+    connectionLimit: 1,
+    maxIdle: 1,
+    waitForConnections: false,
+    queueLimit: 0,
+    connectTimeout: RATE_LIMIT_DB_CONNECT_TIMEOUT_MS,
+  };
+}
+
+function rateLimitDatabasePool() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("Database is unavailable. Configure DATABASE_URL before using shared rate limits.");
+  }
+  _rateLimitPool ??= createPool(rateLimitDatabasePoolOptions(process.env.DATABASE_URL));
+  return _rateLimitPool.promise();
 }
 
 export async function getDb() {
@@ -310,14 +338,44 @@ export async function consumeSharedRateLimit(input: { namespace: string; route: 
   const now = input.now ?? Date.now();
   const windowStartedAt = Math.floor(now / input.windowMs) * input.windowMs;
   const expiresAt = new Date(windowStartedAt + input.windowMs);
-  const bucketMaterial = `${input.namespace}:${input.route}:${input.clientKey}:${windowStartedAt}`;
+  const bucketMaterial = input.namespace + ":" + input.route + ":" + input.clientKey + ":" + windowStartedAt;
   const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
-  const db = await database();
-  await db.insert(rateLimitBuckets).values({ bucketKey, count: 1, expiresAt }).onDuplicateKeyUpdate({ set: { count: sql`${rateLimitBuckets.count} + 1`, expiresAt } });
-  const bucket = (await db.select({ count: rateLimitBuckets.count, expiresAt: rateLimitBuckets.expiresAt }).from(rateLimitBuckets).where(eq(rateLimitBuckets.bucketKey, bucketKey)).limit(1))[0];
-  if (Math.random() < 0.01) void db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.expiresAt} < ${new Date(now)}`);
-  const count = Number(bucket?.count ?? input.limit + 1);
-  return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+  const connection = await rateLimitDatabasePool().getConnection();
+  try {
+    await connection.query(
+      {
+        sql: "INSERT INTO `rateLimitBuckets` (`bucketKey`, `count`, `expiresAt`) VALUES (?, 1, ?) ON DUPLICATE KEY UPDATE `count` = `count` + 1, `expiresAt` = VALUES(`expiresAt`)",
+        timeout: RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
+      },
+      [bucketKey, expiresAt],
+    );
+    const [rows] = await connection.query(
+      {
+        sql: "SELECT `count` FROM `rateLimitBuckets` WHERE `bucketKey` = ? LIMIT 1",
+        timeout: RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
+      },
+      [bucketKey],
+    );
+    const bucket = (rows as Array<{ count: number | string }>)[0];
+    if (Math.random() < 0.01) {
+      try {
+        await connection.query(
+          {
+            sql: "DELETE FROM `rateLimitBuckets` WHERE `expiresAt` < ?",
+            timeout: RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
+          },
+          [new Date(now)],
+        );
+      } catch {
+        // Opportunistic cleanup must not fail a successfully counted request.
+        // A mysql2 query timeout destroys this connection; the pool replaces it.
+      }
+    }
+    const count = Number(bucket?.count ?? input.limit + 1);
+    return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+  } finally {
+    connection.release();
+  }
 }
 
 export async function saveCopilotRecentSearch(input: { userId: number; schoolId: number; query: string; destinationId?: string | null }) {
