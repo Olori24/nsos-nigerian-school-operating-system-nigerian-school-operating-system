@@ -1,39 +1,13 @@
-name: Temporary NSOS lockfile regeneration
+name: Temporary NSOS lockfile regeneration (disabled)
 
 on:
-  push:
-    branches:
-      - feat/cash-assurance-reminder-governance
-    paths:
-      - package.json
-      - .github/workflows/temporary-lockfile-regeneration.yml
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  regenerate-lockfile:
+  disabled:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: feat/cash-assurance-reminder-governance
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: pnpm/action-setup@v4
-      - name: Regenerate pnpm lockfile from declared overrides
-        run: pnpm install --lockfile-only --no-frozen-lockfile
-      - name: Commit generated lockfile
-        run: |
-          if git diff --quiet -- pnpm-lock.yaml; then
-            echo "Lockfile already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pnpm-lock.yaml
-          git commit -m "fix(security): regenerate patched dependency lockfile"
-          git push origin HEAD:feat/cash-assurance-reminder-governance
+      - run: echo "Temporary lockfile runner disabled after setup failure."
