@@ -8,7 +8,7 @@ vi.mock("./edtef", () => ({
   requestEdtefJson: vi.fn(),
 }));
 
-import { requestEdtefJson } from "./edtef";
+import { EdtefApiError, requestEdtefJson } from "./edtef";
 import { registerEdtefRoutes } from "./edtefRoutes";
 
 const app = express();
@@ -62,7 +62,7 @@ describe("EDTEF directory proxy routes", () => {
   });
 
   it("returns a safe service error when EDTEF is rate limited", async () => {
-    const error = new (await import("./edtef")).EdtefApiError("EDTEF rate limit reached. Please retry shortly.", 429, "30");
+    const error = new EdtefApiError("EDTEF rate limit reached. Please retry shortly.", 429, "30");
     vi.mocked(requestEdtefJson).mockRejectedValue(error);
     const response = await fetch(`${baseUrl}/api/edtef/states`);
     expect(response.status).toBe(429);
