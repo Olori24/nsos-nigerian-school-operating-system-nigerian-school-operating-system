@@ -97,20 +97,24 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
     ]);
     expect(edits.map(edit => edit.templateVersion).sort()).toEqual([2, 3]);
 
-    const proposal = await proposeCashAssuranceReminder({
-      schoolId,
-      caseId,
-      policyId: initialPolicy.policyId,
-      actorUserId,
-    });
-    const duplicate = await proposeCashAssuranceReminder({
-      schoolId,
-      caseId,
-      policyId: initialPolicy.policyId,
-      actorUserId,
-    });
-    expect(proposal.status).toBe("proposed");
-    expect(duplicate).toMatchObject({ runId: proposal.runId, duplicate: true });
+    const [proposal, duplicate] = await Promise.all([
+      proposeCashAssuranceReminder({
+        schoolId,
+        caseId,
+        policyId: initialPolicy.policyId,
+        actorUserId,
+      }),
+      proposeCashAssuranceReminder({
+        schoolId,
+        caseId,
+        policyId: initialPolicy.policyId,
+        actorUserId,
+      }),
+    ]);
+    expect([proposal, duplicate].filter(result => !result.duplicate)).toHaveLength(1);
+    expect([proposal, duplicate].filter(result => result.duplicate)).toHaveLength(1);
+    expect(proposal.runId).toBe(duplicate.runId);
+    expect([proposal.status, duplicate.status]).toContain("proposed");
 
     await approveCashAssuranceReminder({ schoolId, runId: proposal.runId, actorUserId });
     const approved = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, proposal.runId)).limit(1))[0];
@@ -177,7 +181,28 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
     const cancellationEvents = await db!.select().from(cashAssuranceEvents).where(eq(cashAssuranceEvents.caseId, cancellableCaseId));
     expect(cancellationEvents.map(event => event.eventType)).toContain("reminder_cancelled");
 
+    const staleCase = await db!.insert(cashAssuranceCases).values({
+      schoolId,
+      studentId: 14,
+      openedBy: actorUserId,
+    });
+    const staleCaseId = Number(staleCase[0].insertId);
+    await db!.insert(paymentEvidence).values({
+      schoolId,
+      caseId: staleCaseId,
+      invoiceId: 987654324,
+      amountClaimed: "25.00",
+      createdBy: actorUserId,
+    });
+    const staleProposal = await proposeCashAssuranceReminder({
+      schoolId,
+      caseId: staleCaseId,
+      policyId: secondPolicy.policyId,
+      actorUserId,
+    });
     await archiveCashAssuranceReminderPolicy({ schoolId, policyId: secondPolicy.policyId, actorUserId });
-    await expect(approveCashAssuranceReminder({ schoolId, runId: pending.runId, actorUserId })).rejects.toThrow();
+    await expect(approveCashAssuranceReminder({ schoolId, runId: staleProposal.runId, actorUserId })).rejects.toThrow(/policy/i);
+    const staleRun = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, staleProposal.runId)).limit(1))[0];
+    expect(staleRun.status).toBe("proposed");
   });
 });
