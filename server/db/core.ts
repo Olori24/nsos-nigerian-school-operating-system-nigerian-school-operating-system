@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool, type Pool } from "mysql2";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
@@ -3740,6 +3740,24 @@ function addReminderCaseEvent(tx: any, input: { schoolId: number; caseId: number
   });
 }
 
+function addReminderSecurityAuditEvent(tx: any, input: {
+  schoolId: number;
+  actorUserId: number;
+  eventType: string;
+  targetType: string;
+  targetId: string | number;
+  metadata?: Record<string, unknown>;
+}) {
+  return tx.insert(securityAuditEvents).values({
+    schoolId: input.schoolId,
+    actorUserId: input.actorUserId,
+    eventType: input.eventType.slice(0, 96),
+    targetType: input.targetType.slice(0, 96),
+    targetId: String(input.targetId).slice(0, 128),
+    metadata: sanitizeSecurityAuditMetadata(input.metadata ?? {}),
+  });
+}
+
 export async function listCashAssuranceReminderPolicies(schoolId: number) {
   const db = await database();
   return db.select().from(reminderPolicies).where(eq(reminderPolicies.schoolId, schoolId)).orderBy(desc(reminderPolicies.updatedAt));
@@ -3782,7 +3800,7 @@ export async function saveCashAssuranceReminderPolicy(input: {
         triggerType: input.triggerType,
         channel: input.channel,
         template: input.template,
-        templateVersion: existing.templateVersion + 1,
+        templateVersion: sql`${reminderPolicies.templateVersion} + 1`,
         requiresApproval: true,
         quietHoursStart: input.quietHoursStart,
         quietHoursEnd: input.quietHoursEnd,
@@ -3793,9 +3811,23 @@ export async function saveCashAssuranceReminderPolicy(input: {
         eq(reminderPolicies.schoolId, input.schoolId),
         eq(reminderPolicies.status, existing.status),
         eq(reminderPolicies.templateVersion, existing.templateVersion),
+        ne(reminderPolicies.status, "archived"),
       ));
       if (reminderAffectedRows(updated) !== 1) throw new Error("This reminder policy changed while it was being saved. Refresh and try again.");
-      return { policyId: input.policyId, templateVersion: existing.templateVersion + 1 };
+      const current = (await tx.select({ templateVersion: reminderPolicies.templateVersion }).from(reminderPolicies).where(and(
+        eq(reminderPolicies.id, input.policyId),
+        eq(reminderPolicies.schoolId, input.schoolId),
+      )).limit(1))[0];
+      if (!current) throw new Error("Reminder policy could not be reloaded after saving.");
+      await addReminderSecurityAuditEvent(tx, {
+        schoolId: input.schoolId,
+        actorUserId: input.actorUserId,
+        eventType: "cash_assurance_reminder_policy_saved",
+        targetType: "cash_assurance_reminder_policy",
+        targetId: input.policyId,
+        metadata: { status: input.status, channel: input.channel, requiresApproval: true },
+      });
+      return { policyId: input.policyId, templateVersion: current.templateVersion };
     }
     const inserted = await tx.insert(reminderPolicies).values({
       schoolId: input.schoolId,
@@ -3812,7 +3844,16 @@ export async function saveCashAssuranceReminderPolicy(input: {
       createdBy: input.actorUserId,
       updatedBy: input.actorUserId,
     });
-    return { policyId: Number(inserted[0].insertId), templateVersion: 1 };
+    const policyId = Number(inserted[0].insertId);
+    await addReminderSecurityAuditEvent(tx, {
+      schoolId: input.schoolId,
+      actorUserId: input.actorUserId,
+      eventType: "cash_assurance_reminder_policy_saved",
+      targetType: "cash_assurance_reminder_policy",
+      targetId: policyId,
+      metadata: { status: input.status, channel: input.channel, requiresApproval: true },
+    });
+    return { policyId, templateVersion: 1 };
   });
 }
 
@@ -3830,8 +3871,17 @@ export async function archiveCashAssuranceReminderPolicy(input: { schoolId: numb
       eq(reminderPolicies.schoolId, input.schoolId),
       eq(reminderPolicies.status, existing.status),
       eq(reminderPolicies.templateVersion, existing.templateVersion),
+      ne(reminderPolicies.status, "archived"),
     ));
     if (reminderAffectedRows(updated) !== 1) throw new Error("This reminder policy changed while it was being archived. Refresh and try again.");
+    await addReminderSecurityAuditEvent(tx, {
+      schoolId: input.schoolId,
+      actorUserId: input.actorUserId,
+      eventType: "cash_assurance_reminder_policy_archived",
+      targetType: "cash_assurance_reminder_policy",
+      targetId: input.policyId,
+      metadata: { archived: true },
+    });
     return { success: true, alreadyArchived: false };
   });
 }
@@ -3899,7 +3949,17 @@ export async function proposeCashAssuranceReminder(input: { schoolId: number; ca
       eq(reminderRuns.schoolId, input.schoolId),
       eq(reminderRuns.idempotencyKey, idempotencyKey),
     )).limit(1).for("update"))[0];
-    if (existing) return { runId: existing.id, status: existing.status, duplicate: true };
+    if (existing) {
+      await addReminderSecurityAuditEvent(tx, {
+        schoolId: input.schoolId,
+        actorUserId: input.actorUserId,
+        eventType: "cash_assurance_reminder_proposed",
+        targetType: "cash_assurance_reminder_run",
+        targetId: existing.id,
+        metadata: { status: existing.status, duplicate: true, dispatchEnabled: false },
+      });
+      return { runId: existing.id, status: existing.status, duplicate: true };
+    }
     const inserted = await tx.insert(reminderRuns).values({
       schoolId: input.schoolId,
       caseId: input.caseId,
@@ -3917,6 +3977,14 @@ export async function proposeCashAssuranceReminder(input: { schoolId: number; ca
       eventType: "reminder_proposed",
       actorUserId: input.actorUserId,
       note: "Reminder proposal created from policy #" + input.policyId + "; awaiting finance approval.",
+    });
+    await addReminderSecurityAuditEvent(tx, {
+      schoolId: input.schoolId,
+      actorUserId: input.actorUserId,
+      eventType: "cash_assurance_reminder_proposed",
+      targetType: "cash_assurance_reminder_run",
+      targetId: runId,
+      metadata: { status: "proposed", duplicate: false, dispatchEnabled: false },
     });
     return { runId, status: "proposed" as const, duplicate: false };
   });
@@ -3966,6 +4034,14 @@ export async function approveCashAssuranceReminder(input: { schoolId: number; ru
       actorUserId: input.actorUserId,
       note: "Reminder proposal #" + input.runId + " approved. No message was sent.",
     });
+    await addReminderSecurityAuditEvent(tx, {
+      schoolId: input.schoolId,
+      actorUserId: input.actorUserId,
+      eventType: "cash_assurance_reminder_approved",
+      targetType: "cash_assurance_reminder_run",
+      targetId: input.runId,
+      metadata: { status: "approved", dispatchEnabled: false },
+    });
     return { success: true, status: "approved" as const, dispatchEnabled: false };
   });
 }
@@ -3992,6 +4068,14 @@ export async function cancelCashAssuranceReminder(input: { schoolId: number; run
       eventType: "reminder_cancelled",
       actorUserId: input.actorUserId,
       note: "Reminder proposal #" + input.runId + " cancelled.",
+    });
+    await addReminderSecurityAuditEvent(tx, {
+      schoolId: input.schoolId,
+      actorUserId: input.actorUserId,
+      eventType: "cash_assurance_reminder_cancelled",
+      targetType: "cash_assurance_reminder_run",
+      targetId: input.runId,
+      metadata: { cancelled: true, dispatchEnabled: false },
     });
     return { success: true };
   });
