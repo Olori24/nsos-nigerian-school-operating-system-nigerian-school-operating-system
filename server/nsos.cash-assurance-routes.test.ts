@@ -88,6 +88,20 @@ describe("Cash Assurance Phase 1 routes", () => {
     }));
   });
 
+  it("prevents activation of unverified outbound reminder channels", async () => {
+    await expect(callerFor(12).nsos.cashAssurance.saveReminderPolicy({
+      schoolId: 4,
+      name: "Unverified SMS",
+      status: "active",
+      triggerType: "overdue",
+      channel: "sms",
+      template: "Finance follow-up.",
+      quietHoursStart: "20:00",
+      quietHoursEnd: "08:00",
+    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(db.saveCashAssuranceReminderPolicy).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid quiet-hour values before reaching persistence", async () => {
     await expect(callerFor(12).nsos.cashAssurance.saveReminderPolicy({
       schoolId: 4,
