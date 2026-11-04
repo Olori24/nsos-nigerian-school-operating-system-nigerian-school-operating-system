@@ -58,6 +58,8 @@ import {
   performanceNotes,
   paymentEvidence,
   paymentPromises,
+  reminderPolicies,
+  reminderRuns,
   platformBillingRecords,
   learningPrograms,
   learningEvidenceSources,
@@ -3716,6 +3718,207 @@ export async function resolveCashAssuranceDispute(input: { schoolId: number; cas
   if (item.status !== "disputed") throw new Error("Only a disputed case can be resolved.");
   await db.update(cashAssuranceCases).set({ status: "open", pausedReason: null }).where(eq(cashAssuranceCases.id, input.caseId));
   await addCashAssuranceEvent({ schoolId: input.schoolId, caseId: input.caseId, eventType: "dispute_resolved", actorUserId: input.resolvedBy, note: input.note });
+  return { success: true };
+}
+
+export type CashAssuranceReminderTrigger = "invoice_due" | "overdue" | "promise_due" | "evidence_received";
+export type CashAssuranceReminderChannel = "in_app" | "email" | "sms" | "whatsapp";
+
+export async function listCashAssuranceReminderPolicies(schoolId: number) {
+  const db = await database();
+  return db.select().from(reminderPolicies).where(eq(reminderPolicies.schoolId, schoolId)).orderBy(desc(reminderPolicies.updatedAt));
+}
+
+export async function saveCashAssuranceReminderPolicy(input: {
+  schoolId: number;
+  policyId?: number;
+  name: string;
+  status: "draft" | "active";
+  triggerType: CashAssuranceReminderTrigger;
+  channel: CashAssuranceReminderChannel;
+  template: string;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  timezone: string;
+  actorUserId: number;
+}) {
+  const db = await database();
+  if (input.timezone !== "Africa/Lagos") {
+    throw new Error("Cash Assurance reminders currently require the Africa/Lagos timezone.");
+  }
+  const timePattern = /^(?:[01]\\d|2[0-3]):[0-5]\\d$/;
+  if (!timePattern.test(input.quietHoursStart) || !timePattern.test(input.quietHoursEnd)) {
+    throw new Error("Quiet hours must use 24-hour HH:MM time.");
+  }
+  if (input.policyId) {
+    const existing = (await db.select().from(reminderPolicies).where(and(
+      eq(reminderPolicies.id, input.policyId),
+      eq(reminderPolicies.schoolId, input.schoolId),
+    )).limit(1))[0];
+    if (!existing || existing.status === "archived") throw new Error("Reminder policy not found or archived.");
+    await db.update(reminderPolicies).set({
+      name: input.name,
+      status: input.status,
+      triggerType: input.triggerType,
+      channel: input.channel,
+      template: input.template,
+      templateVersion: existing.templateVersion + 1,
+      requiresApproval: true,
+      quietHoursStart: input.quietHoursStart,
+      quietHoursEnd: input.quietHoursEnd,
+      timezone: "Africa/Lagos",
+      updatedBy: input.actorUserId,
+    }).where(and(eq(reminderPolicies.id, input.policyId), eq(reminderPolicies.schoolId, input.schoolId)));
+    return { policyId: input.policyId, templateVersion: existing.templateVersion + 1 };
+  }
+  const inserted = await db.insert(reminderPolicies).values({
+    schoolId: input.schoolId,
+    name: input.name,
+    status: input.status,
+    triggerType: input.triggerType,
+    channel: input.channel,
+    template: input.template,
+    templateVersion: 1,
+    requiresApproval: true,
+    quietHoursStart: input.quietHoursStart,
+    quietHoursEnd: input.quietHoursEnd,
+    timezone: "Africa/Lagos",
+    createdBy: input.actorUserId,
+    updatedBy: input.actorUserId,
+  });
+  return { policyId: Number(inserted[0].insertId), templateVersion: 1 };
+}
+
+export async function archiveCashAssuranceReminderPolicy(input: { schoolId: number; policyId: number; actorUserId: number }) {
+  const db = await database();
+  const existing = (await db.select().from(reminderPolicies).where(and(
+    eq(reminderPolicies.id, input.policyId),
+    eq(reminderPolicies.schoolId, input.schoolId),
+  )).limit(1))[0];
+  if (!existing) throw new Error("Reminder policy not found.");
+  await db.update(reminderPolicies).set({ status: "archived", updatedBy: input.actorUserId }).where(and(
+    eq(reminderPolicies.id, input.policyId),
+    eq(reminderPolicies.schoolId, input.schoolId),
+  ));
+  return { success: true };
+}
+
+export async function listCashAssuranceReminderRuns(schoolId: number) {
+  const db = await database();
+  return db.select().from(reminderRuns).where(eq(reminderRuns.schoolId, schoolId)).orderBy(desc(reminderRuns.createdAt)).limit(200);
+}
+
+export async function proposeCashAssuranceReminder(input: { schoolId: number; caseId: number; policyId: number; actorUserId: number }) {
+  const db = await database();
+  const [policy, item] = await Promise.all([
+    db.select().from(reminderPolicies).where(and(
+      eq(reminderPolicies.id, input.policyId),
+      eq(reminderPolicies.schoolId, input.schoolId),
+      eq(reminderPolicies.status, "active"),
+    )).limit(1),
+    getCashAssuranceCaseOrThrow(input.schoolId, input.caseId),
+  ]);
+  if (!policy[0]) throw new Error("An active reminder policy in this school is required.");
+  if (!isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus) || item.status === "disputed" || item.pausedReason) {
+    throw new Error("Reminders are blocked while this case is disputed, closed, settled, or paused.");
+  }
+  const localDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const idempotencyKey = `cash-case:${input.caseId}:policy:${input.policyId}:version:${policy[0].templateVersion}:day:${localDate}`;
+  const existing = (await db.select().from(reminderRuns).where(and(
+    eq(reminderRuns.schoolId, input.schoolId),
+    eq(reminderRuns.idempotencyKey, idempotencyKey),
+  )).limit(1))[0];
+  if (existing) return { runId: existing.id, status: existing.status, duplicate: true };
+  const inserted = await db.insert(reminderRuns).values({
+    schoolId: input.schoolId,
+    caseId: input.caseId,
+    policyId: input.policyId,
+    policyVersion: policy[0].templateVersion,
+    recipientUserId: null,
+    channel: policy[0].channel,
+    status: "proposed",
+    idempotencyKey,
+  });
+  const runId = Number(inserted[0].insertId);
+  await addCashAssuranceEvent({
+    schoolId: input.schoolId,
+    caseId: input.caseId,
+    eventType: "reminder_proposed",
+    actorUserId: input.actorUserId,
+    note: `Reminder proposal created from policy #${input.policyId}; awaiting finance approval.`,
+  });
+  return { runId, status: "proposed" as const, duplicate: false };
+}
+
+export async function approveCashAssuranceReminder(input: { schoolId: number; runId: number; actorUserId: number }) {
+  const db = await database();
+  const run = (await db.select().from(reminderRuns).where(and(
+    eq(reminderRuns.id, input.runId),
+    eq(reminderRuns.schoolId, input.schoolId),
+  )).limit(1))[0];
+  if (!run || run.status !== "proposed") throw new Error("Only a proposed reminder can be approved.");
+  const [policy, item] = await Promise.all([
+    db.select().from(reminderPolicies).where(and(
+      eq(reminderPolicies.id, run.policyId),
+      eq(reminderPolicies.schoolId, input.schoolId),
+      eq(reminderPolicies.status, "active"),
+    )).limit(1),
+    getCashAssuranceCaseOrThrow(input.schoolId, run.caseId),
+  ]);
+  if (!policy[0] || policy[0].templateVersion !== run.policyVersion) throw new Error("The reminder policy changed or is no longer active. Create a fresh proposal.");
+  if (!isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus) || item.status === "disputed" || item.pausedReason) {
+    throw new Error("Approval is blocked while this case is disputed, closed, settled, or paused.");
+  }
+  await db.update(reminderRuns).set({
+    status: "approved",
+    approvedBy: input.actorUserId,
+    approvedAt: new Date(),
+  }).where(and(
+    eq(reminderRuns.id, input.runId),
+    eq(reminderRuns.schoolId, input.schoolId),
+    eq(reminderRuns.status, "proposed"),
+  ));
+  const updated = (await db.select().from(reminderRuns).where(and(
+    eq(reminderRuns.id, input.runId),
+    eq(reminderRuns.schoolId, input.schoolId),
+  )).limit(1))[0];
+  if (updated?.status !== "approved") throw new Error("Reminder approval could not be confirmed.");
+  await addCashAssuranceEvent({
+    schoolId: input.schoolId,
+    caseId: run.caseId,
+    eventType: "reminder_approved",
+    actorUserId: input.actorUserId,
+    note: `Reminder proposal #${input.runId} approved. No message was sent.`,
+  });
+  return { success: true, status: "approved" as const, dispatchEnabled: false };
+}
+
+export async function cancelCashAssuranceReminder(input: { schoolId: number; runId: number; actorUserId: number }) {
+  const db = await database();
+  const run = (await db.select().from(reminderRuns).where(and(
+    eq(reminderRuns.id, input.runId),
+    eq(reminderRuns.schoolId, input.schoolId),
+  )).limit(1))[0];
+  if (!run || !["proposed", "approved"].includes(run.status)) {
+    throw new Error("Only a proposed or approved reminder can be cancelled.");
+  }
+  await db.update(reminderRuns).set({ status: "cancelled" }).where(and(
+    eq(reminderRuns.id, input.runId),
+    eq(reminderRuns.schoolId, input.schoolId),
+    inArray(reminderRuns.status, ["proposed", "approved"]),
+  ));
+  await addCashAssuranceEvent({
+    schoolId: input.schoolId,
+    caseId: run.caseId,
+    eventType: "reminder_cancelled",
+    actorUserId: input.actorUserId,
+    note: `Reminder proposal #${input.runId} cancelled.`,
+  });
   return { success: true };
 }
 
