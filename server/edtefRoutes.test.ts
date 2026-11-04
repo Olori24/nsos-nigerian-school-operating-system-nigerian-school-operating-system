@@ -42,11 +42,11 @@ describe("EDTEF directory proxy routes", () => {
 
   it("forwards only approved, validated school filters", async () => {
     vi.mocked(requestEdtefJson).mockResolvedValue({ data: [] });
-    const response = await fetch(`${baseUrl}/api/edtef/schools?state=kwara&ownership=state&page=2&per_page=20`);
+    const response = await fetch(`${baseUrl}/api/edtef/schools?state=kwara&ownership=state&q=ilorin&page=2&limit=20`);
     expect(response.status).toBe(200);
     const [path, query] = vi.mocked(requestEdtefJson).mock.calls[0] ?? [];
     expect(path).toBe("directory/v1/schools");
-    expect(query?.toString()).toBe("state=kwara&ownership=state&page=2&per_page=20");
+    expect(query?.toString()).toBe("state=kwara&ownership=state&q=ilorin&page=2&limit=20");
   });
 
   it("rejects invalid filter values before making an upstream request", async () => {
@@ -56,7 +56,7 @@ describe("EDTEF directory proxy routes", () => {
   });
 
   it("validates school identifiers before making an upstream request", async () => {
-    const response = await fetch(`${baseUrl}/api/edtef/schools/invalid%21id`);
+    const response = await fetch(`${baseUrl}/api/edtef/schools/invalid-id`);
     expect(response.status).toBe(400);
     expect(requestEdtefJson).not.toHaveBeenCalled();
   });
