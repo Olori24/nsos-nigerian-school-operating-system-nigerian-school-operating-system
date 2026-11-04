@@ -463,11 +463,19 @@
       "when": 1790358642798,
       "tag": "0065_nsos_affiliate_referral",
       "breakpoints": true
-    }    ,{
+    },
+    {
       "idx": 66,
       "version": "5",
       "when": 1790361780000,
       "tag": "0066_school_website_content",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "5",
+      "when": 1793810000000,
+      "tag": "0067_cash_assurance_reminders",
       "breakpoints": true
     }
   ]
