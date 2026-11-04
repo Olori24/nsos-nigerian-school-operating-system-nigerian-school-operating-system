@@ -26,6 +26,7 @@ const actorUserId = 1_700_000_001;
 
 describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
+  let auditConstraintName: string | null = null;
 
   beforeAll(async () => {
     db = await getDb();
@@ -34,7 +35,9 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
 
   afterAll(async () => {
     if (!db) return;
-    await (db as any).$client.promise().query("DROP TRIGGER IF EXISTS test_cash_reminder_audit_failure");
+    if (auditConstraintName) {
+      try { await (db as any).$client.promise().query("ALTER TABLE securityAuditEvents DROP CHECK " + auditConstraintName); } catch { /* Best-effort cleanup after a failed DDL setup. */ }
+    }
     await db.delete(reminderRuns).where(eq(reminderRuns.schoolId, schoolId));
     await db.delete(reminderPolicies).where(eq(reminderPolicies.schoolId, schoolId));
     await db.delete(cashAssuranceEvents).where(eq(cashAssuranceEvents.schoolId, schoolId));
@@ -234,14 +237,18 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
       schoolId, caseId: approvalRollbackCaseId, policyId: approvalRollbackPolicy.policyId, actorUserId,
     });
     const pool = (db as any).$client;
-    await pool.promise().query("DROP TRIGGER IF EXISTS test_cash_reminder_audit_failure");
-    await pool.promise().query("CREATE TRIGGER test_cash_reminder_audit_failure BEFORE INSERT ON securityAuditEvents FOR EACH ROW BEGIN IF NEW.eventType = 'cash_assurance_reminder_approved' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced reminder audit failure'; END IF; END");
+    auditConstraintName = "test_cash_reminder_approval_audit_" + schoolId;
+    await pool.promise().query(
+      "ALTER TABLE securityAuditEvents ADD CONSTRAINT " + auditConstraintName +
+      " CHECK (NOT (eventType = 'cash_assurance_reminder_approved' AND targetId = '" + approvalRollbackProposal.runId + "'))",
+    );
     try {
       await expect(approveCashAssuranceReminder({
         schoolId, runId: approvalRollbackProposal.runId, actorUserId,
-      })).rejects.toThrow(/forced reminder audit failure/i);
+      })).rejects.toThrow(/check constraint/i);
     } finally {
-      await pool.promise().query("DROP TRIGGER IF EXISTS test_cash_reminder_audit_failure");
+      await pool.promise().query("ALTER TABLE securityAuditEvents DROP CHECK " + auditConstraintName);
+      auditConstraintName = null;
     }
     const approvalRollbackRun = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, approvalRollbackProposal.runId)).limit(1))[0];
     expect(approvalRollbackRun.status).toBe("proposed");
