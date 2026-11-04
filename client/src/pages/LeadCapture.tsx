@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, Mail, School, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { NSOS_BRAND } from "@/lib/brand";
 
 export default function LeadCapture() {
   const [firstName, setFirstName] = useState("");
@@ -39,7 +40,7 @@ export default function LeadCapture() {
             <img src="/icons/nsos-icon-192.png" alt="NSOS" className="h-9 w-9 rounded-xl" />
             <span><strong className="block text-sm">NSOS</strong><span className="text-[9px] font-semibold uppercase tracking-[.15em] text-white/45">Nigerian School OS</span></span>
           </a>
-          <a href="/" className="text-xs font-semibold text-white/55 hover:text-white">Sign in</a>
+          <nav className="flex items-center gap-4" aria-label="NSOS links"><a href={NSOS_BRAND.socialLinks[0].url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-white/65 hover:text-white">{NSOS_BRAND.socialLinks[0].label}</a><a href="/" className="text-xs font-semibold text-white/55 hover:text-white">Sign in</a></nav>
         </header>
 
         <div className="grid flex-1 items-center gap-12 px-6 py-12 sm:px-9 lg:grid-cols-[1.05fr_.75fr] lg:px-16">
