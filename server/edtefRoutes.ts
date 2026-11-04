@@ -50,7 +50,7 @@ export function registerEdtefRoutes(app: Express) {
       if (name === "page" || name === "limit") {
         const parsed = Number(value);
         const maximum = name === "page" ? 10_000 : 200;
-        if (!/^\\d+$/.test(value) || !Number.isInteger(parsed) || parsed < 1 || parsed > maximum) {
+        if (!/^\d+$/.test(value) || !Number.isInteger(parsed) || parsed < 1 || parsed > maximum) {
           throw new EdtefApiError(`Invalid ${name} filter.`, 400);
         }
       }
