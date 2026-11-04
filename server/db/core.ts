@@ -3834,17 +3834,27 @@ export async function proposeCashAssuranceReminder(input: { schoolId: number; ca
     eq(reminderRuns.idempotencyKey, idempotencyKey),
   )).limit(1))[0];
   if (existing) return { runId: existing.id, status: existing.status, duplicate: true };
-  const inserted = await db.insert(reminderRuns).values({
-    schoolId: input.schoolId,
-    caseId: input.caseId,
-    policyId: input.policyId,
-    policyVersion: policy[0].templateVersion,
-    recipientUserId: null,
-    channel: policy[0].channel,
-    status: "proposed",
-    idempotencyKey,
-  });
-  const runId = Number(inserted[0].insertId);
+  let runId: number;
+  try {
+    const inserted = await db.insert(reminderRuns).values({
+      schoolId: input.schoolId,
+      caseId: input.caseId,
+      policyId: input.policyId,
+      policyVersion: policy[0].templateVersion,
+      recipientUserId: null,
+      channel: policy[0].channel,
+      status: "proposed",
+      idempotencyKey,
+    });
+    runId = Number(inserted[0].insertId);
+  } catch (error) {
+    const raced = (await db.select().from(reminderRuns).where(and(
+      eq(reminderRuns.schoolId, input.schoolId),
+      eq(reminderRuns.idempotencyKey, idempotencyKey),
+    )).limit(1))[0];
+    if (!raced) throw error;
+    return { runId: raced.id, status: raced.status, duplicate: true };
+  }
   await addCashAssuranceEvent({
     schoolId: input.schoolId,
     caseId: input.caseId,
@@ -3874,7 +3884,7 @@ export async function approveCashAssuranceReminder(input: { schoolId: number; ru
   if (!isActiveCashAssuranceCase(item.status as CashAssuranceCaseStatus) || item.status === "disputed" || item.pausedReason) {
     throw new Error("Approval is blocked while this case is disputed, closed, settled, or paused.");
   }
-  await db.update(reminderRuns).set({
+  const updated = await db.update(reminderRuns).set({
     status: "approved",
     approvedBy: input.actorUserId,
     approvedAt: new Date(),
@@ -3883,11 +3893,8 @@ export async function approveCashAssuranceReminder(input: { schoolId: number; ru
     eq(reminderRuns.schoolId, input.schoolId),
     eq(reminderRuns.status, "proposed"),
   ));
-  const updated = (await db.select().from(reminderRuns).where(and(
-    eq(reminderRuns.id, input.runId),
-    eq(reminderRuns.schoolId, input.schoolId),
-  )).limit(1))[0];
-  if (updated?.status !== "approved") throw new Error("Reminder approval could not be confirmed.");
+  const affectedRows = Number((updated as any)?.[0]?.affectedRows ?? (updated as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This reminder changed while approval was being recorded. Refresh the queue.");
   await addCashAssuranceEvent({
     schoolId: input.schoolId,
     caseId: run.caseId,
@@ -3907,11 +3914,13 @@ export async function cancelCashAssuranceReminder(input: { schoolId: number; run
   if (!run || !["proposed", "approved"].includes(run.status)) {
     throw new Error("Only a proposed or approved reminder can be cancelled.");
   }
-  await db.update(reminderRuns).set({ status: "cancelled" }).where(and(
+  const cancelled = await db.update(reminderRuns).set({ status: "cancelled" }).where(and(
     eq(reminderRuns.id, input.runId),
     eq(reminderRuns.schoolId, input.schoolId),
     inArray(reminderRuns.status, ["proposed", "approved"]),
   ));
+  const affectedRows = Number((cancelled as any)?.[0]?.affectedRows ?? (cancelled as any)?.affectedRows ?? 0);
+  if (affectedRows !== 1) throw new Error("This reminder changed while cancellation was being recorded. Refresh the queue.");
   await addCashAssuranceEvent({
     schoolId: input.schoolId,
     caseId: run.caseId,
