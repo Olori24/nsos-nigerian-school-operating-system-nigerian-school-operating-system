@@ -12,7 +12,7 @@ Set `EDTEF_API_KEY` in the managed runtime's encrypted environment-variable/secr
 - `GET /api/edtef/schools?state=kwara&ownership=state&page=1&per_page=20`
 - `GET /api/edtef/schools/:id`
 
-Supported list filters: `state`, `lga`, `ownership`, `gender`, `boarding`, `page`, and `per_page`. This proxy is read-only; it does not import EDTEF records into a school's private tenant database and does not expose CSV bulk export.
+Supported list filters: `state`, `lga`, `ownership`, `gender`, `boarding`, `q`, `page`, and `limit` (maximum 200). School IDs use EDTEF's `sch_` plus 12 lowercase hexadecimal characters format. This proxy is read-only; it does not import EDTEF records into a school's private tenant database and does not expose CSV bulk export.
 
 Successful responses include attribution: “EDTEF school directory (edtef.org)” linked to `https://edtef.org`. Successful upstream JSON responses are cached in-process for 15 minutes, with a 500-entry bound. Requests time out after 8 seconds. Upstream 429 responses are passed through with a safe message and any Retry-After header. Other provider errors and diagnostics are not exposed to clients.
 
