@@ -1,5 +1,8 @@
+type RateLimitQueryResult = [unknown, unknown];
+type RateLimitQuery = (options: { sql: string; timeout?: number }, values?: unknown[]) => Promise<RateLimitQueryResult>;
+
 type RateLimitConnection = {
-  query: (...args: unknown[]) => Promise<unknown>;
+  query: RateLimitQuery;
   destroy: () => void;
   release: () => void;
 };
@@ -14,10 +17,10 @@ function isQueryTimeout(error: unknown) {
  */
 export async function withRateLimitConnection<T>(
   connection: RateLimitConnection,
-  operation: (query: RateLimitConnection["query"]) => Promise<T>,
+  operation: (query: RateLimitQuery) => Promise<T>,
 ): Promise<T> {
   let destroyed = false;
-  const query: RateLimitConnection["query"] = async (...args) => {
+  const query: RateLimitQuery = async (...args) => {
     try {
       return await connection.query(...args);
     } catch (error) {
