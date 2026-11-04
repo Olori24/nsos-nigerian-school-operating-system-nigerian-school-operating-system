@@ -5501,14 +5501,6 @@ export const nsosRouter = router({
           ...input,
           actorUserId: ctx.user.id,
         });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_reminder_policy_saved",
-          targetType: "cash_assurance_reminder_policy",
-          targetId: result.policyId,
-          metadata: { status: input.status, channel: input.channel, requiresApproval: true },
-        });
         return result;
       }),
     archiveReminderPolicy: managementProcedure("finance.write")
@@ -5517,14 +5509,6 @@ export const nsosRouter = router({
         const result = await db.archiveCashAssuranceReminderPolicy({
           ...input,
           actorUserId: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_reminder_policy_archived",
-          targetType: "cash_assurance_reminder_policy",
-          targetId: input.policyId,
-          metadata: { archived: true },
         });
         return result;
       }),
@@ -5538,14 +5522,6 @@ export const nsosRouter = router({
           ...input,
           actorUserId: ctx.user.id,
         });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_reminder_proposed",
-          targetType: "cash_assurance_reminder_run",
-          targetId: result.runId,
-          metadata: { status: result.status, duplicate: result.duplicate, dispatchEnabled: false },
-        });
         return result;
       }),
     approveReminder: managementProcedure("finance.write")
@@ -5555,14 +5531,6 @@ export const nsosRouter = router({
           ...input,
           actorUserId: ctx.user.id,
         });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_reminder_approved",
-          targetType: "cash_assurance_reminder_run",
-          targetId: input.runId,
-          metadata: { status: result.status, dispatchEnabled: false },
-        });
         return result;
       }),
     cancelReminder: managementProcedure("finance.write")
@@ -5571,14 +5539,6 @@ export const nsosRouter = router({
         const result = await db.cancelCashAssuranceReminder({
           ...input,
           actorUserId: ctx.user.id,
-        });
-        await db.recordSecurityAuditEvent({
-          schoolId: input.schoolId,
-          actorUserId: ctx.user.id,
-          eventType: "cash_assurance_reminder_cancelled",
-          targetType: "cash_assurance_reminder_run",
-          targetId: input.runId,
-          metadata: { cancelled: true, dispatchEnabled: false },
         });
         return result;
       }),
