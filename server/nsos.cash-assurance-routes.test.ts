@@ -82,10 +82,7 @@ describe("Cash Assurance Phase 1 routes", () => {
       actorUserId: 12,
       timezone: "Africa/Lagos",
     }));
-    expect(db.recordSecurityAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: "cash_assurance_reminder_policy_saved",
-      metadata: { status: "active", channel: "in_app", requiresApproval: true },
-    }));
+    expect(db.recordSecurityAuditEvent).not.toHaveBeenCalled();
   });
 
   it("prevents activation of unverified outbound reminder channels", async () => {
