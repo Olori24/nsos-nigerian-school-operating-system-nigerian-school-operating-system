@@ -9,7 +9,7 @@ Set `EDTEF_API_KEY` in the managed runtime's encrypted environment-variable/secr
 ## Internal endpoints
 
 - `GET /api/edtef/states`
-- `GET /api/edtef/schools?state=kwara&ownership=state&page=1&per_page=20`
+- `GET /api/edtef/schools?state=kwara&ownership=state&page=1&limit=20`
 - `GET /api/edtef/schools/:id`
 
 Supported list filters: `state`, `lga`, `ownership`, `gender`, `boarding`, `q`, `page`, and `limit` (maximum 200). School IDs use EDTEF's `sch_` plus 12 lowercase hexadecimal characters format. This proxy is read-only; it does not import EDTEF records into a school's private tenant database and does not expose CSV bulk export.
