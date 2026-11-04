@@ -55,6 +55,15 @@ describe("EDTEF directory proxy routes", () => {
     expect(requestEdtefJson).not.toHaveBeenCalled();
   });
 
+  it.each(["page=", "page=%20", "limit=", "limit=%20"])(
+    "rejects empty or whitespace-only pagination values (%s)",
+    async parameter => {
+      const response = await fetch(`${baseUrl}/api/edtef/schools?${parameter}`);
+      expect(response.status).toBe(400);
+      expect(requestEdtefJson).not.toHaveBeenCalled();
+    },
+  );
+
   it("validates school identifiers before making an upstream request", async () => {
     const response = await fetch(`${baseUrl}/api/edtef/schools/invalid-id`);
     expect(response.status).toBe(400);
