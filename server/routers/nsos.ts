@@ -5475,6 +5475,110 @@ export const nsosRouter = router({
   }),
 
   cashAssurance: router({
+    listReminderPolicies: managementProcedure("finance.read")
+      .input(schoolInput)
+      .query(({ input }) => db.listCashAssuranceReminderPolicies(input.schoolId)),
+    listReminderRuns: managementProcedure("finance.read")
+      .input(schoolInput)
+      .query(({ input }) => db.listCashAssuranceReminderRuns(input.schoolId)),
+    saveReminderPolicy: managementProcedure("finance.write")
+      .input(schoolInput.extend({
+        policyId: z.number().int().positive().optional(),
+        name: z.string().trim().min(2).max(120),
+        status: z.enum(["draft", "active"]),
+        triggerType: z.enum(["invoice_due", "overdue", "promise_due", "evidence_received"]),
+        channel: z.enum(["in_app", "email", "sms", "whatsapp"]),
+        template: z.string().trim().min(1).max(2000),
+        quietHoursStart: z.string().regex(/^(?:[01]\\d|2[0-3]):[0-5]\\d$/),
+        quietHoursEnd: z.string().regex(/^(?:[01]\\d|2[0-3]):[0-5]\\d$/),
+        timezone: z.literal("Africa/Lagos").default("Africa/Lagos"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.saveCashAssuranceReminderPolicy({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        await db.recordSecurityAuditEvent({
+          schoolId: input.schoolId,
+          actorUserId: ctx.user.id,
+          eventType: "cash_assurance_reminder_policy_saved",
+          targetType: "cash_assurance_reminder_policy",
+          targetId: result.policyId,
+          metadata: { status: input.status, channel: input.channel, requiresApproval: true },
+        });
+        return result;
+      }),
+    archiveReminderPolicy: managementProcedure("finance.write")
+      .input(schoolInput.extend({ policyId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.archiveCashAssuranceReminderPolicy({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        await db.recordSecurityAuditEvent({
+          schoolId: input.schoolId,
+          actorUserId: ctx.user.id,
+          eventType: "cash_assurance_reminder_policy_archived",
+          targetType: "cash_assurance_reminder_policy",
+          targetId: input.policyId,
+          metadata: { archived: true },
+        });
+        return result;
+      }),
+    proposeReminder: managementProcedure("finance.write")
+      .input(schoolInput.extend({
+        caseId: z.number().int().positive(),
+        policyId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.proposeCashAssuranceReminder({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        await db.recordSecurityAuditEvent({
+          schoolId: input.schoolId,
+          actorUserId: ctx.user.id,
+          eventType: "cash_assurance_reminder_proposed",
+          targetType: "cash_assurance_reminder_run",
+          targetId: result.runId,
+          metadata: { status: result.status, duplicate: result.duplicate, dispatchEnabled: false },
+        });
+        return result;
+      }),
+    approveReminder: managementProcedure("finance.write")
+      .input(schoolInput.extend({ runId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.approveCashAssuranceReminder({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        await db.recordSecurityAuditEvent({
+          schoolId: input.schoolId,
+          actorUserId: ctx.user.id,
+          eventType: "cash_assurance_reminder_approved",
+          targetType: "cash_assurance_reminder_run",
+          targetId: input.runId,
+          metadata: { status: result.status, dispatchEnabled: false },
+        });
+        return result;
+      }),
+    cancelReminder: managementProcedure("finance.write")
+      .input(schoolInput.extend({ runId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.cancelCashAssuranceReminder({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        await db.recordSecurityAuditEvent({
+          schoolId: input.schoolId,
+          actorUserId: ctx.user.id,
+          eventType: "cash_assurance_reminder_cancelled",
+          targetType: "cash_assurance_reminder_run",
+          targetId: input.runId,
+          metadata: { cancelled: true, dispatchEnabled: false },
+        });
+        return result;
+      }),
     list: managementProcedure("finance.read")
       .input(schoolInput)
       .query(({ input }) => db.listCashAssuranceData(input.schoolId)),
