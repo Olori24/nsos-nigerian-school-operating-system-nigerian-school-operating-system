@@ -3838,7 +3838,7 @@ export async function proposeCashAssuranceReminder(input: { schoolId: number; ca
         inArray(invoices.id, caseLinks.map(link => link.invoiceId)),
       ))
     : [];
-  const dueDate = (value: Date | string | null) => value ? String(value).slice(0, 10) : "";
+  const dueDate = (value: Date | string | null) => value ? (value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10)) : "";
   let triggerEligible = false;
   if (policy[0].triggerType === "invoice_due") {
     triggerEligible = invoiceRows.some(invoice => dueDate(invoice.dueDate) === localDate && invoice.status !== "void" && invoiceOutstanding(invoice) > 0.009);
