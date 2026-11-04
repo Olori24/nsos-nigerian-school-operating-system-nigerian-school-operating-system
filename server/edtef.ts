@@ -44,7 +44,7 @@ export async function requestEdtefJson(path: string, query = new URLSearchParams
   if (!key) throw new EdtefApiError("EDTEF directory integration is not configured.", 503);
 
   const normalizedPath = path.replace(/^\/+/, "");
-  if (!/^directory\/v1\/(?:schools(?:\/[A-Za-z0-9_-]{1,128})?|states)$/.test(normalizedPath)) {
+  if (!/^directory\/v1\/(?:schools(?:\/sch_[a-f0-9]{12})?|states)$/.test(normalizedPath)) {
     throw new EdtefApiError("Unsupported EDTEF directory resource.", 400);
   }
 
