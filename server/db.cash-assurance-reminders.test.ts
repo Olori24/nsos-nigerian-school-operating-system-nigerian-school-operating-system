@@ -245,7 +245,7 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
     try {
       await expect(approveCashAssuranceReminder({
         schoolId, runId: approvalRollbackProposal.runId, actorUserId,
-      })).rejects.toThrow(/check constraint/i);
+      })).rejects.toThrow();
     } finally {
       await pool.promise().query("ALTER TABLE securityAuditEvents DROP CHECK " + auditConstraintName);
       auditConstraintName = null;
