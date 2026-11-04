@@ -24,4 +24,4 @@ Successful responses include attribution: â€œEDTEF school directory (edtef.org)â
 4. Call `/api/edtef/states` and a filtered `/api/edtef/schools` request. Confirm 200 responses, expected records, attribution, and that the key is absent from browser assets and logs.
 5. If no key is configured, confirm 503 responses without exposing configuration details.
 
-The current hosting provider's secret manager must be confirmed from the active deployment account before making any provider-side configuration change.
+NSOS is documented as running on the managed Autoscale profile. Add the secret through that deployment's managed secret workflow. This change does not alter hosting, domain routing, or any existing environment variables.
