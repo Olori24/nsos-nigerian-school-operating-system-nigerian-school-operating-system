@@ -3843,7 +3843,7 @@ export async function proposeCashAssuranceReminder(input: { schoolId: number; ca
   if (policy[0].triggerType === "invoice_due") {
     triggerEligible = invoiceRows.some(invoice => dueDate(invoice.dueDate) === localDate && invoice.status !== "void" && invoiceOutstanding(invoice) > 0.009);
   } else if (policy[0].triggerType === "overdue") {
-    triggerEligible = invoiceRows.some(invoice => dueDate(invoice.dueDate) < localDate && invoice.status !== "void" && invoiceOutstanding(invoice) > 0.009);
+    triggerEligible = invoiceRows.some(invoice => { const invoiceDueDate = dueDate(invoice.dueDate); return invoiceDueDate !== "" && invoiceDueDate < localDate && invoice.status !== "void" && invoiceOutstanding(invoice) > 0.009; });
   } else if (policy[0].triggerType === "promise_due") {
     const promises = await db.select().from(paymentPromises).where(and(
       eq(paymentPromises.schoolId, input.schoolId),
