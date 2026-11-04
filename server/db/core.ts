@@ -3746,7 +3746,7 @@ export async function saveCashAssuranceReminderPolicy(input: {
   if (input.timezone !== "Africa/Lagos") {
     throw new Error("Cash Assurance reminders currently require the Africa/Lagos timezone.");
   }
-  const timePattern = /^(?:[01]\\d|2[0-3]):[0-5]\\d$/;
+  const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
   if (!timePattern.test(input.quietHoursStart) || !timePattern.test(input.quietHoursEnd)) {
     throw new Error("Quiet hours must use 24-hour HH:MM time.");
   }
