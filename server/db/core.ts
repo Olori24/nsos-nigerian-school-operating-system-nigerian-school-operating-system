@@ -3552,8 +3552,13 @@ export async function createInvoice(input: { schoolId: number; studentId: number
   await db.insert(invoiceLineItems).values(input.lineItems.map(item => ({ invoiceId, feeStructureId: item.feeStructureId, description: item.description, quantity: item.quantity, unitAmount: String(item.unitAmount), lineTotal: String(item.quantity * item.unitAmount) })));
   return { invoiceId };
 }
+/**
+ * Records a school-scoped invoice payment atomically, using kobo precision.
+ */
 export async function recordPayment(input: { schoolId: number; invoiceId: number; amount: number; paidOn: string; method: "cash" | "bank_transfer" | "card" | "pos" | "cheque" | "other"; reference?: string; note?: string; recordedBy: number }) {
-  if (!Number.isFinite(input.amount) || input.amount <= 0 || Math.abs(input.amount * 100 - Math.round(input.amount * 100)) > 0.000001) {
+  const amountText = String(input.amount);
+  const decimalPlaces = amountText.includes(".") ? amountText.length - amountText.indexOf(".") - 1 : 0;
+  if (!Number.isFinite(input.amount) || input.amount <= 0 || /[eE]/.test(amountText) || decimalPlaces > 2 || input.amount > 9_999_999_999.99) {
     throw new Error("Payment amount must be a positive value with no more than two decimal places.");
   }
   const paymentDate = asDate(input.paidOn);
