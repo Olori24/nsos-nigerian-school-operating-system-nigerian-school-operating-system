@@ -23,7 +23,7 @@ describe("EDTEF directory service", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(new Headers(init.headers).get("x-api-key")).toBe("test-key");
-    expect(JSON.stringify(init)).not.toContain("test-key");
+    expect(fetchMock.mock.calls[0]?.[0]).not.toContain("test-key");
   });
 
   it("fails closed when the API key is absent", async () => {
