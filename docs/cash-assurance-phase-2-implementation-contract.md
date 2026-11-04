@@ -98,6 +98,7 @@ The mobile-first workbench should show:
 - Financial integrity: before/after ledger snapshots prove that proposal, approval, dispatch, failure, callback, cancellation, and retry do not mutate invoices, payments, allocations, or balances.
 - Privacy: tests prove that phone/email, message body, learner names, invoice amounts, bank details, and receipt contents are excluded from third-party product analytics and logs.
 - UI: mobile and desktop approval/cancel/provider-unavailable states.
+- Dependency security: frozen-lockfile install and production dependency audit must pass against the committed pnpm lockfile.
 - Release: clean install, typecheck, lint, full tests, production build, synthetic staging with provider stubs only.
 
 ## 8. Explicitly not authorised
