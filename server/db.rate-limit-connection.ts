@@ -1,5 +1,5 @@
 type RateLimitQueryResult = [unknown, unknown];
-type RateLimitQuery = (options: { sql: string; timeout?: number }, values?: unknown[]) => Promise<RateLimitQueryResult>;
+export type RateLimitQuery = (options: { sql: string; timeout?: number }, values?: unknown[]) => Promise<RateLimitQueryResult>;
 
 type RateLimitConnection = {
   query: RateLimitQuery;
