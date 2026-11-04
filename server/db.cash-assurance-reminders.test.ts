@@ -6,6 +6,7 @@ import {
   paymentEvidence,
   reminderPolicies,
   reminderRuns,
+  securityAuditEvents,
 } from "../drizzle/schema";
 import {
   archiveCashAssuranceReminderPolicy,
@@ -33,6 +34,7 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
     await db.delete(reminderRuns).where(eq(reminderRuns.schoolId, schoolId));
     await db.delete(reminderPolicies).where(eq(reminderPolicies.schoolId, schoolId));
     await db.delete(cashAssuranceEvents).where(eq(cashAssuranceEvents.schoolId, schoolId));
+    await db.delete(securityAuditEvents).where(eq(securityAuditEvents.schoolId, schoolId));
     await db.delete(paymentEvidence).where(eq(paymentEvidence.schoolId, schoolId));
     await db.delete(cashAssuranceCases).where(eq(cashAssuranceCases.schoolId, schoolId));
     const pool = (db as any).$client;
@@ -130,6 +132,12 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
     expect(approved.status).toBe("approved");
     const approvedEvents = await db!.select().from(cashAssuranceEvents).where(eq(cashAssuranceEvents.caseId, caseId));
     expect(approvedEvents.map(event => event.eventType)).toEqual(expect.arrayContaining(["reminder_proposed", "reminder_approved"]));
+    const auditRows = await db!.select().from(securityAuditEvents).where(eq(securityAuditEvents.schoolId, schoolId));
+    expect(auditRows.map(event => event.eventType)).toEqual(expect.arrayContaining([
+      "cash_assurance_reminder_policy_saved",
+      "cash_assurance_reminder_proposed",
+      "cash_assurance_reminder_approved",
+    ]));
 
     const disputedCase = await db!.insert(cashAssuranceCases).values({
       schoolId,
@@ -196,6 +204,8 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
     expect(cancelled.status).toBe("cancelled");
     const cancellationEvents = await db!.select().from(cashAssuranceEvents).where(eq(cashAssuranceEvents.caseId, cancellableCaseId));
     expect(cancellationEvents.map(event => event.eventType)).toContain("reminder_cancelled");
+    const cancellationAudit = await db!.select().from(securityAuditEvents).where(eq(securityAuditEvents.schoolId, schoolId));
+    expect(cancellationAudit.map(event => event.eventType)).toContain("cash_assurance_reminder_cancelled");
 
     const staleCase = await db!.insert(cashAssuranceCases).values({
       schoolId,
