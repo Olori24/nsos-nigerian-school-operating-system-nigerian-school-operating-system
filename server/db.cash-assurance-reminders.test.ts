@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   cashAssuranceCases,
   cashAssuranceEvents,
+  cashAssuranceCaseInvoices,
+  invoices,
   paymentEvidence,
+  paymentPromises,
   reminderPolicies,
   reminderRuns,
   securityAuditEvents,
@@ -31,11 +34,16 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
 
   afterAll(async () => {
     if (!db) return;
+    await (db as any).$client.promise().query("DROP TRIGGER IF EXISTS test_cash_reminder_audit_failure");
     await db.delete(reminderRuns).where(eq(reminderRuns.schoolId, schoolId));
     await db.delete(reminderPolicies).where(eq(reminderPolicies.schoolId, schoolId));
     await db.delete(cashAssuranceEvents).where(eq(cashAssuranceEvents.schoolId, schoolId));
     await db.delete(securityAuditEvents).where(eq(securityAuditEvents.schoolId, schoolId));
     await db.delete(paymentEvidence).where(eq(paymentEvidence.schoolId, schoolId));
+    await db.delete(paymentPromises).where(eq(paymentPromises.schoolId, schoolId));
+    const testCases = await db.select({ id: cashAssuranceCases.id }).from(cashAssuranceCases).where(eq(cashAssuranceCases.schoolId, schoolId));
+    if (testCases.length) await db.delete(cashAssuranceCaseInvoices).where(inArray(cashAssuranceCaseInvoices.caseId, testCases.map(item => item.id)));
+    await db.delete(invoices).where(eq(invoices.schoolId, schoolId));
     await db.delete(cashAssuranceCases).where(eq(cashAssuranceCases.schoolId, schoolId));
     const pool = (db as any).$client;
     if (pool?.end) await new Promise<void>((resolve, reject) => pool.end((error?: Error) => error ? reject(error) : resolve()));
@@ -138,6 +146,107 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
       "cash_assurance_reminder_proposed",
       "cash_assurance_reminder_approved",
     ]));
+
+    const localDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Lagos",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const yesterdayDate = new Date(localDate + "T00:00:00.000Z");
+    yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+
+    const invoiceDueCase = await db!.insert(cashAssuranceCases).values({ schoolId, studentId: 21, openedBy: actorUserId });
+    const invoiceDueCaseId = Number(invoiceDueCase[0].insertId);
+    const dueInvoice = await db!.insert(invoices).values({
+      schoolId, studentId: 21, invoiceNo: "REM-DUE-" + schoolId, issueDate: new Date(localDate + "T00:00:00.000Z"),
+      dueDate: new Date(localDate + "T00:00:00.000Z"), subtotal: "100.00", total: "100.00", status: "issued", createdBy: actorUserId,
+    });
+    await db!.insert(cashAssuranceCaseInvoices).values({
+      caseId: invoiceDueCaseId, invoiceId: Number(dueInvoice[0].insertId), snapshotOutstandingAmount: "100.00",
+    });
+    const duePolicy = await saveCashAssuranceReminderPolicy({
+      schoolId, name: "Invoice due", status: "active", triggerType: "invoice_due", channel: "in_app",
+      template: "Invoice due reminder.", quietHoursStart: "20:00", quietHoursEnd: "08:00", timezone: "Africa/Lagos", actorUserId,
+    });
+    const dueProposal = await proposeCashAssuranceReminder({ schoolId, caseId: invoiceDueCaseId, policyId: duePolicy.policyId, actorUserId });
+    expect(dueProposal.status).toBe("proposed");
+
+    const overdueCase = await db!.insert(cashAssuranceCases).values({ schoolId, studentId: 22, openedBy: actorUserId });
+    const overdueCaseId = Number(overdueCase[0].insertId);
+    const overdueInvoice = await db!.insert(invoices).values({
+      schoolId, studentId: 22, invoiceNo: "REM-OVERDUE-" + schoolId, issueDate: new Date(yesterday + "T00:00:00.000Z"),
+      dueDate: new Date(yesterday + "T00:00:00.000Z"), subtotal: "150.00", total: "150.00", status: "issued", createdBy: actorUserId,
+    });
+    await db!.insert(cashAssuranceCaseInvoices).values({
+      caseId: overdueCaseId, invoiceId: Number(overdueInvoice[0].insertId), snapshotOutstandingAmount: "150.00",
+    });
+    const overduePolicy = await saveCashAssuranceReminderPolicy({
+      schoolId, name: "Overdue invoice", status: "active", triggerType: "overdue", channel: "in_app",
+      template: "Overdue invoice reminder.", quietHoursStart: "20:00", quietHoursEnd: "08:00", timezone: "Africa/Lagos", actorUserId,
+    });
+    const overdueProposal = await proposeCashAssuranceReminder({ schoolId, caseId: overdueCaseId, policyId: overduePolicy.policyId, actorUserId });
+    expect(overdueProposal.status).toBe("proposed");
+
+    const promiseCase = await db!.insert(cashAssuranceCases).values({ schoolId, studentId: 23, openedBy: actorUserId });
+    const promiseCaseId = Number(promiseCase[0].insertId);
+    await db!.insert(paymentPromises).values({
+      schoolId, caseId: promiseCaseId, promisedAmount: "200.00", promisedOn: new Date(localDate + "T00:00:00.000Z"),
+      status: "open", recordedBy: actorUserId,
+    });
+    const promisePolicy = await saveCashAssuranceReminderPolicy({
+      schoolId, name: "Promise due", status: "active", triggerType: "promise_due", channel: "in_app",
+      template: "Promise due reminder.", quietHoursStart: "20:00", quietHoursEnd: "08:00", timezone: "Africa/Lagos", actorUserId,
+    });
+    const promiseProposal = await proposeCashAssuranceReminder({ schoolId, caseId: promiseCaseId, policyId: promisePolicy.policyId, actorUserId });
+    expect(promiseProposal.status).toBe("proposed");
+
+    const versionCase = await db!.insert(cashAssuranceCases).values({ schoolId, studentId: 24, openedBy: actorUserId });
+    const versionCaseId = Number(versionCase[0].insertId);
+    await db!.insert(paymentEvidence).values({
+      schoolId, caseId: versionCaseId, invoiceId: 987654325, amountClaimed: "30.00", createdBy: actorUserId,
+    });
+    const versionPolicy = await saveCashAssuranceReminderPolicy({
+      schoolId, name: "Version guard", status: "active", triggerType: "evidence_received", channel: "in_app",
+      template: "Version 1.", quietHoursStart: "20:00", quietHoursEnd: "08:00", timezone: "Africa/Lagos", actorUserId,
+    });
+    const versionProposal = await proposeCashAssuranceReminder({ schoolId, caseId: versionCaseId, policyId: versionPolicy.policyId, actorUserId });
+    await saveCashAssuranceReminderPolicy({
+      schoolId, policyId: versionPolicy.policyId, name: "Version guard updated", status: "active",
+      triggerType: "evidence_received", channel: "in_app", template: "Version 2.",
+      quietHoursStart: "20:00", quietHoursEnd: "08:00", timezone: "Africa/Lagos", actorUserId,
+    });
+    await expect(approveCashAssuranceReminder({ schoolId, runId: versionProposal.runId, actorUserId })).rejects.toThrow(/policy/i);
+    const versionRun = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, versionProposal.runId)).limit(1))[0];
+    expect(versionRun.status).toBe("proposed");
+
+    const approvalRollbackCase = await db!.insert(cashAssuranceCases).values({ schoolId, studentId: 25, openedBy: actorUserId });
+    const approvalRollbackCaseId = Number(approvalRollbackCase[0].insertId);
+    await db!.insert(paymentEvidence).values({
+      schoolId, caseId: approvalRollbackCaseId, invoiceId: 987654326, amountClaimed: "45.00", createdBy: actorUserId,
+    });
+    const approvalRollbackPolicy = await saveCashAssuranceReminderPolicy({
+      schoolId, name: "Approval rollback", status: "active", triggerType: "evidence_received", channel: "in_app",
+      template: "Approval rollback test.", quietHoursStart: "20:00", quietHoursEnd: "08:00", timezone: "Africa/Lagos", actorUserId,
+    });
+    const approvalRollbackProposal = await proposeCashAssuranceReminder({
+      schoolId, caseId: approvalRollbackCaseId, policyId: approvalRollbackPolicy.policyId, actorUserId,
+    });
+    const pool = (db as any).$client;
+    await pool.promise().query("DROP TRIGGER IF EXISTS test_cash_reminder_audit_failure");
+    await pool.promise().query("CREATE TRIGGER test_cash_reminder_audit_failure BEFORE INSERT ON securityAuditEvents FOR EACH ROW BEGIN IF NEW.eventType = 'cash_assurance_reminder_approved' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced reminder audit failure'; END IF; END");
+    try {
+      await expect(approveCashAssuranceReminder({
+        schoolId, runId: approvalRollbackProposal.runId, actorUserId,
+      })).rejects.toThrow(/forced reminder audit failure/i);
+    } finally {
+      await pool.promise().query("DROP TRIGGER IF EXISTS test_cash_reminder_audit_failure");
+    }
+    const approvalRollbackRun = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, approvalRollbackProposal.runId)).limit(1))[0];
+    expect(approvalRollbackRun.status).toBe("proposed");
+    const rollbackEvents = await db!.select().from(cashAssuranceEvents).where(eq(cashAssuranceEvents.caseId, approvalRollbackCaseId));
+    expect(rollbackEvents.map(event => event.eventType)).not.toContain("reminder_approved");
 
     const disputedCase = await db!.insert(cashAssuranceCases).values({
       schoolId,
