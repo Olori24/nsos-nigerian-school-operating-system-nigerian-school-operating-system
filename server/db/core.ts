@@ -3746,6 +3746,9 @@ export async function saveCashAssuranceReminderPolicy(input: {
   if (input.timezone !== "Africa/Lagos") {
     throw new Error("Cash Assurance reminders currently require the Africa/Lagos timezone.");
   }
+  if (input.status === "active" && input.channel !== "in_app") {
+    throw new Error("External reminder channels cannot be activated until their provider and sender configuration are verified.");
+  }
   const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
   if (!timePattern.test(input.quietHoursStart) || !timePattern.test(input.quietHoursEnd)) {
     throw new Error("Quiet hours must use 24-hour HH:MM time.");
@@ -3828,6 +3831,34 @@ export async function proposeCashAssuranceReminder(input: { schoolId: number; ca
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+  const caseLinks = await db.select().from(cashAssuranceCaseInvoices).where(eq(cashAssuranceCaseInvoices.caseId, input.caseId));
+  const invoiceRows = caseLinks.length
+    ? await db.select().from(invoices).where(and(
+        eq(invoices.schoolId, input.schoolId),
+        inArray(invoices.id, caseLinks.map(link => link.invoiceId)),
+      ))
+    : [];
+  const dueDate = (value: Date | string | null) => value ? String(value).slice(0, 10) : "";
+  let triggerEligible = false;
+  if (policy[0].triggerType === "invoice_due") {
+    triggerEligible = invoiceRows.some(invoice => dueDate(invoice.dueDate) === localDate && invoice.status !== "void" && invoiceOutstanding(invoice) > 0.009);
+  } else if (policy[0].triggerType === "overdue") {
+    triggerEligible = invoiceRows.some(invoice => dueDate(invoice.dueDate) < localDate && invoice.status !== "void" && invoiceOutstanding(invoice) > 0.009);
+  } else if (policy[0].triggerType === "promise_due") {
+    const promises = await db.select().from(paymentPromises).where(and(
+      eq(paymentPromises.schoolId, input.schoolId),
+      eq(paymentPromises.caseId, input.caseId),
+      eq(paymentPromises.status, "open"),
+    ));
+    triggerEligible = promises.some(promise => dueDate(promise.promisedOn) <= localDate);
+  } else if (policy[0].triggerType === "evidence_received") {
+    const evidence = await db.select().from(paymentEvidence).where(and(
+      eq(paymentEvidence.schoolId, input.schoolId),
+      eq(paymentEvidence.caseId, input.caseId),
+    ));
+    triggerEligible = evidence.some(item => item.status === "submitted" || item.status === "under_review");
+  }
+  if (!triggerEligible) throw new Error("This reminder policy trigger is not currently satisfied by the selected case.");
   const idempotencyKey = `cash-case:${input.caseId}:policy:${input.policyId}:version:${policy[0].templateVersion}:day:${localDate}`;
   const existing = (await db.select().from(reminderRuns).where(and(
     eq(reminderRuns.schoolId, input.schoolId),
