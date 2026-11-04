@@ -123,6 +123,7 @@ import { storagePut } from "../storage";
 import { deriveTenantOnboardingStatus } from "../tenantOnboarding";
 import { getNigerianCurriculumTemplate, type NigerianCurriculumTemplateId, listNigerianCurriculumTemplates } from "../nigerianCurriculum";
 import { MAX_SCHEME_FILE_BYTES, normaliseReviewedSchemeRows, safeSchemeFileName, type ReviewedSchemeRow } from "../schemeOfWork";
+import { withRateLimitConnection } from "./db.rate-limit-connection";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -340,22 +341,15 @@ export async function consumeSharedRateLimit(input: { namespace: string; route: 
   const bucketMaterial = input.namespace + ":" + input.route + ":" + input.clientKey + ":" + windowStartedAt;
   const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
   const connection = await rateLimitDatabasePool().getConnection();
-  let connectionDestroyed = false;
-  const destroyTimedOutConnection = (error: unknown) => {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "PROTOCOL_SEQUENCE_TIMEOUT") {
-      connectionDestroyed = true;
-      connection.destroy();
-    }
-  };
-  try {
-    await connection.query(
+  return withRateLimitConnection(connection, async query => {
+    await query(
       {
         sql: "INSERT INTO `rateLimitBuckets` (`bucketKey`, `count`, `expiresAt`) VALUES (?, 1, ?) ON DUPLICATE KEY UPDATE `count` = `count` + 1, `expiresAt` = VALUES(`expiresAt`)",
         timeout: RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
       },
       [bucketKey, expiresAt],
     );
-    const [rows] = await connection.query(
+    const [rows] = await query(
       {
         sql: "SELECT `count` FROM `rateLimitBuckets` WHERE `bucketKey` = ? LIMIT 1",
         timeout: RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
@@ -365,26 +359,20 @@ export async function consumeSharedRateLimit(input: { namespace: string; route: 
     const bucket = (rows as Array<{ count: number | string }>)[0];
     if (Math.random() < 0.01) {
       try {
-        await connection.query(
+        await query(
           {
             sql: "DELETE FROM `rateLimitBuckets` WHERE `expiresAt` < ?",
             timeout: RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
           },
           [new Date(now)],
         );
-      } catch (error) {
-        destroyTimedOutConnection(error);
+      } catch {
         // Opportunistic cleanup must not fail a successfully counted request.
       }
     }
     const count = Number(bucket?.count ?? input.limit + 1);
     return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
-  } catch (error) {
-    destroyTimedOutConnection(error);
-    throw error;
-  } finally {
-    if (!connectionDestroyed) connection.release();
-  }
+  });
 }
 
 export async function saveCopilotRecentSearch(input: { userId: number; schoolId: number; query: string; destinationId?: string | null }) {
