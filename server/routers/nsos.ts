@@ -597,7 +597,7 @@ export const nsosRouter = router({
             name: z.string().trim().min(2).max(160),
             destinationUrl: z.string().url().max(2048),
             commissionType: z.enum(["percentage", "fixed"]),
-            commissionValue: z.string().regex(/^\\d+(?:\\.\\d{1,2})?$/),
+            commissionValue: z.string().regex(/^\d+(?:\.\d{1,2})?$/),
             currency: z.string().trim().min(3).max(8).default("NGN"),
             attributionDays: z.number().int().min(1).max(180).default(30),
             termsVersion: z.string().trim().max(64).optional(),
@@ -616,7 +616,7 @@ export const nsosRouter = router({
             commissionType: z.enum(["percentage", "fixed"]).optional(),
             commissionValue: z
               .string()
-              .regex(/^\\d+(?:\\.\\d{1,2})?$/)
+              .regex(/^\d+(?:\.\d{1,2})?$/)
               .optional(),
             currency: z.string().trim().min(3).max(8).optional(),
             attributionDays: z.number().int().min(1).max(180).optional(),
@@ -5475,6 +5475,73 @@ export const nsosRouter = router({
   }),
 
   cashAssurance: router({
+    listReminderPolicies: managementProcedure("finance.read")
+      .input(schoolInput)
+      .query(({ input }) => db.listCashAssuranceReminderPolicies(input.schoolId)),
+    listReminderRuns: managementProcedure("finance.read")
+      .input(schoolInput)
+      .query(({ input }) => db.listCashAssuranceReminderRuns(input.schoolId)),
+    saveReminderPolicy: managementProcedure("finance.write")
+      .input(schoolInput.extend({
+        policyId: z.number().int().positive().optional(),
+        name: z.string().trim().min(2).max(120),
+        status: z.enum(["draft", "active"]),
+        triggerType: z.enum(["invoice_due", "overdue", "promise_due", "evidence_received"]),
+        channel: z.enum(["in_app", "email", "sms", "whatsapp"]),
+        template: z.string().trim().min(1).max(2000),
+        quietHoursStart: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+        quietHoursEnd: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+        timezone: z.literal("Africa/Lagos").default("Africa/Lagos"),
+      }).refine(
+        input => input.status !== "active" || input.channel === "in_app",
+        { message: "External channels cannot be activated until provider readiness is verified.", path: ["channel"] },
+      ))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.saveCashAssuranceReminderPolicy({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        return result;
+      }),
+    archiveReminderPolicy: managementProcedure("finance.write")
+      .input(schoolInput.extend({ policyId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.archiveCashAssuranceReminderPolicy({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        return result;
+      }),
+    proposeReminder: managementProcedure("finance.write")
+      .input(schoolInput.extend({
+        caseId: z.number().int().positive(),
+        policyId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.proposeCashAssuranceReminder({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        return result;
+      }),
+    approveReminder: managementProcedure("finance.write")
+      .input(schoolInput.extend({ runId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.approveCashAssuranceReminder({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        return result;
+      }),
+    cancelReminder: managementProcedure("finance.write")
+      .input(schoolInput.extend({ runId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.cancelCashAssuranceReminder({
+          ...input,
+          actorUserId: ctx.user.id,
+        });
+        return result;
+      }),
     list: managementProcedure("finance.read")
       .input(schoolInput)
       .query(({ input }) => db.listCashAssuranceData(input.schoolId)),

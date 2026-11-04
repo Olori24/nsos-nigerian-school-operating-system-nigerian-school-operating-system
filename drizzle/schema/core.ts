@@ -1534,6 +1534,61 @@ export const schoolBankAccounts = mysqlTable(
   table => ({ schoolStatus: index("schoolBankAccount_school_status_idx").on(table.schoolId, table.status), schoolPrimary: index("schoolBankAccount_school_primary_idx").on(table.schoolId, table.isPrimary) }),
 );
 
+export const reminderPolicies = mysqlTable(
+  "reminderPolicies",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    status: mysqlEnum("status", ["draft", "active", "archived"]).notNull().default("draft"),
+    triggerType: mysqlEnum("triggerType", ["invoice_due", "overdue", "promise_due", "evidence_received"]).notNull(),
+    channel: mysqlEnum("channel", ["in_app", "email", "sms", "whatsapp"]).notNull(),
+    template: text("template").notNull(),
+    templateVersion: int("templateVersion").notNull().default(1),
+    requiresApproval: boolean("requiresApproval").notNull().default(true),
+    quietHoursStart: varchar("quietHoursStart", { length: 5 }).notNull().default("20:00"),
+    quietHoursEnd: varchar("quietHoursEnd", { length: 5 }).notNull().default("08:00"),
+    timezone: varchar("timezone", { length: 64 }).notNull().default("Africa/Lagos"),
+    createdBy: int("createdBy").notNull(),
+    updatedBy: int("updatedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolStatus: index("reminderPolicy_school_status_idx").on(table.schoolId, table.status),
+    schoolTrigger: index("reminderPolicy_school_trigger_idx").on(table.schoolId, table.triggerType),
+  }),
+);
+
+export const reminderRuns = mysqlTable(
+  "reminderRuns",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    schoolId: int("schoolId").notNull(),
+    caseId: int("caseId").notNull(),
+    policyId: int("policyId").notNull(),
+    policyVersion: int("policyVersion").notNull(),
+    recipientUserId: int("recipientUserId"),
+    channel: mysqlEnum("channel", ["in_app", "email", "sms", "whatsapp"]).notNull(),
+    status: mysqlEnum("status", ["proposed", "approved", "submitted", "delivered", "failed", "suppressed", "cancelled"]).notNull().default("proposed"),
+    idempotencyKey: varchar("idempotencyKey", { length: 191 }).notNull(),
+    messageLogId: int("messageLogId"),
+    scheduledAt: timestamp("scheduledAt"),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    submittedAt: timestamp("submittedAt"),
+    deliveredAt: timestamp("deliveredAt"),
+    failureCode: varchar("failureCode", { length: 96 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    schoolIdempotency: uniqueIndex("reminderRun_school_idempotency_unique").on(table.schoolId, table.idempotencyKey),
+    schoolStatus: index("reminderRun_school_status_idx").on(table.schoolId, table.status),
+    schoolCase: index("reminderRun_school_case_idx").on(table.schoolId, table.caseId),
+  }),
+);
+
 export const cashAssuranceCases = mysqlTable(
   "cashAssuranceCases",
   {

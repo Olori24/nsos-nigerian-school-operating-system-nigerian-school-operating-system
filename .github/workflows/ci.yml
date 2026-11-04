@@ -81,6 +81,15 @@ jobs:
       - name: Validate database migrations
         run: pnpm drizzle-kit migrate
 
+      - name: Verify Drizzle schema snapshots
+        run: |
+          pnpm drizzle-kit generate --name=ci_schema_drift
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            git status --short -- drizzle
+            echo "Drizzle schema and committed migration snapshots are out of sync."
+            exit 1
+          fi
+
       - name: Run tests
         run: pnpm test
 
