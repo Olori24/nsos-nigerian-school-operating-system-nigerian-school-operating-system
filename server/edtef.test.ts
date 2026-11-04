@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./db", () => ({ consumeSharedRateLimit: vi.fn() }));
+
+import { consumeSharedRateLimit } from "./db";
 import { clearEdtefCacheForTests, requestEdtefJson } from "./edtef";
 
 describe("EDTEF directory service", () => {
@@ -6,6 +10,7 @@ describe("EDTEF directory service", () => {
   beforeEach(() => {
     clearEdtefCacheForTests();
     process.env.EDTEF_API_KEY = "test-key";
+    vi.mocked(consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 86_400 });
     vi.stubGlobal("fetch", vi.fn());
   });
   afterEach(() => {
@@ -23,7 +28,15 @@ describe("EDTEF directory service", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(new Headers(init.headers).get("x-api-key")).toBe("test-key");
+    expect(init.redirect).toBe("error");
     expect(fetchMock.mock.calls[0]?.[0]).not.toContain("test-key");
+    expect(consumeSharedRateLimit).toHaveBeenCalledWith({ namespace: "edtef-upstream", route: "directory-v1", clientKey: "shared-api-key", limit: 8_000, windowMs: 86_400_000 });
+  });
+
+  it("enforces a shared daily upstream request budget before making uncached calls", async () => {
+    vi.mocked(consumeSharedRateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 120 });
+    await expect(requestEdtefJson("directory/v1/states")).rejects.toMatchObject({ status: 429, retryAfter: "120" });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("fails closed when the API key is absent", async () => {
