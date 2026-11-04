@@ -52,7 +52,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           package-manager-cache: false
 
       - name: Enable Corepack
@@ -65,9 +65,6 @@ jobs:
 
       - name: Audit repository engineering baseline
         run: pnpm arsenal:audit
-
-      - name: Audit production dependencies
-        run: pnpm audit --prod
 
       - name: Lint
         run: pnpm lint
@@ -94,4 +91,7 @@ jobs:
         run: pnpm test
 
       - name: Build production bundle
-        run: pnpm build
+        run: pnpm build:vercel
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
