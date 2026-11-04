@@ -76,4 +76,52 @@ describe("rate-limit connection lifecycle", () => {
     expect(conn.destroy).toHaveBeenCalledTimes(1);
     expect(conn.release).not.toHaveBeenCalled();
   });
+
+  it("releases after a swallowed non-timeout cleanup error", async () => {
+    const error = Object.assign(new Error("cleanup unavailable"), { code: "ECONNRESET" });
+    const conn = connection(vi.fn().mockRejectedValue(error));
+
+    await expect(withRateLimitConnection(conn, async query => {
+      try {
+        await query({ sql: "DELETE cleanup" });
+      } catch {
+        return "counted";
+      }
+      return "counted";
+    })).resolves.toBe("counted");
+
+    expect(conn.destroy).not.toHaveBeenCalled();
+    expect(conn.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases after an operation error outside the query wrapper", async () => {
+    const conn = connection(vi.fn().mockResolvedValue([[], []]));
+    const error = new Error("post-query processing failed");
+
+    await expect(withRateLimitConnection(conn, async () => {
+      throw error;
+    })).rejects.toBe(error);
+
+    expect(conn.destroy).not.toHaveBeenCalled();
+    expect(conn.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not release or destroy more than once after repeated timeout handling", async () => {
+    const timeout = Object.assign(new Error("query timed out"), { code: "PROTOCOL_SEQUENCE_TIMEOUT" });
+    const conn = connection(vi.fn().mockRejectedValue(timeout));
+
+    await expect(withRateLimitConnection(conn, async query => {
+      for (let index = 0; index < 2; index += 1) {
+        try {
+          await query({ sql: "DELETE cleanup" });
+        } catch {
+          // The cleanup caller may swallow this, but the connection stays destroyed.
+        }
+      }
+      return "counted";
+    })).resolves.toBe("counted");
+
+    expect(conn.destroy).toHaveBeenCalledTimes(1);
+    expect(conn.release).not.toHaveBeenCalled();
+  });
 });
