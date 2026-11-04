@@ -597,7 +597,7 @@ export const nsosRouter = router({
             name: z.string().trim().min(2).max(160),
             destinationUrl: z.string().url().max(2048),
             commissionType: z.enum(["percentage", "fixed"]),
-            commissionValue: z.string().regex(/^\d+(?:\\.\d{1,2})?$/),
+            commissionValue: z.string().regex(/^\d+(?:\.\d{1,2})?$/),
             currency: z.string().trim().min(3).max(8).default("NGN"),
             attributionDays: z.number().int().min(1).max(180).default(30),
             termsVersion: z.string().trim().max(64).optional(),
@@ -616,7 +616,7 @@ export const nsosRouter = router({
             commissionType: z.enum(["percentage", "fixed"]).optional(),
             commissionValue: z
               .string()
-              .regex(/^\d+(?:\\.\d{1,2})?$/)
+              .regex(/^\d+(?:\.\d{1,2})?$/)
               .optional(),
             currency: z.string().trim().min(3).max(8).optional(),
             attributionDays: z.number().int().min(1).max(180).optional(),
