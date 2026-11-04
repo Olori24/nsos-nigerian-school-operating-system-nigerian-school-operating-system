@@ -4,7 +4,7 @@ import {
   RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
   rateLimitDatabasePoolOptions,
 } from "./db/core";
-import { withRateLimitConnection } from "./db.rate-limit-connection";
+import { withRateLimitConnection, type RateLimitQuery } from "./db.rate-limit-connection";
 
 describe("shared rate-limit database pool", () => {
   it("fails fast under pool saturation and bounds connection establishment", () => {
@@ -23,7 +23,7 @@ describe("shared rate-limit database pool", () => {
 });
 
 describe("rate-limit connection lifecycle", () => {
-  function connection(query: (...args: unknown[]) => Promise<unknown>) {
+  function connection(query: RateLimitQuery) {
     return { query: vi.fn(query), destroy: vi.fn(), release: vi.fn() };
   }
 
