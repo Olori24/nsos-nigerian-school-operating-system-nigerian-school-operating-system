@@ -1,4 +1,8 @@
+import { consumeSharedRateLimit } from "./db";
+
 const EDTEF_BASE_URL = "https://api.edtef.org/public";
+const UPSTREAM_DAILY_LIMIT = 8_000;
+const UPSTREAM_WINDOW_MS = 24 * 60 * 60 * 1000;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 500;
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -53,10 +57,27 @@ export async function requestEdtefJson(path: string, query = new URLSearchParams
   const cached = readCache(cacheId, now);
   if (cached !== undefined) return cached;
 
+  let budget: Awaited<ReturnType<typeof consumeSharedRateLimit>>;
+  try {
+    budget = await consumeSharedRateLimit({
+      namespace: "edtef-upstream",
+      route: "directory-v1",
+      clientKey: "shared-api-key",
+      limit: UPSTREAM_DAILY_LIMIT,
+      windowMs: UPSTREAM_WINDOW_MS,
+    });
+  } catch {
+    throw new EdtefApiError("EDTEF request protection is temporarily unavailable.", 503);
+  }
+  if (!budget.allowed) {
+    throw new EdtefApiError("EDTEF request budget reached. Please retry after the daily reset.", 429, String(budget.retryAfterSeconds));
+  }
+
   let response: Response;
   try {
     response = await fetch(`${EDTEF_BASE_URL}/${normalizedPath}${query.size ? `?${query.toString()}` : ""}`, {
       method: "GET",
+      redirect: "error",
       headers: { "x-api-key": key, Accept: "application/json" },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
