@@ -45,6 +45,15 @@ describe("EDTEF directory service", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("fails closed when the shared quota store is unavailable", async () => {
+    vi.mocked(consumeSharedRateLimit).mockRejectedValue(new Error("database unavailable"));
+    await expect(requestEdtefJson("directory/v1/states")).rejects.toMatchObject({
+      status: 503,
+      message: "EDTEF request protection is temporarily unavailable.",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("rejects paths outside the allowlisted EDTEF directory resources", async () => {
     await expect(requestEdtefJson("directory/v1/schools.csv")).rejects.toMatchObject({ status: 400 });
     expect(fetch).not.toHaveBeenCalled();
