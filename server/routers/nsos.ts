@@ -5492,7 +5492,10 @@ export const nsosRouter = router({
         quietHoursStart: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
         quietHoursEnd: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
         timezone: z.literal("Africa/Lagos").default("Africa/Lagos"),
-      }))
+      }).refine(
+        input => input.status !== "active" || input.channel === "in_app",
+        { message: "External channels cannot be activated until provider readiness is verified.", path: ["channel"] },
+      ))
       .mutation(async ({ ctx, input }) => {
         const result = await db.saveCashAssuranceReminderPolicy({
           ...input,
