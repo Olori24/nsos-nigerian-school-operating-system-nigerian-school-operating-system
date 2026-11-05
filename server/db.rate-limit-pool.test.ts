@@ -13,6 +13,10 @@ import {
 } from "./db/core";
 import { withRateLimitConnection, type RateLimitQuery } from "./db.rate-limit-connection";
 
+function connection(query: RateLimitQuery) {
+  return { query: vi.fn(query), destroy: vi.fn(), release: vi.fn() };
+}
+
 describe("rate-limit database pool isolation", () => {
   it("preserves bounded concurrency for existing application rate limits", () => {
     const options = rateLimitDatabasePoolOptions("mysql://user:password@example.test/nsos");
@@ -38,10 +42,6 @@ describe("rate-limit database pool isolation", () => {
 });
 
 describe("rate-limit connection lifecycle", () => {
-  function connection(query: RateLimitQuery) {
-    return { query: vi.fn(query), destroy: vi.fn(), release: vi.fn() };
-  }
-
   for (const statement of ["INSERT", "SELECT", "DELETE cleanup"]) {
     it(`destroys the connection and never releases it when ${statement} times out`, async () => {
       const timeout = Object.assign(new Error("query timed out"), { code: "PROTOCOL_SEQUENCE_TIMEOUT" });
