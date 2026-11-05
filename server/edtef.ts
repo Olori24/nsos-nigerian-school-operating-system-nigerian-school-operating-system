@@ -45,6 +45,7 @@ function writeCache(key: string, value: unknown, now: number) {
   responseCache.set(key, { value, expiresAt: now + CACHE_TTL_MS });
 }
 
+/** Fetches an allowlisted EDTEF directory resource with shared quota enforcement and caching. */
 export async function requestEdtefJson(path: string, query = new URLSearchParams()) {
   const key = apiKey();
   if (!key) throw new EdtefApiError("EDTEF directory integration is not configured.", 503);
@@ -120,6 +121,7 @@ export async function requestEdtefJson(path: string, query = new URLSearchParams
   return value;
 }
 
+/** Clears the in-memory EDTEF response cache for isolated tests. */
 export function clearEdtefCacheForTests() {
   responseCache.clear();
 }
