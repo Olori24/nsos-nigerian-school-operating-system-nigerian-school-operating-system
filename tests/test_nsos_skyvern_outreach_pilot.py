@@ -2,6 +2,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest.mock import patch
 
 MODULE_PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "nsos-skyvern-outreach-pilot.py"
 SPEC = importlib.util.spec_from_file_location("nsos_skyvern_pilot", MODULE_PATH)
@@ -10,6 +11,10 @@ SPEC.loader.exec_module(PILOT)
 
 
 class PilotSafetyTests(unittest.TestCase):
+    @patch("nsos_skyvern_pilot.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))])
+    def test_accepts_public_https_url(self, _dns):
+        self.assertEqual(PILOT.validate_public_https_url("https://example.com/contact"), "example.com")
+
     def test_rejects_plain_http(self):
         with self.assertRaises(ValueError):
             PILOT.validate_public_https_url("http://example.com")
