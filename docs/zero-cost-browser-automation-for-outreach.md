@@ -64,7 +64,9 @@ Official references:
 ## First pilot: one Nigerian school
 
 ### Input
-- One school name and its official public website URL, supplied by the outreach operator.
+- Selected existing outreach prospect: New Horizon Private Schools, Abuja.
+- Pilot target URL: https://newhorizonprivateschools.com/ (official homepage).
+- Preliminary public-page references: /about, /contact, and /admissions. These are candidate pages from web research, not yet confirmed by a Skyvern browser run.
 - Scope: public pages only (home, about, contact, admissions).
 - No login, CAPTCHA bypass, account creation, or form submission.
 
@@ -131,7 +133,8 @@ The pilot is accepted only when all are true:
 | Pilot workflow and extraction contract | Documented |
 | Skyvern local-mode worker code and workflow | Added; execution not yet verified |
 | Local Qwen2.5-VL inference workflow configuration | Added; model startup not yet verified |
-| Real school website browser run | Pending manual workflow dispatch and live run |
+| New Horizon Private Schools, Abuja pilot target selected | Verified against existing outreach prospect list and official website |
+| Real school website browser run | Pending PR merge and manual workflow dispatch |
 | NSOS application / outreach-queue integration | Blocked pending authenticated OIDC result sink and private persistence |
 | End-to-end outreach acceptance test | Blocked pending workflow execution and secure result integration |
 
