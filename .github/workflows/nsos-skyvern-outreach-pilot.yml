@@ -1,0 +1,80 @@
+name: NSOS Skyvern Outreach Pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Official HTTPS website URL for one public organisation"
+        required: true
+        type: string
+      target_kind:
+        description: "Keep Nigerian schools separate from international businesses"
+        required: true
+        type: choice
+        options:
+          - school
+          - business
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nsos-skyvern-outreach-pilot
+  cancel-in-progress: false
+
+jobs:
+  verify-public-contact:
+    name: Run one isolated public-website verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ENABLE_OLLAMA: "true"
+      ENABLE_OPENAI: "false"
+      LLM_KEY: OLLAMA
+      OLLAMA_SERVER_URL: http://127.0.0.1:11434
+      OLLAMA_MODEL: qwen2.5vl:3b
+      OLLAMA_SUPPORTS_VISION: "true"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      ENABLE_URL_VALIDATION: "true"
+      NSOS_TARGET_URL: ${{ inputs.target_url }}
+      NSOS_TARGET_KIND: ${{ inputs.target_kind }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Check out NSOS
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install local Skyvern runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "skyvern[local]"
+          python -m playwright install --with-deps chromium
+
+      - name: Start local Ollama and load the vision model
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve > /tmp/nsos-ollama.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null
+          ollama pull qwen2.5vl:3b
+          ollama show qwen2.5vl:3b >/dev/null
+
+      - name: Run bounded Skyvern extraction
+        run: python scripts/nsos-skyvern-outreach-pilot.py
+
+      - name: Confirm no external outreach occurred
+        if: always()
+        run: |
+          echo "This pilot does not send email, submit forms, log in, register, or change prospect or website data."
+          echo "The runner is ephemeral. Extracted contact values are not printed, uploaded, or persisted."
