@@ -76,7 +76,7 @@ Return one record with:
 - `organisation_name`
 - `official_website`
 - `country`
-- `school_type`
+- `organisation_type`
 - `public_contact_email` (only if visibly published)
 - `public_phone` (only if visibly published)
 - `contact_page_url`
