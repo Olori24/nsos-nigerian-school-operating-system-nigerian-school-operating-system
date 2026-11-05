@@ -155,7 +155,10 @@ Return only data matching the supplied JSON schema.
         phone = payload.get("public_phone")
         email_ok = isinstance(email, str) and "@" in email and len(email) <= 254
         phone_ok = isinstance(phone, str) and len(phone.strip()) >= 7
-        passed = name_ok and country_ok and website_ok and bool(evidence)
+        review_required_ok = payload.get("review_required") is True
+        contact_page_ok = payload.get("contact_page_url") is None or same_host(payload.get("contact_page_url"), host)
+        admissions_page_ok = payload.get("admissions_page_url") is None or same_host(payload.get("admissions_page_url"), host)
+        passed = name_ok and country_ok and website_ok and bool(evidence) and review_required_ok and contact_page_ok and admissions_page_ok
 
         summary = {
             "status": "passed" if passed else "needs_review",
@@ -165,6 +168,9 @@ Return only data matching the supplied JSON schema.
             "organisation_name_verified": name_ok,
             "nigerian_school_country_verified": country_ok,
             "official_website_matches_target": website_ok,
+            "review_required_flag_verified": review_required_ok,
+            "contact_page_matches_target": contact_page_ok,
+            "admissions_page_matches_target": admissions_page_ok,
             "evidence_pages_on_target_host": len(evidence),
             "public_email_found": email_ok,
             "public_phone_found": phone_ok,
