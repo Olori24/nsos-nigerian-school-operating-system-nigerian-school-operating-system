@@ -1,6 +1,8 @@
 import { consumeSharedRateLimit } from "./db";
 
 const EDTEF_BASE_URL = "https://api.edtef.org/public";
+const UPSTREAM_SECOND_LIMIT = 5;
+const UPSTREAM_SECOND_WINDOW_MS = 1_000;
 const UPSTREAM_DAILY_LIMIT = 8_000;
 const UPSTREAM_WINDOW_MS = 24 * 60 * 60 * 1000;
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -57,20 +59,35 @@ export async function requestEdtefJson(path: string, query = new URLSearchParams
   const cached = readCache(cacheId, now);
   if (cached !== undefined) return cached;
 
-  let budget: Awaited<ReturnType<typeof consumeSharedRateLimit>>;
+  let secondBudget: Awaited<ReturnType<typeof consumeSharedRateLimit>>;
+  let dailyBudget: Awaited<ReturnType<typeof consumeSharedRateLimit>>;
   try {
-    budget = await consumeSharedRateLimit({
+    secondBudget = await consumeSharedRateLimit({
       namespace: "edtef-upstream",
-      route: "directory-v1",
+      route: "directory-v1-per-second",
       clientKey: "shared-api-key",
-      limit: UPSTREAM_DAILY_LIMIT,
-      windowMs: UPSTREAM_WINDOW_MS,
+      limit: UPSTREAM_SECOND_LIMIT,
+      windowMs: UPSTREAM_SECOND_WINDOW_MS,
     });
+    if (secondBudget.allowed) {
+      dailyBudget = await consumeSharedRateLimit({
+        namespace: "edtef-upstream",
+        route: "directory-v1-daily",
+        clientKey: "shared-api-key",
+        limit: UPSTREAM_DAILY_LIMIT,
+        windowMs: UPSTREAM_WINDOW_MS,
+      });
+    } else {
+      dailyBudget = { allowed: false, retryAfterSeconds: secondBudget.retryAfterSeconds };
+    }
   } catch {
     throw new EdtefApiError("EDTEF request protection is temporarily unavailable.", 503);
   }
-  if (!budget.allowed) {
-    throw new EdtefApiError("EDTEF request budget reached. Please retry after the daily reset.", 429, String(budget.retryAfterSeconds));
+  if (!secondBudget.allowed) {
+    throw new EdtefApiError("EDTEF request rate reached. Please retry shortly.", 429, String(secondBudget.retryAfterSeconds));
+  }
+  if (!dailyBudget.allowed) {
+    throw new EdtefApiError("EDTEF request budget reached. Please retry after the daily reset.", 429, String(dailyBudget.retryAfterSeconds));
   }
 
   let response: Response;
