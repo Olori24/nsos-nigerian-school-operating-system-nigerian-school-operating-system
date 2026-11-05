@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """One-shot, public-page-only NSOS outreach pilot using local Skyvern inference.
 
-The worker deliberately never prints or persists extracted contact values. The
-GitHub Actions runner is ephemeral; only a redacted verification summary is
-written to the workflow summary.
+Never print or persist extracted contact values. The GitHub Actions runner is
+ephemeral; only a redacted verification summary is written to the run summary.
 """
 from __future__ import annotations
 
@@ -51,15 +50,12 @@ def validate_public_https_url(raw: str) -> str:
     if parsed.username or parsed.password or parsed.port not in (None, 443):
         raise ValueError("Credentials and non-standard ports are not permitted")
     host = parsed.hostname.lower().rstrip(".")
-    if host in {"localhost"} or host.endswith((".localhost", ".local", ".internal")):
+    if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
         raise ValueError("Private and local hostnames are not permitted")
     try:
-        literal = ipaddress.ip_address(host)
-        if not literal.is_global:
-            raise ValueError("Target IP must be globally routable")
-    except ValueError as exc:
-        if "does not appear to be an IPv4 or IPv6 address" not in str(exc):
-            raise
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
     else:
         raise ValueError("IP-literal targets are not permitted")
     try:
@@ -106,8 +102,6 @@ async def main() -> int:
     host = validate_public_https_url(target)
     if kind not in {"school", "business"}:
         raise ValueError("Target kind must be school or business")
-    if kind == "school" and not host.endswith(".ng"):
-        raise ValueError("The school pilot is restricted to Nigerian .ng websites")
 
     from skyvern import Skyvern
 
@@ -140,30 +134,37 @@ Return only data matching the supplied JSON schema.
             wait_for_completion=True,
             timeout=600,
         )
-        raw_status = getattr(result, "status", "unknown")\n        status = str(getattr(raw_status, "value", raw_status))
-        output = getattr(result, "output", None)
-        payload = find_payload(output)
+        raw_status = getattr(result, "status", "unknown")
+        status = str(getattr(raw_status, "value", raw_status))
+        payload = find_payload(getattr(result, "output", None))
         if status != "completed" or payload is None:
             print(f"NSOS_SKYVERN_RESULT status={status} schema_valid=false")
             return 2
 
         evidence = payload.get("evidence_urls") or []
-        evidence = [u for u in evidence if same_host(u, host)]
+        if not isinstance(evidence, list):
+            evidence = []
+        evidence = [url for url in evidence if same_host(url, host)]
         official = payload.get("official_website")
-        name_ok = bool((payload.get("organisation_name") or "").strip())
+        organisation_name = payload.get("organisation_name")
+        name_ok = isinstance(organisation_name, str) and bool(organisation_name.strip())
+        country = str(payload.get("country") or "").strip().lower()
+        country_ok = kind != "school" or "nigeria" in country
         website_ok = same_host(official, host)
         email = payload.get("public_contact_email")
         phone = payload.get("public_phone")
         email_ok = isinstance(email, str) and "@" in email and len(email) <= 254
         phone_ok = isinstance(phone, str) and len(phone.strip()) >= 7
-        passed = name_ok and website_ok and country_ok and bool(evidence)
+        passed = name_ok and country_ok and website_ok and bool(evidence)
+
         summary = {
             "status": "passed" if passed else "needs_review",
             "target_kind": kind,
             "target_host": host,
             "skyvern_status": status,
             "organisation_name_verified": name_ok,
-            "official_website_matches_target": website_ok,\n            "nigerian_school_country_verified": country_ok,
+            "nigerian_school_country_verified": country_ok,
+            "official_website_matches_target": website_ok,
             "evidence_pages_on_target_host": len(evidence),
             "public_email_found": email_ok,
             "public_phone_found": phone_ok,
@@ -189,6 +190,6 @@ if __name__ == "__main__":
     try:
         sys.exit(asyncio.run(main()))
     except Exception as exc:
-        # Deliberately suppress exception text: it can contain URLs or page data.
+        # Exception text can contain URLs or page data; report only the class.
         print(f"NSOS_SKYVERN_RESULT status=failed error_type={type(exc).__name__}")
         sys.exit(1)
