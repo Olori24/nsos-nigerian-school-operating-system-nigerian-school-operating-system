@@ -36,7 +36,7 @@ const products = [
     href: "https://samura-ai.vercel.app",
     action: "Open SAMURA AI",
     icon: Sparkles,
-    status: "Live preview",
+    status: "Preview · access may be restricted",
   },
   {
     name: "Opportunity Radar Africa",
