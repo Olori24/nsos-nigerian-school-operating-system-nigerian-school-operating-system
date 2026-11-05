@@ -133,6 +133,7 @@ let _edtefRateLimitPool: Pool | null = null;
 export const DB_POOL_CONNECTION_LIMIT = 5;
 export const DB_POOL_QUEUE_LIMIT = 20;
 
+/** Returns the bounded connection-pool settings shared by NSOS database clients. */
 export function databasePoolOptions(uri: string) {
   return {
     uri,
