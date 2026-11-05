@@ -35,6 +35,8 @@ class PilotSafetyTests(unittest.TestCase):
         self.assertFalse(PILOT.same_host("https://other.example/contact", "school.example"))
         self.assertFalse(PILOT.same_host("http://school.example/contact", "school.example"))
         self.assertFalse(PILOT.same_host("https://sub.school.example/contact", "school.example"))
+        self.assertFalse(PILOT.same_host("https://user:pass@school.example/contact", "school.example"))
+        self.assertFalse(PILOT.same_host("https://school.example:8443/contact", "school.example"))
 
     def test_finds_nested_structured_payload(self):
         expected = {"organisation_name": "Example School", "evidence_urls": ["https://school.example"]}
