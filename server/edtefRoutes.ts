@@ -31,6 +31,7 @@ function route(handler: (request: Request) => Promise<unknown>) {
   };
 }
 
+/** Registers the read-only, validated EDTEF directory proxy endpoints. */
 export function registerEdtefRoutes(app: Express) {
   app.get("/api/edtef/states", route(() => requestEdtefJson("directory/v1/states")));
 
