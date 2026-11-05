@@ -354,6 +354,7 @@ export async function listSecurityAuditEvents(schoolId: number, limit = 50) {
   return (await database()).select({ id: securityAuditEvents.id, actorUserId: securityAuditEvents.actorUserId, eventType: securityAuditEvents.eventType, targetType: securityAuditEvents.targetType, targetId: securityAuditEvents.targetId, metadata: securityAuditEvents.metadata, occurredAt: securityAuditEvents.occurredAt }).from(securityAuditEvents).where(eq(securityAuditEvents.schoolId, schoolId)).orderBy(desc(securityAuditEvents.occurredAt)).limit(Math.min(Math.max(limit, 1), 100));
 }
 
+/** Atomically increments and evaluates a shared, namespaced database-backed rate-limit bucket. */
 export async function consumeSharedRateLimit(input: { namespace: string; route: string; clientKey: string; limit: number; windowMs: number; now?: number }) {
   const now = input.now ?? Date.now();
   const windowStartedAt = Math.floor(now / input.windowMs) * input.windowMs;
