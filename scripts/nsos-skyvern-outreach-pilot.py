@@ -92,7 +92,17 @@ def same_host(raw: str | None, expected_host: str) -> bool:
     if not raw:
         return False
     parsed = urlparse(raw)
-    return parsed.scheme == "https" and parsed.hostname == expected_host
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and parsed.hostname == expected_host
+        and not parsed.username
+        and not parsed.password
+        and port in (None, 443)
+    )
 
 
 async def main() -> int:
