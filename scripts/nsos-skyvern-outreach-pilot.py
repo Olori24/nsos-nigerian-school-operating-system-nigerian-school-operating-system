@@ -140,7 +140,7 @@ Return only data matching the supplied JSON schema.
             wait_for_completion=True,
             timeout=600,
         )
-        status = str(getattr(result, "status", "unknown"))
+        raw_status = getattr(result, "status", "unknown")\n        status = str(getattr(raw_status, "value", raw_status))
         output = getattr(result, "output", None)
         payload = find_payload(output)
         if status != "completed" or payload is None:
@@ -156,14 +156,14 @@ Return only data matching the supplied JSON schema.
         phone = payload.get("public_phone")
         email_ok = isinstance(email, str) and "@" in email and len(email) <= 254
         phone_ok = isinstance(phone, str) and len(phone.strip()) >= 7
-        passed = name_ok and website_ok and bool(evidence)
+        passed = name_ok and website_ok and country_ok and bool(evidence)
         summary = {
             "status": "passed" if passed else "needs_review",
             "target_kind": kind,
             "target_host": host,
             "skyvern_status": status,
             "organisation_name_verified": name_ok,
-            "official_website_matches_target": website_ok,
+            "official_website_matches_target": website_ok,\n            "nigerian_school_country_verified": country_ok,
             "evidence_pages_on_target_host": len(evidence),
             "public_email_found": email_ok,
             "public_phone_found": phone_ok,
