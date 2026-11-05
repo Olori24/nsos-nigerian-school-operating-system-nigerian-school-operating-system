@@ -21,42 +21,43 @@ Use self-hosted Skyvern as the AI-directed browser layer, with Playwright as the
 
 ## NSOS hosting boundary
 
-The browser worker is an NSOS-operated backend service. It must not depend on an operator's laptop or phone, and it must not be exposed as a public unauthenticated browser-control endpoint.
+The browser worker is NSOS-operated infrastructure. It must not depend on an operator's laptop or phone, and it must not be exposed as a public unauthenticated browser-control endpoint.
 
-### Verified hosting assessment (5 November 2026)
+### Hosting assessment (5 November 2026)
 
-The connected Vercel account reports the NSOS-linked project as `nsos-vercel-migration` on the Hobby plan. The project currently reports `live: false`, and its latest production deployment is in an error state. Vercel Hobby is also documented as intended for non-commercial, personal use. This is not an approved production hosting target for NSOS commercial outreach.
+The connected Vercel project `nsos-vercel-migration` is on the Hobby plan, reports `live: false`, and its latest production deployment is in an error state. Vercel Functions are request-scoped serverless compute, not a persistent Docker host for Skyvern's API, Chromium, database, and worker lifecycle. Vercel Hobby is documented for non-commercial/personal use, so it is not the selected NSOS commercial worker host.
 
-Vercel Functions are serverless request handlers with finite execution, memory, and bundle limits. They are not a persistent Docker host for Skyvern's API, Chromium browser, database, and worker lifecycle. Do not try to install the full Skyvern stack inside the NSOS Express/Vercel function bundle.
+The NSOS GitHub repository is public. GitHub documents standard GitHub-hosted runners for public repositories as free and unlimited, with an Ubuntu standard runner providing 4 CPUs, 16 GB RAM, and 14 GB SSD. Skyvern's current self-hosting documentation supports Python local mode and a local Ollama model. The Qwen2.5-VL 3B Ollama model is a 3.2 GB vision model. This makes an **ephemeral GitHub Actions batch worker** the best zero-spend pilot candidate, not a permanently running service.
 
-Skyvern's official Docker setup documents at least 4 GB of available RAM and a configured LLM provider. Self-hosting removes the Skyvern Cloud subscription, but does not remove compute or model-inference requirements.
+### Implemented pilot worker
 
-### Required architecture
+The branch now includes:
 
-- **NSOS app:** owns authentication, role checks, job creation, approval state, audit records, and the outreach ledger.
-- **Browser worker:** runs separately as an NSOS-controlled backend worker. It accepts only signed, scoped jobs from the NSOS queue and returns structured evidence.
-- **Skyvern:** provides AI-directed browser execution only when an approved worker host and a zero-cost inference path are available.
-- **Playwright:** provides deterministic navigation and browser checks for known page structures; it is not represented as an AI agent.
-- **Storage:** persists job state and evidence references in NSOS-owned storage. Do not store browser profiles or session cookies in the prospect ledger.
-- **Resend:** remains separate. No browser job can send email or submit a contact form.
+- `.github/workflows/nsos-skyvern-outreach-pilot.yml`: manually dispatched, one-target-at-a-time workflow on `ubuntu-24.04`.
+- `scripts/nsos-skyvern-outreach-pilot.py`: Skyvern local-mode task runner with Qwen2.5-VL 3B via Ollama.
+- URL validation requiring HTTPS, rejecting private/local/IP-literal targets and DNS results that resolve to non-public addresses.
+- A bounded 10-step task and 10-minute execution timeout.
+- Public pages only, same-host navigation instructions, and a structured evidence schema.
+- No login, CAPTCHA bypass, form submission, email, registration, downloads, payment, or website mutation.
+- Redacted run output: actual email and phone values are not printed, uploaded as artifacts, or persisted by this pilot.
+- One ephemeral runner per run; it is destroyed when the job finishes.
 
-### Zero-cost deployment gate
+The workflow is deliberately manual. It has no schedule and does not connect to the NSOS outreach queue. The public repository's workflow metadata and target hostname are visible to repository readers; therefore this pilot must only be used with public organisation websites and non-confidential URLs. It must never receive credentials, private prospect data, or session cookies.
 
-Do not deploy or enable a paid service to get around the current hosting gap. Before enabling a live worker, verify all of the following:
+### Production integration gate
 
-1. NSOS has an approved server/container execution environment with sufficient RAM, persistent job storage, outbound HTTPS, and private service-to-service authentication.
-2. The worker can run without relying on the user's personal devices.
-3. Skyvern can complete a test using local inference or a provider with an explicitly confirmed free quota and no automatic paid fallback.
-4. Usage limits, retention, secrets handling, URL allowlisting, and network isolation are configured.
-5. The worker can be stopped or disabled without affecting the NSOS application.
+A GitHub Actions runner is ephemeral, not an always-on worker. The pilot proves whether local Skyvern and local inference can execute in the available zero-cost compute; it does not by itself provide durable queue processing or private storage.
 
-A GitHub Actions runner may be evaluated as an **ephemeral batch runner** for a controlled pilot, but it is not a persistent Skyvern service and must not be described as NSOS production hosting. Any such use must be checked against repository visibility, Actions quotas, and the chosen model's free-tier conditions before activation.
+Before production outreach integration, NSOS must provide a secure result sink and job-claim protocol. Preferred design: a short-lived GitHub Actions OIDC identity scoped to this exact repository/workflow/ref, verified by an NSOS API endpoint; the endpoint then validates the job, stores evidence in the NSOS ledger, and returns only the next approved task. Do not add a long-lived database password or application secret to a public repository. Until that endpoint and private result persistence exist, the pilot's extracted contact values remain in runner memory and are discarded.
 
-Until a compliant host and inference path are verified, the correct state is **deployment blocked**. Do not substitute the operator's laptop, the Samsung A16, a Vercel Function, or an unapproved free trial.
+No automatic schedule, paid model provider, Skyvern Cloud account, proxy, CAPTCHA service, or paid infrastructure is enabled.
 
 Official references:
-- Skyvern self-hosting: https://github.com/Skyvern-AI/skyvern/blob/main/docs/developers/self-hosted/overview.mdx
-- Skyvern Docker requirements: https://github.com/Skyvern-AI/skyvern/blob/main/docs/developers/self-hosted/docker.mdx
+- Skyvern self-hosted and local mode: https://github.com/Skyvern-AI/skyvern/blob/main/docs/developers/self-hosted/overview.mdx
+- Skyvern SDK local mode and task API: https://github.com/Skyvern-AI/skyvern/blob/main/docs/sdk-reference/overview.mdx
+- GitHub Actions free public-repository runners: https://docs.github.com/en/actions/concepts/billing-and-usage
+- GitHub runner specifications: https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job
+- Ollama Qwen2.5-VL 3B: https://ollama.com/library/qwen2.5vl:3b
 - Vercel Function limits: https://vercel.com/docs/functions/limitations
 - Vercel Hobby plan: https://vercel.com/docs/plans/hobby
 
@@ -128,10 +129,10 @@ The pilot is accepted only when all are true:
 | Zero-spend and no-paid-fallback policy | Documented |
 | Security and human-approval boundary | Documented |
 | Pilot workflow and extraction contract | Documented |
-| Skyvern installed on a user-controlled host | Not yet verified |
-| Local inference configured | Not yet verified |
-| Real school website browser run | Not yet executed |
-| NSOS application integration | Not yet implemented |
-| End-to-end outreach acceptance test | Blocked pending a working local Skyvern host and a supplied school URL |
+| Skyvern local-mode worker code and workflow | Added; execution not yet verified |
+| Local Qwen2.5-VL inference workflow configuration | Added; model startup not yet verified |
+| Real school website browser run | Pending manual workflow dispatch and live run |
+| NSOS application / outreach-queue integration | Blocked pending authenticated OIDC result sink and private persistence |
+| End-to-end outreach acceptance test | Blocked pending workflow execution and secure result integration |
 
 This status is intentionally explicit. A Git commit containing this runbook is not evidence that a browser service is running or that a live school record has been verified.
