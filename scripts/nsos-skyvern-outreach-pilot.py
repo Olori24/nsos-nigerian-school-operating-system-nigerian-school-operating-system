@@ -7,6 +7,7 @@ ephemeral; only a redacted verification summary is written to the run summary.
 from __future__ import annotations
 
 import asyncio
+from contextlib import redirect_stderr, redirect_stdout
 import ipaddress
 import json
 import logging
@@ -15,7 +16,6 @@ import socket
 import sys
 from urllib.parse import urlparse
 
-logging.disable(logging.CRITICAL)
 
 SCHEMA = {
     "type": "object",
@@ -103,11 +103,20 @@ async def main() -> int:
     if kind not in {"school", "business"}:
         raise ValueError("Target kind must be school or business")
 
+    logging.disable(logging.CRITICAL)
     from skyvern import Skyvern
 
-    client = Skyvern.local(use_in_memory_db=True)
-    try:
-        prompt = f"""
+    with open(os.devnull, "w", encoding="utf-8") as sink:
+        with redirect_stdout(sink), redirect_stderr(sink):
+            client = Skyvern.local(use_in_memory_db=True)
+            try:
+                return await run_skyvern_task(client, target, host, kind)
+            finally:
+                await client.aclose()
+
+
+async def run_skyvern_task(client, target: str, host: str, kind: str) -> int:
+    prompt = f"""
 You are the NSOS public-website verification worker. Organisation type: {kind}.
 The ONLY permitted hostname is {host}. Start at the supplied official URL.
 Inspect only the homepage and normal public About, Contact, Admissions or
@@ -125,21 +134,21 @@ area. Stop immediately if a CAPTCHA, login wall, unexpected redirect, or
 request to access another hostname appears.
 Return only data matching the supplied JSON schema.
 """
-        result = await client.run_task(
-            prompt=prompt,
-            url=target,
-            title="NSOS public organisation contact verification pilot",
-            data_extraction_schema=SCHEMA,
-            max_steps=10,
-            wait_for_completion=True,
-            timeout=600,
-        )
-        raw_status = getattr(result, "status", "unknown")
-        status = str(getattr(raw_status, "value", raw_status))
-        payload = find_payload(getattr(result, "output", None))
-        if status != "completed" or payload is None:
-            print(f"NSOS_SKYVERN_RESULT status={status} schema_valid=false")
-            return 2
+    result = await client.run_task(
+        prompt=prompt,
+        url=target,
+        title="NSOS public organisation contact verification pilot",
+        data_extraction_schema=SCHEMA,
+        max_steps=10,
+        wait_for_completion=True,
+        timeout=600,
+    )
+    raw_status = getattr(result, "status", "unknown")
+    status = str(getattr(raw_status, "value", raw_status))
+    payload = find_payload(getattr(result, "output", None))
+    if status != "completed" or payload is None:
+        print(f"NSOS_SKYVERN_RESULT status={status} schema_valid=false")
+        return 2
 
         evidence = payload.get("evidence_urls") or []
         if not isinstance(evidence, list):
