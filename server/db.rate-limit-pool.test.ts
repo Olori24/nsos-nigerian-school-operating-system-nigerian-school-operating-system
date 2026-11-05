@@ -1,5 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const poolMocks = vi.hoisted(() => ({ createPool: vi.fn() }));
+
+vi.mock("mysql2", () => ({ createPool: poolMocks.createPool }));
+
 import {
+  consumeSharedRateLimit,
   RATE_LIMIT_DB_CONNECT_TIMEOUT_MS,
   RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
   edtefRateLimitDatabasePoolOptions,
@@ -132,5 +138,44 @@ describe("rate-limit connection lifecycle", () => {
 
     expect(conn.destroy).toHaveBeenCalledTimes(1);
     expect(conn.release).not.toHaveBeenCalled();
+  });
+});
+
+describe("shared rate-limit namespace routing", () => {
+  beforeEach(() => {
+    poolMocks.createPool.mockReset();
+  });
+
+  it("uses the isolated EDTEF pool only for EDTEF upstream quota requests", async () => {
+    const getConnectionByLimit = new Map<number, ReturnType<typeof connection>>();
+    poolMocks.createPool.mockImplementation((options: unknown) => {
+      const connectionLimit = (options as { connectionLimit: number }).connectionLimit;
+      const conn = connection(vi.fn(async ({ sql }: { sql: string }) => {
+        if (sql.startsWith("SELECT")) return [[{ count: 1 }], []] as never;
+        return [{ affectedRows: 1 }, []] as never;
+      }));
+      getConnectionByLimit.set(connectionLimit, conn);
+      return {
+        promise: () => ({ getConnection: vi.fn().mockResolvedValue(conn) }),
+      } as never;
+    });
+
+    const common = {
+      route: "/api/health",
+      clientKey: "test-client",
+      limit: 10,
+      windowMs: 60_000,
+      now: 1_800_000_000_000,
+    };
+
+    await consumeSharedRateLimit({ ...common, namespace: "edtef-upstream" });
+    await consumeSharedRateLimit({ ...common, namespace: "application-api" });
+
+    expect(poolMocks.createPool).toHaveBeenCalledTimes(2);
+    expect(poolMocks.createPool.mock.calls.map(([options]) => (options as { connectionLimit: number }).connectionLimit)).toEqual([3, 5]);
+    expect(getConnectionByLimit.get(3)?.query).toHaveBeenCalledTimes(2);
+    expect(getConnectionByLimit.get(5)?.query).toHaveBeenCalledTimes(2);
+    expect(getConnectionByLimit.get(3)?.release).toHaveBeenCalledTimes(1);
+    expect(getConnectionByLimit.get(5)?.release).toHaveBeenCalledTimes(1);
   });
 });
