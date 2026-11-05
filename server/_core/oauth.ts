@@ -23,7 +23,8 @@ export function registerOAuthRoutes(app: Express) {
     // CSRF guard: the nonce in `state` must match the one-time cookie that
     // startLogin set in the browser that began this login. An attacker can
     // forge `state`, but cannot plant this cookie in the victim's browser.
-    const { nonce } = decodeOAuthState(state);
+    const oauthState = decodeOAuthState(state);
+    const { nonce } = oauthState;
     const expectedNonce = parseCookieHeader(req.headers.cookie ?? "")[OAUTH_STATE_COOKIE];
     if (!nonce || nonce !== expectedNonce) {
       res.status(403).json({ error: "invalid oauth state" });
@@ -61,7 +62,10 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      const callbackUrl = new URL(oauthState.redirectUri);
+      const hostname = callbackUrl.hostname;
+      const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+      res.redirect(302, `${callbackUrl.origin}${isPlatformHost ? "/app" : "/"}`);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });
