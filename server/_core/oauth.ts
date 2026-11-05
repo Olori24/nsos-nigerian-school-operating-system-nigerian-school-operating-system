@@ -1,7 +1,9 @@
 import { COOKIE_NAME, ONE_YEAR_MS, OAUTH_STATE_COOKIE, decodeOAuthState } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
+import rateLimit from "express-rate-limit";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
+import { createRateLimitMiddleware } from "../security";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 
@@ -11,7 +13,11 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
-  app.get("/api/oauth/callback", async (req: Request, res: Response) => {
+  app.get(
+    "/api/oauth/callback",
+    rateLimit({ windowMs: 10 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false }),
+    createRateLimitMiddleware({ namespace: "oauth-callback", limit: 20, windowMs: 10 * 60_000 }),
+    async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
 
@@ -23,7 +29,8 @@ export function registerOAuthRoutes(app: Express) {
     // CSRF guard: the nonce in `state` must match the one-time cookie that
     // startLogin set in the browser that began this login. An attacker can
     // forge `state`, but cannot plant this cookie in the victim's browser.
-    const { nonce } = decodeOAuthState(state);
+    const oauthState = decodeOAuthState(state);
+    const { nonce } = oauthState;
     const expectedNonce = parseCookieHeader(req.headers.cookie ?? "")[OAUTH_STATE_COOKIE];
     if (!nonce || nonce !== expectedNonce) {
       res.status(403).json({ error: "invalid oauth state" });
@@ -61,10 +68,14 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      const callbackUrl = new URL(oauthState.redirectUri);
+      const hostname = callbackUrl.hostname;
+      const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+      res.redirect(302, `${callbackUrl.origin}${isPlatformHost ? "/app" : "/"}`);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });
     }
-  });
+    }
+  );
 }

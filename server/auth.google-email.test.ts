@@ -135,7 +135,7 @@ describe("external authentication policy", () => {
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=verified-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(302);
-      expect(callback.headers.location).toBe("https://nsos-system-uhkdscaf.manus.space/");
+      expect(callback.headers.location).toBe("https://nsos-system-uhkdscaf.manus.space/app");
       expect(headerText(callback.headers["set-cookie"])).toContain("__Host-google_signin_notice=google_success");
       expect(headerText(callback.headers["set-cookie"])).toContain("Max-Age=60");
       expect(resolveIdentity).toHaveBeenCalledWith(expect.objectContaining({ avatarUrl: "https://lh3.googleusercontent.com/a/verified-profile" }));
@@ -197,7 +197,7 @@ describe("external authentication policy", () => {
     await withAuthRouteServer(async origin => {
       const first = await requestRoute(`${origin}/api/auth/email/verify?token=${"a".repeat(43)}`);
       expect(first.status).toBe(302);
-      expect(first.headers.location).toBe("https://nsos-system-uhkdscaf.manus.space/");
+      expect(first.headers.location).toBe("https://nsos-system-uhkdscaf.manus.space/app");
       expect(headerText(first.headers["set-cookie"])).toContain("app_session_id=");
       expect(acceptStaffInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });
       expect(acceptGuardianInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });

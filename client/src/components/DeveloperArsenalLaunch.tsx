@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Activity, ArrowRight, CheckCircle2, ShieldCheck, Sparkles, Zap } from "lucide-react";
 
 type ArsenalItem = { label: string; detail: string; icon: typeof ShieldCheck };
@@ -13,19 +14,24 @@ const items: ArsenalItem[] = [
 ];
 
 export function DeveloperArsenalLaunch() {
+  const [location] = useLocation();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (location !== "/app") {
+      setOpen(false);
+      return;
+    }
     const seen = window.sessionStorage.getItem("nsos:arsenal-launch-seen");
     if (!seen) setOpen(true);
-  }, []);
+  }, [location]);
 
   const dismiss = () => {
     window.sessionStorage.setItem("nsos:arsenal-launch-seen", "1");
     setOpen(false);
   };
 
-  if (!open) return null;
+  if (location !== "/app" || !open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] overflow-y-auto bg-[#071b16]/80 p-4 backdrop-blur-md sm:p-6">

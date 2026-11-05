@@ -31,6 +31,12 @@ function validOrigin(value: unknown) {
   }
 }
 
+function postSignInPath(origin: string) {
+  const hostname = new URL(origin).hostname;
+  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+  return isPlatformHost ? "/app" : "/";
+}
+
 function validMagicLinkToken(value: string) {
   return /^[A-Za-z0-9_-]{43}$/.test(value);
 }
@@ -166,7 +172,7 @@ export function registerGoogleAuthRoutes(app: Express) {
       const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.picture === "string" ? profile.picture : null });
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
-      res.redirect(302, `${loginState.origin}/`);
+      res.redirect(302, `${loginState.origin}${postSignInPath(loginState.origin)}`);
     } catch {
       writeOperationalEvent("warn", "auth_google_callback_failed", { category: "provider_or_identity_failure" });
       res.status(502).json({ error: "Google sign-in could not be completed. Please try again." });
@@ -202,7 +208,7 @@ export function registerEmailAuthRoutes(app: Express) {
       await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);
-      res.redirect(302, `${origin}/`);
+      res.redirect(302, `${origin}${postSignInPath(origin)}`);
     } catch {
       writeOperationalEvent("warn", "auth_passwordless_verification_failed", { category: "invalid_or_expired_link" });
       res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });

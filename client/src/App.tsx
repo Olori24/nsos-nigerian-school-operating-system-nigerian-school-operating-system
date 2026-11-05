@@ -14,6 +14,7 @@ import { NSOSUpdatePrompt } from "./components/NSOSUpdatePrompt";
 import { DeveloperArsenalLaunch } from "./components/DeveloperArsenalLaunch";
 import { useEffect, useState } from "react";
 import Home from "./pages/Home";
+import EcosystemHome from "./pages/EcosystemHome";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
@@ -38,7 +39,8 @@ function Router() {
     return <DomainSchoolWebsite />;
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={EcosystemHome} />
+      <Route path="/app" component={Home} />
       <Route path="/start" component={LeadCapture} />
       <Route path="/apply/:shortCode" component={PublicAdmissions} />
       <Route path="/school/:shortCode" component={SchoolWebsite} />
