@@ -83,7 +83,7 @@ function ProductCard({ product }: { product: (typeof products)[number] }) {
       <h3 className={`mt-2 text-xl font-semibold tracking-tight ${product.featured ? "text-[#142c22]" : "text-white"}`}>{product.name}</h3>
       <p className={`mt-3 flex-1 text-sm leading-7 ${product.featured ? "text-[#52675b]" : "text-[#b7c8bf]"}`}>{product.description}</p>
       {product.href ? (
-        <a href={product.href} target={product.href.startsWith("http") ? "_blank" : undefined} rel={product.href.startsWith("http") ? "noreferrer" : undefined} className={`mt-6 inline-flex w-fit items-center gap-2 text-sm font-semibold transition group-hover:gap-3 ${product.featured ? "text-[#145b46]" : "text-[#a8dfbc"}`}>
+        <a href={product.href} target={product.href.startsWith("http") ? "_blank" : undefined} rel={product.href.startsWith("http") ? "noreferrer" : undefined} className={`mt-6 inline-flex w-fit items-center gap-2 text-sm font-semibold transition group-hover:gap-3 ${product.featured ? "text-[#145b46]" : "text-[#a8dfbc]"}`}>
           {product.action}<ArrowUpRight size={16} />
         </a>
       ) : (
