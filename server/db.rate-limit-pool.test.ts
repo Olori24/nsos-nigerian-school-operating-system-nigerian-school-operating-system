@@ -2,19 +2,28 @@ import { describe, expect, it, vi } from "vitest";
 import {
   RATE_LIMIT_DB_CONNECT_TIMEOUT_MS,
   RATE_LIMIT_DB_QUERY_TIMEOUT_MS,
+  edtefRateLimitDatabasePoolOptions,
   rateLimitDatabasePoolOptions,
 } from "./db/core";
 import { withRateLimitConnection, type RateLimitQuery } from "./db.rate-limit-connection";
 
-describe("shared rate-limit database pool", () => {
-  it("fails fast under pool saturation and bounds connection establishment", () => {
+describe("rate-limit database pool isolation", () => {
+  it("preserves bounded concurrency for existing application rate limits", () => {
     const options = rateLimitDatabasePoolOptions("mysql://user:password@example.test/nsos");
-    expect(options.connectionLimit).toBe(1);
-    expect(options.maxIdle).toBe(1);
+    expect(options.connectionLimit).toBe(5);
+    expect(options.maxIdle).toBe(5);
+    expect(options.waitForConnections).toBe(true);
+    expect(options.queueLimit).toBe(20);
+    expect(options.connectTimeout).toBe(RATE_LIMIT_DB_CONNECT_TIMEOUT_MS);
+  });
+
+  it("isolates EDTEF quota traffic in a separate fail-fast pool", () => {
+    const options = edtefRateLimitDatabasePoolOptions("mysql://user:password@example.test/nsos");
+    expect(options.connectionLimit).toBe(3);
+    expect(options.maxIdle).toBe(3);
     expect(options.waitForConnections).toBe(false);
     expect(options.queueLimit).toBe(0);
     expect(options.connectTimeout).toBe(RATE_LIMIT_DB_CONNECT_TIMEOUT_MS);
-    expect(options.connectTimeout).toBe(3_000);
   });
 
   it("uses a bounded per-query timeout", () => {
