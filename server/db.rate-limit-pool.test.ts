@@ -168,14 +168,19 @@ describe("shared rate-limit namespace routing", () => {
       now: 1_800_000_000_000,
     };
 
-    await consumeSharedRateLimit({ ...common, namespace: "edtef-upstream" });
-    await consumeSharedRateLimit({ ...common, namespace: "application-api" });
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    try {
+      await consumeSharedRateLimit({ ...common, namespace: "edtef-upstream" });
+      await consumeSharedRateLimit({ ...common, namespace: "application-api" });
 
-    expect(poolMocks.createPool).toHaveBeenCalledTimes(2);
-    expect(poolMocks.createPool.mock.calls.map(([options]) => (options as { connectionLimit: number }).connectionLimit)).toEqual([3, 5]);
-    expect(getConnectionByLimit.get(3)?.query).toHaveBeenCalledTimes(2);
-    expect(getConnectionByLimit.get(5)?.query).toHaveBeenCalledTimes(2);
-    expect(getConnectionByLimit.get(3)?.release).toHaveBeenCalledTimes(1);
-    expect(getConnectionByLimit.get(5)?.release).toHaveBeenCalledTimes(1);
+      expect(poolMocks.createPool).toHaveBeenCalledTimes(2);
+      expect(poolMocks.createPool.mock.calls.map(([options]) => (options as { connectionLimit: number }).connectionLimit)).toEqual([3, 5]);
+      expect(getConnectionByLimit.get(3)?.query).toHaveBeenCalledTimes(2);
+      expect(getConnectionByLimit.get(5)?.query).toHaveBeenCalledTimes(2);
+      expect(getConnectionByLimit.get(3)?.release).toHaveBeenCalledTimes(1);
+      expect(getConnectionByLimit.get(5)?.release).toHaveBeenCalledTimes(1);
+    } finally {
+      random.mockRestore();
+    }
   });
 });
