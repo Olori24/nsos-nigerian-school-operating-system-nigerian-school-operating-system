@@ -111,6 +111,9 @@ async def main() -> int:
     host = validate_public_https_url(target)
     if kind not in {"school", "business"}:
         raise ValueError("Target kind must be school or business")
+    if "--validate-only" in sys.argv:
+        print("NSOS_TARGET_VALIDATION passed")
+        return 0
 
     logging.disable(logging.CRITICAL)
     from skyvern import Skyvern
