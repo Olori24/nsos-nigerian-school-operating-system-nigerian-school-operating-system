@@ -54,6 +54,9 @@ jobs:
       - name: Test URL validation and result parsing
         run: python -m unittest discover -s tests -p "test_nsos_skyvern_outreach_pilot.py" -v
 
+      - name: Validate target URL before model download
+        run: python scripts/nsos-skyvern-outreach-pilot.py --validate-only
+
       - name: Install local Skyvern runtime
         run: |
           python -m pip install --upgrade pip
