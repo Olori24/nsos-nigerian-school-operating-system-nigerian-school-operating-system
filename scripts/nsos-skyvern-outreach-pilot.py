@@ -7,15 +7,14 @@ ephemeral; only a redacted verification summary is written to the run summary.
 from __future__ import annotations
 
 import asyncio
-from contextlib import redirect_stderr, redirect_stdout
 import ipaddress
 import json
 import logging
 import os
 import socket
 import sys
+from contextlib import redirect_stderr, redirect_stdout
 from urllib.parse import urlparse
-
 
 SCHEMA = {
     "type": "object",
@@ -150,55 +149,56 @@ Return only data matching the supplied JSON schema.
         print(f"NSOS_SKYVERN_RESULT status={status} schema_valid=false")
         return 2
 
-        evidence = payload.get("evidence_urls") or []
-        if not isinstance(evidence, list):
-            evidence = []
-        evidence = [url for url in evidence if same_host(url, host)]
-        official = payload.get("official_website")
-        organisation_name = payload.get("organisation_name")
-        name_ok = isinstance(organisation_name, str) and bool(organisation_name.strip())
-        country = str(payload.get("country") or "").strip().lower()
-        country_ok = kind != "school" or "nigeria" in country
-        website_ok = same_host(official, host)
-        email = payload.get("public_contact_email")
-        phone = payload.get("public_phone")
-        email_ok = isinstance(email, str) and "@" in email and len(email) <= 254
-        phone_ok = isinstance(phone, str) and len(phone.strip()) >= 7
-        review_required_ok = payload.get("review_required") is True
-        contact_page_ok = payload.get("contact_page_url") is None or same_host(payload.get("contact_page_url"), host)
-        admissions_page_ok = payload.get("admissions_page_url") is None or same_host(payload.get("admissions_page_url"), host)
-        passed = name_ok and country_ok and website_ok and bool(evidence) and review_required_ok and contact_page_ok and admissions_page_ok
+    evidence = payload.get("evidence_urls") or []
+    if not isinstance(evidence, list):
+        evidence = []
+    evidence = [url for url in evidence if same_host(url, host)]
+    official = payload.get("official_website")
+    organisation_name = payload.get("organisation_name")
+    name_ok = isinstance(organisation_name, str) and bool(organisation_name.strip())
+    country = str(payload.get("country") or "").strip().lower()
+    country_ok = kind != "school" or "nigeria" in country
+    website_ok = same_host(official, host)
+    email = payload.get("public_contact_email")
+    phone = payload.get("public_phone")
+    email_ok = isinstance(email, str) and "@" in email and len(email) <= 254
+    phone_ok = isinstance(phone, str) and len(phone.strip()) >= 7
+    review_required_ok = payload.get("review_required") is True
+    contact_page_ok = payload.get("contact_page_url") is None or same_host(payload.get("contact_page_url"), host)
+    admissions_page_ok = payload.get("admissions_page_url") is None or same_host(payload.get("admissions_page_url"), host)
+    passed = (
+        name_ok and country_ok and website_ok and bool(evidence)
+        and review_required_ok and contact_page_ok and admissions_page_ok
+    )
 
-        summary = {
-            "status": "passed" if passed else "needs_review",
-            "target_kind": kind,
-            "target_host": host,
-            "skyvern_status": status,
-            "organisation_name_verified": name_ok,
-            "nigerian_school_country_verified": country_ok,
-            "official_website_matches_target": website_ok,
-            "review_required_flag_verified": review_required_ok,
-            "contact_page_matches_target": contact_page_ok,
-            "admissions_page_matches_target": admissions_page_ok,
-            "evidence_pages_on_target_host": len(evidence),
-            "public_email_found": email_ok,
-            "public_phone_found": phone_ok,
-            "human_review_required": True,
-            "external_actions": "none",
-            "contact_values_persisted": False,
-        }
-        print("NSOS_SKYVERN_RESULT " + json.dumps(summary, sort_keys=True))
-        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-        if summary_path:
-            with open(summary_path, "a", encoding="utf-8") as handle:
-                handle.write("## NSOS Skyvern pilot result\n\n")
-                handle.write("| Check | Result |\n|---|---|\n")
-                for key, value in summary.items():
-                    handle.write(f"| {key.replace('_', ' ')} | {value} |\n")
-                handle.write("\nContact values are intentionally not printed or stored by this public-repository pilot.\n")
-        return 0 if passed else 3
-    finally:
-        await client.aclose()
+    summary = {
+        "status": "passed" if passed else "needs_review",
+        "target_kind": kind,
+        "target_host": host,
+        "skyvern_status": status,
+        "organisation_name_verified": name_ok,
+        "nigerian_school_country_verified": country_ok,
+        "official_website_matches_target": website_ok,
+        "review_required_flag_verified": review_required_ok,
+        "contact_page_matches_target": contact_page_ok,
+        "admissions_page_matches_target": admissions_page_ok,
+        "evidence_pages_on_target_host": len(evidence),
+        "public_email_found": email_ok,
+        "public_phone_found": phone_ok,
+        "human_review_required": True,
+        "external_actions": "none",
+        "contact_values_persisted": False,
+    }
+    print("NSOS_SKYVERN_RESULT " + json.dumps(summary, sort_keys=True))
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path, "a", encoding="utf-8") as handle:
+            handle.write("## NSOS Skyvern pilot result\n\n")
+            handle.write("| Check | Result |\n|---|---|\n")
+            for key, value in summary.items():
+                handle.write(f"| {key.replace('_', ' ')} | {value} |\n")
+            handle.write("\nContact values are intentionally not printed or stored by this public-repository pilot.\n")
+    return 0 if passed else 3
 
 
 if __name__ == "__main__":
