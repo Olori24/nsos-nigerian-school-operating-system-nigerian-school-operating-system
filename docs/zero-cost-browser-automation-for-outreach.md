@@ -19,13 +19,46 @@ Use self-hosted Skyvern as the AI-directed browser layer, with Playwright as the
 4. If local inference is too slow or unavailable, use Playwright only for deterministic public-page checks and keep AI-assisted extraction as a human-reviewed step. Do not silently fall back to a metered provider.
 5. Never put API keys, cookies, credentials, prospect personal data, or session exports in Git.
 
-## Deployment boundary
+## NSOS hosting boundary
 
-Skyvern is an external local service, not part of the NSOS Vercel runtime. Do not expose its API or browser/VNC ports publicly. Bind it to localhost or a private network, enable URL validation, and restrict outbound destinations to public websites needed for the task. Do not allow the browser agent to access cloud metadata, localhost services, private IP ranges, NSOS databases, or internal admin endpoints.
+The browser worker is an NSOS-operated backend service. It must not depend on an operator's laptop or phone, and it must not be exposed as a public unauthenticated browser-control endpoint.
 
-Recommended first deployment is on a capable Windows/Linux laptop or private workstation, not the Samsung A16 handset. The handset can be used to inspect results, but is not the target host for Chromium plus a vision model.
+### Verified hosting assessment (5 November 2026)
 
-Official setup reference: https://github.com/Skyvern-AI/skyvern/blob/main/docs/developers/self-hosted/overview.mdx
+The connected Vercel account reports the NSOS-linked project as `nsos-vercel-migration` on the Hobby plan. The project currently reports `live: false`, and its latest production deployment is in an error state. Vercel Hobby is also documented as intended for non-commercial, personal use. This is not an approved production hosting target for NSOS commercial outreach.
+
+Vercel Functions are serverless request handlers with finite execution, memory, and bundle limits. They are not a persistent Docker host for Skyvern's API, Chromium browser, database, and worker lifecycle. Do not try to install the full Skyvern stack inside the NSOS Express/Vercel function bundle.
+
+Skyvern's official Docker setup documents at least 4 GB of available RAM and a configured LLM provider. Self-hosting removes the Skyvern Cloud subscription, but does not remove compute or model-inference requirements.
+
+### Required architecture
+
+- **NSOS app:** owns authentication, role checks, job creation, approval state, audit records, and the outreach ledger.
+- **Browser worker:** runs separately as an NSOS-controlled backend worker. It accepts only signed, scoped jobs from the NSOS queue and returns structured evidence.
+- **Skyvern:** provides AI-directed browser execution only when an approved worker host and a zero-cost inference path are available.
+- **Playwright:** provides deterministic navigation and browser checks for known page structures; it is not represented as an AI agent.
+- **Storage:** persists job state and evidence references in NSOS-owned storage. Do not store browser profiles or session cookies in the prospect ledger.
+- **Resend:** remains separate. No browser job can send email or submit a contact form.
+
+### Zero-cost deployment gate
+
+Do not deploy or enable a paid service to get around the current hosting gap. Before enabling a live worker, verify all of the following:
+
+1. NSOS has an approved server/container execution environment with sufficient RAM, persistent job storage, outbound HTTPS, and private service-to-service authentication.
+2. The worker can run without relying on the user's personal devices.
+3. Skyvern can complete a test using local inference or a provider with an explicitly confirmed free quota and no automatic paid fallback.
+4. Usage limits, retention, secrets handling, URL allowlisting, and network isolation are configured.
+5. The worker can be stopped or disabled without affecting the NSOS application.
+
+A GitHub Actions runner may be evaluated as an **ephemeral batch runner** for a controlled pilot, but it is not a persistent Skyvern service and must not be described as NSOS production hosting. Any such use must be checked against repository visibility, Actions quotas, and the chosen model's free-tier conditions before activation.
+
+Until a compliant host and inference path are verified, the correct state is **deployment blocked**. Do not substitute the operator's laptop, the Samsung A16, a Vercel Function, or an unapproved free trial.
+
+Official references:
+- Skyvern self-hosting: https://github.com/Skyvern-AI/skyvern/blob/main/docs/developers/self-hosted/overview.mdx
+- Skyvern Docker requirements: https://github.com/Skyvern-AI/skyvern/blob/main/docs/developers/self-hosted/docker.mdx
+- Vercel Function limits: https://vercel.com/docs/functions/limitations
+- Vercel Hobby plan: https://vercel.com/docs/plans/hobby
 
 ## First pilot: one Nigerian school
 
