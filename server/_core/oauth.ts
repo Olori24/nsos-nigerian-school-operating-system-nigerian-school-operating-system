@@ -1,5 +1,6 @@
 import { COOKIE_NAME, ONE_YEAR_MS, OAUTH_STATE_COOKIE, decodeOAuthState } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
+import rateLimit from "express-rate-limit";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { createRateLimitMiddleware } from "../security";
@@ -14,6 +15,7 @@ function getQueryParam(req: Request, key: string): string | undefined {
 export function registerOAuthRoutes(app: Express) {
   app.get(
     "/api/oauth/callback",
+    rateLimit({ windowMs: 10 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false }),
     createRateLimitMiddleware({ namespace: "oauth-callback", limit: 20, windowMs: 10 * 60_000 }),
     async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
