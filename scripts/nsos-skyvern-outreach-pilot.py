@@ -120,7 +120,19 @@ async def main() -> int:
 
     with open(os.devnull, "w", encoding="utf-8") as sink:
         with redirect_stdout(sink), redirect_stderr(sink):
-            client = Skyvern.local(use_in_memory_db=True)
+            client = Skyvern.local(
+                use_in_memory_db=True,
+                settings={
+                    "ENABLE_OLLAMA": True,
+                    "ENABLE_OPENAI": False,
+                    "LLM_KEY": "OLLAMA",
+                    "OLLAMA_SERVER_URL": "http://127.0.0.1:11434",
+                    "OLLAMA_MODEL": "qwen2.5vl:3b",
+                    "OLLAMA_SUPPORTS_VISION": True,
+                    "ENABLE_URL_VALIDATION": True,
+                    "BROWSER_TYPE": "chromium-headless",
+                },
+            )
             try:
                 return await run_skyvern_task(client, target, host, kind)
             finally:
