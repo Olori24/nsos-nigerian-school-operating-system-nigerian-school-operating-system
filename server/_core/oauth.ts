@@ -2,6 +2,7 @@ import { COOKIE_NAME, ONE_YEAR_MS, OAUTH_STATE_COOKIE, decodeOAuthState } from "
 import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
+import { createRateLimitMiddleware } from "../security";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 
@@ -11,7 +12,10 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
-  app.get("/api/oauth/callback", async (req: Request, res: Response) => {
+  app.get(
+    "/api/oauth/callback",
+    createRateLimitMiddleware({ namespace: "oauth-callback", limit: 20, windowMs: 10 * 60_000 }),
+    async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
 
@@ -70,5 +74,6 @@ export function registerOAuthRoutes(app: Express) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });
     }
-  });
+    }
+  );
 }
