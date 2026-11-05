@@ -9,6 +9,7 @@ describe("EDTEF directory service", () => {
   const originalKey = process.env.EDTEF_API_KEY;
   beforeEach(() => {
     clearEdtefCacheForTests();
+    vi.mocked(consumeSharedRateLimit).mockReset();
     process.env.EDTEF_API_KEY = "test-key";
     vi.mocked(consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 86_400 });
     vi.stubGlobal("fetch", vi.fn());
