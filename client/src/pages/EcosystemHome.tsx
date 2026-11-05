@@ -45,7 +45,7 @@ const products = [
     href: "https://opportunity-radar-africa.vercel.app",
     action: "Open Opportunity Radar preview",
     icon: Radar,
-    status: "Private preview · access restricted",
+    status: "Public demo · no account required",
   },
   {
     name: "Business Operating System",
@@ -148,7 +148,7 @@ export default function EcosystemHome() {
       </section>
 
       <section id="contact" className="mx-5 mb-16 rounded-3xl border border-[#6ca98a]/20 bg-gradient-to-br from-[#173c2c] to-[#10251c] px-6 py-12 text-center sm:mx-8 sm:px-10 lg:mx-auto lg:max-w-7xl lg:py-16">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a8d7b9]">Start here</p><h2 className="mx-auto mt-4 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Find the product built for what you need to do.</h2><p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#bdd0c3]">Explore the ecosystem or head straight into the NSOS school workspace.</p><a href="/app" className="mt-7 inline-flex items-center gap-2 rounded-full bg-[#b7e2c8] px-6 py-3.5 text-sm font-bold text-[#103d2d] transition hover:bg-white">Enter NSOS <ArrowUpRight size={16} /></a>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a8d7b9]">Start here</p><h2 className="mx-auto mt-4 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Find the product built for what you need to do.</h2><p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#bdd0c3]">Explore the ecosystem or contact the NSOS team directly.</p><a href="mailto:hello@nsos.top" className="mt-7 inline-flex items-center gap-2 rounded-full border border-[#b7e2c8]/40 px-6 py-3.5 text-sm font-bold text-[#b7e2c8] transition hover:bg-white/10">Contact hello@nsos.top</a><a href="/app" className="mt-7 inline-flex items-center gap-2 rounded-full bg-[#b7e2c8] px-6 py-3.5 text-sm font-bold text-[#103d2d] transition hover:bg-white">Enter NSOS <ArrowUpRight size={16} /></a>
       </section>
 
       <footer className="border-t border-white/10 px-5 py-8 text-center text-xs text-[#81988a] sm:px-8"><p>© {new Date().getFullYear()} NSOS. A connected ecosystem of digital products.</p><p className="mt-2">Each product is independently developed and operated. Availability varies by product.</p></footer>
