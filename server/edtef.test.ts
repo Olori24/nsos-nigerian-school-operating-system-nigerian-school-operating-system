@@ -30,7 +30,15 @@ describe("EDTEF directory service", () => {
     expect(new Headers(init.headers).get("x-api-key")).toBe("test-key");
     expect(init.redirect).toBe("error");
     expect(fetchMock.mock.calls[0]?.[0]).not.toContain("test-key");
-    expect(consumeSharedRateLimit).toHaveBeenCalledWith({ namespace: "edtef-upstream", route: "directory-v1", clientKey: "shared-api-key", limit: 8_000, windowMs: 86_400_000 });
+    expect(consumeSharedRateLimit).toHaveBeenNthCalledWith(1, { namespace: "edtef-upstream", route: "directory-v1-per-second", clientKey: "shared-api-key", limit: 5, windowMs: 1_000 });
+    expect(consumeSharedRateLimit).toHaveBeenNthCalledWith(2, { namespace: "edtef-upstream", route: "directory-v1-daily", clientKey: "shared-api-key", limit: 8_000, windowMs: 86_400_000 });
+  });
+
+  it("enforces the shared per-second upstream rate before making uncached calls", async () => {
+    vi.mocked(consumeSharedRateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 1 });
+    await expect(requestEdtefJson("directory/v1/states")).rejects.toMatchObject({ status: 429, retryAfter: "1" });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(consumeSharedRateLimit).toHaveBeenCalledTimes(1);
   });
 
   it("enforces a shared daily upstream request budget before making uncached calls", async () => {
