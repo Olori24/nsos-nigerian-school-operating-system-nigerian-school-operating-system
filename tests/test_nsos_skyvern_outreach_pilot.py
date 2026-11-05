@@ -11,7 +11,7 @@ SPEC.loader.exec_module(PILOT)
 
 
 class PilotSafetyTests(unittest.TestCase):
-    @patch("nsos_skyvern_pilot.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))])
+    @patch.object(PILOT.socket, "getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))])
     def test_accepts_public_https_url(self, _dns):
         self.assertEqual(PILOT.validate_public_https_url("https://example.com/contact"), "example.com")
 
