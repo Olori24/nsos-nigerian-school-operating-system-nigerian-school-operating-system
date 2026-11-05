@@ -37,6 +37,7 @@ The branch now includes:
 - `scripts/nsos-skyvern-outreach-pilot.py`: Skyvern local-mode task runner with Qwen2.5-VL 3B via Ollama.
 - URL validation requiring HTTPS, rejecting private/local/IP-literal targets and DNS results that resolve to non-public addresses.
 - A bounded 10-step task and 10-minute execution timeout.
+- Eight offline unit tests for URL safety, exact-host evidence checks, and result parsing; these passed in an isolated Python run.
 - Public pages only, same-host navigation instructions, and a structured evidence schema.
 - No login, CAPTCHA bypass, form submission, email, registration, downloads, payment, or website mutation.
 - Redacted run output: actual email and phone values are not printed, uploaded as artifacts, or persisted by this pilot.
@@ -131,8 +132,8 @@ The pilot is accepted only when all are true:
 | Zero-spend and no-paid-fallback policy | Documented |
 | Security and human-approval boundary | Documented |
 | Pilot workflow and extraction contract | Documented |
-| Skyvern local-mode worker code and workflow | Added; execution not yet verified |
-| Local Qwen2.5-VL inference workflow configuration | Added; model startup not yet verified |
+| Skyvern local-mode worker code and workflow | Added; runtime execution not yet verified |
+| Local Qwen2.5-VL inference workflow configuration | Added; model startup not yet verified |\n| Pilot safety helper tests | 8 passed in isolated Python execution; GitHub workflow test step pending |
 | New Horizon Private Schools, Abuja pilot target selected | Verified against existing outreach prospect list and official website |
 | Real school website browser run | Pending PR merge and manual workflow dispatch |
 | NSOS application / outreach-queue integration | Blocked pending authenticated OIDC result sink and private persistence |
