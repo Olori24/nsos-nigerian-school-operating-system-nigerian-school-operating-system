@@ -128,6 +128,7 @@ import { withRateLimitConnection } from "../db.rate-limit-connection";
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
 let _rateLimitPool: Pool | null = null;
+let _edtefRateLimitPool: Pool | null = null;
 
 export const DB_POOL_CONNECTION_LIMIT = 5;
 export const DB_POOL_QUEUE_LIMIT = 20;
@@ -150,15 +151,25 @@ export const RATE_LIMIT_DB_CONNECT_TIMEOUT_MS = 3_000;
 export const RATE_LIMIT_DB_QUERY_TIMEOUT_MS = 3_000;
 
 /**
- * Isolated, fail-fast pool for shared rate-limit accounting. Saturation rejects
- * immediately; connectTimeout bounds new sockets; mysql2 query timeouts destroy
- * the timed-out connection instead of leaving an uncancelled query in flight.
+ * Bounded pool for existing application-wide rate-limit accounting. Its
+ * capacity preserves normal concurrent API and authentication traffic.
  */
 export function rateLimitDatabasePoolOptions(uri: string) {
   return {
     ...databasePoolOptions(uri),
-    connectionLimit: 1,
-    maxIdle: 1,
+    connectTimeout: RATE_LIMIT_DB_CONNECT_TIMEOUT_MS,
+  };
+}
+
+/**
+ * Separate fail-fast capacity for the EDTEF upstream budget so directory
+ * traffic cannot consume the connections used by existing rate-limit checks.
+ */
+export function edtefRateLimitDatabasePoolOptions(uri: string) {
+  return {
+    ...databasePoolOptions(uri),
+    connectionLimit: 3,
+    maxIdle: 3,
     waitForConnections: false,
     queueLimit: 0,
     connectTimeout: RATE_LIMIT_DB_CONNECT_TIMEOUT_MS,
@@ -171,6 +182,14 @@ function rateLimitDatabasePool() {
   }
   _rateLimitPool ??= createPool(rateLimitDatabasePoolOptions(process.env.DATABASE_URL));
   return _rateLimitPool.promise();
+}
+
+function edtefRateLimitDatabasePool() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("Database is unavailable. Configure DATABASE_URL before using the EDTEF request budget.");
+  }
+  _edtefRateLimitPool ??= createPool(edtefRateLimitDatabasePoolOptions(process.env.DATABASE_URL));
+  return _edtefRateLimitPool.promise();
 }
 
 export async function getDb() {
@@ -340,7 +359,8 @@ export async function consumeSharedRateLimit(input: { namespace: string; route: 
   const expiresAt = new Date(windowStartedAt + input.windowMs);
   const bucketMaterial = input.namespace + ":" + input.route + ":" + input.clientKey + ":" + windowStartedAt;
   const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
-  const connection = await rateLimitDatabasePool().getConnection();
+  const pool = input.namespace === "edtef-upstream" ? edtefRateLimitDatabasePool() : rateLimitDatabasePool();
+  const connection = await pool.getConnection();
   return withRateLimitConnection(connection, async query => {
     await query(
       {
