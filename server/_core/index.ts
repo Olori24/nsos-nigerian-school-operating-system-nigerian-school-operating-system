@@ -11,6 +11,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerSmsWebhookRoutes } from "../webhooks";
 import { registerAffiliateRoutes } from "../affiliateRoutes";
+import { registerEdtefRoutes } from "../edtefRoutes";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
 import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
@@ -61,6 +62,7 @@ async function startServer() {
   registerSmsWebhookRoutes(app);
   app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
   registerAffiliateRoutes(app);
+  registerEdtefRoutes(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
