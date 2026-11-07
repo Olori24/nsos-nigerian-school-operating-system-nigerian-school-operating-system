@@ -1,0 +1,78 @@
+name: NSOS Docker Smoke
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - ".env.docker.example"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "patches/**"
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "vite.config.ts"
+      - ".github/workflows/docker-smoke.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - ".env.docker.example"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "patches/**"
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "vite.config.ts"
+      - ".github/workflows/docker-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build portable image
+        run: |
+          docker build \
+            --build-arg VITE_APP_ID=nsos-synthetic-ci \
+            --build-arg VITE_OAUTH_PORTAL_URL=https://auth.example.invalid \
+            --tag nsos:ci .
+
+      - name: Start with synthetic-only configuration
+        run: |
+          docker run --detach --name nsos-ci \
+            --publish 3000:3000 \
+            --env NODE_ENV=production \
+            --env PORT=3000 \
+            --env VITE_APP_ID=nsos-synthetic-ci \
+            --env JWT_SECRET=ci-only-not-a-real-secret-32-characters-minimum \
+            --env DATABASE_URL=mysql://synthetic:synthetic@127.0.0.1:3306/nsos_test \
+            --env OAUTH_SERVER_URL=https://auth.example.invalid \
+            nsos:ci
+
+      - name: Verify process health only
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs nsos-ci
+          exit 1
+
+      - name: Clean up
+        if: always()
+        run: docker rm --force nsos-ci || true
