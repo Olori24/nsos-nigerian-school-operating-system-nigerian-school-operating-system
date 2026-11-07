@@ -3109,10 +3109,15 @@ export async function graduateStudent(schoolId: number, studentId: number, gradu
 
 export async function linkGuardianToStudent(input: { schoolId: number; studentId: number; firstName: string; lastName: string; relationship: string; email?: string; phone?: string; isPrimary?: boolean }) {
   const db = await database();
-  const guardian = await db.insert(guardians).values({ schoolId: input.schoolId, firstName: input.firstName, lastName: input.lastName, relationship: input.relationship, email: input.email, phone: input.phone, isPrimaryContact: input.isPrimary ?? false });
-  const guardianId = Number(guardian[0].insertId);
-  await db.insert(studentGuardians).values({ studentId: input.studentId, guardianId, isPrimary: input.isPrimary ?? false });
-  return { guardianId };
+  return db.transaction(async tx => {
+    const student = (await tx.select({ id: studentProfiles.id }).from(studentProfiles).where(and(eq(studentProfiles.id, input.studentId), eq(studentProfiles.schoolId, input.schoolId))).limit(1))[0];
+    if (!student) throw new Error("Student record was not found in this school.");
+
+    const guardian = await tx.insert(guardians).values({ schoolId: input.schoolId, firstName: input.firstName, lastName: input.lastName, relationship: input.relationship, email: input.email, phone: input.phone, isPrimaryContact: input.isPrimary ?? false });
+    const guardianId = Number(guardian[0].insertId);
+    await tx.insert(studentGuardians).values({ studentId: input.studentId, guardianId, isPrimary: input.isPrimary ?? false });
+    return { guardianId };
+  });
 }
 
 export async function listStudentGuardians(input: { schoolId: number; studentId: number }) {
