@@ -8,7 +8,7 @@ The Dockerfile packages the existing React/Vite client and Express/tRPC server a
 
 ## Build and run
 
-1. Install Docker Engine **28.0.0 or later** and Docker Compose plugin **2.24.0 or later** on the target host. The Compose minimum is required for the documented single-quote escape handling. This minimum is a security prerequisite for the loopback port binding used below: older Docker Engine versions can allow hosts on the same layer-2 network to reach ports published to localhost. If an older engine must be used, do not rely on the loopback binding; first enforce and verify host/network firewall controls that block access to the published port from every non-host interface. Record the Engine version and the applicable network-control evidence before starting the service. Do not proceed if neither condition can be met.
+1. Install Docker Engine **28.0.0 or later** and the Docker Compose plugin on the target host. This minimum is a security prerequisite for the loopback port binding used below: older Docker Engine versions can allow hosts on the same layer-2 network to reach ports published to localhost. If an older engine must be used, do not rely on the loopback binding; first enforce and verify host/network firewall controls that block access to the published port from every non-host interface. Record the Engine version and the applicable network-control evidence before starting the service. Do not proceed if neither condition can be met.
 2. Copy `docker.env.example` to `.env`.
 3. Fill the required public application/OAuth portal values and the server-only production values using the target environment's secure secret manager.
 4. Confirm `DATABASE_URL` points to a dedicated isolated staging database for staging work.
@@ -35,9 +35,20 @@ The Compose port is bound to `127.0.0.1` by default. Set `NSOS_HOST_IP` only to 
 
 **Do not generate a new JWT_SECRET and point the container at the existing production database.**
 
-Use Docker Compose plugin **2.24.0 or later**. Verify with `docker compose version`. Compose `.env` parsing must preserve the exact secret bytes: single-quoted values are literal, while unquoted and double-quoted values are subject to interpolation. For a value containing a single quote, escape it as `\\'` inside the surrounding single quotes; this escape handling is why the minimum Compose version is required. For a value ending in a backslash, do not use the single-quoted form because the final backslash can escape the closing quote. Use a double-quoted form with `$` doubled and backslashes escaped instead. For example, the synthetic value `foo$bar\\` is represented as `JWT_SECRET=\"foo$$bar\\\\\"` and must resolve to `foo$bar\\` inside the container. Prefer high-entropy secrets encoded with a Compose-safe alphabet (letters, digits, `_`, and `-`) for newly generated environments.
+`JWT_SECRET` is deliberately excluded from `.env`. Docker Compose parses `.env` values and special characters, quotes, dollar signs, and trailing backslashes can be interpreted differently across versions. The Compose service receives `JWT_SECRET` only from the environment of the process invoking Docker Compose; the Compose file passes it through without storing it in the repository or `.env`.
 
-Before connecting to any database, verify the resolved value inside the candidate container without printing or logging it: compare its byte length and a keyed digest computed inside the trusted environment against an independently computed reference, and ensure neither value is emitted to terminal history, CI logs, or observability. Do not share `docker compose config` output because it may print resolved environment values. If the existing secret uses characters not covered by the documented cases, stop and validate the exact Compose parser behaviour in an isolated disposable environment before use.
+For an interactive local session, enter the value silently and keep it out of shell history:
+
+```sh
+read -rsp 'Existing JWT_SECRET: ' JWT_SECRET
+export JWT_SECRET
+printf '\\n'
+docker compose build
+docker compose up -d
+unset JWT_SECRET
+```
+
+For hosted deployment, inject the exact existing value from the platform's encrypted secret manager as an environment variable. Never put it in `.env`, command-line arguments, build arguments, logs, or `docker compose config` output. Confirm the secret manager's injection mechanism preserves the value byte-for-byte before connecting to a database.
 
 NSOS currently derives the session-signing key and encryption keys for provider credentials, Meta advertising access tokens, and school bank-account numbers from `JWT_SECRET`. Replacing that value invalidates existing sessions and makes ciphertext created with the previous key unreadable.
 
