@@ -14,6 +14,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
+      JWT_SECRET: ${JWT_SECRET:?Inject JWT_SECRET from a secure environment or secret manager}
     ports:
       - "${NSOS_HOST_IP:-127.0.0.1}:${NSOS_HOST_PORT:-3000}:3000"
     read_only: true
