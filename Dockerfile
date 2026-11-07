@@ -21,15 +21,14 @@ RUN pnpm build
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
 
-RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
-COPY patches ./patches
-RUN pnpm install --prod --frozen-lockfile && pnpm store prune
-
+# The current production entrypoint statically imports server/_core/vite.ts,
+# which imports Vite and its config-time plugins. Until those development-only
+# imports are separated from the production entrypoint, the runtime must retain
+# the locked dependency tree installed in the build stage.
+COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 
 USER node
