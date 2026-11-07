@@ -15,7 +15,7 @@ services:
       NODE_ENV: production
       PORT: "3000"
     ports:
-      - "${NSOS_HOST_PORT:-3000}:3000"
+      - "${NSOS_HOST_IP:-127.0.0.1}:${NSOS_HOST_PORT:-3000}:3000"
     read_only: true
     tmpfs:
       - /tmp:size=64m,noexec,nosuid
