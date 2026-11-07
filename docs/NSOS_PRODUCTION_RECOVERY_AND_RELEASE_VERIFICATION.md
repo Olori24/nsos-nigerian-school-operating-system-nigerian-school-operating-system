@@ -25,11 +25,31 @@ Ask Manus support to:
 
 1. Confirm that the existing project's protected `JWT_SECRET` binding is present and readable by the production runtime.
 2. Restore the original protected value if it is recoverable.
-3. If the original value is irrecoverable, provision a new cryptographically random secret of at least 32 characters through the platform's supported protected-secret mechanism.
+3. If the original value is irrecoverable, do not provision a replacement until the encrypted-data impact assessment and recovery/re-entry plan below have been approved. Then provision a new cryptographically random secret of at least 32 characters through the platform's supported protected-secret mechanism.
 4. Confirm that the value is attached to the existing NSOS project and production runtime, not merely to a separate preview or migration project.
 5. Confirm whether restoring or rotating this value requires a restart or republish, and whether successful injection can be confirmed without disclosing the secret.
 
 Never request that support send the secret in email, chat, a ticket, screenshot, or log. Do not paste it into GitHub, this repository, a browser console, or a support conversation.
+
+### Data-integrity impact if the secret is rotated
+
+The current implementation also derives encryption keys from the same configured application secret:
+
+- `server/db/core.ts` derives the provider-configuration encryption key from `ENV.cookieSecret`. Stored provider credentials include API keys, secret keys, and webhook secrets.
+- The same file derives a separate bank-account encryption key from `ENV.cookieSecret` for stored Nigerian school bank account numbers.
+- SMS webhook verification reads the stored provider credentials, so loss of decryption access can also prevent verification.
+
+If `JWT_SECRET` is replaced, ciphertext encrypted under the previous derived keys will not be decryptable with the replacement keys. Do not assume that restoring application startup means stored provider or bank-account data remains usable.
+
+**Mandatory gate before any replacement/rotation:**
+
+1. Inventory the affected encrypted provider-configuration and school bank-account records. Record record counts and non-sensitive identifiers/status only; do not export or expose plaintext credentials or full account numbers.
+2. Identify which schools and integrations depend on those records, including payment providers and SMS providers/webhook verification.
+3. Obtain an approved recovery plan for each affected data class. Where the original key cannot be restored, plan secure re-entry and re-verification of provider credentials and bank details, including appropriate credential revocation/rotation with the provider where needed.
+4. For any proposed cryptographic migration, require a separately reviewed and tested migration design with explicit backup, access-control, rollback, and verification steps. Do not improvise a multi-key fallback or attempt ad hoc decryption/re-encryption during this incident.
+5. Obtain explicit owner approval for the recovery plan before Manus provisions a replacement secret or anyone initiates a rotation.
+
+Never place plaintext credentials, full bank account numbers, secret values, or decrypted exports in GitHub, logs, tickets, or this runbook.
 
 ### Session impact if the secret is rotated
 
@@ -40,8 +60,9 @@ NSOS signs and verifies session JWTs with the configured secret. Replacing it ma
 Before republishing the existing checkpoint:
 
 - Confirm the support response identifies the correct NSOS project.
-- Confirm the protected secret is restored/provisioned in the production runtime.
+- Confirm the protected secret is restored in the production runtime. If replacement is unavoidable, first confirm the encrypted-data inventory and approved recovery/re-entry plan are complete and explicitly authorised.
 - Confirm the value meets the application's 32-character minimum without revealing or copying it into logs.
+- Before any replacement, confirm affected provider credentials and bank-account records have an approved preservation, migration, or secure re-entry path; do not proceed on the basis of session recovery alone.
 - Confirm the other required production settings are present: `VITE_APP_ID`, `DATABASE_URL`, and `OAUTH_SERVER_URL`.
 - Confirm the intended checkpoint/commit is the current reviewed release and no unrelated changes are included.
 - Do not run schema migrations, alter DNS, attach domains, change traffic routing, or modify provider credentials as part of this secret-only recovery.
