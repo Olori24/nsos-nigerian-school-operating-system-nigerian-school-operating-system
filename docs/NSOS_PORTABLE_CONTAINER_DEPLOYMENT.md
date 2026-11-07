@@ -79,3 +79,8 @@ For rollback, stop the candidate container and restore the previous approved hos
 | Production | Owner-approved cutover plan and verified rollback | Not authorized |
 
 A successful image build or `/healthz` response must not be represented as a successful staging deployment or production release.
+
+
+### Current runtime dependency note
+
+The server entrypoint currently imports `serveStatic` and `setupVite` from the same `server/_core/vite.ts` module. That module statically imports Vite and its configuration plugins even in production mode. Until the development-only Vite imports are separated from the production entrypoint and verified through the normal test suite, the container runtime copies the locked full dependency tree from the build stage rather than using a production-only install. This increases image size and installed package surface; it is an explicit compatibility trade-off, not a claim that development dependencies are required by the business runtime. A follow-up refactor should split static serving from Vite development middleware, then prove the production bundle starts with production-only dependencies before reducing the image.
