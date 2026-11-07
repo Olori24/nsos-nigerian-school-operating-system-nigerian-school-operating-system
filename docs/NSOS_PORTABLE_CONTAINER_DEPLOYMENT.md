@@ -8,7 +8,7 @@ The Dockerfile packages the existing React/Vite client and Express/tRPC server a
 
 ## Build and run
 
-1. Install Docker Engine and the Docker Compose plugin on the target host.
+1. Install Docker Engine **28.0.0 or later** and the Docker Compose plugin on the target host. This minimum is a security prerequisite for the loopback port binding used below: older Docker Engine versions can allow hosts on the same layer-2 network to reach ports published to localhost. If an older engine must be used, do not rely on the loopback binding; first enforce and verify host/network firewall controls that block access to the published port from every non-host interface. Record the Engine version and the applicable network-control evidence before starting the service. Do not proceed if neither condition can be met.
 2. Copy `docker.env.example` to `.env`.
 3. Fill the required public application/OAuth portal values and the server-only production values using the target environment's secure secret manager.
 4. Confirm `DATABASE_URL` points to a dedicated isolated staging database for staging work.
