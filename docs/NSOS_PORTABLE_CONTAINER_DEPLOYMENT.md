@@ -9,7 +9,7 @@ The Dockerfile packages the existing React/Vite client and Express/tRPC server a
 ## Build and run
 
 1. Install Docker Engine and the Docker Compose plugin on the target host.
-2. Copy `.env.docker.example` to `.env`.
+2. Copy `docker.env.example` to `.env`.
 3. Fill the required public application/OAuth portal values and the server-only production values using the target environment's secure secret manager.
 4. Confirm `DATABASE_URL` points to a dedicated isolated staging database for staging work.
 5. Build and start:
