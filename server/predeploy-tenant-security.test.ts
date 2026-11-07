@@ -33,4 +33,18 @@ describe("pre-deployment tenant security invariants", () => {
     expect(db).toContain('eq(announcements.schoolId, schoolId)');
     expect(db).toContain('eq(leaveRequests.schoolId, schoolId)');
   });
+
+  it("verifies student ownership before creating a guardian relationship", () => {
+    const db = readFileSync(resolve(root, "server/db/core.ts"), "utf8");
+    const start = db.indexOf("export async function linkGuardianToStudent");
+    const end = db.indexOf("export async function listStudentGuardians", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const implementation = db.slice(start, end);
+    expect(implementation).toContain("db.transaction(async tx");
+    expect(implementation).toContain("eq(studentProfiles.id, input.studentId)");
+    expect(implementation).toContain("eq(studentProfiles.schoolId, input.schoolId)");
+    expect(implementation).toContain("if (!student) throw new Error");
+    expect(implementation.indexOf("if (!student)")).toBeLessThan(implementation.indexOf("tx.insert(guardians)"));
+  });
 });
