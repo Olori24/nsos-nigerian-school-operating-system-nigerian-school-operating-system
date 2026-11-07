@@ -33,21 +33,23 @@ Never request that support send the secret in email, chat, a ticket, screenshot,
 
 ### Data-integrity impact if the secret is rotated
 
-The current implementation also derives encryption keys from the same configured application secret:
+The current implementation derives multiple encryption keys from the same configured application secret:
 
-- `server/db/core.ts` derives the provider-configuration encryption key from `ENV.cookieSecret`. Stored provider credentials include API keys, secret keys, and webhook secrets.
+- `server/db/core.ts` derives the provider-configuration encryption key from `ENV.cookieSecret`. Stored provider credentials include payment, SMS, WhatsApp and email API keys, secret keys, and webhook secrets.
 - The same file derives a separate bank-account encryption key from `ENV.cookieSecret` for stored Nigerian school bank account numbers.
+- Meta advertising access tokens are also encrypted with `sealProviderCredentials` and stored in `schoolAdvertisingAccounts` by `saveMetaAdvertisingAccount`. Losing decryption access makes the connected advertising account and related campaign-preparation workflows unusable until the token is securely re-entered and revalidated.
 - SMS webhook verification reads the stored provider credentials, so loss of decryption access can also prevent verification.
 
-If `JWT_SECRET` is replaced, ciphertext encrypted under the previous derived keys will not be decryptable with the replacement keys. Do not assume that restoring application startup means stored provider or bank-account data remains usable.
+If `JWT_SECRET` is replaced, ciphertext encrypted under the previous derived keys will not be decryptable with the replacement keys. Do not assume that restoring application startup means stored provider, Meta advertising, or bank-account data remains usable.
 
 **Mandatory gate before any replacement/rotation:**
 
-1. Inventory the affected encrypted provider-configuration and school bank-account records. Record record counts and non-sensitive identifiers/status only; do not export or expose plaintext credentials or full account numbers.
-2. Identify which schools and integrations depend on those records, including payment providers and SMS providers/webhook verification.
-3. Obtain an approved recovery plan for each affected data class. Where the original key cannot be restored, plan secure re-entry and re-verification of provider credentials and bank details, including appropriate credential revocation/rotation with the provider where needed.
-4. For any proposed cryptographic migration, require a separately reviewed and tested migration design with explicit backup, access-control, rollback, and verification steps. Do not improvise a multi-key fallback or attempt ad hoc decryption/re-encryption during this incident.
-5. Obtain explicit owner approval for the recovery plan before Manus provisions a replacement secret or anyone initiates a rotation.
+1. Inventory affected encrypted records by data class: provider configurations, Meta advertising accounts in `schoolAdvertisingAccounts`, and school bank-account records. Record counts and non-sensitive school/record identifiers and status only; do not export or expose plaintext credentials, access tokens, or full account numbers.
+2. Identify every school and integration depending on those records, including payment processing, SMS delivery and webhook verification, WhatsApp/email providers, Meta advertising connections, and bank-account display or payout workflows.
+3. Define and approve an operable recovery path for every affected provider channel and every affected school record. If the original key cannot be restored, plan secure credential re-entry, token revocation/rotation where appropriate, bank-detail re-entry and verification, and provider reconnection tests. Verify that each channel can be recovered independently; a successful save for one channel must not be taken as proof that all channels are recoverable.
+4. Account for partial-success behavior during recovery: `saveProviderConfiguration` writes the selected channel before returning `listProviderConfigurations`, which decrypts all configured channels. A save can therefore persist successfully and still return an error if another channel contains ciphertext that cannot be decrypted. Before retrying an operation that reports an error, re-read the specific channel's non-secret status and credential-presence metadata to determine whether the write already persisted; avoid blind repeated writes and verify each channel separately. Do not expose decrypted values during this check.
+5. For any proposed cryptographic migration, require a separately reviewed and tested migration design with explicit backup, access-control, rollback, and verification steps. Do not improvise a multi-key fallback or attempt ad hoc decryption/re-encryption during this incident.
+6. Obtain explicit owner approval for the complete recovery plan before Manus provisions a replacement secret or anyone initiates a rotation.
 
 Never place plaintext credentials, full bank account numbers, secret values, or decrypted exports in GitHub, logs, tickets, or this runbook.
 
