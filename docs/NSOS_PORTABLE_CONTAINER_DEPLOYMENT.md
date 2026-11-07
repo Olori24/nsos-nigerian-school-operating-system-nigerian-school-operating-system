@@ -24,7 +24,7 @@ docker compose logs --tail=100 nsos
 6. Verify the process health endpoint:
 
 ```sh
-curl --fail --silent http://127.0.0.1:3000/healthz
+curl --fail --silent "http://${NSOS_HOST_IP:-127.0.0.1}:${NSOS_HOST_PORT:-3000}/healthz"
 ```
 
 The endpoint proves only that the HTTP process is running. It does not prove database connectivity, authentication, tenant isolation, provider delivery, or production readiness.
