@@ -1,6 +1,6 @@
 # NSOS Portable Container Deployment
 
-**Status:** Configuration added; container build, startup, staging, and production deployment remain unverified until the Docker smoke workflow and an isolated operator-controlled environment pass.
+**Status:** Docker image build and synthetic process smoke passed on commit `e7b4271`; isolated staging and production deployment remain unverified.
 
 ## Purpose
 
@@ -28,6 +28,8 @@ curl --fail --silent http://127.0.0.1:3000/healthz
 ```
 
 The endpoint proves only that the HTTP process is running. It does not prove database connectivity, authentication, tenant isolation, provider delivery, or production readiness.
+
+The Compose port is bound to `127.0.0.1` by default. Set `NSOS_HOST_IP` only to a specific host interface reachable by a separately secured TLS-terminating ingress; do not use `0.0.0.0` or expose the plain HTTP port directly to untrusted networks. `NSOS_HOST_PORT` remains configurable.
 
 ## Secret continuity and encrypted data
 
@@ -70,15 +72,15 @@ For rollback, stop the candidate container and restore the previous approved hos
 
 | Gate | Evidence required | Current state |
 |---|---|---|
-| Image build | Docker build workflow passes on this branch | Pending |
-| Process smoke | Container starts with synthetic runtime configuration and `/healthz` returns 200 | Pending |
+| Image build | Docker image build workflow passed on commit `e7b4271` (run #6) | PASS — image build only |
+| Process smoke | Container starts with synthetic runtime configuration and `/healthz` returns 200 on commit `e7b4271` (run #6) | PASS — process health only |
 | Isolated staging | Dedicated DB, storage namespace, secrets, OAuth and provider stubs verified | Blocked until provisioned |
 | Authentication | Synthetic user sign-in/session lifecycle passes | Not run |
 | Tenant isolation | Cross-tenant and role boundary tests pass against staging | Not run |
 | Recovery | Staging backup restore and rollback rehearsal recorded | Not run |
 | Production | Owner-approved cutover plan and verified rollback | Not authorized |
 
-A successful image build or `/healthz` response must not be represented as a successful staging deployment or production release.
+A successful image build or `/healthz` response must not be represented as a successful staging deployment or production release. The recorded smoke evidence is tied to commit `e7b4271`; later documentation-only changes do not expand what that run proves.
 
 
 ### Current runtime dependency note
