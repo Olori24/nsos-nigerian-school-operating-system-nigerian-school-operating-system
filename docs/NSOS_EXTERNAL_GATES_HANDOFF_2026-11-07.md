@@ -34,7 +34,7 @@ PR #61 adds:
 - Docker image build and synthetic process-health workflow.
 - Deployment documentation covering secret continuity, staging isolation and rollback.
 
-The first smoke run exposed a real packaging defect: the production bundle statically imports Vite, but the first runtime stage installed production dependencies only. The run failed with `ERR_MODULE_NOT_FOUND: Cannot find package 'vite'`. The Dockerfile was corrected to copy the locked dependency tree required by the current entrypoint. The corrected smoke run must pass before the image is accepted.
+The first smoke run exposed a real packaging defect: the production bundle statically imports Vite, but the first runtime stage installed production dependencies only. The run failed with `ERR_MODULE_NOT_FOUND: Cannot find package 'vite'`. The Dockerfile was corrected to copy the locked dependency tree required by the current entrypoint. The corrected smoke run passed on commit `e7b4271`: the Docker image built, the synthetic-configured container started, `/healthz` returned success, and cleanup completed. Evidence: [NSOS Docker Smoke run #6](https://github.com/Olori24/nsos-nigerian-school-operating-system-nigerian-school-operating-system/actions/runs/42415396366). This verifies process startup only; it does not verify database connectivity, authentication, tenant isolation, provider integrations, or production readiness.
 
 The current container health endpoint proves process availability only. It does not prove database connectivity, authentication, tenant isolation, provider integrations, or readiness for production.
 
