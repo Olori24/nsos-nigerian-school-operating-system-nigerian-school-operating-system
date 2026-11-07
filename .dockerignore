@@ -12,6 +12,7 @@ coverage
 *.log
 .env
 .env.*
-!.env.docker.example
 .DS_Store
 Thumbs.db
+
+docker.env.example
