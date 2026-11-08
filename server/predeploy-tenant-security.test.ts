@@ -45,6 +45,10 @@ describe("pre-deployment tenant security invariants", () => {
     expect(implementation).toContain("eq(studentProfiles.id, input.studentId)");
     expect(implementation).toContain("eq(studentProfiles.schoolId, input.schoolId)");
     expect(implementation).toContain("if (!student) throw new Error");
+    expect(implementation).toContain("tx.insert(guardians)");
+    expect(implementation).toContain("tx.insert(studentGuardians)");
+    expect(implementation).not.toContain("db.insert(guardians)");
+    expect(implementation).not.toContain("db.insert(studentGuardians)");
     expect(implementation.indexOf("if (!student)")).toBeLessThan(implementation.indexOf("tx.insert(guardians)"));
   });
 });
