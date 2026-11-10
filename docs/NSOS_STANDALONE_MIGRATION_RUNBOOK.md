@@ -178,3 +178,40 @@ No no-card provider has yet passed all NSOS requirements for a commercial, secur
 - Legacy account-linking coverage has not yet been measured against production users.
 
 No production data, DNS, secrets, or traffic are changed by this runbook or by the migration branch itself.
+
+
+## Enzonic public-project sponsorship review (2026-11-10)
+
+A fresh review of Enzonic's official grants pages found a separate **Project Grants & Sponsorships** programme. It is distinct from the previously documented Cloud plan/grant offer and should be assessed on its own terms.
+
+Official programme: https://enzonic.com/grants
+
+Published eligibility:
+- Project must be public (for example, an open-source GitHub repository or public web app).
+- Applicant must be 18+ or have guardian authorization.
+- Project must be original, actively developed, and have a clear roadmap and growth potential.
+- Applicant must provide visible Enzonic credit while sponsorship is active (for example, a “Powered by Enzonic” website badge or sponsor link).
+
+Published benefit: a sponsored server, with resources shown before acceptance. The page does not specify a guaranteed resource size or detailed production SLA.
+
+NSOS appears to meet the public-project/original-development criteria based on its public GitHub repository and public application site. **Do not submit acceptance or promise branding placement until the owner approves that trade-off.** A grant application may be explored, but any resulting server is staging-only until Enzonic confirms in writing:
+
+1. Whether the sponsored server can run NSOS's supported Node.js runtime, MySQL 8.4 (or a version proven compatible by the full migration/test suite), and a private S3-compatible object store or an approved alternative.
+2. CPU, RAM, SSD capacity, bandwidth, region, uptime/maintenance policy, resource suspension/termination rules, and grant duration/renewal.
+3. Whether there are any signup, verification, payment-card, billing, overage, or auto-conversion requirements. Hard limit remains $0; no payment method may be added.
+4. Privacy policy, data-processing terms, subprocessors, data location, access controls, backup/restore, export/deletion, incident notification, and security responsibilities.
+5. Whether commercial use by a Nigerian education-technology business is allowed and whether public-school or student data is prohibited.
+
+Do not place production or identifiable learner/family data on a sponsored server without a documented security/privacy review, verified backup/restore, and separate approval. Do not treat a generic VM grant as managed database, object storage, backup, or production support.
+
+Additional official references:
+- Enzonic grant eligibility and promotion terms: https://enzonic.com/grants
+- Enzonic Cloud web runtimes and databases: https://enzonic.com/web-hosting
+- Enzonic contact: https://enzonic.com/contact
+
+Other credit programmes were checked as secondary options:
+- AWS Activate Founders advertises $1,000 credits for eligible self-funded startups, but requires linking an AWS account. Card-free activation is not established; do not create an AWS account or add a payment method for this migration without verifying that requirement first. https://startups.aws.com/lp/aws-activate-credits
+- Google for Startups Cloud requires a Cloud Billing account and a payments profile before credits can be used. It is not a verified no-card route. https://cloud.google.com/startup/onboarding
+- Microsoft's current Azure activation instructions require payment information. It is not a no-card route. https://learn.microsoft.com/en-us/startups/build/getting-started/activate
+
+Current decision: Enzonic public-project sponsorship is the only identified no-card sponsorship candidate worth an initial written eligibility inquiry. It is not yet an approved host. Continue CI-based engineering and keep production untouched while provider terms are verified.
