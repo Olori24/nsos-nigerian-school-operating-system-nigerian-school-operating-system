@@ -115,7 +115,7 @@ export function requiredProductionEnvironmentErrors(input: {
       ["BUILT_IN_FORGE_API_URL", input.forgeApiUrl],
       ["BUILT_IN_FORGE_API_KEY", input.forgeApiKey],
     ].filter(([, value]) => !value?.trim()).map(([name]) => name);
-    if (missingLegacy.length) errors.push("Legacy storage is selected but these settings are missing: " + missingLegacy.join(", ") + ".");
+    if (missingLegacy.length) errors.push("Forge integration is selected but these settings are missing: " + missingLegacy.join(", ") + ".");
   }
   if (input.llmProvider && !["forge", "openai-compatible"].includes(input.llmProvider)) {
     errors.push("LLM_PROVIDER must be forge or openai-compatible.");
