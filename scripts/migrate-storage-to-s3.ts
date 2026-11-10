@@ -24,11 +24,13 @@ function normalizeStoredKey(value: unknown) {
 
 async function main() {
   if (!ENV.databaseUrl) throw new Error("DATABASE_URL is required.");
-  if (!ENV.forgeApiUrl || !ENV.forgeApiKey) throw new Error("Legacy storage credentials are required for source reads.");
-  if (!ENV.s3Bucket || !ENV.s3AccessKeyId || !ENV.s3SecretAccessKey || !ENV.s3Region) throw new Error("S3 target credentials are required.");
-
   const copy = process.argv.includes("--copy");
+  if (process.env.STORAGE_MIGRATION_SOURCE_READ_ONLY !== "true") {
+    throw new Error("Use a read-only database account and set STORAGE_MIGRATION_SOURCE_READ_ONLY=true.");
+  }
   if (copy) {
+    if (!ENV.forgeApiUrl || !ENV.forgeApiKey) throw new Error("Legacy storage credentials are required for source reads.");
+    if (!ENV.s3Bucket || !ENV.s3AccessKeyId || !ENV.s3SecretAccessKey || !ENV.s3Region) throw new Error("S3 target credentials are required.");
     if (process.env.STORAGE_MIGRATION_APPROVED !== "true") throw new Error("Copy mode requires STORAGE_MIGRATION_APPROVED=true.");
     if (process.env.STORAGE_MIGRATION_TARGET !== "staging") throw new Error("Copy mode is restricted to an explicitly named staging target.");
     if (process.env.STORAGE_MIGRATION_TARGET_BUCKET !== ENV.s3Bucket) throw new Error("Confirm the exact S3_BUCKET using STORAGE_MIGRATION_TARGET_BUCKET.");
@@ -36,6 +38,11 @@ async function main() {
 
   const connection = await createConnection(ENV.databaseUrl);
   try {
+    const [grantRows] = await connection.query("SHOW GRANTS FOR CURRENT_USER()");
+    const grants = (grantRows as Array<Record<string, unknown>>).map(row => Object.values(row).join(" ")).join(" ").toUpperCase();
+    if (/\\b(ALL PRIVILEGES|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRIGGER|EXECUTE|GRANT OPTION)\\b/.test(grants)) {
+      throw new Error("The connected database account is not read-only. Stop and use a SELECT-only account.");
+    }
     const keys = new Set<string>();
     for (const item of objectColumns) {
       const [columns] = await connection.query(
