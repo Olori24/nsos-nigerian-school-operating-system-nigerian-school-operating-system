@@ -14,7 +14,8 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "arsenal:audit": "node scripts/arsenal-audit.mjs",
-    "seo:submit-sitemap": "node scripts/submit-sitemap.mjs"
+    "seo:submit-sitemap": "node scripts/submit-sitemap.mjs",
+    "build:vercel": "pnpm build"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1112.0",
