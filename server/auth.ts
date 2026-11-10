@@ -262,9 +262,12 @@ export function registerGoogleAuthRoutes(app: Express) {
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
       res.redirect(302, loginState.origin + postSignInPath(loginState.origin));
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("explicit identity linking")) {
+        return res.status(409).json({ error: "An existing NSOS account uses this verified email. Sign in to that account with its current sign-in method, then link Google or email from Account security." });
+      }
       writeOperationalEvent("warn", "auth_google_callback_failed", { category: "provider_or_identity_failure" });
-      res.status(502).json({ error: "Google sign-in or account linking could not be completed. Please try again." });
+      return res.status(502).json({ error: "Google sign-in or account linking could not be completed. Please try again." });
     }
   });
 }
@@ -358,9 +361,12 @@ export function registerEmailAuthRoutes(app: Express) {
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);
       res.redirect(302, `${origin}${postSignInPath(origin)}`);
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("explicit identity linking")) {
+        return res.status(409).json({ error: "An existing NSOS account uses this email. Sign in to that account with its current sign-in method, then link this email from Account security." });
+      }
       writeOperationalEvent("warn", "auth_passwordless_verification_failed", { category: "invalid_or_expired_link" });
-      res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });
+      return res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });
     }
   });
 }
