@@ -192,8 +192,6 @@ export type SmsDeliveryState = "pending" | "delivered" | "failed";
 export type AdvertisingCampaignStatus = "draft" | "pending_approval" | "approved" | "launching" | "active" | "paused" | "completed" | "failed" | "archived";
 type AdvertisingAudience = { locations: string[]; ageMin?: number; ageMax?: number; note?: string };
 
-
-
 function encryptionKey() {
   if (!ENV.cookieSecret) throw new Error("Provider credentials cannot be stored until the application secret is configured.");
   return createHash("sha256").update(`nsos-provider-configuration:${ENV.cookieSecret}`).digest();
