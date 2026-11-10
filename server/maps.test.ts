@@ -29,6 +29,7 @@ describe("standalone Google Maps server client", () => {
 
   it("rejects endpoints outside the Google Maps API path", async () => {
     await expect(makeRequest("https://attacker.example/collect")).rejects.toThrow("Google Maps endpoint is not allowed.");
+    await expect(makeRequest("/maps/api/%2e%2e/evil")).rejects.toThrow("Google Maps endpoint is not allowed.");
     expect(fetch).not.toHaveBeenCalled();
   });
 });
