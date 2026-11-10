@@ -3,6 +3,7 @@ import * as db from "../db";
 import { storageGetSignedUrl } from "../storage";
 import { can, isManagementRole, type SchoolRole } from "../roles";
 import { sdk } from "./sdk";
+import { createRateLimitMiddleware } from "../security";
 
 export function isSafeStorageKey(key: string) {
   return key.length > 0 && key.length <= 1024 && /^[A-Za-z0-9._/-]+$/.test(key) && !key.includes("..") && /^schools\/[1-9]\d*\//.test(key);
@@ -54,9 +55,9 @@ async function serveStoredObject(req: Request, res: Response) {
   }
 }
 
-export function registerStorageProxy(app: Express) {
+export function registerStorageProxy(app: Express, rateLimit = createRateLimitMiddleware) {
   // New uploads use the provider-neutral path. The old path remains available
   // so previously persisted file URLs continue to work during migration.
-  app.get("/storage/*", serveStoredObject);
-  app.get("/manus-storage/*", serveStoredObject);
+  app.get("/storage/*", rateLimit({ namespace: "storage-object-read", limit: 300, windowMs: 60_000 }), serveStoredObject);
+  app.get("/manus-storage/*", rateLimit({ namespace: "storage-object-read", limit: 300, windowMs: 60_000 }), serveStoredObject);
 }
