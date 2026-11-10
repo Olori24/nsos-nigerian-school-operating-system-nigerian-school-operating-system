@@ -3,6 +3,7 @@ export const ENV = {
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
+  legacyAuthEnabled: process.env.LEGACY_MANUS_AUTH_ENABLED !== "false",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
   publicAppUrl: process.env.PUBLIC_APP_URL ?? "",
