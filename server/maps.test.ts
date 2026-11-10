@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./env", () => ({
+vi.mock("./_core/env", () => ({
   ENV: { googleMapsApiKey: "server-maps-test-key" },
 }));
 
-import { makeRequest } from "./map";
+import { makeRequest } from "./_core/map";
 
 describe("standalone Google Maps server client", () => {
   beforeEach(() => {
