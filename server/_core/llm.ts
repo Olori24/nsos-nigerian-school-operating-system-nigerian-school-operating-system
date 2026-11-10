@@ -224,14 +224,14 @@ function resolveCompatibleBaseUrl() {
   const localHttp = !ENV.isProduction && parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
   if (parsed.protocol !== "https:" && !localHttp) throw new Error("LLM_API_BASE_URL must use HTTPS outside local development.");
   if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error("LLM_API_BASE_URL must not contain credentials, a query, or a fragment.");
-  return baseUrl.replace(/\\/+$/, "");
+  return baseUrl.replace(/\/+$/, "");
 }
 
 const resolveApiBaseUrl = () => {
   if (ENV.llmProvider === "openai-compatible") return resolveCompatibleBaseUrl();
   if (ENV.llmProvider !== "forge") throw new Error("LLM_PROVIDER must be forge or openai-compatible.");
   return ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? ENV.forgeApiUrl.replace(/\\/+$/, "") + "/v1"
+    ? ENV.forgeApiUrl.replace(/\/+$/, "") + "/v1"
     : "https://forge.manus.im/v1";
 };
 
@@ -436,7 +436,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${resolveApiKey()}`,
     },
     body: JSON.stringify(payload),
   });
