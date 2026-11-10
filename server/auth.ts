@@ -9,6 +9,7 @@ import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
+const EMAIL_LINK_STATE_COOKIE = "__Host-email_link_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
 const STATE_TTL_MS = 10 * 60_000;
 const MAGIC_LINK_TTL_LABEL = "15 minutes";
@@ -33,7 +34,7 @@ function validOrigin(value: unknown) {
 
 function postSignInPath(origin: string) {
   const hostname = new URL(origin).hostname;
-  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".vercel.app");
   return isPlatformHost ? "/app" : "/";
 }
 
@@ -55,16 +56,45 @@ function matchesState(expected: string | undefined, actual: string | undefined) 
   return timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
 }
 
-function readGoogleLoginState(req: Request) {
+type GoogleLoginState = {
+  state: string;
+  origin: string;
+  intent: "signin" | "link";
+  userId?: number;
+  sessionId?: string;
+};
+
+function readGoogleLoginState(req: Request): GoogleLoginState | undefined {
   const raw = parseCookieHeader(req.headers.cookie ?? "")[GOOGLE_STATE_COOKIE];
   if (!raw) return undefined;
   try {
-    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown };
+    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown; intent?: unknown; userId?: unknown; sessionId?: unknown };
     const origin = validOrigin(parsed.origin);
-    return typeof parsed.state === "string" && origin ? { state: parsed.state, origin } : undefined;
+    if (typeof parsed.state !== "string" || !origin) return undefined;
+    if (parsed.intent === "link") {
+      if (!Number.isSafeInteger(parsed.userId) || typeof parsed.sessionId !== "string" || !parsed.sessionId) return undefined;
+      return { state: parsed.state, origin, intent: "link", userId: parsed.userId as number, sessionId: parsed.sessionId };
+    }
+    return { state: parsed.state, origin, intent: "signin" };
   } catch {
     return undefined;
   }
+}
+
+function readEmailLinkState(req: Request) {
+  const raw = parseCookieHeader(req.headers.cookie ?? "")[EMAIL_LINK_STATE_COOKIE];
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { nonce?: unknown; userId?: unknown; sessionId?: unknown; email?: unknown };
+    if (typeof parsed.nonce !== "string" || !Number.isSafeInteger(parsed.userId) || typeof parsed.sessionId !== "string" || typeof parsed.email !== "string") return undefined;
+    return { nonce: parsed.nonce, userId: parsed.userId as number, sessionId: parsed.sessionId, email: db.normaliseAuthEmail(parsed.email) };
+  } catch {
+    return undefined;
+  }
+}
+
+function clearEmailLinkStateCookie(res: Response) {
+  res.clearCookie(EMAIL_LINK_STATE_COOKIE, { path: "/", secure: true, sameSite: "lax", httpOnly: true });
 }
 
 function clearGoogleStateCookie(req: Request, res: Response) {
@@ -136,17 +166,38 @@ export async function sendGuardianPortalInvitationEmail(input: { email: string; 
   await sendMagicLinkEmail({ email, link, subject: `Your ${schoolName} family portal invitation`, text: `Hello ${guardianName}, ${schoolName} has invited you to access the NSOS family portal. Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>Hello ${guardianName},</p><p>${schoolName} has invited you to access the NSOS family portal.</p><p><a href="${link}">Access family portal</a></p><p>This secure sign-in link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
 }
 
+async function startGoogleAuthorization(req: Request, res: Response, intent: "signin" | "link") {
+  const origin = validOrigin(getStringQuery(req, "origin"));
+  if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
+  if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
+
+  let userId: number | undefined;
+  let sessionId: string | undefined;
+  if (intent === "link") {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user.email || !user.sessionId) return res.status(409).json({ error: "Sign in to the existing NSOS account with its current email before linking Google." });
+      userId = user.id;
+      sessionId = user.sessionId;
+    } catch {
+      return res.status(401).json({ error: "Sign in to the existing NSOS account before linking Google." });
+    }
+  }
+
+  const state = randomBytes(32).toString("base64url");
+  res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state, origin, intent, userId, sessionId }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+  const redirectUri = origin + "/api/auth/google/callback";
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.search = new URLSearchParams({ client_id: ENV.googleClientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, prompt: "select_account" }).toString();
+  return res.redirect(302, url.toString());
+}
+
 export function registerGoogleAuthRoutes(app: Express) {
   app.get("/api/auth/google/start", (req: Request, res: Response) => {
-    const origin = validOrigin(getStringQuery(req, "origin"));
-    if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
-    if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
-    const state = randomBytes(32).toString("base64url");
-    res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state, origin }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
-    const redirectUri = `${origin}/api/auth/google/callback`;
-    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    url.search = new URLSearchParams({ client_id: ENV.googleClientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, prompt: "select_account" }).toString();
-    res.redirect(302, url.toString());
+    void startGoogleAuthorization(req, res, "signin");
+  });
+  app.get("/api/auth/google/link/start", (req: Request, res: Response) => {
+    void startGoogleAuthorization(req, res, "link");
   });
 
   app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
@@ -157,7 +208,7 @@ export function registerGoogleAuthRoutes(app: Express) {
     if (!code || !loginState || !matchesState(loginState.state, state)) return res.status(403).json({ error: "Google sign-in could not be verified. Please start again." });
 
     try {
-      const redirectUri = `${loginState.origin}/api/auth/google/callback`;
+      const redirectUri = loginState.origin + "/api/auth/google/callback";
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -166,21 +217,96 @@ export function registerGoogleAuthRoutes(app: Express) {
       });
       const tokenPayload = await tokenResponse.json().catch(() => ({})) as { access_token?: unknown };
       if (!tokenResponse.ok || typeof tokenPayload.access_token !== "string") throw new Error("Google token exchange failed.");
-      const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${tokenPayload.access_token}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
+      const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: "Bearer " + tokenPayload.access_token }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
       const profile = await profileResponse.json().catch(() => ({})) as { sub?: unknown; email?: unknown; email_verified?: unknown; name?: unknown; picture?: unknown };
       if (!profileResponse.ok || typeof profile.sub !== "string" || typeof profile.email !== "string" || profile.email_verified !== true) throw new Error("Google account does not provide a verified email address.");
+
+      if (loginState.intent === "link") {
+        let currentUser;
+        try {
+          currentUser = await sdk.authenticateRequest(req);
+        } catch {
+          return res.status(401).json({ error: "Your NSOS session expired. Sign in again and restart account linking." });
+        }
+        if (currentUser.id !== loginState.userId || currentUser.sessionId !== loginState.sessionId) {
+          return res.status(403).json({ error: "The account session changed during linking. Sign in again and restart." });
+        }
+        await db.linkExternalAuthIdentity({ userId: currentUser.id, provider: "google", providerSubject: profile.sub, email: profile.email });
+        return res.redirect(302, loginState.origin + "/app?identityLinked=google");
+      }
+
       const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.picture === "string" ? profile.picture : null });
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
-      res.redirect(302, `${loginState.origin}${postSignInPath(loginState.origin)}`);
+      res.redirect(302, loginState.origin + postSignInPath(loginState.origin));
     } catch {
       writeOperationalEvent("warn", "auth_google_callback_failed", { category: "provider_or_identity_failure" });
-      res.status(502).json({ error: "Google sign-in could not be completed. Please try again." });
+      res.status(502).json({ error: "Google sign-in or account linking could not be completed. Please try again." });
     }
   });
 }
 
 export function registerEmailAuthRoutes(app: Express) {
+  app.post("/api/auth/email/link/request", async (req: Request, res: Response) => {
+    const origin = validOrigin(req.body?.origin);
+    const headerOrigin = validOrigin(req.get("origin"));
+    if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
+
+    let user;
+    try {
+      user = await sdk.authenticateRequest(req);
+    } catch {
+      return res.status(401).json({ error: "Sign in to the existing NSOS account before linking email." });
+    }
+
+    try {
+      if (!user.email || !user.sessionId) return res.status(409).json({ error: "The signed-in NSOS account does not have a verified email to link." });
+      const email = db.normaliseAuthEmail(req.body?.email ?? user.email);
+      if (db.normaliseAuthEmail(user.email) !== email) return res.status(400).json({ error: "The email to link must match the signed-in NSOS account email." });
+
+      const nonce = randomBytes(32).toString("base64url");
+      res.cookie(EMAIL_LINK_STATE_COOKIE, JSON.stringify({ nonce, userId: user.id, sessionId: user.sessionId, email }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+      const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
+      const link = origin + "/api/auth/email/link/verify?token=" + encodeURIComponent(token) + "&state=" + encodeURIComponent(nonce);
+      await sendMagicLinkEmail({
+        email,
+        link,
+        subject: "Confirm your NSOS account link",
+        text: "Open this link in the same browser where you are signed in to NSOS. It expires in " + MAGIC_LINK_TTL_LABEL + ": " + link,
+        html: "<p>Open this link in the same browser where you are signed in to NSOS.</p><p><a href=\"" + link + "\">Confirm email account link</a></p><p>This link expires in " + MAGIC_LINK_TTL_LABEL + ".</p>",
+      });
+      return res.status(202).json({ success: true, message: "A confirmation link has been sent. Open it in this same browser to preserve your existing school account." });
+    } catch {
+      clearEmailLinkStateCookie(res);
+      writeOperationalEvent("warn", "auth_email_link_request_failed", { category: "provider_or_identity_failure" });
+      return res.status(503).json({ error: "We could not send an account-link confirmation right now. Please try again shortly." });
+    }
+  });
+
+  app.get("/api/auth/email/link/verify", async (req: Request, res: Response) => {
+    const token = getStringQuery(req, "token");
+    const state = getStringQuery(req, "state");
+    const linkState = readEmailLinkState(req);
+    clearEmailLinkStateCookie(res);
+    if (!token || !validMagicLinkToken(token) || !linkState || !matchesState(linkState.nonce, state)) {
+      return res.status(400).json({ error: "This account-link confirmation is invalid or has expired. Start again from your signed-in account." });
+    }
+
+    try {
+      const link = await db.consumeAuthMagicLink(token);
+      const origin = validOrigin(link.redirectOrigin);
+      if (!origin || db.normaliseAuthEmail(link.email) !== linkState.email) throw new Error("The email-link confirmation does not match.");
+      const currentUser = await sdk.authenticateRequest(req);
+      if (currentUser.id !== linkState.userId || currentUser.sessionId !== linkState.sessionId || !currentUser.email || db.normaliseAuthEmail(currentUser.email) !== linkState.email) {
+        throw new Error("The signed-in account changed during email linking.");
+      }
+      await db.linkExternalAuthIdentity({ userId: currentUser.id, provider: "email", providerSubject: link.email, email: link.email });
+      return res.redirect(302, origin + "/app?identityLinked=email");
+    } catch {
+      writeOperationalEvent("warn", "auth_email_link_verification_failed", { category: "invalid_or_expired_link" });
+      return res.status(400).json({ error: "This account-link confirmation is invalid, expired, or already used. Start again from your signed-in account." });
+    }
+  });
   app.post("/api/auth/email/request", async (req: Request, res: Response) => {
     const origin = validOrigin(req.body?.origin);
     const headerOrigin = validOrigin(req.get("origin"));
