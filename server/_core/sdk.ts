@@ -284,6 +284,7 @@ class SDKServer {
     }
 
     if (session.openId.startsWith(CRON_OPEN_ID_PREFIX)) {
+      if (!ENV.legacyAuthEnabled) throw ForbiddenError("Legacy scheduled-task authentication is disabled.");
       const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
       const taskUid = userInfo.taskUid ?? null;
       if (!taskUid) {
