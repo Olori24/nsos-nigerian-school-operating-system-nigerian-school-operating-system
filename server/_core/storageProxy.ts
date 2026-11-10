@@ -5,7 +5,7 @@ import { can, isManagementRole, type SchoolRole } from "../roles";
 import { sdk } from "./sdk";
 
 export function isSafeStorageKey(key: string) {
-  return key.length > 0 && key.length <= 1024 && /^[A-Za-z0-9._/-]+$/.test(key) && !key.includes("..") && /^schools\\/[1-9]\\d*\\//.test(key);
+  return key.length > 0 && key.length <= 1024 && /^[A-Za-z0-9._/-]+$/.test(key) && !key.includes("..") && /^schools\/[1-9]\d*\//.test(key);
 }
 
 function canReadStoredObject(record: db.StoredObjectAccessRecord, input: { userId: number; role: SchoolRole }) {
