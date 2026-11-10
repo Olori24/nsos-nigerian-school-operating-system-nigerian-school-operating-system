@@ -30,7 +30,7 @@ describe("NSOS security hardening rules", () => {
   });
 
   it("allows same-origin state changes and redacts sensitive audit metadata", () => {
-    expect(isTrustedMutationOrigin("https://nsos-system-uhkdscaf.manus.space", "https", "nsos-system-uhkdscaf.manus.space")).toBe(true);
+    expect(isTrustedMutationOrigin("https://nsos.test", "https", "nsos-system-uhkdscaf.manus.space")).toBe(true);
     expect(isTrustedMutationOrigin("https://attacker.example", "https", "nsos-system-uhkdscaf.manus.space")).toBe(false);
     expect(isTrustedMutationOrigin(undefined, "https", "nsos-system-uhkdscaf.manus.space")).toBe(false);
     expect(sanitizeSecurityAuditMetadata({ provider: "termii", apiKey: "secret", recipientPhone: "2348031234567", deliveryTracking: "pending" })).toEqual({ provider: "termii", apiKey: "[REDACTED]", recipientPhone: "[REDACTED]", deliveryTracking: "pending" });
