@@ -212,14 +212,39 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+function resolveCompatibleBaseUrl() {
+  const baseUrl = ENV.llmApiBaseUrl.trim();
+  if (!baseUrl) throw new Error("LLM_API_BASE_URL is required for the openai-compatible provider.");
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error("LLM_API_BASE_URL must be a valid URL.");
+  }
+  const localHttp = !ENV.isProduction && parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
+  if (parsed.protocol !== "https:" && !localHttp) throw new Error("LLM_API_BASE_URL must use HTTPS outside local development.");
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error("LLM_API_BASE_URL must not contain credentials, a query, or a fragment.");
+  return baseUrl.replace(/\\/+$/, "");
+}
+
+const resolveApiBaseUrl = () => {
+  if (ENV.llmProvider === "openai-compatible") return resolveCompatibleBaseUrl();
+  if (ENV.llmProvider !== "forge") throw new Error("LLM_PROVIDER must be forge or openai-compatible.");
+  return ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+    ? ENV.forgeApiUrl.replace(/\\/+$/, "") + "/v1"
+    : "https://forge.manus.im/v1";
+};
+
+const resolveApiUrl = () => resolveApiBaseUrl() + "/chat/completions";
+const resolveModelsUrl = () => resolveApiBaseUrl() + "/models";
+const resolveApiKey = () => ENV.llmProvider === "openai-compatible" ? ENV.llmApiKey : ENV.forgeApiKey;
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!resolveApiKey()) {
+    throw new Error(ENV.llmProvider === "openai-compatible" ? "LLM_API_KEY is not configured." : "BUILT_IN_FORGE_API_KEY is not configured.");
+  }
+  if (ENV.llmProvider === "openai-compatible" && !ENV.llmModel.trim()) {
+    throw new Error("LLM_MODEL is required for the openai-compatible provider.");
   }
 };
 
@@ -367,8 +392,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     messages: messages.map(normalizeMessage),
   };
 
-  if (model) {
-    payload.model = model;
+  const resolvedModel = model || (ENV.llmProvider === "openai-compatible" ? ENV.llmModel : "");
+  if (resolvedModel) {
+    payload.model = resolvedModel;
   }
 
   if (tools && tools.length > 0) {
@@ -440,12 +466,8 @@ export type ModelsResponse = {
 export async function listLLMModels(): Promise<ModelsResponse> {
   assertApiKey();
 
-  const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models`
-    : "https://forge.manus.im/v1/models";
-
-  const response = await fetchWithBackoff(url, {
-    headers: { authorization: `Bearer ${ENV.forgeApiKey}` },
+  const response = await fetchWithBackoff(resolveModelsUrl(), {
+    headers: { authorization: `Bearer ${resolveApiKey()}` },
   });
 
   if (!response.ok) {
