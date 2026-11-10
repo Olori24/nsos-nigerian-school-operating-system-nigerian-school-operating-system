@@ -77,7 +77,7 @@ export function registerOAuthRoutes(app: Express) {
 
       const callbackUrl = new URL(oauthState.redirectUri);
       const hostname = callbackUrl.hostname;
-      const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+      const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".nsos.top") || hostname.endsWith(".vercel.app");
       res.redirect(302, `${callbackUrl.origin}${isPlatformHost ? "/app" : "/"}`);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
