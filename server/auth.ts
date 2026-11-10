@@ -12,6 +12,7 @@ const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const EMAIL_LINK_STATE_COOKIE = "__Host-email_link_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
 const STATE_TTL_MS = 10 * 60_000;
+const EMAIL_LINK_STATE_TTL_MS = 15 * 60_000;
 const MAGIC_LINK_TTL_LABEL = "15 minutes";
 const EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS = 10_000;
 
@@ -34,7 +35,7 @@ function validOrigin(value: unknown) {
 
 function postSignInPath(origin: string) {
   const hostname = new URL(origin).hostname;
-  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".vercel.app");
+  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".nsos.top") || hostname.endsWith(".vercel.app");
   return isPlatformHost ? "/app" : "/";
 }
 
@@ -265,7 +266,7 @@ export function registerEmailAuthRoutes(app: Express) {
       if (db.normaliseAuthEmail(user.email) !== email) return res.status(400).json({ error: "The email to link must match the signed-in NSOS account email." });
 
       const nonce = randomBytes(32).toString("base64url");
-      res.cookie(EMAIL_LINK_STATE_COOKIE, JSON.stringify({ nonce, userId: user.id, sessionId: user.sessionId, email }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+      res.cookie(EMAIL_LINK_STATE_COOKIE, JSON.stringify({ nonce, userId: user.id, sessionId: user.sessionId, email }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: EMAIL_LINK_STATE_TTL_MS });
       const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
       const link = origin + "/api/auth/email/link/verify?token=" + encodeURIComponent(token) + "&state=" + encodeURIComponent(nonce);
       await sendMagicLinkEmail({
