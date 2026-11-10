@@ -39,5 +39,6 @@ describe("production observability controls", () => {
     expect(requiredProductionEnvironmentErrors({ isProduction: false, appId: "", cookieSecret: "", databaseUrl: "", oAuthServerUrl: "" })).toEqual([]);
     expect(requiredProductionEnvironmentErrors({ isProduction: true, appId: "app", cookieSecret: "", databaseUrl: "db", oAuthServerUrl: "" })).toEqual(["JWT_SECRET is required in production.", "OAUTH_SERVER_URL is required in production."]);
     expect(requiredProductionEnvironmentErrors({ isProduction: true, appId: "app", cookieSecret: "12345678901234567890123456789012", databaseUrl: "db", oAuthServerUrl: "https://auth.example", storageProvider: "s3" })).toContain("S3 storage is selected but these settings are missing: S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION.");
+    expect(requiredProductionEnvironmentErrors({ isProduction: true, appId: "app", cookieSecret: "12345678901234567890123456789012", databaseUrl: "db", oAuthServerUrl: "https://auth.example", storageProvider: "dual", s3Bucket: "bucket", s3AccessKeyId: "key", s3SecretAccessKey: "secret", s3Region: "auto" })).toContain("Legacy storage is selected but these settings are missing: BUILT_IN_FORGE_API_URL, BUILT_IN_FORGE_API_KEY.");
   });
 });
