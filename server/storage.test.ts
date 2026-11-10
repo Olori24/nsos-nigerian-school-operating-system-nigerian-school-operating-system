@@ -61,7 +61,7 @@ describe("standalone S3-compatible object storage", () => {
     );
 
     expect(result.key).toMatch(/^schools\/34\/knowledge-library\/source\/handbook_[a-f0-9]{8}\.pdf$/);
-    expect(result.url).toBe(`/manus-storage/${result.key}`);
+    expect(result.url).toBe(`/storage/${result.key}`);
     const command = mocks.send.mock.calls[0]?.[0] as { input: Record<string, unknown> };
     expect(command.input).toMatchObject({
       Bucket: "nsos-test",
