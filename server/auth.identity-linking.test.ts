@@ -124,7 +124,9 @@ describe("explicit legacy account identity linking", () => {
       expect(start.status).toBe(202);
       const stateCookie = cookiePair(start.headers, "__Host-email_link_state");
       const emailPayload = JSON.parse(String((providerFetch.mock.calls[0]?.[1] as RequestInit).body));
-      const link = new URL(emailPayload.text.split(": ").at(-1));
+      const emailText = String(emailPayload.text);
+      const linkText = emailText.slice(emailText.lastIndexOf(": ") + 2);
+      const link = new URL(linkText);
       const state = link.searchParams.get("state");
 
       const verify = await requestRoute(origin + link.pathname + link.search, { headers: { cookie: sessionCookie + "; " + stateCookie } });
