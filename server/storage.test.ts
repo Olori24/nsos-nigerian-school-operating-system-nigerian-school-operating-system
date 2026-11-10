@@ -83,7 +83,7 @@ describe("standalone S3-compatible object storage", () => {
     await expect(storageGet("schools/34/knowledge-library/../private.txt")).rejects.toThrow("Storage object key is invalid.");
     expect(await storageGet("schools/34/knowledge-library/handbook.pdf")).toEqual({
       key: "schools/34/knowledge-library/handbook.pdf",
-      url: "/manus-storage/schools/34/knowledge-library/handbook.pdf",
+      url: "/storage/schools/34/knowledge-library/handbook.pdf",
     });
   });
 });
