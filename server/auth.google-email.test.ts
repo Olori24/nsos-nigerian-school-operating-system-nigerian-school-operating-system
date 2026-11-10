@@ -62,6 +62,7 @@ describe("external authentication policy", () => {
 
   it("allows only an exact HTTPS origin or a local HTTP development origin", () => {
     expect(authRoutePolicies.validOrigin("https://nsos.test")).toBe("https://nsos.test");
+    expect(authRoutePolicies.validOrigin("https://attacker.example")).toBeUndefined();
     expect(authRoutePolicies.validOrigin("http://localhost:3000")).toBe("http://localhost:3000");
     expect(authRoutePolicies.validOrigin("https://nsos.test/unsafe-path")).toBeUndefined();
     expect(authRoutePolicies.validOrigin("http://school.example.ng")).toBeUndefined();
