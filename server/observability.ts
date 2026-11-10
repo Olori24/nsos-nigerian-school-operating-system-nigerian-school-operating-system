@@ -86,6 +86,7 @@ export function requiredProductionEnvironmentErrors(input: {
   llmApiBaseUrl?: string;
   llmApiKey?: string;
   llmModel?: string;
+  publicAppUrl?: string;
 }) {
   if (!input.isProduction) return [];
   const errors = [
@@ -93,6 +94,7 @@ export function requiredProductionEnvironmentErrors(input: {
     ["JWT_SECRET", input.cookieSecret && input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
     ["OAUTH_SERVER_URL", input.oAuthServerUrl],
+    ["PUBLIC_APP_URL", input.publicAppUrl],
   ].filter(([, value]) => !value?.trim()).map(([name]) => name + " is required in production.");
 
   if (input.storageProvider && !["forge", "s3", "dual"].includes(input.storageProvider)) {
