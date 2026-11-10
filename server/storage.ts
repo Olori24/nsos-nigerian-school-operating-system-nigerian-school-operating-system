@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   GetObjectCommand,
   PutObjectCommand,
@@ -199,6 +200,29 @@ export async function storagePut(
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
   return { key, url: "/storage/" + key };
+}
+
+export async function copyLegacyObjectToS3(relKey: string): Promise<{ key: string; bytes: number; sha256: string; contentType: string }> {
+  const key = normalizeKey(relKey);
+  const sourceUrl = await forgeGetSignedUrl(key);
+  const sourceResponse = await fetch(sourceUrl, { signal: AbortSignal.timeout(60_000) });
+  if (!sourceResponse.ok) throw new Error("Legacy object download failed (" + sourceResponse.status + ").");
+
+  const contentType = (sourceResponse.headers.get("content-type") || "application/octet-stream").split(";")[0]!.trim();
+  const sourceBytes = Buffer.from(await sourceResponse.arrayBuffer());
+  const sourceHash = createHash("sha256").update(sourceBytes).digest("hex");
+  await s3Put(key, sourceBytes, contentType);
+
+  const targetUrl = await s3GetSignedUrl(key);
+  const targetResponse = await fetch(targetUrl, { signal: AbortSignal.timeout(60_000) });
+  if (!targetResponse.ok) throw new Error("S3 object verification download failed (" + targetResponse.status + ").");
+  const targetBytes = Buffer.from(await targetResponse.arrayBuffer());
+  const targetHash = createHash("sha256").update(targetBytes).digest("hex");
+  if (targetBytes.byteLength !== sourceBytes.byteLength || targetHash !== sourceHash) {
+    throw new Error("S3 object verification failed: downloaded bytes do not match the legacy source.");
+  }
+
+  return { key, bytes: sourceBytes.byteLength, sha256: sourceHash, contentType };
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
