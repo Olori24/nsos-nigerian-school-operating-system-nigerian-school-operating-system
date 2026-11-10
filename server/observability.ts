@@ -75,6 +75,7 @@ export function requiredProductionEnvironmentErrors(input: {
   cookieSecret: string;
   databaseUrl: string;
   oAuthServerUrl: string;
+  legacyAuthEnabled?: boolean;
   storageProvider?: string;
   s3Bucket?: string;
   s3AccessKeyId?: string;
@@ -93,7 +94,7 @@ export function requiredProductionEnvironmentErrors(input: {
     ["VITE_APP_ID", input.appId],
     ["JWT_SECRET", input.cookieSecret && input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
-    ["OAUTH_SERVER_URL", input.oAuthServerUrl],
+    ...(input.legacyAuthEnabled === false ? [] : [["OAUTH_SERVER_URL", input.oAuthServerUrl] as const]),
     ["PUBLIC_APP_URL", input.publicAppUrl],
   ].filter(([, value]) => !value?.trim()).map(([name]) => name + " is required in production.");
 
