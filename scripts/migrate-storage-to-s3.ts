@@ -40,7 +40,7 @@ async function main() {
   try {
     const [grantRows] = await connection.query("SHOW GRANTS FOR CURRENT_USER()");
     const grants = (grantRows as Array<Record<string, unknown>>).map(row => Object.values(row).join(" ")).join(" ").toUpperCase();
-    if (/\\b(ALL PRIVILEGES|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRIGGER|EXECUTE|GRANT OPTION)\\b/.test(grants)) {
+    if (/\b(ALL PRIVILEGES|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRIGGER|EXECUTE|GRANT OPTION)\b/.test(grants)) {
       throw new Error("The connected database account is not read-only. Stop and use a SELECT-only account.");
     }
     const keys = new Set<string>();
