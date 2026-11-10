@@ -7,6 +7,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
+import { createRateLimitMiddleware } from "./security";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const EMAIL_LINK_STATE_COOKIE = "__Host-email_link_state";
@@ -215,15 +216,15 @@ async function startGoogleAuthorization(req: Request, res: Response, intent: "si
   return res.redirect(302, url.toString());
 }
 
-export function registerGoogleAuthRoutes(app: Express) {
-  app.get("/api/auth/google/start", (req: Request, res: Response) => {
+export function registerGoogleAuthRoutes(app: Express, rateLimit = createRateLimitMiddleware) {
+  app.get("/api/auth/google/start", rateLimit({ namespace: "google-signin-start", limit: 10, windowMs: 10 * 60_000 }), (req: Request, res: Response) => {
     void startGoogleAuthorization(req, res, "signin");
   });
-  app.get("/api/auth/google/link/start", (req: Request, res: Response) => {
+  app.get("/api/auth/google/link/start", rateLimit({ namespace: "google-account-link", limit: 5, windowMs: 10 * 60_000 }), (req: Request, res: Response) => {
     void startGoogleAuthorization(req, res, "link");
   });
 
-  app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+  app.get("/api/auth/google/callback", rateLimit({ namespace: "google-signin-callback", limit: 20, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     const code = getStringQuery(req, "code");
     const state = getStringQuery(req, "state");
     const loginState = readGoogleLoginState(req);
@@ -272,8 +273,8 @@ export function registerGoogleAuthRoutes(app: Express) {
   });
 }
 
-export function registerEmailAuthRoutes(app: Express) {
-  app.post("/api/auth/email/link/request", async (req: Request, res: Response) => {
+export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimitMiddleware) {
+  app.post("/api/auth/email/link/request", rateLimit({ namespace: "email-account-link", limit: 3, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     const origin = validOrigin(req.body?.origin);
     const headerOrigin = validOrigin(req.get("origin"));
     if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
@@ -309,7 +310,7 @@ export function registerEmailAuthRoutes(app: Express) {
     }
   });
 
-  app.get("/api/auth/email/link/verify", async (req: Request, res: Response) => {
+  app.get("/api/auth/email/link/verify", rateLimit({ namespace: "email-account-link-verify", limit: 5, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
     const state = getStringQuery(req, "state");
     const linkState = readEmailLinkState(req);
@@ -333,7 +334,7 @@ export function registerEmailAuthRoutes(app: Express) {
       return res.status(400).json({ error: "This account-link confirmation is invalid, expired, or already used. Start again from your signed-in account." });
     }
   });
-  app.post("/api/auth/email/request", async (req: Request, res: Response) => {
+  app.post("/api/auth/email/request", rateLimit({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     const origin = validOrigin(req.body?.origin);
     const headerOrigin = validOrigin(req.get("origin"));
     if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
@@ -349,7 +350,7 @@ export function registerEmailAuthRoutes(app: Express) {
     }
   });
 
-  app.get("/api/auth/email/verify", async (req: Request, res: Response) => {
+  app.get("/api/auth/email/verify", rateLimit({ namespace: "passwordless-email-verify", limit: 10, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
     if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
     try {
