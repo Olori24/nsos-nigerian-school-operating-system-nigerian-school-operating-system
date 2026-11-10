@@ -22,6 +22,7 @@ export const ENV = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   authEmailFrom: process.env.AUTH_EMAIL_FROM ?? "",
+  ownerNotificationEmail: process.env.OWNER_NOTIFICATION_EMAIL ?? "",
   composioApiKey: process.env.COMPOSIO_API_KEY ?? "",
   composioUserId: process.env.COMPOSIO_USER_ID ?? "",
   composioConnectedAccountId: process.env.COMPOSIO_CONNECTED_ACCOUNT_ID ?? "",
