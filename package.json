@@ -15,7 +15,8 @@
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "arsenal:audit": "node scripts/arsenal-audit.mjs",
     "seo:submit-sitemap": "node scripts/submit-sitemap.mjs",
-    "build:vercel": "pnpm build"
+    "build:vercel": "pnpm build",
+    "storage:migrate:s3": "tsx scripts/migrate-storage-to-s3.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1112.0",
