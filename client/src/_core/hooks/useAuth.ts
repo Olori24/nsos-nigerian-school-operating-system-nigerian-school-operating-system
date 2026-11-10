@@ -47,10 +47,12 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    try {
+      localStorage.setItem("nsos-runtime-user-info", JSON.stringify(meQuery.data ?? null));
+      localStorage.removeItem("manus-runtime-user-info");
+    } catch {
+      // Authentication remains cookie-based when browser storage is unavailable.
+    }
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,
@@ -72,11 +74,14 @@ export function useAuth(options?: UseAuthOptions) {
     if (typeof window === "undefined") return;
     if (redirectPath && window.location.pathname === redirectPath) return;
 
-    // Navigate at this moment only. startLogin() mints the nonce + cookie itself.
     if (redirectPath) {
       window.location.href = redirectPath;
-    } else {
+    } else if (import.meta.env.VITE_LEGACY_LOGIN_ENABLED !== "false") {
+      // Keep the legacy sign-in bridge only during the identity migration window.
       startLogin();
+    } else {
+      // After legacy auth is retired, send unauthenticated users to the standalone login page.
+      window.location.assign("/");
     }
   }, [
     redirectOnUnauthenticated,
