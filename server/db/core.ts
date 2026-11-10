@@ -192,7 +192,7 @@ export type SmsDeliveryState = "pending" | "delivered" | "failed";
 export type AdvertisingCampaignStatus = "draft" | "pending_approval" | "approved" | "launching" | "active" | "paused" | "completed" | "failed" | "archived";
 type AdvertisingAudience = { locations: string[]; ageMin?: number; ageMax?: number; note?: string };
 
-const NSOS_WEBHOOK_ORIGIN = "https://nsos-system-uhkdscaf.manus.space";
+
 
 function encryptionKey() {
   if (!ENV.cookieSecret) throw new Error("Provider credentials cannot be stored until the application secret is configured.");
@@ -380,10 +380,19 @@ export function canApplySmsDeliveryTransition(currentStatus: "queued" | "sent" |
 }
 
 export function getSmsDeliveryWebhookUrls(schoolId: number) {
+  const configuredOrigin = ENV.publicAppUrl.trim();
+  if (!configuredOrigin) throw new Error("PUBLIC_APP_URL is required to build SMS callback URLs.");
+  const parsed = new URL(configuredOrigin);
+  const localHttp = !ENV.isProduction && parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
+  if (parsed.protocol !== "https:" && !localHttp) throw new Error("PUBLIC_APP_URL must use HTTPS outside local development.");
+  if (parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
+    throw new Error("PUBLIC_APP_URL must be an origin without credentials, path, query, or fragment.");
+  }
+  const origin = parsed.origin;
   const query = `?schoolId=${schoolId}`;
   return {
-    termii: `${NSOS_WEBHOOK_ORIGIN}/api/webhooks/sms/termii${query}`,
-    twilio: `${NSOS_WEBHOOK_ORIGIN}/api/webhooks/sms/twilio${query}`,
+    termii: `${origin}/api/webhooks/sms/termii${query}`,
+    twilio: `${origin}/api/webhooks/sms/twilio${query}`,
   };
 }
 
