@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({ getStoredObjectAccessRecord: vi.fn(), getSchoolMembership: vi.fn() }));
 const sdk = vi.hoisted(() => ({ authenticateRequest: vi.fn() }));
+const storage = vi.hoisted(() => ({ storageGetSignedUrl: vi.fn().mockResolvedValue("https://signed.example/object") }));
 vi.mock("../server/db", () => db);
 vi.mock("../server/_core/sdk", () => ({ sdk }));
-vi.mock("../server/_core/env", () => ({ ENV: { forgeApiUrl: "https://forge.example", forgeApiKey: "test-key" } }));
+vi.mock("./storage", () => storage);
 
 import { isSafeStorageKey, registerStorageProxy } from "./_core/storageProxy";
 
@@ -23,7 +24,7 @@ function response() {
 describe("storage proxy authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: "https://signed.example/object" }) }));
+    storage.storageGetSignedUrl.mockResolvedValue("https://signed.example/object");
   });
 
   it("rejects unknown and traversal-style keys before signing or authentication", async () => {
@@ -33,7 +34,7 @@ describe("storage proxy authorization", () => {
     expect(res.code).toBe(404);
     expect(db.getStoredObjectAccessRecord).not.toHaveBeenCalled();
     expect(sdk.authenticateRequest).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(storage.storageGetSignedUrl).not.toHaveBeenCalled();
   });
 
   it("allows only selected published website media without a session", async () => {
