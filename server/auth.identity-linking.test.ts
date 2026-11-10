@@ -105,6 +105,29 @@ describe("explicit legacy account identity linking", () => {
     });
   });
 
+  it("does not create a duplicate account when a verified provider email belongs to a legacy NSOS user", async () => {
+    const resolveIdentity = vi.spyOn(database, "resolveExternalAuthIdentity").mockRejectedValue(new Error("Existing NSOS accounts require explicit identity linking."));
+    const createSession = vi.spyOn(database, "createUserSession");
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "google-access-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sub: "google-sub-legacy", email: "owner@example.ng", email_verified: true }), { status: 200 })));
+
+    await withServer(async origin => {
+      const start = await requestRoute(origin + "/api/auth/google/start?origin=" + encodeURIComponent("https://nsos.test"));
+      const stateCookie = cookiePair(start.headers, "__Host-google_oauth_state");
+      const state = JSON.parse(parseCookieHeader(stateCookie)["__Host-google_oauth_state"]!);
+      const callback = await requestRoute(
+        origin + "/api/auth/google/callback?code=verified-code&state=" + encodeURIComponent(state.state),
+        { headers: { cookie: stateCookie } },
+      );
+
+      expect(callback.status).toBe(409);
+      expect(callback.body).toContain("Sign in to that account");
+      expect(resolveIdentity).toHaveBeenCalledOnce();
+      expect(createSession).not.toHaveBeenCalled();
+    });
+  });
+
   it("links a verified email identity only in the same authenticated browser session", async () => {
     vi.spyOn(sdk, "authenticateRequest").mockResolvedValue(user as any);
     vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("m".repeat(43));
