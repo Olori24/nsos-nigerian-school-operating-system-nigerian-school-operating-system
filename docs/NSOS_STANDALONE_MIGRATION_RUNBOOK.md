@@ -101,6 +101,46 @@ For the final standalone cutover, configure:
 
 The legacy callback then returns HTTP 410 and the legacy sign-in control is hidden. Do not apply these flags while any required account remains unlinked.
 
+## Zero-dollar infrastructure assessment (2026-11-10)
+
+The owner has set a hard infrastructure budget of **USD 0 per month until NSOS earns revenue**. Do not create paid resources, start a free trial that can auto-convert, upgrade the tenancy to Pay As You Go, attach paid add-ons, or accept usage-based overages. No credit card or billing authorization is implied by this plan.
+
+### Preferred staging candidate: OCI Always Free
+
+Oracle Cloud Infrastructure (OCI) documents a set of Always Free resources available for the life of an account in its home region. This is the strongest currently identified zero-dollar candidate because it offers a managed MySQL option and private object storage without changing NSOS's database engine.
+
+Official references:
+- OCI Always Free resources: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
+- MySQL HeatWave Always Free DB system: https://docs.oracle.com/en-us/iaas/mysql-database/doc/creating-always-free-db-system.html
+- MySQL HeatWave service limitations: https://docs.oracle.com/en-us/iaas/mysql-database/doc/features-mysql-heatwave-service.html
+- OCI S3 compatibility API: https://www.oracle.com/cloud/storage/object-storage/faq/
+
+Documented capacity and limitations:
+- **Compute:** up to 2 total Ampere A1 OCPUs and 12 GB RAM, subject to home-region availability. Always Free compute instances may be reclaimed when Oracle's documented 7-day CPU, network, and (for A1) memory utilization thresholds are all below 20%. This is not a production availability guarantee.
+- **MySQL:** one Always Free MySQL HeatWave DB system using the MySQL.Free shape, fixed 50 GiB storage, and optional one-node HeatWave.Free cluster. The service is MySQL 8.0+ with InnoDB support, but its version is automatically updated to the latest release. Automatic backups retain one day; manual backups, point-in-time recovery, high availability, read replicas, SLA and Oracle Support are not included. Treat this as an isolated staging database only, never as the sole production database or backup.
+- **Object storage:** 20 GB combined Always Free object storage and 50,000 API requests per month in an Always Free-only account. Keep the bucket private. The S3 compatibility API supports Signature V4 and path-style or virtual-hosted requests, but does not implement every S3 API.
+- **Network and capacity:** resources must remain in the tenancy home region to qualify for Always Free. Region capacity can prevent provisioning. Do not move resources to another region if that would create a billable resource.
+
+### Staging topology to validate
+
+1. One Always Free A1 VM for the NSOS staging application, reverse proxy, and operational monitoring.
+2. One Always Free MySQL HeatWave DB system, isolated from production and reachable only from the staging VM/network.
+3. One private OCI Object Storage bucket for synthetic staging files. Configure the AWS SDK S3 endpoint using the namespace and home-region compatibility endpoint, Signature V4 credentials, and path-style access where required.
+4. A separate staging hostname and secrets. Do not point staging to `nsos.top`, production OAuth callbacks, production email lists, production database, or production object storage.
+
+The current NSOS S3 adapter uses `PutObject`, `GetObject`, and presigned `GetObject` URLs. OCI's compatibility layer does not promise complete S3 parity, so validate all three operations with synthetic objects, including signed URL expiry, content type, byte-for-byte download verification, and denial of anonymous access, before accepting OCI storage. Do not copy any production object until the isolated staging tests pass and a separate approval is obtained.
+
+### Hard zero-spend controls
+
+- Use only resources explicitly labelled **Always Free** in the OCI console. Do not provision a resource whose cost estimate is non-zero or whose eligibility is unclear.
+- Do not upgrade to Pay As You Go, enable paid support, or create paid load balancers, NAT gateways, databases, storage tiers, backups, observability add-ons, or AI services.
+- Use OCI compartment quotas and service limits to constrain resource creation where supported. Check the tenancy's usage and billing pages before and after each provisioning step.
+- Keep object storage below 20 GB and API calls below 50,000 per month; do not rely on an overage being blocked automatically.
+- Keep compute and database staging workloads small. Do not use the free VM as a production availability promise; the documented idle-reclamation policy and absence of database SLA make this a staging candidate only.
+- If the account requires a paid upgrade, billing commitment, or non-zero resource, stop and report the blocker. Do not proceed.
+
+**Provisioning status:** Not provisioned. No OCI tenancy has been confirmed in the connected workspace, and no cloud resource, billing setting, credential, database, bucket, or network has been created or changed.
+
 ## Staging and data-verification sequence
 
 1. Provision an isolated MySQL staging database, a private S3-compatible staging bucket, and a separate staging application deployment. Do not reuse production credentials or connect staging to the production database.
