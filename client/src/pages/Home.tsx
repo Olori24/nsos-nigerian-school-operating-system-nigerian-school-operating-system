@@ -434,6 +434,19 @@ export default function Home() {
       className: SUCCESS_TOAST_CLASS,
     });
   }, [user?.id]);
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get("identityLinked");
+    if (linked !== "google" && linked !== "email") return;
+    toast.success((linked === "google" ? "Google" : "Email") + " sign-in linked to your existing NSOS account.", {
+      duration: SUCCESS_TOAST_DURATION_MS,
+      className: SUCCESS_TOAST_CLASS,
+    });
+    params.delete("identityLinked");
+    const query = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash);
+  }, []);
 
   useEffect(() => {
     if (!schoolsQuery.data?.length) { if (schoolId) setSchoolId(null); return; }
