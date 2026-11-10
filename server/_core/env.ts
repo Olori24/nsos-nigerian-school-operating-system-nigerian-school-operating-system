@@ -26,6 +26,7 @@ export const ENV = {
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   authEmailFrom: process.env.AUTH_EMAIL_FROM ?? "",
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? "",
+  googleMapsBrowserApiKey: process.env.VITE_GOOGLE_MAPS_API_KEY ?? "",
   ownerNotificationEmail: process.env.OWNER_NOTIFICATION_EMAIL ?? "",
   composioApiKey: process.env.COMPOSIO_API_KEY ?? "",
   composioUserId: process.env.COMPOSIO_USER_ID ?? "",
