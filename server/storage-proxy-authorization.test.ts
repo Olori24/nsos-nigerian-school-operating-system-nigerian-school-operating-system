@@ -13,7 +13,8 @@ type Handler = (req: any, res: any) => Promise<void>;
 
 function route() {
   let handler: Handler | undefined;
-  registerStorageProxy({ get: (_path: string, registered: Handler) => { handler = registered; } } as any);
+  const allow = () => (_req: any, _res: any, next: () => void) => next();
+  registerStorageProxy({ get: (_path: string, ...registered: Handler[]) => { handler = registered[registered.length - 1]; } } as any, allow as any);
   return handler!;
 }
 
