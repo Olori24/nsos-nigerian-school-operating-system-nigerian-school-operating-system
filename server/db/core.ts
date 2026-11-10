@@ -734,7 +734,7 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   // to a pre-existing Manus user, because that user may already own tenant data.
   // External providers may share their own local account; linking a legacy
   // Manus account requires a separate explicit reauthentication flow.
-  const matchingEmailUsers = await db.select().from(users).where(eq(users.email, email)).limit(20);
+  const matchingEmailUsers = await db.select().from(users).where(sql`LOWER(${users.email}) = ${email}`);
   const legacyUser = matchingEmailUsers.find(candidate => !candidate.openId.startsWith("external:"));
   if (legacyUser) throw new Error("Existing NSOS accounts require explicit identity linking.");
   let user = matchingEmailUsers.find(candidate => candidate.openId.startsWith("external:"));
