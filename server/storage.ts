@@ -193,12 +193,12 @@ export async function storagePut(
   }
 
   // Keep the established proxy URL so existing database references remain valid.
-  return { key, url: "/manus-storage/" + key };
+  return { key, url: "/storage/" + key };
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
-  return { key, url: "/manus-storage/" + key };
+  return { key, url: "/storage/" + key };
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
