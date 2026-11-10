@@ -69,7 +69,7 @@ describe("dual-write object storage migration mode", () => {
       "application/pdf",
     );
 
-    expect(result.key).toMatch(/^schools\\/34\\/admissions\\/51\\/passport_[a-f0-9]{8}\\.pdf$/);
+    expect(result.key).toMatch(/^schools\/34\/admissions\/51\/passport_[a-f0-9]{8}\.pdf$/);
     expect(result.url).toBe("/manus-storage/" + result.key);
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(2);
