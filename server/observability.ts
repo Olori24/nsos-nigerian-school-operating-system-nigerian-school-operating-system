@@ -27,7 +27,8 @@ export function requestIdFor(value: string | undefined) {
 }
 
 export function safeRequestPath(request: Pick<Request, "baseUrl" | "path">) {
-  return (request.baseUrl || "") + (request.path || "").split("?", 1)[0]!.slice(0, 320) || "/";
+  const path = ((request.baseUrl || "") + (request.path || "")).split("?", 1)[0]!.slice(0, 320);
+  return path || "/";
 }
 
 export function writeOperationalEvent(level: "info" | "warn" | "error", event: string, fields: Record<string, string | number | boolean | undefined>) {
