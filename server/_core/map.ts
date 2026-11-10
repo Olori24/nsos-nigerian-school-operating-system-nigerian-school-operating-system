@@ -23,6 +23,10 @@ export async function makeRequest<T = unknown>(
   }
 
   const url = new URL(path, "https://maps.googleapis.com");
+  // URL parsing normalises encoded dot segments, so validate the resolved path too.
+  if (url.origin !== "https://maps.googleapis.com" || !url.pathname.startsWith("/maps/api/")) {
+    throw new Error("Google Maps endpoint is not allowed.");
+  }
   url.searchParams.set("key", apiKey);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null) url.searchParams.append(key, String(value));
