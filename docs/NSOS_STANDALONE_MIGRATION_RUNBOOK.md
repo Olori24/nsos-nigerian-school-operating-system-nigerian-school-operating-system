@@ -141,6 +141,23 @@ The current NSOS S3 adapter uses `PutObject`, `GetObject`, and presigned `GetObj
 
 **Provisioning status:** Not provisioned. No OCI tenancy has been confirmed in the connected workspace, and no cloud resource, billing setting, credential, database, bucket, or network has been created or changed.
 
+## No-card hosting reassessment (2026-11-10)
+
+OCI is blocked for this owner: the signup flow requests payment-card verification, and the owner has no card. Do not ask for borrowed card details, bypass verification, or upgrade billing. No OCI resources have been created.
+
+The previous OCI Always Free proposal is retained above as technical reference only; it is **not an available deployment path** unless Oracle changes its signup requirements without requiring a card or paid billing.
+
+Other no-card options reviewed:
+
+- **Enzonic Cloud:** Its current free Deploy and MySQL database tiers do not require a card. The free database supports MySQL 8.4, up to 3 GB per database, 0.25 vCPU / 512 MB RAM, daily backups retained for one day, and sleeps after five idle minutes. Free Deploy server mode is one 512 MB instance and sleeps after 15 idle minutes. Critically, Enzonic explicitly positions Free for personal projects, bots and prototypes, while production apps/databases are assigned to paid plans. Therefore, do not use its free tier for NSOS commercial production or real learner/family data. A possible route is a **startup grant**: Enzonic says startups may apply for 3, 6 or 12 months of Pro/Business and up to USD 500 cloud credit; an application is reviewed by a person and is not guaranteed. The grant application requires a free account, not a card. Ask the provider to confirm commercial NSOS eligibility, privacy/data-processing terms, backup/restore scope and region before any staging data is uploaded. Current official references: https://www.enzonic.com/cloud/deploy and https://www.enzonic.com/cloud/databases.
+- **EthioDeploy:** Its published no-card free tier offers one Node backend at 256 MB RAM / 0.5 CPU and a 512 MB managed MySQL database; the app sleeps after 30 minutes, local files are wiped on deploy, and the free tier has no custom domain or branch previews. Its public page does not establish adequate commercial-use, privacy, data-processing, support, or recovery terms for NSOS. Treat it as an unverified technical experiment only, not an approved host and never use it for production or real learner/family data without written vendor confirmation. Reference: https://ethiodeploy.com/free-backend-hosting.
+- **Aiven:** Its MySQL free tier has been retired for new services. The current MySQL Developer tier is USD 5/month, so it violates the hard budget. Do not select its free PostgreSQL tier because NSOS is a MySQL application and PostgreSQL is not a drop-in replacement. Reference: https://aiven.io/free-mysql-database-retired.
+- **Cloudflare Workers / D1:** The free tier has useful request quotas, but D1 is SQLite rather than MySQL. Moving NSOS's 107-table MySQL application to D1 would be a database/platform migration, not a hosting substitution. Do not pursue without a separate architecture decision and full compatibility plan.
+
+### Current hosting decision
+
+No no-card provider has yet passed all NSOS requirements for a commercial, secure, persistent, MySQL-backed service. **Do not deploy NSOS production or real school data to any of the above free tiers.** The immediate viable path is to pursue a no-card startup grant (Enzonic is one candidate) and continue engineering/verification in GitHub Actions while keeping production untouched. If a grant is declined or unsuitable, report the blocker rather than activating a paid plan or weakening the database/storage/security requirements.
+
 ## Staging and data-verification sequence
 
 1. Provision an isolated MySQL staging database, a private S3-compatible staging bucket, and a separate staging application deployment. Do not reuse production credentials or connect staging to the production database.
