@@ -7,11 +7,13 @@ import { normaliseAuthEmail } from "./db";
 import { ENV } from "./_core/env";
 import { registerOAuthRoutes } from "./_core/oauth";
 
+const allowRateLimit = () => (_req: any, _res: any, next: () => void) => next();
+
 async function withAuthRouteServer<T>(run: (origin: string) => Promise<T>) {
   const app = express();
   app.use(express.json());
-  registerGoogleAuthRoutes(app);
-  registerEmailAuthRoutes(app);
+  registerGoogleAuthRoutes(app, allowRateLimit as any);
+  registerEmailAuthRoutes(app, allowRateLimit as any);
   registerOAuthRoutes(app);
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
