@@ -57,11 +57,7 @@ async function startServer() {
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "live-provider-action", limit: 6, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.providers.sendTestSms") }));
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "family-receipt-scan", limit: 12, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.portal.scanPaymentEvidence") }));
   app.use("/api/auth/email/request", requireSameOriginForMutations());
-  app.use("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }));
   app.use("/api/auth/email/link/request", requireSameOriginForMutations());
-  app.use("/api/auth/email/link/request", createRateLimitMiddleware({ namespace: "email-account-link", limit: 3, windowMs: 10 * 60_000 }));
-  app.use("/api/auth/email/link/verify", createRateLimitMiddleware({ namespace: "email-account-link-verify", limit: 5, windowMs: 10 * 60_000 }));
-  app.use("/api/auth/google/link/start", createRateLimitMiddleware({ namespace: "google-account-link", limit: 5, windowMs: 10 * 60_000 }));
   registerSmsWebhookRoutes(app);
   app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
   registerAffiliateRoutes(app);
