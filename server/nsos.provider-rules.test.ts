@@ -45,7 +45,9 @@ describe("NSOS provider configuration rules", () => {
   });
 
   it("validates Twilio signed callback fields and preserves terminal message outcomes", () => {
-    const callbackUrl = getSmsDeliveryWebhookUrls(17).twilio;
+    const callbackUrls = getSmsDeliveryWebhookUrls(17);
+    expect(callbackUrls).toEqual({ termii: "https://nsos.test/api/webhooks/sms/termii?schoolId=17", twilio: "https://nsos.test/api/webhooks/sms/twilio?schoolId=17" });
+    const callbackUrl = callbackUrls.twilio;
     const formFields = { MessageSid: "SM42", MessageStatus: "delivered", ErrorCode: "" };
     const payload = `${callbackUrl}ErrorCodeMessageSidSM42MessageStatusdelivered`;
     const signature = createHmac("sha1", "twilio-auth-token").update(payload).digest("base64");
