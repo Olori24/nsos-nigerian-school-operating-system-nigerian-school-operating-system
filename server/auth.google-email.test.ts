@@ -64,10 +64,10 @@ describe("external authentication policy", () => {
   });
 
   it("allows only an exact HTTPS origin or a local HTTP development origin", () => {
-    expect(authRoutePolicies.validOrigin("https://nsos.test")).toBe("https://nsos.test");
+    expect(authRoutePolicies.validOrigin("https://nsos.top")).toBe("https://nsos.top");
     expect(authRoutePolicies.validOrigin("https://attacker.example")).toBeUndefined();
     expect(authRoutePolicies.validOrigin("http://localhost:3000")).toBe("http://localhost:3000");
-    expect(authRoutePolicies.validOrigin("https://nsos.test/unsafe-path")).toBeUndefined();
+    expect(authRoutePolicies.validOrigin("https://nsos.top/unsafe-path")).toBeUndefined();
     expect(authRoutePolicies.validOrigin("http://school.example.ng")).toBeUndefined();
   });
 
@@ -113,7 +113,7 @@ describe("external authentication policy", () => {
 
   it("starts Google sign-in only with a safe origin and issues a browser-bound state cookie", async () => {
     await withAuthRouteServer(async origin => {
-      const response = await fetch(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.test")}`, { redirect: "manual" });
+      const response = await fetch(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`, { redirect: "manual" });
       expect(response.status).toBe(302);
       expect(response.headers.get("location")).toContain("accounts.google.com/o/oauth2/v2/auth");
       expect(response.headers.get("set-cookie")).toContain("__Host-google_oauth_state=");
@@ -122,7 +122,7 @@ describe("external authentication policy", () => {
 
   it("rejects a Google callback whose state does not match the browser-bound cookie", async () => {
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.test")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=fake-code&state=wrong-state`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(403);
       expect(callback.body).toContain("could not be verified");
@@ -133,7 +133,7 @@ describe("external authentication policy", () => {
     const providerFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }));
     vi.stubGlobal("fetch", providerFetch);
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.test")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=fake-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(502);
@@ -149,11 +149,11 @@ describe("external authentication policy", () => {
     const resolveIdentity = vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 12, openId: "external:google:12", name: "School User", email: "school.user@example.ng", avatarUrl: "https://lh3.googleusercontent.com/a/verified-profile", loginMethod: "google" } as any);
     vi.spyOn(database, "createUserSession").mockResolvedValue("google-test-session");
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.test")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=verified-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(302);
-      expect(callback.headers.location).toBe("https://nsos.test/app");
+      expect(callback.headers.location).toBe("https://nsos.top/app");
       expect(headerText(callback.headers["set-cookie"])).toContain("__Host-google_signin_notice=google_success");
       expect(headerText(callback.headers["set-cookie"])).toContain("Max-Age=60");
       expect(resolveIdentity).toHaveBeenCalledWith(expect.objectContaining({ avatarUrl: "https://lh3.googleusercontent.com/a/verified-profile" }));
@@ -166,7 +166,7 @@ describe("external authentication policy", () => {
     const providerFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "email_123" }), { status: 200 }));
     vi.stubGlobal("fetch", providerFetch);
     await withAuthRouteServer(async origin => {
-      const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos.test", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos.test" }) });
+      const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos.top", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos.top" }) });
       expect(response.status).toBe(202);
       expect(response.body).toContain("sign-in links");
       expect(providerFetch).toHaveBeenCalledTimes(1);
@@ -178,7 +178,7 @@ describe("external authentication policy", () => {
     vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("a".repeat(43));
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "provider unavailable" }), { status: 503 })));
     await withAuthRouteServer(async origin => {
-      const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos.test", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos.test" }) });
+      const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos.top", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos.top" }) });
       expect(response.status).toBe(503);
       expect(response.body).toContain("could not send");
     });
@@ -188,7 +188,7 @@ describe("external authentication policy", () => {
     vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("a".repeat(43));
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("provider deadline exceeded", "TimeoutError")));
     await withAuthRouteServer(async origin => {
-      const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos.test", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos.test" }) });
+      const response = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { origin: "https://nsos.top", "content-type": "application/json" }, body: JSON.stringify({ email: "parent@example.ng", origin: "https://nsos.top" }) });
       expect(response.status).toBe(503);
       expect(response.body).toContain("could not send");
     });
@@ -198,7 +198,7 @@ describe("external authentication policy", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("provider deadline exceeded", "TimeoutError")));
     const createSession = vi.spyOn(database, "createUserSession");
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.test")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=slow-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(502);
@@ -207,7 +207,7 @@ describe("external authentication policy", () => {
   });
 
   it("creates a session only once for a successfully consumed passwordless-email link", async () => {
-    const consumeLink = vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "parent@example.ng", redirectOrigin: "https://nsos.test" } as any);
+    const consumeLink = vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "parent@example.ng", redirectOrigin: "https://nsos.top" } as any);
     vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 123, openId: "external:email:123", name: "Parent", email: "parent@example.ng" } as any);
     const acceptStaffInvitations = vi.spyOn(database, "acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
     const acceptGuardianInvitations = vi.spyOn(database, "acceptGuardianPortalInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
@@ -215,7 +215,7 @@ describe("external authentication policy", () => {
     await withAuthRouteServer(async origin => {
       const first = await requestRoute(`${origin}/api/auth/email/verify?token=${"a".repeat(43)}`);
       expect(first.status).toBe(302);
-      expect(first.headers.location).toBe("https://nsos.test/app");
+      expect(first.headers.location).toBe("https://nsos.top/app");
       expect(headerText(first.headers["set-cookie"])).toContain("app_session_id=");
       expect(acceptStaffInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });
       expect(acceptGuardianInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });
