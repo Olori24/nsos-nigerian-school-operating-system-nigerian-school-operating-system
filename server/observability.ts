@@ -107,7 +107,7 @@ export function requiredProductionEnvironmentErrors(input: {
     ].filter(([, value]) => !value?.trim()).map(([name]) => name);
     if (missingStorage.length) errors.push("S3 storage is selected but these settings are missing: " + missingStorage.join(", ") + ".");
   }
-  if (input.storageProvider === "forge" || input.storageProvider === "dual") {
+  if (input.storageProvider === "forge" || input.storageProvider === "dual" || input.llmProvider === "forge") {
     const missingLegacy = [
       ["BUILT_IN_FORGE_API_URL", input.forgeApiUrl],
       ["BUILT_IN_FORGE_API_KEY", input.forgeApiKey],
