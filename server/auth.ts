@@ -26,8 +26,29 @@ function validOrigin(value: unknown) {
   try {
     const url = new URL(value);
     if (url.origin !== value || !["https:", "http:"].includes(url.protocol)) return undefined;
-    if (url.protocol === "http:" && !["localhost", "127.0.0.1"].includes(url.hostname)) return undefined;
-    return url.origin;
+    const localHttp = !ENV.isProduction && url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
+    if (localHttp) return url.origin;
+    if (url.protocol !== "https:") return undefined;
+
+    const allowedOrigins = new Set<string>();
+    if (ENV.publicAppUrl) {
+      try {
+        allowedOrigins.add(new URL(ENV.publicAppUrl).origin);
+      } catch {
+        return undefined;
+      }
+    }
+    for (const candidate of ENV.authAllowedOrigins.split(",")) {
+      const allowed = candidate.trim();
+      if (!allowed) continue;
+      try {
+        const parsed = new URL(allowed);
+        if (parsed.protocol === "https:" && parsed.origin === allowed) allowedOrigins.add(parsed.origin);
+      } catch {
+        // Ignore malformed optional allow-list entries.
+      }
+    }
+    return allowedOrigins.has(url.origin) ? url.origin : undefined;
   } catch {
     return undefined;
   }
