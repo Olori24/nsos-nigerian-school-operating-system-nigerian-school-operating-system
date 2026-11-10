@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { storageGetSignedUrl } from "../storage";
 import { can, isManagementRole, type SchoolRole } from "../roles";
@@ -16,42 +16,47 @@ function canReadStoredObject(record: db.StoredObjectAccessRecord, input: { userI
   return can(input.role, "finance.read") || (can(input.role, "portal.read") && record.createdBy === input.userId);
 }
 
-export function registerStorageProxy(app: Express) {
-  app.get("/manus-storage/*", async (req, res) => {
-    const key = (req.params as Record<string, string>)[0];
-    if (!key || !isSafeStorageKey(key)) {
+async function serveStoredObject(req: Request, res: Response) {
+  const key = (req.params as Record<string, string>)[0];
+  if (!key || !isSafeStorageKey(key)) {
+    res.status(404).send("File not found");
+    return;
+  }
+
+  try {
+    const record = await db.getStoredObjectAccessRecord(key);
+    if (!record) {
       res.status(404).send("File not found");
       return;
     }
 
-    try {
-      const record = await db.getStoredObjectAccessRecord(key);
-      if (!record) {
+    if (record.scope !== "public_website_media") {
+      let user;
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch {
         res.status(404).send("File not found");
         return;
       }
-
-      if (record.scope !== "public_website_media") {
-        let user;
-        try {
-          user = await sdk.authenticateRequest(req);
-        } catch {
-          res.status(404).send("File not found");
-          return;
-        }
-        const membership = await db.getSchoolMembership(user.id, record.schoolId);
-        if (!membership || membership.schoolId !== record.schoolId || membership.status !== "active" || !canReadStoredObject(record, { userId: user.id, role: membership.role as SchoolRole })) {
-          res.status(404).send("File not found");
-          return;
-        }
+      const membership = await db.getSchoolMembership(user.id, record.schoolId);
+      if (!membership || membership.schoolId !== record.schoolId || membership.status !== "active" || !canReadStoredObject(record, { userId: user.id, role: membership.role as SchoolRole })) {
+        res.status(404).send("File not found");
+        return;
       }
-
-      const signedUrl = await storageGetSignedUrl(key);
-      res.set("Cache-Control", "no-store");
-      res.redirect(307, signedUrl);
-    } catch (error) {
-      console.error("[StorageProxy] failed:", error);
-      res.status(502).send("Storage backend error");
     }
-  });
+
+    const signedUrl = await storageGetSignedUrl(key);
+    res.set("Cache-Control", "no-store");
+    res.redirect(307, signedUrl);
+  } catch (error) {
+    console.error("[StorageProxy] failed:", error);
+    res.status(502).send("Storage backend error");
+  }
+}
+
+export function registerStorageProxy(app: Express) {
+  // New uploads use the provider-neutral path. The old path remains available
+  // so previously persisted file URLs continue to work during migration.
+  app.get("/storage/*", serveStoredObject);
+  app.get("/manus-storage/*", serveStoredObject);
 }
