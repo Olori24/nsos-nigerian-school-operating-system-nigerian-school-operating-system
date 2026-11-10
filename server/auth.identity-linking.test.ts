@@ -19,11 +19,13 @@ const user = {
   lastSignedIn: new Date(),
 };
 
+const allowRateLimit = () => (_req: any, _res: any, next: () => void) => next();
+
 async function withServer<T>(run: (origin: string) => Promise<T>) {
   const app = express();
   app.use(express.json());
-  registerGoogleAuthRoutes(app);
-  registerEmailAuthRoutes(app);
+  registerGoogleAuthRoutes(app, allowRateLimit as any);
+  registerEmailAuthRoutes(app, allowRateLimit as any);
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
