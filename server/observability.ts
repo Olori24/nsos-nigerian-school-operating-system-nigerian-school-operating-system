@@ -72,6 +72,7 @@ export function requestObservabilityMiddleware(options: {
 export function requiredProductionEnvironmentErrors(input: {
   isProduction: boolean;
   appId: string;
+  ownerOpenId?: string;
   cookieSecret: string;
   databaseUrl: string;
   oAuthServerUrl: string;
@@ -88,10 +89,15 @@ export function requiredProductionEnvironmentErrors(input: {
   llmApiKey?: string;
   llmModel?: string;
   publicAppUrl?: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
+  resendApiKey?: string;
+  authEmailFrom?: string;
 }) {
   if (!input.isProduction) return [];
   const errors = [
     ["VITE_APP_ID", input.appId],
+    ["OWNER_OPEN_ID", input.ownerOpenId],
     ["JWT_SECRET", input.cookieSecret && input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
     ...(input.legacyAuthEnabled === false ? [] : [["OAUTH_SERVER_URL", input.oAuthServerUrl] as const]),
@@ -127,6 +133,15 @@ export function requiredProductionEnvironmentErrors(input: {
       ["LLM_MODEL", input.llmModel],
     ].filter(([, value]) => !value?.trim()).map(([name]) => name);
     if (missingLlm.length) errors.push("OpenAI-compatible LLM is selected but these settings are missing: " + missingLlm.join(", ") + ".");
+  }
+  if (input.legacyAuthEnabled === false) {
+    const missingStandaloneAuth = [
+      ["GOOGLE_CLIENT_ID", input.googleClientId],
+      ["GOOGLE_CLIENT_SECRET", input.googleClientSecret],
+      ["RESEND_API_KEY", input.resendApiKey],
+      ["AUTH_EMAIL_FROM", input.authEmailFrom],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingStandaloneAuth.length) errors.push("Standalone sign-in is selected but these settings are missing: " + missingStandaloneAuth.join(", ") + ".");
   }
   return errors;
 }
