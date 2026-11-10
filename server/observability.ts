@@ -93,6 +93,7 @@ export function requiredProductionEnvironmentErrors(input: {
   googleClientSecret?: string;
   resendApiKey?: string;
   authEmailFrom?: string;
+  googleMapsApiKey?: string;
 }) {
   if (!input.isProduction) return [];
   const errors = [
@@ -102,6 +103,7 @@ export function requiredProductionEnvironmentErrors(input: {
     ["DATABASE_URL", input.databaseUrl],
     ...(input.legacyAuthEnabled === false ? [] : [["OAUTH_SERVER_URL", input.oAuthServerUrl] as const]),
     ["PUBLIC_APP_URL", input.publicAppUrl],
+    ["GOOGLE_MAPS_API_KEY", input.googleMapsApiKey],
   ].filter(([, value]) => !value?.trim()).map(([name]) => name + " is required in production.");
 
   if (input.storageProvider && !["forge", "s3", "dual"].includes(input.storageProvider)) {
