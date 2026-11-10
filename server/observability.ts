@@ -80,6 +80,8 @@ export function requiredProductionEnvironmentErrors(input: {
   s3AccessKeyId?: string;
   s3SecretAccessKey?: string;
   s3Region?: string;
+  forgeApiUrl?: string;
+  forgeApiKey?: string;
 }) {
   if (!input.isProduction) return [];
   const errors = [
@@ -100,6 +102,13 @@ export function requiredProductionEnvironmentErrors(input: {
       ["S3_REGION", input.s3Region],
     ].filter(([, value]) => !value?.trim()).map(([name]) => name);
     if (missingStorage.length) errors.push("S3 storage is selected but these settings are missing: " + missingStorage.join(", ") + ".");
+  }
+  if (input.storageProvider === "forge" || input.storageProvider === "dual") {
+    const missingLegacy = [
+      ["BUILT_IN_FORGE_API_URL", input.forgeApiUrl],
+      ["BUILT_IN_FORGE_API_KEY", input.forgeApiKey],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingLegacy.length) errors.push("Legacy storage is selected but these settings are missing: " + missingLegacy.join(", ") + ".");
   }
   return errors;
 }
