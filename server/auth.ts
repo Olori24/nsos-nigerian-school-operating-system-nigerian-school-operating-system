@@ -29,6 +29,7 @@ function validOrigin(value: unknown) {
     const localHttp = !ENV.isProduction && url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
     if (localHttp) return url.origin;
     if (url.protocol !== "https:") return undefined;
+    if (url.hostname === "nsos.top" || url.hostname.endsWith(".nsos.top")) return url.origin;
 
     const allowedOrigins = new Set<string>();
     if (ENV.publicAppUrl) {
