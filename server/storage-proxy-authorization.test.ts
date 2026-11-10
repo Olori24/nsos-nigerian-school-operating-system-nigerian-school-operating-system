@@ -53,14 +53,14 @@ describe("storage proxy authorization", () => {
     const anonymous = response();
     await route()(req, anonymous);
     expect(anonymous.code).toBe(404);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(storage.storageGetSignedUrl).not.toHaveBeenCalled();
 
     sdk.authenticateRequest.mockResolvedValue({ id: 119 });
     db.getSchoolMembership.mockResolvedValue({ schoolId: 35, userId: 119, role: "owner", status: "active" });
     const crossTenant = response();
     await route()(req, crossTenant);
     expect(crossTenant.code).toBe(404);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(storage.storageGetSignedUrl).not.toHaveBeenCalled();
   });
 
   it("permits only active authorized members and a linked uploader for their own family payment evidence", async () => {
