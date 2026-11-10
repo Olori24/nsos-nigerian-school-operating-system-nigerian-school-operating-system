@@ -120,7 +120,7 @@ async function forgePut(
   const uploadResponse = await fetch(payload.url, {
     method: "PUT",
     headers: { "Content-Type": contentType },
-    body: new Blob([data as BlobPart], { type: contentType }),
+    body: new Blob([data as any], { type: contentType }),
     signal: AbortSignal.timeout(60_000),
   });
   if (!uploadResponse.ok) {
