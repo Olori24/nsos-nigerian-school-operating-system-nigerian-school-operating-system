@@ -27,7 +27,7 @@ export function requestIdFor(value: string | undefined) {
 }
 
 export function safeRequestPath(request: Pick<Request, "baseUrl" | "path">) {
-  return `${request.baseUrl || ""}${request.path || ""}`.split("?", 1)[0]!.slice(0, 320) || "/";
+  return (request.baseUrl || "") + (request.path || "").split("?", 1)[0]!.slice(0, 320) || "/";
 }
 
 export function writeOperationalEvent(level: "info" | "warn" | "error", event: string, fields: Record<string, string | number | boolean | undefined>) {
@@ -68,12 +68,37 @@ export function requestObservabilityMiddleware(options: {
   };
 }
 
-export function requiredProductionEnvironmentErrors(input: { isProduction: boolean; appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string }) {
+export function requiredProductionEnvironmentErrors(input: {
+  isProduction: boolean;
+  appId: string;
+  cookieSecret: string;
+  databaseUrl: string;
+  oAuthServerUrl: string;
+  storageProvider?: string;
+  s3Bucket?: string;
+  s3AccessKeyId?: string;
+  s3SecretAccessKey?: string;
+  s3Region?: string;
+}) {
   if (!input.isProduction) return [];
-  return [
+  const errors = [
     ["VITE_APP_ID", input.appId],
     ["JWT_SECRET", input.cookieSecret && input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
     ["OAUTH_SERVER_URL", input.oAuthServerUrl],
-  ].filter(([, value]) => !value.trim()).map(([name]) => `${name} is required in production.`);
+  ].filter(([, value]) => !value?.trim()).map(([name]) => name + " is required in production.");
+
+  if (input.storageProvider && !["forge", "s3", "dual"].includes(input.storageProvider)) {
+    errors.push("STORAGE_PROVIDER must be forge, s3, or dual.");
+  }
+  if (input.storageProvider === "s3" || input.storageProvider === "dual") {
+    const missingStorage = [
+      ["S3_BUCKET", input.s3Bucket],
+      ["S3_ACCESS_KEY_ID", input.s3AccessKeyId],
+      ["S3_SECRET_ACCESS_KEY", input.s3SecretAccessKey],
+      ["S3_REGION", input.s3Region],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingStorage.length) errors.push("S3 storage is selected but these settings are missing: " + missingStorage.join(", ") + ".");
+  }
+  return errors;
 }
