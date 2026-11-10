@@ -82,6 +82,10 @@ export function requiredProductionEnvironmentErrors(input: {
   s3Region?: string;
   forgeApiUrl?: string;
   forgeApiKey?: string;
+  llmProvider?: string;
+  llmApiBaseUrl?: string;
+  llmApiKey?: string;
+  llmModel?: string;
 }) {
   if (!input.isProduction) return [];
   const errors = [
@@ -109,6 +113,17 @@ export function requiredProductionEnvironmentErrors(input: {
       ["BUILT_IN_FORGE_API_KEY", input.forgeApiKey],
     ].filter(([, value]) => !value?.trim()).map(([name]) => name);
     if (missingLegacy.length) errors.push("Legacy storage is selected but these settings are missing: " + missingLegacy.join(", ") + ".");
+  }
+  if (input.llmProvider && !["forge", "openai-compatible"].includes(input.llmProvider)) {
+    errors.push("LLM_PROVIDER must be forge or openai-compatible.");
+  }
+  if (input.llmProvider === "openai-compatible") {
+    const missingLlm = [
+      ["LLM_API_BASE_URL", input.llmApiBaseUrl],
+      ["LLM_API_KEY", input.llmApiKey],
+      ["LLM_MODEL", input.llmModel],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingLlm.length) errors.push("OpenAI-compatible LLM is selected but these settings are missing: " + missingLlm.join(", ") + ".");
   }
   return errors;
 }
