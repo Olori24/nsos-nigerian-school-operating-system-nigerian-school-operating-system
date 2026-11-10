@@ -4,12 +4,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { authRoutePolicies, registerEmailAuthRoutes, registerGoogleAuthRoutes } from "./auth";
 import * as database from "./db";
 import { normaliseAuthEmail } from "./db";
+import { ENV } from "./_core/env";
+import { registerOAuthRoutes } from "./_core/oauth";
 
 async function withAuthRouteServer<T>(run: (origin: string) => Promise<T>) {
   const app = express();
   app.use(express.json());
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
+  registerOAuthRoutes(app);
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -83,6 +86,20 @@ describe("external authentication policy", () => {
   it("accepts a standard Resend sender form and rejects unsafe sender values", () => {
     expect(authRoutePolicies.normaliseAuthSender("NSOS <onboarding@resend.dev>")).toBe("NSOS <onboarding@resend.dev>");
     expect(() => authRoutePolicies.normaliseAuthSender("NSOS <onboarding@resend.dev>\r\nBcc: attacker@example.com")).toThrow("not configured safely");
+  });
+
+  it("retires the legacy OAuth callback cleanly when the standalone cutover flag is disabled", async () => {
+    const previous = ENV.legacyAuthEnabled;
+    ENV.legacyAuthEnabled = false;
+    try {
+      await withAuthRouteServer(async origin => {
+        const response = await requestRoute(origin + "/api/oauth/callback?code=legacy&state=legacy");
+        expect(response.status).toBe(410);
+        expect(response.body).toContain("Legacy sign-in has been retired");
+      });
+    } finally {
+      ENV.legacyAuthEnabled = previous;
+    }
   });
 
   it("rejects route starts that do not provide a safe application origin", async () => {
