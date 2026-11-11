@@ -8,6 +8,16 @@ const staticServerSource = readFileSync(
   path.join(projectRoot, "server", "_core", "vite.ts"),
   "utf8"
 );
+const serverEntrySource = readFileSync(
+  path.join(projectRoot, "server", "_core", "index.ts"),
+  "utf8"
+);
+
+const publicLandingPages = [
+  "school-management-software-nigeria",
+  "online-school-admissions-nigeria",
+  "school-parent-portal-nigeria",
+] as const;
 
 const discoveryFiles = [
   {
@@ -21,6 +31,7 @@ const discoveryFiles = [
     requiredContent: [
       '<?xml version="1.0" encoding="UTF-8"?>',
       "https://nsos.top/",
+      ...publicLandingPages.map(slug => `https://nsos.top/${slug}/`),
     ],
   },
   {
@@ -29,6 +40,7 @@ const discoveryFiles = [
     requiredContent: [
       "# NSOS — Nigerian School Operating System",
       "https://nsos.top/",
+      ...publicLandingPages.map(slug => `https://nsos.top/${slug}/`),
       "Do not infer customer counts",
     ],
   },
@@ -48,11 +60,32 @@ describe("public discovery file serving", () => {
     expect(file.contentType).toMatch(/^(text\/plain|application\/xml)$/);
   });
 
+  it.each(publicLandingPages)("ships an indexable %s landing page", slug => {
+    const pagePath = path.join(publicRoot, slug, "index.html");
+    expect(existsSync(pagePath)).toBe(true);
+
+    const html = readFileSync(pagePath, "utf8");
+    expect(html).toContain(`<link rel="canonical" href="https://nsos.top/${slug}/">`);
+    expect(html).toContain('<meta name="robots" content="index,follow,max-image-preview:large">');
+    expect(html).toContain('property="og:title"');
+    expect(html).toContain('application/ld+json');
+    expect(html).toContain('href="/start"');
+  });
+
+  it("sends route-specific noindex headers before static serving", () => {
+    expect(serverEntrySource).toContain('app.use(["/app", "/start"]');
+    expect(serverEntrySource).toContain('response.setHeader("X-Robots-Tag", "noindex, nofollow")');
+  });
+
   it("serves static assets before the SPA fallback", () => {
     const staticMiddleware = staticServerSource.indexOf("express.static(distPath");
     const spaFallback = staticServerSource.indexOf('app.use("*", (_req, res) =>');
 
     expect(staticMiddleware).toBeGreaterThanOrEqual(0);
     expect(spaFallback).toBeGreaterThan(staticMiddleware);
+  });
+
+  it("resolves the built static directory from the project root", () => {
+    expect(staticServerSource).toContain('path.resolve(process.cwd(), "dist", "public")');
   });
 });
