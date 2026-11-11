@@ -84,6 +84,8 @@ describe("public discovery file serving", () => {
   it("sends route-specific noindex headers before static serving", () => {
     expect(serverEntrySource).toContain('app.use(["/app", "/start"]');
     expect(serverEntrySource).toContain('response.setHeader("X-Robots-Tag", "noindex, nofollow")');
+    expect(serverEntrySource).toContain('process.env.VERCEL_ENV === "preview"');
+    expect(serverEntrySource).toContain('app.use("/api", (_request, response) =>');
   });
 
   it("serves static assets before the SPA fallback", () => {
