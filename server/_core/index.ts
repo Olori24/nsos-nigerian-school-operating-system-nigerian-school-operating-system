@@ -44,6 +44,11 @@ async function startServer() {
   app.disable("x-powered-by");
   app.use(requestObservabilityMiddleware());
   app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
+  // Keep authenticated application and lead-capture routes out of search indexes on the initial HTML response.
+  app.use(["/app", "/start"], (_request, response, next) => {
+    response.setHeader("X-Robots-Tag", "noindex, nofollow");
+    next();
+  });
   app.get("/healthz", (_request, response) => {
     response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
   });
