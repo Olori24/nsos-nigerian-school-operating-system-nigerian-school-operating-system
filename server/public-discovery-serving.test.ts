@@ -68,8 +68,17 @@ describe("public discovery file serving", () => {
     expect(html).toContain(`<link rel="canonical" href="https://nsos.top/${slug}/">`);
     expect(html).toContain('<meta name="robots" content="index,follow,max-image-preview:large">');
     expect(html).toContain('property="og:title"');
+    expect(html).toContain('https://nsos.top/nsos-social.svg');
     expect(html).toContain('application/ld+json');
     expect(html).toContain('href="/start"');
+  });
+
+  it("ships a 1200x630 NSOS social preview image", () => {
+    const imagePath = path.join(publicRoot, "nsos-social.svg");
+    expect(existsSync(imagePath)).toBe(true);
+    const svg = readFileSync(imagePath, "utf8");
+    expect(svg).toContain('width="1200" height="630"');
+    expect(svg).toContain("Nigerian School Operating System");
   });
 
   it("sends route-specific noindex headers before static serving", () => {
