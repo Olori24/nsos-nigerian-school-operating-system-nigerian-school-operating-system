@@ -16,6 +16,7 @@ import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, wr
 import { ENV } from "./env";
 import { parseConfiguredPort } from "./port";
 
+/** Check whether a TCP port can be bound on the current host. */
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -26,6 +27,7 @@ function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
+/** Find an available local development port starting from the configured preference. */
 async function findAvailablePort(startPort: number = 3000): Promise<number> {
   for (let port = startPort; port < startPort + 20; port++) {
     if (await isPortAvailable(port)) {
@@ -87,6 +89,7 @@ const appReady = process.env.NODE_ENV === "development"
   ? setupVite(app, server)
   : Promise.resolve(serveStatic(app));
 
+/** Start the local Express server after its development or production middleware is ready. */
 async function startServer() {
   await appReady;
   const preferredPort = parseConfiguredPort(process.env.PORT);
