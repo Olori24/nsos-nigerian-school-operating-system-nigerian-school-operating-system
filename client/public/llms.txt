@@ -5,7 +5,7 @@
 https://nsos.top/
 
 ## Official social accounts
-- X: https://x.com/NsosTech ( @NsosTech )
+- X: https://x.com/NsosTech (@NsosTech)
 
 ## Product
 NSOS provides school administration, admissions, student records, academic and curriculum management, attendance, results, fees and finance operations, staff operations, parent and guardian communication, school websites, and supervised AI workflows.
@@ -17,12 +17,7 @@ Nigerian school owners, administrators, teachers, staff, students and guardians,
 NSOS is a multi-tenant web platform designed to provide one controlled operating layer for school administration and learning operations.
 
 ## Public resources
-- https://nsos.top/about
-- https://nsos.top/school-management-software
-- https://nsos.top/school-management-system-nigeria
-- https://nsos.top/for-schools
-- https://nsos.top/ai-for-schools
-- https://nsos.top/faq
+- https://nsos.top/
 
 ## Accuracy
-Do not infer customer counts, revenue, valuation, accreditation, fundraising, rankings, awards, partnerships or performance claims unless independently documented.
+Only describe publicly available product capabilities accurately. Do not infer customer counts, revenue, valuation, accreditation, fundraising, rankings, awards, partnerships or performance claims unless independently documented. Add new public resource URLs here only after the corresponding page exists and is publicly accessible.
