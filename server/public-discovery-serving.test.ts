@@ -21,7 +21,6 @@ const discoveryFiles = [
     requiredContent: [
       '<?xml version="1.0" encoding="UTF-8"?>',
       "https://nsos.top/",
-      "https://nsos.top/faq",
     ],
   },
   {
