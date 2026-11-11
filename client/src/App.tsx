@@ -20,6 +20,35 @@ import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
 import LeadCapture from "./pages/LeadCapture";
 
+function useNoIndexMetadata() {
+  useEffect(() => {
+    const robotsMeta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    const previousContent = robotsMeta?.content;
+    const meta = robotsMeta ?? document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex, nofollow";
+    if (!robotsMeta) document.head.appendChild(meta);
+
+    return () => {
+      if (robotsMeta && previousContent !== undefined) {
+        robotsMeta.content = previousContent;
+      } else {
+        meta.remove();
+      }
+    };
+  }, []);
+}
+
+function NoIndexHome() {
+  useNoIndexMetadata();
+  return <Home />;
+}
+
+function NoIndexLeadCapture() {
+  useNoIndexMetadata();
+  return <LeadCapture />;
+}
+
 function isNsosPlatformHost(hostname: string) {
   return (
     hostname === "localhost" ||
@@ -40,8 +69,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={EcosystemHome} />
-      <Route path="/app" component={Home} />
-      <Route path="/start" component={LeadCapture} />
+      <Route path="/app" component={NoIndexHome} />
+      <Route path="/start" component={NoIndexLeadCapture} />
       <Route path="/apply/:shortCode" component={PublicAdmissions} />
       <Route path="/school/:shortCode" component={SchoolWebsite} />
       <Route path="/404" component={NotFound} />
