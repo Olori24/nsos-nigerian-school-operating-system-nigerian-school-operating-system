@@ -56,6 +56,13 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(requestObservabilityMiddleware());
 app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
+// Vercel preview hosts must not compete with the canonical production domain in search results.
+if (process.env.VERCEL === "1" && process.env.VERCEL_ENV === "preview") {
+  app.use((_request, response, next) => {
+    response.setHeader("X-Robots-Tag", "noindex, nofollow");
+    next();
+  });
+}
 // Keep authenticated application and lead-capture routes out of search indexes on the initial HTML response.
 app.use(["/app", "/start"], (_request, response, next) => {
   response.setHeader("X-Robots-Tag", "noindex, nofollow");
