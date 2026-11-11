@@ -37,7 +37,15 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-const environmentErrors = requiredProductionEnvironmentErrors(ENV);
+// Allow a Vercel preview without a database to serve public static pages; production remains strict.
+const isStaticOnlyPreview =
+  process.env.VERCEL === "1" &&
+  process.env.VERCEL_ENV === "preview" &&
+  !ENV.databaseUrl;
+const environmentErrors = requiredProductionEnvironmentErrors({
+  ...ENV,
+  isProduction: ENV.isProduction && !isStaticOnlyPreview,
+});
 if (environmentErrors.length) {
   throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
 }
@@ -56,6 +64,11 @@ app.use(["/app", "/start"], (_request, response, next) => {
 app.get("/healthz", (_request, response) => {
   response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
 });
+if (isStaticOnlyPreview) {
+  app.use("/api", (_request, response) => {
+    response.status(503).json({ error: "Preview API is disabled until a preview database is configured." });
+  });
+}
 app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
 app.use("/api/trpc", requireSameOriginForMutations());
