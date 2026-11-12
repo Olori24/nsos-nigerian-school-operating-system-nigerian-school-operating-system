@@ -144,7 +144,7 @@ export function databasePoolOptions(uri: string) {
     port: parsed.port ? Number(parsed.port) : 3306,
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
-    database: decodeURIComponent(parsed.pathname.replace(/^\\//, "")) || undefined,
+    database: decodeURIComponent(parsed.pathname.slice(1)) || undefined,
     connectionLimit: DB_POOL_CONNECTION_LIMIT,
     maxIdle: DB_POOL_CONNECTION_LIMIT,
     idleTimeout: 60_000,
