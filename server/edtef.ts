@@ -106,6 +106,9 @@ export async function requestEdtefJson(path: string, query = new URLSearchParams
   if (response.status === 429) {
     throw new EdtefApiError("EDTEF rate limit reached. Please retry shortly.", 429, response.headers.get("retry-after") ?? undefined);
   }
+  if (response.status === 404) {
+    throw new EdtefApiError("The requested EDTEF directory record was not found.", 404);
+  }
   if (!response.ok) {
     throw new EdtefApiError("EDTEF directory request failed.", 502);
   }
