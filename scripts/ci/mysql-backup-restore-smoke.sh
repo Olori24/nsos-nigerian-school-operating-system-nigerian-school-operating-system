@@ -50,14 +50,16 @@ mysql_cli "$MYSQL_DATABASE" -e "
 docker run --rm --network host \
   -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
   "$MYSQL_CLIENT_IMAGE" mysqldump --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u root \
-    --single-transaction --routines --triggers --events --hex-blob "$MYSQL_DATABASE" > "$BACKUP_FILE"
+    --single-transaction --routines --triggers --events --hex-blob --databases "$MYSQL_DATABASE" --no-create-db > "$BACKUP_FILE"
+
+# Rewrite the explicit database selection so the dump restores into the isolated target.
+sed -i 's/USE `nsos`;/USE `nsos_restore`;/g' "$BACKUP_FILE"
+grep -Fq 'USE `nsos_restore`;' "$BACKUP_FILE"
 
 test -s "$BACKUP_FILE"
 mysql_cli -e "CREATE DATABASE nsos_restore"
 
-docker run --rm --network host -i \
-  -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
-  "$MYSQL_CLIENT_IMAGE" mysql --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u root nsos_restore < "$BACKUP_FILE"
+mysql_cli < "$BACKUP_FILE"
 
 source_tables="$(mysql_cli -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$MYSQL_DATABASE'")"
 restored_tables="$(mysql_cli -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'nsos_restore'")"
