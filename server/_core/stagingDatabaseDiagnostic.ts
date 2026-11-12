@@ -1,14 +1,19 @@
 import { createConnection } from "mysql2/promise";
 import type { Express, Request, Response } from "express";
 
-const BRANCH = "fix/vercel-serverless-runtime-init";
+let lastDiagnosticAt = 0;
 
 export function registerStagingDatabaseDiagnostic(app: Express) {
   app.get("/healthz/db", async (_req: Request, res: Response) => {
     res.set("Cache-Control", "no-store");
-    if (process.env.VERCEL_ENV !== "preview" || process.env.VERCEL_GIT_COMMIT_REF !== BRANCH) {
+    if (process.env.VERCEL_ENV !== "preview") {
       return res.status(404).json({ status: "unavailable" });
     }
+    const now = Date.now();
+    if (now - lastDiagnosticAt < 10_000) {
+      return res.status(429).json({ status: "rate_limited" });
+    }
+    lastDiagnosticAt = now;
     let connection: Awaited<ReturnType<typeof createConnection>> | undefined;
     try {
       const uri = process.env.DATABASE_URL;
