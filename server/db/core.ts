@@ -143,7 +143,11 @@ export function databasePoolOptions(uri: string) {
     queueLimit: DB_POOL_QUEUE_LIMIT,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    ...(ENV.isProduction ? { ssl: { rejectUnauthorized: true } } : {}),
+    // Require verified TLS for every remote database. Local MySQL test services use
+    // ephemeral self-signed certificates and run inside the isolated CI network.
+    ssl: ["localhost", "127.0.0.1", "::1"].includes(new URL(uri).hostname)
+      ? undefined
+      : { rejectUnauthorized: true },
   };
 }
 
