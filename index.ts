@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
-import { createApp } from "./server/_core/index";
 
-// Reuse one configured Express application for this serverless instance.
-let appPromise: ReturnType<typeof createApp> | undefined;
+// Keep the Express application warm between invocations. Import the server
+// bootstrap lazily so module-initialization failures are caught and logged too.
+let appPromise: Promise<{ app: import("express").Express }> | undefined;
 
 const SENSITIVE_ENV_KEYS = [
   "JWT_SECRET",
@@ -30,12 +30,11 @@ export default async function handler(request: Request, response: Response) {
   response.setHeader("X-Request-ID", requestId);
 
   try {
-    appPromise ??= createApp();
+    appPromise ??= import("./server/_core/index").then(({ createApp }) => createApp());
     const { app } = await appPromise;
     return app(request, response);
   } catch (error) {
-    // Log the startup/invocation exception without dumping environment values,
-    // request headers, cookies, bodies, or credentials.
+    // Never dump environment values, request headers, cookies, bodies or credentials.
     console.error(JSON.stringify({
       service: "nsos",
       event: "vercel_function_invocation_failed",
@@ -45,7 +44,6 @@ export default async function handler(request: Request, response: Response) {
       error: safeErrorText(error),
     }));
 
-    // Permit a later invocation in this warm instance to retry initialization.
     appPromise = undefined;
     if (!response.headersSent) {
       return response.status(500).json({
