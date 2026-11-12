@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const.js";
 import { parse as parseCookieHeader } from "cookie";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Express, Request, Response } from "express";
