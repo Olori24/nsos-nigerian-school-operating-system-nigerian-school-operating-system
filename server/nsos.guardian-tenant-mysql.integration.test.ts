@@ -73,7 +73,7 @@ describe.skipIf(!integrationEnabled)("guardian tenant isolation (MySQL integrati
     // Force the relationship insert to fail after the guardian insert. The
     // transaction must roll back the earlier guardian row as well.
     const triggerName = `nsos_fail_guardian_link_${suffix}`;
-    await db.execute(sql.raw(`CREATE TRIGGER \`${triggerName}\` BEFORE INSERT ON \`studentGuardians\` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced relationship failure'`));
+    await db.execute(sql.raw(`CREATE TRIGGER ${triggerName} BEFORE INSERT ON studentGuardians FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced relationship failure'`));
     try {
       await expect(linkGuardianToStudent({
         schoolId: schoolBId,
@@ -85,7 +85,7 @@ describe.skipIf(!integrationEnabled)("guardian tenant isolation (MySQL integrati
       expect(await db.select({ id: guardians.id }).from(guardians).where(eq(guardians.schoolId, schoolBId))).toHaveLength(0);
       expect(await db.select({ id: studentGuardians.id }).from(studentGuardians).where(eq(studentGuardians.studentId, studentBId))).toHaveLength(0);
     } finally {
-      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS \`${triggerName}\``));
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${triggerName}`));
     }
 
     const validLink = await linkGuardianToStudent({
