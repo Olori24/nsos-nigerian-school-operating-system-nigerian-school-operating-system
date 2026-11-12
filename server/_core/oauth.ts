@@ -6,6 +6,7 @@ import * as db from "../db";
 import { createRateLimitMiddleware } from "../security";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { isNsosPlatformHost } from "../../shared/platform-host";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
