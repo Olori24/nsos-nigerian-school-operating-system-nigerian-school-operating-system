@@ -73,6 +73,14 @@ describe("EDTEF directory service", () => {
     await expect(requestEdtefJson("directory/v1/states")).rejects.toMatchObject({ status: 429, retryAfter: "30" });
   });
 
+  it("maps an unknown upstream school record to a safe 404", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response("private upstream detail", { status: 404 }));
+    await expect(requestEdtefJson("directory/v1/schools/sch_abcdef123456")).rejects.toMatchObject({
+      status: 404,
+      message: "The requested EDTEF directory record was not found.",
+    });
+  });
+
   it("does not expose upstream response details on failure", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response("secret provider diagnostic", { status: 500 }));
     await expect(requestEdtefJson("directory/v1/states")).rejects.toMatchObject({ status: 502, message: "EDTEF directory request failed." });
