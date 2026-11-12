@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
+import { serveStatic } from "./server/_core/static.js";
 
 // Keep the Express application warm between invocations. Import the server
 // bootstrap lazily so module-initialization failures are caught and logged too.
@@ -17,7 +18,7 @@ const SENSITIVE_ENV_KEYS = [
 ];
 
 function safeErrorText(value: unknown): string {
-  let message = value instanceof Error ? `${value.name}: ${value.message}\n${value.stack ?? ""}` : String(value);
+  let message = value instanceof Error ? `${value.name}: ${value.message}\\n${value.stack ?? ""}` : String(value);
   for (const key of SENSITIVE_ENV_KEYS) {
     const secret = process.env[key];
     if (secret && secret.length >= 4) message = message.split(secret).join("[REDACTED]");
@@ -30,9 +31,11 @@ export default async function handler(request: Request, response: Response) {
   response.setHeader("X-Request-ID", requestId);
 
   try {
-    // Node.js ESM requires the bundled server entry so Vercel runs the same dependency graph validated by esbuild.
-    // @ts-expect-error The build step generates this bundled JavaScript entry; it has no source declaration file.
-    appPromise ??= import("./dist/index.js").then(({ createApp }) => createApp());
+    // The development-only Vite dependency graph must never load in production.
+    appPromise ??= import("./server/_core/index.js").then(async ({ createApp }) => {
+      const { app, server } = await createApp();
+      return { app, server };
+    });
     const { app } = await appPromise;
     return app(request, response);
   } catch (error) {
