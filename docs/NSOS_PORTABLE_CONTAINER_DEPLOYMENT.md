@@ -40,7 +40,7 @@ The Compose port is bound to `127.0.0.1` by default. Set `NSOS_HOST_IP` only to 
 
 **Do not generate a new JWT_SECRET and point the container at the existing production database.**
 
-`JWT_SECRET` is deliberately excluded from `.env`. Docker Compose parses `.env` values and special characters, quotes, dollar signs, and trailing backslashes can be interpreted differently across versions. The Compose service receives `JWT_SECRET` only from the invoking process environment using Compose's pass-through form (`- JWT_SECRET`). It does not interpolate the secret from `.env`; if the shell variable is absent, the container receives no `JWT_SECRET`, even if an older `.env` file still contains one. This allows image builds and management commands such as `docker compose logs` and `bash scripts/nsos-compose.sh down` to run without the runtime secret. Starting the application without the exact secret will fail its startup guard and is not a valid deployment.
+`JWT_SECRET` is deliberately excluded from `.env.runtime`. The service receives it from the invoking shell through the Compose mapping `${JWT_SECRET:-}`. Always use `bash scripts/nsos-compose.sh` for Compose commands: the wrapper passes `--env-file .env.runtime`, disables automatic `.env` loading, and rejects any env file containing `JWT_SECRET`. An older default `.env` therefore cannot supply or replace the key. If the shell variable is unset, the mapping resolves to an empty value, so image builds and management commands such as logs and down work without the runtime secret. Starting the application without the exact key fails its production startup guard and is not a valid deployment.
 
 For an interactive local session, enter the value silently and keep it out of shell history:
 
