@@ -4,9 +4,9 @@ export const ENV = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  // NODE_ENV=production is also used for Vercel Preview builds. Use VERCEL_ENV
-  // to enforce production-only startup requirements on actual production deploys.
-  isProduction: process.env.VERCEL_ENV
+  // Vercel Preview runs with NODE_ENV=production; enforce production-only
+  // configuration only for actual Production deployments.
+  isProduction: process.env.VERCEL === "1"
     ? process.env.VERCEL_ENV === "production"
     : process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
