@@ -61,7 +61,7 @@ jobs:
               key: "DATABASE_URL",
               value: process.env.STAGING_DATABASE_URL,
               type: "encrypted",
-              visibility: "sensitive",
+              visibility: "secret",
               target: ["preview"],
               gitBranch: branch,
               comment: "Synced from GitHub STAGING_DATABASE_URL. TiDB staging only; Preview branch only."
