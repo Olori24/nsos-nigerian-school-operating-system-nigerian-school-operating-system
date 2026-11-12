@@ -18,18 +18,9 @@ import EcosystemHome from "./pages/EcosystemHome";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
+import { isNsosPlatformHost } from "../../shared/platform-host";
 import LeadCapture from "./pages/LeadCapture";
 
-function isNsosPlatformHost(hostname: string) {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "nsos.top" ||
-    hostname === "www.nsos.top" ||
-    hostname.endsWith(".manus.space") ||
-    hostname.endsWith(".manus.computer")
-  );
-}
 
 function Router() {
   if (
