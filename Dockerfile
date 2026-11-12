@@ -16,7 +16,7 @@ ARG VITE_OAUTH_PORTAL_URL
 ENV VITE_APP_ID=$VITE_APP_ID
 ENV VITE_OAUTH_PORTAL_URL=$VITE_OAUTH_PORTAL_URL
 RUN test -n "$VITE_APP_ID" && test -n "$VITE_OAUTH_PORTAL_URL"
-RUN pnpm build
+RUN pnpm build && test -s public/index.html
 
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production
@@ -30,6 +30,7 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/public ./public
 
 USER node
 EXPOSE 3000
