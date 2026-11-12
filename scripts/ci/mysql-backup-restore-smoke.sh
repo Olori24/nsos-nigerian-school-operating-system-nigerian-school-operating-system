@@ -57,9 +57,11 @@ sed -i 's/USE `nsos`;/USE `nsos_restore`;/g' "$BACKUP_FILE"
 grep -Fq 'USE `nsos_restore`;' "$BACKUP_FILE"
 
 test -s "$BACKUP_FILE"
-mysql_cli -e "CREATE DATABASE nsos_restore"
+mysql_cli -e "DROP DATABASE IF EXISTS nsos_restore; CREATE DATABASE nsos_restore"
 
-mysql_cli < "$BACKUP_FILE"
+docker run --rm --network host -i \
+  -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
+  "$MYSQL_CLIENT_IMAGE" mysql --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u root < "$BACKUP_FILE"
 
 source_tables="$(mysql_cli -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$MYSQL_DATABASE'")"
 restored_tables="$(mysql_cli -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'nsos_restore'")"
