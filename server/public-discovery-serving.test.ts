@@ -70,7 +70,7 @@ describe("public discovery file serving", () => {
     const previewGuard = serverEntrySource.indexOf("if (staticOnlyPreview)");
     const storageRegistration = serverEntrySource.indexOf("registerStorageProxy(app)");
     const affiliateRegistration = serverEntrySource.indexOf("registerAffiliateRoutes(app)");
-    const apiRegistration = serverEntrySource.indexOf("createExpressMiddleware");
+    const apiRegistration = serverEntrySource.indexOf('"/api/trpc",');
 
     expect(serverEntrySource).toContain('app.use("/api", previewApiDisabled)');
     expect(serverEntrySource).toContain('app.use(["/storage", "/manus-storage", "/r"], previewApiDisabled)');
