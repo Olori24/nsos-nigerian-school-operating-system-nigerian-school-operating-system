@@ -1,6 +1,6 @@
 # NSOS Portable Container Deployment
 
-**Status:** Docker image build and synthetic process smoke passed on commit `e7b4271`; isolated staging and production deployment remain unverified.
+**Status:** Docker image build, synthetic process smoke, and static HTML/JavaScript/CSS/service-worker smoke are covered by CI. The updated checks are pending on this branch; isolated staging and production deployment remain unverified.
 
 ## Purpose
 
@@ -33,6 +33,8 @@ curl --fail --silent --show-error "http://${HOST_BINDING}/healthz"
 ```
 
 The endpoint proves only that the HTTP process is running. It does not prove database connectivity, authentication, tenant isolation, provider delivery, or production readiness.
+
+The Docker smoke workflow also verifies that the homepage returns HTML, the compiled JavaScript and CSS assets return successful responses with the expected content types, and `/sw.js` is served with a `no-store` cache policy. The Vite build emits the client into the repository-root `public/` directory; the runtime image copies that directory alongside the bundled server in `dist/`. This check catches a common failure mode where the health endpoint works but the client bundle is missing or served from the wrong directory.
 
 The Compose port is bound to `127.0.0.1` by default. Set `NSOS_HOST_IP` only to a specific host interface reachable by a separately secured TLS-terminating ingress; do not use `0.0.0.0` or expose the plain HTTP port directly to untrusted networks. `NSOS_HOST_PORT` remains configurable.
 
