@@ -1,8 +1,11 @@
-import express from "express";
-import app from "./server/_core/index";
+import type { Request, Response } from "express";
+import { createApp } from "./server/_core/index";
 
-// Export a root Express handler so Vercel can discover the application entrypoint.
-const handler = express();
-handler.use(app);
+// Reuse one configured Express application for this serverless instance.
+let appPromise: ReturnType<typeof createApp> | undefined;
 
-export default handler;
+export default async function handler(request: Request, response: Response) {
+  appPromise ??= createApp();
+  const { app } = await appPromise;
+  return app(request, response);
+}
