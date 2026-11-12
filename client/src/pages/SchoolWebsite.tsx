@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowUpRight, Eye, GraduationCap, Loader2, MapPin, Phone, School } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { setCanonicalUrl, setPageMetadata, setPageStructuredData } from "@/lib/seo";
 import { useRoute } from "wouter";
 
 type SiteQuery = { data?: PublicSchoolSite; isLoading: boolean };
@@ -20,6 +21,40 @@ export default function SchoolWebsite() {
 }
 
 export function SchoolWebsitePage({ site }: { site: SiteQuery }) {
+  useEffect(() => {
+    if (!site.data) return;
+    const { school, website } = site.data;
+    const canonicalUrl = new URL(window.location.pathname, window.location.origin);
+    canonicalUrl.search = "";
+    canonicalUrl.hash = "";
+    setCanonicalUrl(canonicalUrl.toString());
+    const description =
+      website.introduction?.trim() || `Official school website for ${school.name}.`;
+    setPageMetadata({
+      title: `${school.name} | Official School Website`,
+      description,
+      imageUrl: website.logoUrl,
+    });
+    setPageStructuredData({
+      "@context": "https://schema.org",
+      "@type": "School",
+      name: school.name,
+      url: new URL(window.location.pathname, window.location.origin).toString(),
+      description,
+      ...(website.contactPhone ? { telephone: website.contactPhone } : {}),
+      ...(website.contactEmail ? { email: website.contactEmail } : {}),
+      ...(website.campusLocation
+        ? {
+            address: {
+              "@type": "PostalAddress",
+              streetAddress: website.campusLocation,
+              addressCountry: "NG",
+            },
+          }
+        : {}),
+    });
+  }, [site.data]);
+
   if (site.isLoading) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1]"><Loader2 className="h-6 w-6 animate-spin text-[#0f5c4f]" /></main>;
   if (!site.data) return <main className="grid min-h-screen place-items-center bg-[#f5f6f1] p-5"><section className="max-w-md rounded-3xl border border-[#e0e5df] bg-white p-8 text-center shadow-sm"><School className="mx-auto h-7 w-7 text-[#0f5c4f]" /><h1 className="mt-4 text-xl font-semibold text-[#20342c]">School website unavailable</h1><p className="mt-2 text-sm leading-6 text-[#758079]">This school website is not published, the domain is not active, or the link is not recognised.</p></section></main>;
   return <SchoolWebsiteLayout site={site.data} />;

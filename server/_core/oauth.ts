@@ -6,6 +6,7 @@ import * as db from "../db";
 import { createRateLimitMiddleware } from "../security";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { isNsosPlatformHost } from "../../shared/platform-host";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -69,8 +70,7 @@ export function registerOAuthRoutes(app: Express) {
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       const callbackUrl = new URL(oauthState.redirectUri);
-      const hostname = callbackUrl.hostname;
-      const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+      const isPlatformHost = isNsosPlatformHost(callbackUrl.hostname);
       res.redirect(302, `${callbackUrl.origin}${isPlatformHost ? "/app" : "/"}`);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);

@@ -16,6 +16,7 @@ import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, wr
 import { ENV } from "./env";
 import { parseConfiguredPort } from "./port";
 
+/** Check whether a TCP port can be bound on the current host. */
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -26,6 +27,7 @@ function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
+/** Find an available local development port starting from the configured preference. */
 async function findAvailablePort(startPort: number = 3000): Promise<number> {
   for (let port = startPort; port < startPort + 20; port++) {
     if (await isPortAvailable(port)) {
@@ -35,54 +37,81 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-async function startServer() {
-  const environmentErrors = requiredProductionEnvironmentErrors(ENV);
-  if (environmentErrors.length) throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
-  const app = express();
-  const server = createServer(app);
-  app.set("trust proxy", 1);
-  app.disable("x-powered-by");
-  app.use(requestObservabilityMiddleware());
-  app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
-  app.get("/healthz", (_request, response) => {
-    response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
-  });
-  app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
-  app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
-  app.use("/api/trpc", requireSameOriginForMutations());
-  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "public-admissions", limit: 30, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.publicSubmit") }));
-  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "lead-capture", limit: 8, windowMs: 15 * 60_000, matcher: path => path.includes("nsos.leads.capture") }));
-  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "lead-intent", limit: 5, windowMs: 15 * 60_000, matcher: path => path.includes("nsos.leads.highIntent") }));
-  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "biodata-document-extraction", limit: 8, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.extractBiodata") }));
-  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "live-provider-action", limit: 6, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.providers.sendTestSms") }));
-  app.use("/api/trpc", createRateLimitMiddleware({ namespace: "family-receipt-scan", limit: 12, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.portal.scanPaymentEvidence") }));
-  app.use("/api/auth/email/request", requireSameOriginForMutations());
-  app.use("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }));
-  registerSmsWebhookRoutes(app);
-  app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
-  registerAffiliateRoutes(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ limit: "1mb", extended: true }));
-  registerStorageProxy(app);
-  registerGoogleAuthRoutes(app);
-  registerEmailAuthRoutes(app);
-  registerOAuthRoutes(app);
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
-  // development mode uses Vite, production mode uses static files
-  if (process.env.NODE_ENV === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
+// Allow a Vercel preview without a database to serve public static pages; production remains strict.
+const isStaticOnlyPreview =
+  process.env.VERCEL === "1" &&
+  process.env.VERCEL_ENV === "preview" &&
+  !ENV.databaseUrl;
+const environmentErrors = requiredProductionEnvironmentErrors({
+  ...ENV,
+  isProduction: ENV.isProduction && !isStaticOnlyPreview,
+});
+if (environmentErrors.length) {
+  throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
+}
 
+export const app = express();
+const server = createServer(app);
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(requestObservabilityMiddleware());
+app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
+// Vercel preview hosts must not compete with the canonical production domain in search results.
+if (process.env.VERCEL === "1" && process.env.VERCEL_ENV === "preview") {
+  app.use((_request, response, next) => {
+    response.setHeader("X-Robots-Tag", "noindex, nofollow");
+    next();
+  });
+}
+// Keep authenticated application and lead-capture routes out of search indexes on the initial HTML response.
+app.use(["/app", "/start"], (_request, response, next) => {
+  response.setHeader("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
+app.get("/healthz", (_request, response) => {
+  response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
+});
+if (isStaticOnlyPreview) {
+  app.use("/api", (_request, response) => {
+    response.status(503).json({ error: "Preview API is disabled until a preview database is configured." });
+  });
+}
+app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
+app.use("/api/trpc", requireSameOriginForMutations());
+app.use("/api/trpc", createRateLimitMiddleware({ namespace: "public-admissions", limit: 30, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.publicSubmit") }));
+app.use("/api/trpc", createRateLimitMiddleware({ namespace: "lead-capture", limit: 8, windowMs: 15 * 60_000, matcher: path => path.includes("nsos.leads.capture") }));
+app.use("/api/trpc", createRateLimitMiddleware({ namespace: "lead-intent", limit: 5, windowMs: 15 * 60_000, matcher: path => path.includes("nsos.leads.highIntent") }));
+app.use("/api/trpc", createRateLimitMiddleware({ namespace: "biodata-document-extraction", limit: 8, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.extractBiodata") }));
+app.use("/api/trpc", createRateLimitMiddleware({ namespace: "live-provider-action", limit: 6, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.providers.sendTestSms") }));
+app.use("/api/trpc", createRateLimitMiddleware({ namespace: "family-receipt-scan", limit: 12, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.portal.scanPaymentEvidence") }));
+app.use("/api/auth/email/request", requireSameOriginForMutations());
+app.use("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }));
+registerSmsWebhookRoutes(app);
+app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
+registerAffiliateRoutes(app);
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "1mb", extended: true }));
+registerStorageProxy(app);
+registerGoogleAuthRoutes(app);
+registerEmailAuthRoutes(app);
+registerOAuthRoutes(app);
+app.use(
+  "/api/trpc",
+  createExpressMiddleware({
+    router: appRouter,
+    createContext,
+  })
+);
+
+// Vercel imports this Express app directly. Local development adds Vite; production serves the built client.
+const appReady = process.env.NODE_ENV === "development"
+  ? setupVite(app, server)
+  : Promise.resolve(serveStatic(app));
+
+/** Start the local Express server after its development or production middleware is ready. */
+async function startServer() {
+  await appReady;
   const preferredPort = parseConfiguredPort(process.env.PORT);
 
   // Managed production platforms route traffic to the exact PORT they provide.
@@ -108,7 +137,11 @@ async function startServer() {
   });
 }
 
-startServer().catch(error => {
-  console.error("NSOS startup failed", error);
-  process.exitCode = 1;
-});
+if (process.env.VERCEL !== "1") {
+  startServer().catch(error => {
+    console.error("NSOS startup failed", error);
+    process.exitCode = 1;
+  });
+}
+
+export default app;

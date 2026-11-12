@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { ArrowRight, ArrowUpRight, BookOpen, Building2, HeartPulse, Layers3, Radar, Sparkles, Workflow } from "lucide-react";
+import { setPageMetadata, setPageStructuredData } from "@/lib/seo";
 
 const products = [
   {
@@ -94,6 +96,30 @@ function ProductCard({ product }: { product: (typeof products)[number] }) {
 }
 
 export default function EcosystemHome() {
+  useEffect(() => {
+    const description =
+      "NSOS is a school management platform for Nigerian schools, bringing school administration, academic operations and communication into one connected workspace.";
+    setPageMetadata({
+      title: "NSOS | School Management Software for Nigerian Schools",
+      description,
+    });
+    setPageStructuredData({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "NSOS",
+      alternateName: "Nigerian School Operating System",
+      url: new URL("/", window.location.origin).toString(),
+      applicationCategory: "EducationalApplication",
+      operatingSystem: "Web",
+      description,
+      provider: {
+        "@type": "Organization",
+        name: "NSOS Technology",
+        url: "https://technology.nsos.top/",
+      },
+    });
+  }, []);
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#0b1713] text-white">
       <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
@@ -145,6 +171,31 @@ export default function EcosystemHome() {
       <section id="about" className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-8 lg:grid-cols-2 lg:px-10 lg:py-24">
         <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#9bd6b2]">Why one ecosystem?</p><h2 className="mt-4 max-w-xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">Different challenges deserve focused products.</h2></div>
         <div className="space-y-5 text-sm leading-8 text-[#b6c8bd] sm:text-base"><p>We build software around real operational needs. Schools need better ways to manage learning and administration. Clinics need dependable operational systems. Businesses need clearer processes. People need useful AI tools.</p><p>NSOS is the shared front door to this work: one place to understand what we are building and find the right product.</p></div>
+      </section>
+
+      <section aria-labelledby="school-resources-title" className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:px-10">
+        <div className="max-w-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#9bd6b2]">NSOS school resources</p>
+          <h2 id="school-resources-title" className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Explore the school platform.</h2>
+          <p className="mt-4 text-sm leading-7 text-[#b6c8bd]">Learn how NSOS approaches school operations, admissions and communication with parents and guardians.</p>
+        </div>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <a href="/school-management-software-nigeria/" className="rounded-2xl border border-white/10 bg-white/[0.045] p-5 transition hover:border-[#9bd6b2]/40">
+            <h3 className="font-semibold text-white">School management software</h3>
+            <p className="mt-2 text-sm leading-6 text-[#b6c8bd]">Explore the connected school operations platform for Nigerian schools.</p>
+            <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#a8dfbc]">Read overview <ArrowUpRight size={15}/></span>
+          </a>
+          <a href="/online-school-admissions-nigeria/" className="rounded-2xl border border-white/10 bg-white/[0.045] p-5 transition hover:border-[#9bd6b2]/40">
+            <h3 className="font-semibold text-white">Online school admissions</h3>
+            <p className="mt-2 text-sm leading-6 text-[#b6c8bd]">See how school-configured public admission forms work.</p>
+            <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#a8dfbc]">Read overview <ArrowUpRight size={15}/></span>
+          </a>
+          <a href="/school-parent-portal-nigeria/" className="rounded-2xl border border-white/10 bg-white/[0.045] p-5 transition hover:border-[#9bd6b2]/40">
+            <h3 className="font-semibold text-white">Parent and guardian portal</h3>
+            <p className="mt-2 text-sm leading-6 text-[#b6c8bd]">Learn about permitted updates and linked learner records.</p>
+            <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#a8dfbc]">Read overview <ArrowUpRight size={15}/></span>
+          </a>
+        </div>
       </section>
 
       <section id="contact" className="mx-5 mb-16 rounded-3xl border border-[#6ca98a]/20 bg-gradient-to-br from-[#173c2c] to-[#10251c] px-6 py-12 text-center sm:mx-8 sm:px-10 lg:mx-auto lg:max-w-7xl lg:py-16">
