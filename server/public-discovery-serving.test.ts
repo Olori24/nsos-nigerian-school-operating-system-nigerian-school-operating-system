@@ -12,6 +12,10 @@ const serverEntrySource = readFileSync(
   path.join(projectRoot, "server", "_core", "index.ts"),
   "utf8"
 );
+const sharedHtmlSource = readFileSync(path.join(projectRoot, "client", "index.html"), "utf8");
+const appSource = readFileSync(path.join(projectRoot, "client", "src", "App.tsx"), "utf8");
+const ecosystemSource = readFileSync(path.join(projectRoot, "client", "src", "pages", "EcosystemHome.tsx"), "utf8");
+const schoolWebsiteSource = readFileSync(path.join(projectRoot, "client", "src", "pages", "SchoolWebsite.tsx"), "utf8");
 
 const publicLandingPages = [
   "school-management-software-nigeria",
@@ -47,6 +51,24 @@ const discoveryFiles = [
 ] as const;
 
 describe("public discovery file serving", () => {
+  it("keeps host-specific canonical and structured data out of the shared SPA shell", () => {
+    expect(sharedHtmlSource).not.toContain('rel="canonical"');
+    expect(sharedHtmlSource).not.toContain('property="og:url"');
+    expect(sharedHtmlSource).not.toContain("application/ld+json");
+    expect(appSource).toContain("useLocation");
+    expect(appSource).toContain("setCanonicalUrl");
+    expect(appSource).toContain("import.meta.env.DEV && <DeveloperArsenalLaunch />");
+    expect(ecosystemSource).toContain('"@type": "SoftwareApplication"');
+    expect(schoolWebsiteSource).toContain('"@type": "School"');
+  });
+
+  it("loads optional analytics only when both public variables are configured", () => {
+    expect(sharedHtmlSource).not.toContain("%VITE_ANALYTICS_ENDPOINT%");
+    expect(sharedHtmlSource).not.toContain("%VITE_ANALYTICS_WEBSITE_ID%");
+    expect(sharedHtmlSource).toContain("import.meta.env.VITE_ANALYTICS_ENDPOINT");
+    expect(sharedHtmlSource).toContain("if (analyticsEndpoint && analyticsWebsiteId)");
+  });
+
   it.each(discoveryFiles)("ships a valid $name static asset", file => {
     const assetPath = path.join(publicRoot, file.name);
     expect(existsSync(assetPath)).toBe(true);
