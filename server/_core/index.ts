@@ -4,19 +4,19 @@ import { createServer } from "http";
 import { pathToFileURL } from "node:url";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth";
-import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
-import { registerSmsWebhookRoutes } from "../webhooks";
-import { registerAffiliateRoutes } from "../affiliateRoutes";
-import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
-import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
-import { ENV } from "./env";
-import { parseConfiguredPort } from "./port";
-import { isStaticOnlyPreview } from "./previewMode";
+import { registerOAuthRoutes } from "./oauth.js";
+import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth.js";
+import { registerStorageProxy } from "./storageProxy.js";
+import { appRouter } from "../routers.js";
+import { createContext } from "./context.js";
+import { serveStatic, setupVite } from "./vite.js";
+import { registerSmsWebhookRoutes } from "../webhooks.js";
+import { registerAffiliateRoutes } from "../affiliateRoutes.js";
+import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security.js";
+import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability.js";
+import { ENV } from "./env.js";
+import { parseConfiguredPort } from "./port.js";
+import { isStaticOnlyPreview } from "./previewMode.js";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
