@@ -68,7 +68,9 @@ describe("public discovery file serving", () => {
     expect(html).toContain(`<link rel="canonical" href="https://nsos.top/${slug}/">`);
     expect(html).toContain('<meta name="robots" content="index,follow,max-image-preview:large">');
     expect(html).toContain('property="og:title"');
-    expect(html).toContain('https://nsos.top/nsos-social.svg');
+    expect(html).toContain('property="og:image" content="https://nsos.top/icons/nsos-icon-512.png"');
+    expect(html).toContain('name="twitter:image" content="https://nsos.top/icons/nsos-icon-512.png"');
+    expect(html).toContain('property="og:image:type" content="image/png"');
     expect(html).toContain('application/ld+json');
     expect(html).toContain('href="/start"');
   });
