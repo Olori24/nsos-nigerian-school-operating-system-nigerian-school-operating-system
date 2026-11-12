@@ -9,6 +9,7 @@ const staticServerSource = readFileSync(
   "utf8"
 );
 const viteConfigSource = readFileSync(path.join(projectRoot, "vite.config.ts"), "utf8");
+const serverEntrySource = readFileSync(path.join(projectRoot, "server", "_core", "index.ts"), "utf8");
 const vercelConfigSource = readFileSync(path.join(projectRoot, "vercel.mjs"), "utf8");
 
 const discoveryFiles = [
@@ -63,6 +64,20 @@ describe("public discovery file serving", () => {
     expect(viteConfigSource).toContain('outDir: path.resolve(import.meta.dirname, "public")');
     expect(staticServerSource).toContain('path.resolve(process.cwd(), "public")');
     expect(vercelConfigSource).toContain('includeFiles: "public/**"');
+  });
+
+  it("keeps database-free preview routes static and fails closed for stateful APIs", () => {
+    const previewGuard = serverEntrySource.indexOf("if (staticOnlyPreview)");
+    const storageRegistration = serverEntrySource.indexOf("registerStorageProxy(app)");
+    const affiliateRegistration = serverEntrySource.indexOf("registerAffiliateRoutes(app)");
+    const apiRegistration = serverEntrySource.indexOf("createExpressMiddleware");
+
+    expect(serverEntrySource).toContain('app.use("/api", previewApiDisabled)');
+    expect(serverEntrySource).toContain('app.use(["/storage", "/manus-storage", "/r"], previewApiDisabled)');
+    expect(previewGuard).toBeGreaterThanOrEqual(0);
+    expect(storageRegistration).toBeGreaterThan(previewGuard);
+    expect(affiliateRegistration).toBeGreaterThan(previewGuard);
+    expect(apiRegistration).toBeGreaterThan(previewGuard);
   });
 
   it("serves static assets before the SPA fallback", () => {
