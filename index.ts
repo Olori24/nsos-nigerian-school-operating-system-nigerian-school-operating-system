@@ -7,7 +7,8 @@ let appPromise: Promise<express.Express> | undefined;
 
 app.use(async (request, response, next) => {
   try {
-    appPromise ??= import("./server/_core/app").then(async ({ createApp }) => {
+    // Vercel's Node 24 ESM runtime requires the emitted .js extension here.
+    appPromise ??= import("./server/_core/app.js").then(async ({ createApp }) => {
       const { app: configuredApp } = await createApp();
       return configuredApp;
     });
