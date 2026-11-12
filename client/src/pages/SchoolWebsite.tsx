@@ -35,7 +35,7 @@ export function SchoolWebsitePage({ site }: { site: SiteQuery }) {
       "@context": "https://schema.org",
       "@type": "School",
       name: school.name,
-      url: window.location.href.split("?")[0],
+      url: new URL(window.location.pathname, window.location.origin).toString(),
       description,
       ...(website.contactPhone ? { telephone: website.contactPhone } : {}),
       ...(website.contactEmail ? { email: website.contactEmail } : {}),
