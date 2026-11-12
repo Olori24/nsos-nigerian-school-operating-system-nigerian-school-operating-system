@@ -73,12 +73,19 @@ describe.skipIf(!integrationEnabled)("guardian tenant isolation (MySQL integrati
     // Reserve the next guardian ID in a pre-existing relationship row. The
     // guardian insert can succeed, but the relationship insert then collides
     // with the unique (studentId, guardianId) index and must roll back.
-    const [sequenceRows] = await db.$client.promise().query(
-      "SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'guardians'",
-    );
-    const nextGuardianId = Number(
-      (sequenceRows as Array<{ AUTO_INCREMENT: number | null }>)[0]?.AUTO_INCREMENT,
-    );
+    const sequenceConnection = await db.$client.promise().getConnection();
+    let nextGuardianId: number;
+    try {
+      await sequenceConnection.query("SET SESSION information_schema_stats_expiry = 0");
+      const [sequenceRows] = await sequenceConnection.query(
+        "SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'guardians'",
+      );
+      nextGuardianId = Number(
+        (sequenceRows as Array<{ AUTO_INCREMENT: number | null }>)[0]?.AUTO_INCREMENT,
+      );
+    } finally {
+      sequenceConnection.release();
+    }
     if (!Number.isSafeInteger(nextGuardianId) || nextGuardianId <= 0) {
       throw new Error("Could not determine the next guardian ID for rollback coverage.");
     }
