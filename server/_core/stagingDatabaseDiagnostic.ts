@@ -18,7 +18,17 @@ export function registerStagingDatabaseDiagnostic(app: Express) {
     try {
       const uri = process.env.DATABASE_URL;
       if (!uri) throw new Error("database_not_configured");
-      connection = await createConnection({ uri, ssl: { rejectUnauthorized: true }, connectTimeout: 10000 });
+      const parsed = new URL(uri);
+      if (parsed.protocol !== "mysql:") throw new Error("database_url_protocol_invalid");
+      connection = await createConnection({
+        host: parsed.hostname,
+        port: parsed.port ? Number(parsed.port) : 3306,
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        database: decodeURIComponent(parsed.pathname.replace(/^\\//, "")) || undefined,
+        ssl: { rejectUnauthorized: true },
+        connectTimeout: 10000,
+      });
       await connection.query("SELECT 1");
       return res.status(200).json({ status: "ok", database: "reachable", check: "SELECT 1" });
     } catch (error) {
