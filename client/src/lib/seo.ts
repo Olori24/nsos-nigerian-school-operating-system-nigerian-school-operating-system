@@ -1,4 +1,4 @@
-const DEFAULT_SOCIAL_IMAGE = "https://nsos.top/icons/nsos-icon-512.png";
+const DEFAULT_SOCIAL_IMAGE_PATH = "/icons/nsos-icon-512.png";
 
 type PageMetadata = {
   title: string;
@@ -19,14 +19,14 @@ function upsertMeta(attribute: "name" | "property", key: string, content: string
 }
 
 function resolveImageUrl(imageUrl?: string | null) {
-  if (!imageUrl) return DEFAULT_SOCIAL_IMAGE;
+  if (!imageUrl) return new URL(DEFAULT_SOCIAL_IMAGE_PATH, window.location.origin).toString();
   try {
     const resolved = new URL(imageUrl, window.location.origin);
     return resolved.protocol === "http:" || resolved.protocol === "https:"
       ? resolved.toString()
-      : DEFAULT_SOCIAL_IMAGE;
+      : new URL(DEFAULT_SOCIAL_IMAGE_PATH, window.location.origin).toString();
   } catch {
-    return DEFAULT_SOCIAL_IMAGE;
+    return new URL(DEFAULT_SOCIAL_IMAGE_PATH, window.location.origin).toString();
   }
 }
 
