@@ -4,16 +4,16 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_APP_ID: ${VITE_APP_ID:?Set VITE_APP_ID in .env}
-        VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:?Set VITE_OAUTH_PORTAL_URL in .env}
+        VITE_APP_ID: ${VITE_APP_ID:?Set VITE_APP_ID in .env.runtime}
+        VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:?Set VITE_OAUTH_PORTAL_URL in .env.runtime}
     image: nsos:local
     restart: unless-stopped
     init: true
     env_file:
       - .env.runtime
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      NODE_ENV: production
+      PORT: "3000"
       JWT_SECRET: ${JWT_SECRET:-}
     ports:
       - "${NSOS_HOST_IP:-127.0.0.1}:${NSOS_HOST_PORT:-3000}:3000"
