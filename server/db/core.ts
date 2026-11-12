@@ -134,8 +134,17 @@ export const DB_POOL_CONNECTION_LIMIT = 5;
 export const DB_POOL_QUEUE_LIMIT = 20;
 
 export function databasePoolOptions(uri: string) {
+  const parsed = new URL(uri);
+  if (parsed.protocol !== "mysql:") {
+    throw new Error("DATABASE_URL must use the mysql:// protocol");
+  }
+  const isLocal = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
   return {
-    uri,
+    host: parsed.hostname,
+    port: parsed.port ? Number(parsed.port) : 3306,
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: decodeURIComponent(parsed.pathname.replace(/^\\//, "")) || undefined,
     connectionLimit: DB_POOL_CONNECTION_LIMIT,
     maxIdle: DB_POOL_CONNECTION_LIMIT,
     idleTimeout: 60_000,
@@ -143,11 +152,8 @@ export function databasePoolOptions(uri: string) {
     queueLimit: DB_POOL_QUEUE_LIMIT,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    // Require verified TLS for every remote database. Local MySQL test services use
-    // ephemeral self-signed certificates and run inside the isolated CI network.
-    ssl: ["localhost", "127.0.0.1", "::1"].includes(new URL(uri).hostname)
-      ? undefined
-      : { rejectUnauthorized: true },
+    // Require verified TLS for every remote database.
+    ssl: isLocal ? undefined : { rejectUnauthorized: true },
   };
 }
 
