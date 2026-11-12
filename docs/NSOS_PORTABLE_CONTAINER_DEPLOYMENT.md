@@ -42,15 +42,25 @@ The Compose port is bound to `127.0.0.1` by default. Set `NSOS_HOST_IP` only to 
 
 `JWT_SECRET` is deliberately excluded from `.env.runtime`. The service receives it from the invoking shell through the Compose mapping `${JWT_SECRET:-}`. Always use `bash scripts/nsos-compose.sh` for Compose commands: the wrapper passes `--env-file .env.runtime`, disables automatic `.env` loading, and rejects any env file containing `JWT_SECRET`. An older default `.env` therefore cannot supply or replace the key. If the shell variable is unset, the mapping resolves to an empty value, so image builds and management commands such as logs and down work without the runtime secret. Starting the application without the exact key fails its production startup guard and is not a valid deployment.
 
-For an interactive local session, enter the value silently and keep it out of shell history:
+For an interactive local session, run this block in **Bash** (not zsh). It clears any stale exported value, preserves leading/trailing whitespace, and stops if the prompt fails:
 
-```sh
+```bash
 bash scripts/nsos-compose.sh build
 
 # Preserve every byte of the existing secret, including leading/trailing whitespace.
 set +x
-IFS= read -r -s -p 'Existing JWT_SECRET: ' JWT_SECRET
+unset JWT_SECRET
+IFS= read -r -s -p 'Existing JWT_SECRET: ' JWT_SECRET || {
+  unset JWT_SECRET
+  echo "Could not read JWT_SECRET; stopping." >&2
+  exit 1
+}
 printf '\n'
+if (( ${#JWT_SECRET} < 32 )); then
+  unset JWT_SECRET
+  echo "JWT_SECRET must be at least 32 characters; stopping." >&2
+  exit 1
+fi
 export JWT_SECRET
 bash scripts/nsos-compose.sh up -d
 unset JWT_SECRET
