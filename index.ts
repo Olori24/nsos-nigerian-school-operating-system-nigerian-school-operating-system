@@ -31,6 +31,7 @@ export default async function handler(request: Request, response: Response) {
 
   try {
     // Node.js ESM requires the bundled server entry so Vercel runs the same dependency graph validated by esbuild.
+    // @ts-expect-error The build step generates this bundled JavaScript entry; it has no source declaration file.
     appPromise ??= import("./dist/index.js").then(({ createApp }) => createApp());
     const { app } = await appPromise;
     return app(request, response);
