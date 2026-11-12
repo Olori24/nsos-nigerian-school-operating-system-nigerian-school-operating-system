@@ -43,36 +43,47 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Build portable image
+      - name: Prepare synthetic Compose environment
         run: |
-          docker build \
-            --build-arg VITE_APP_ID=nsos-synthetic-ci \
-            --build-arg VITE_OAUTH_PORTAL_URL=https://auth.example.invalid \
-            --tag nsos:ci .
+          cat > .env <<'EOF'
+          VITE_APP_ID=nsos-synthetic-ci
+          VITE_OAUTH_PORTAL_URL=https://auth.example.invalid
+          DATABASE_URL=mysql://synthetic:synthetic@127.0.0.1:3306/nsos_test
+          OAUTH_SERVER_URL=https://auth.example.invalid
+          NSOS_HOST_PORT=3000
+          JWT_SECRET=dotenv-sentinel-must-never-reach-container
+          EOF
 
-      - name: Start with synthetic-only configuration
+      - name: Build without runtime secret
         run: |
-          docker run --detach --name nsos-ci \
-            --publish 3000:3000 \
-            --env NODE_ENV=production \
-            --env PORT=3000 \
-            --env VITE_APP_ID=nsos-synthetic-ci \
-            --env JWT_SECRET=ci-only-not-a-real-secret-32-characters-minimum \
-            --env DATABASE_URL=mysql://synthetic:synthetic@127.0.0.1:3306/nsos_test \
-            --env OAUTH_SERVER_URL=https://auth.example.invalid \
-            nsos:ci
+          env -u JWT_SECRET docker compose build
 
-      - name: Verify process health only
+      - name: Verify .env cannot supply JWT_SECRET
         run: |
+          env -u JWT_SECRET docker compose run --rm --no-deps --entrypoint node nsos \
+            -e "if (process.env.JWT_SECRET) { console.error('JWT_SECRET leaked from .env'); process.exit(1); }"
+
+      - name: Start with synthetic runtime secret
+        run: |
+          export JWT_SECRET=ci-only-not-a-real-secret-32-characters-minimum
+          docker compose up -d
+          unset JWT_SECRET
+
+      - name: Verify process health through configured host binding
+        run: |
+          HOST_BINDING="$(docker compose port nsos 3000)"
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:3000/healthz; then
+            if curl --fail --silent "http://${HOST_BINDING}/healthz"; then
               exit 0
             fi
             sleep 2
           done
-          docker logs nsos-ci
+          docker compose logs --tail=100 nsos
           exit 1
 
-      - name: Clean up
+      - name: Verify management commands after unsetting secret
         if: always()
-        run: docker rm --force nsos-ci || true
+        run: |
+          docker compose ps
+          docker compose logs --tail=100 nsos || true
+          docker compose down --remove-orphans || true
