@@ -93,5 +93,8 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Build production bundle
-        run: pnpm build
+      - name: Build production bundle in Vercel mode
+        run: VERCEL=1 pnpm build
+
+      - name: Verify production HTML has no Manus runtime injection
+        run: node scripts/assert-vercel-build-html.mjs
