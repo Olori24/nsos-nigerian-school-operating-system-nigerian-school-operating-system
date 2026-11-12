@@ -16,9 +16,20 @@ export function registerStagingDatabaseDiagnostic(app: Express) {
     lastDiagnosticAt = now;
     let connection: Awaited<ReturnType<typeof createConnection>> | undefined;
     let phase = "read_environment";
+    let urlShape: Record<string, unknown> | undefined;
     try {
       const uri = process.env.DATABASE_URL;
       if (!uri) throw new Error("database_not_configured");
+      phase = "inspect_database_url";
+      urlShape = {
+        length: uri.length,
+        startsWithMysqlScheme: uri.startsWith("mysql://"),
+        schemePresent: /^[a-z][a-z0-9+.-]*:/i.test(uri),
+        containsWhitespace: /\s/.test(uri),
+        startsWithQuote: /^['"`]/.test(uri),
+        endsWithQuote: /['"`]$/.test(uri),
+        containsPlaceholder: /<|>|\$\{|YOUR_|REPLACE_ME/i.test(uri),
+      };
       phase = "parse_database_url";
       const parsed = new URL(uri);
       if (parsed.protocol !== "mysql:") throw new Error("database_url_protocol_invalid");
@@ -44,8 +55,9 @@ export function registerStagingDatabaseDiagnostic(app: Express) {
         code,
         errno: typeof details.errno === "number" ? details.errno : undefined,
         sqlState: typeof details.sqlState === "string" ? details.sqlState : undefined,
+        urlShape,
       });
-      return res.status(503).json({ status: "error", database: "unreachable", phase, code });
+      return res.status(503).json({ status: "error", database: "unreachable", phase, code, ...(phase === "parse_database_url" ? { urlShape } : {}) });
     } finally {
       await connection?.end().catch(() => undefined);
     }
