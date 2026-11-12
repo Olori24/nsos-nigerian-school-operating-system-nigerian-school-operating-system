@@ -1,21 +1,22 @@
 import express from "express";
 import { createApp } from "./server/_core/app";
 
-// Vercel executes this handler without opening a listening socket.
-// The build bundles all local modules so Node ESM never has to resolve
-// extensionless TypeScript source imports at runtime.
+// Initialize the Express app once when the function module loads. Constructing
+// rate-limit middleware inside a request handler triggers runtime validation
+// errors and recreates the middleware on every request.
 const app = express();
-let appPromise: ReturnType<typeof createApp> | undefined;
+const appPromise = createApp().then(({ app: configuredApp }) => configuredApp);
 
-app.use(async (request, response, next) => {
-  try {
-    appPromise ??= createApp();
-    const { app: configuredApp } = await appPromise;
-    configuredApp(request, response, next);
-  } catch (error) {
-    console.error("NSOS serverless application initialization failed", error);
-    next(error);
-  }
+// Mark initialization failures as handled immediately, while retaining the
+// rejected promise so each request receives the original startup error.
+void appPromise.catch(error => {
+  console.error("NSOS serverless application initialization failed", error);
+});
+
+app.use((request, response, next) => {
+  appPromise
+    .then(configuredApp => configuredApp(request, response, next))
+    .catch(next);
 });
 
 export default app;
