@@ -150,7 +150,15 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+// Manus runtime is only needed in the Manus-hosted development environment.
+// Vercel sets VERCEL=1 during builds, so do not inject Manus runtime scripts there.
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  ...(process.env.VERCEL === "1" ? [] : [vitePluginManusRuntime()]),
+  vitePluginManusDebugCollector(),
+];
 
 export default defineConfig({
   plugins,
