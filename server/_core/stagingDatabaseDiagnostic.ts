@@ -1,16 +1,12 @@
-import { timingSafeEqual } from "node:crypto";
 import { createConnection } from "mysql2/promise";
 import type { Express, Request, Response } from "express";
 
 const BRANCH = "fix/vercel-serverless-runtime-init";
 
 export function registerStagingDatabaseDiagnostic(app: Express) {
-  app.get("/healthz/db", async (req: Request, res: Response) => {
+  app.get("/healthz/db", async (_req: Request, res: Response) => {
     res.set("Cache-Control", "no-store");
-    const expected = process.env.JWT_SECRET ?? "";
-    const supplied = typeof req.query.token === "string" ? req.query.token : "";
-    const authorized = expected.length === supplied.length && expected.length >= 32 && timingSafeEqual(Buffer.from(expected), Buffer.from(supplied));
-    if (process.env.VERCEL_ENV !== "preview" || process.env.VERCEL_GIT_COMMIT_REF !== BRANCH || !authorized) {
+    if (process.env.VERCEL_ENV !== "preview" || process.env.VERCEL_GIT_COMMIT_REF !== BRANCH) {
       return res.status(404).json({ status: "unavailable" });
     }
     let connection: Awaited<ReturnType<typeof createConnection>> | undefined;
