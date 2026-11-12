@@ -8,6 +8,7 @@ const staticServerSource = readFileSync(
   path.join(projectRoot, "server", "_core", "vite.ts"),
   "utf8"
 );
+const viteConfigSource = readFileSync(path.join(projectRoot, "vite.config.ts"), "utf8");
 
 const discoveryFiles = [
   {
@@ -47,6 +48,11 @@ describe("public discovery file serving", () => {
     }
 
     expect(file.contentType).toMatch(/^(text\/plain|application\/xml)$/);
+  });
+
+  it("builds assets into the Vercel Express public directory", () => {
+    expect(viteConfigSource).toContain('outDir: path.resolve(import.meta.dirname, "public")');
+    expect(staticServerSource).toContain('path.resolve(process.cwd(), "public")');
   });
 
   it("serves static assets before the SPA fallback", () => {
