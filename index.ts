@@ -30,8 +30,8 @@ export default async function handler(request: Request, response: Response) {
   response.setHeader("X-Request-ID", requestId);
 
   try {
-    // Node.js ESM requires the emitted .js extension for this relative import.
-    appPromise ??= import("./server/_core/index.js").then(({ createApp }) => createApp());
+    // Node.js ESM requires the bundled server entry so Vercel runs the same dependency graph validated by esbuild.
+    appPromise ??= import("./dist/index.js").then(({ createApp }) => createApp());
     const { app } = await appPromise;
     return app(request, response);
   } catch (error) {
