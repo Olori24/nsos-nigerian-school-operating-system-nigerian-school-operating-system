@@ -60,7 +60,7 @@ jobs:
             body: JSON.stringify({
               key: "DATABASE_URL",
               value: process.env.STAGING_DATABASE_URL,
-              type: "encrypted",
+              type: "sensitive",
               visibility: "secret",
               target: ["preview"],
               gitBranch: branch,
