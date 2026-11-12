@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
+import { pathToFileURL } from "node:url";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -35,7 +36,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-async function startServer() {
+export async function createApp() {
   const environmentErrors = requiredProductionEnvironmentErrors(ENV);
   if (environmentErrors.length) throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
   const app = express();
@@ -83,6 +84,11 @@ async function startServer() {
     serveStatic(app);
   }
 
+  return { app, server };
+}
+
+async function startServer() {
+  const { app, server } = await createApp();
   const preferredPort = parseConfiguredPort(process.env.PORT);
 
   // Managed production platforms route traffic to the exact PORT they provide.
@@ -108,7 +114,9 @@ async function startServer() {
   });
 }
 
-startServer().catch(error => {
-  console.error("NSOS startup failed", error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startServer().catch(error => {
+    console.error("NSOS startup failed", error);
+    process.exitCode = 1;
+  });
+}
