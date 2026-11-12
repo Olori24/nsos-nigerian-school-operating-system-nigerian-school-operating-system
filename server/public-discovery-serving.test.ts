@@ -16,6 +16,7 @@ const sharedHtmlSource = readFileSync(path.join(projectRoot, "client", "index.ht
 const appSource = readFileSync(path.join(projectRoot, "client", "src", "App.tsx"), "utf8");
 const ecosystemSource = readFileSync(path.join(projectRoot, "client", "src", "pages", "EcosystemHome.tsx"), "utf8");
 const schoolWebsiteSource = readFileSync(path.join(projectRoot, "client", "src", "pages", "SchoolWebsite.tsx"), "utf8");
+const domainSchoolWebsiteSource = readFileSync(path.join(projectRoot, "client", "src", "pages", "DomainSchoolWebsite.tsx"), "utf8");
 const seoHelperSource = readFileSync(path.join(projectRoot, "client", "src", "lib", "seo.ts"), "utf8");
 
 const publicLandingPages = [
@@ -61,6 +62,8 @@ describe("public discovery file serving", () => {
     expect(appSource).toContain("import.meta.env.DEV && <DeveloperArsenalLaunch />");
     expect(ecosystemSource).toContain('"@type": "SoftwareApplication"');
     expect(schoolWebsiteSource).toContain('"@type": "School"');
+    expect(schoolWebsiteSource).toContain("setCanonicalUrl");
+    expect(domainSchoolWebsiteSource).toContain("setCanonicalUrl");
     expect(seoHelperSource).toContain('DEFAULT_SOCIAL_IMAGE_PATH = "/icons/nsos-icon-512.png"');
     expect(seoHelperSource).toContain("new URL(DEFAULT_SOCIAL_IMAGE_PATH, window.location.origin)");
   });
