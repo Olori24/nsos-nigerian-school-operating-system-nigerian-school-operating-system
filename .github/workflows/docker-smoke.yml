@@ -103,8 +103,8 @@ jobs:
           const html = await htmlResponse.text();
           if (!html.includes('<div id="root"></div>')) throw new Error("SPA root element is missing.");
 
-          const scriptPath = html.match(/<script[^>]+src=["']([^"']+\\.js(?:\\?[^"']*)?)["']/i)?.[1];
-          const stylePath = html.match(/<link[^>]+href=["']([^"']+\\.css(?:\\?[^"']*)?)["']/i)?.[1];
+          const scriptPath = html.match(/<script[^>]+src=["']([^"']+\.js(?:\?[^"']*)?)["']/i)?.[1];
+          const stylePath = html.match(/<link[^>]+href=["']([^"']+\.css(?:\?[^"']*)?)["']/i)?.[1];
           if (!scriptPath || !stylePath) throw new Error("Built JavaScript or CSS asset reference is missing.");
 
           const [scriptResponse, styleResponse, serviceWorkerResponse] = await Promise.all([
