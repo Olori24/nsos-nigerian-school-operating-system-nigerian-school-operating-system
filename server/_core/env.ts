@@ -4,7 +4,11 @@ export const ENV = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  isProduction: process.env.NODE_ENV === "production",
+  // Vercel Preview runs with NODE_ENV=production; enforce production-only
+  // configuration only for actual Production deployments.
+  isProduction: process.env.VERCEL === "1"
+    ? process.env.VERCEL_ENV === "production"
+    : process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
