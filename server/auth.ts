@@ -5,6 +5,7 @@ import type { Express, Request, Response } from "express";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
+import { isNsosPlatformHost } from "../shared/platform-host";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
 
@@ -33,8 +34,7 @@ function validOrigin(value: unknown) {
 
 function postSignInPath(origin: string) {
   const hostname = new URL(origin).hostname;
-  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
-  return isPlatformHost ? "/app" : "/";
+  return isNsosPlatformHost(hostname) ? "/app" : "/";
 }
 
 function validMagicLinkToken(value: string) {
