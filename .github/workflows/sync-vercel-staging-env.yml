@@ -1,0 +1,85 @@
+name: Sync NSOS staging database to Vercel Preview
+
+on:
+  push:
+    branches:
+      - fix/vercel-serverless-runtime-init
+    paths:
+      - ".github/workflows/sync-vercel-staging-env.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nsos-vercel-staging-env-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-staging-database:
+    name: Sync staging connection to branch Preview only
+    if: github.repository == 'Olori24/nsos-nigerian-school-operating-system-nigerian-school-operating-system' && github.ref == 'refs/heads/fix/vercel-serverless-runtime-init'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate staging target without printing credentials
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          node --input-type=module <<'NODE'
+          const raw = process.env.STAGING_DATABASE_URL;
+          if (!raw) throw new Error("STAGING_DATABASE_URL is missing");
+          const url = new URL(raw);
+          if (url.protocol !== "mysql:") throw new Error("Expected mysql protocol");
+          if (url.hostname !== "gateway01.ap-northeast-1.prod.aws.tidbcloud.com") throw new Error("Unexpected database host");
+          if (url.port !== "4000") throw new Error("Unexpected database port");
+          if (decodeURIComponent(url.pathname.slice(1)) !== "nsos_staging") throw new Error("Database must be nsos_staging");
+          if (!url.searchParams.has("ssl")) throw new Error("TLS configuration is required");
+          if (!url.username || !url.password) throw new Error("Database credentials are incomplete");
+          console.log("Staging target validated. Credentials withheld.");
+          NODE
+
+      - name: Upsert branch-scoped Vercel Preview variable
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          const projectId = "prj_xjIPyNyC6VIs6tE0Hb0ODcfBbqTs";
+          const teamId = "team_NKFPuLmPv9szBq7kwqFVfafV";
+          const branch = "fix/vercel-serverless-runtime-init";
+          const base = "https://api.vercel.com";
+          if (!process.env.VERCEL_TOKEN) throw new Error("VERCEL_TOKEN repository secret is missing");
+          const headers = {
+            Authorization: `Bearer ${process.env.VERCEL_TOKEN}`,
+            "Content-Type": "application/json"
+          };
+          const endpoint = `${base}/v10/projects/${projectId}/env?teamId=${teamId}`;
+          const response = await fetch(`${endpoint}&upsert=true`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              key: "DATABASE_URL",
+              value: process.env.STAGING_DATABASE_URL,
+              type: "encrypted",
+              visibility: "sensitive",
+              target: ["preview"],
+              gitBranch: branch,
+              comment: "Synced from GitHub STAGING_DATABASE_URL. TiDB staging only; Preview branch only."
+            })
+          });
+          if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(`Vercel environment sync failed (${response.status}): ${detail.slice(0, 1000)}`);
+          }
+          const verify = await fetch(`${base}/v10/projects/${projectId}/env?teamId=${teamId}&gitBranch=${encodeURIComponent(branch)}&decrypt=false`, { headers });
+          if (!verify.ok) throw new Error(`Vercel verification failed (${verify.status})`);
+          const data = await verify.json();
+          const envs = data.envs ?? data;
+          const match = Array.isArray(envs) && envs.find(item =>
+            item.key === "DATABASE_URL" &&
+            item.gitBranch === branch &&
+            Array.isArray(item.target) && item.target.includes("preview")
+          );
+          if (!match) throw new Error("Vercel did not return the expected branch-scoped Preview DATABASE_URL");
+          console.log("Verified: DATABASE_URL exists for the NSOS migration branch, Preview target only. Secret value was not read back or printed.");
+          NODE
