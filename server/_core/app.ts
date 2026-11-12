@@ -13,6 +13,7 @@ import { registerAffiliateRoutes } from "../affiliateRoutes";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
 import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware } from "../observability";
 import { ENV } from "./env";
+import { registerStagingDatabaseDiagnostic } from "./stagingDatabaseDiagnostic";
 
 export async function createApp(): Promise<{ app: express.Express; server: Server }> {
   const environmentErrors = requiredProductionEnvironmentErrors(ENV);
@@ -29,6 +30,7 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   app.get("/healthz", (_request, response) => {
     response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
   });
+  registerStagingDatabaseDiagnostic(app);
   app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
   app.use("/api/trpc", requireSameOriginForMutations());
