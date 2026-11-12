@@ -205,7 +205,7 @@ function initials(name?: string | null) {
 
 function isNsosPlatformHost() {
   const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1" || host === "nsos.top" || host === "www.nsos.top" || host.endsWith(".manus.computer") || host.endsWith(".manus.space");
+  return host === "localhost" || host === "127.0.0.1" || host === "nsos.top" || host === "www.nsos.top" || host.endsWith(".vercel.app") || host.endsWith(".manus.computer") || host.endsWith(".manus.space");
 }
 
 function StatusPill({ children, tone = "sage" }: { children: React.ReactNode; tone?: "sage" | "gold" | "rose" | "sky" | "neutral" }) {
