@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { BiodataThemeToggle } from "./components/BiodataThemeToggle";
@@ -13,6 +13,7 @@ import { InstallNSOSPrompt } from "./components/InstallNSOSPrompt";
 import { NSOSUpdatePrompt } from "./components/NSOSUpdatePrompt";
 import { DeveloperArsenalLaunch } from "./components/DeveloperArsenalLaunch";
 import { useEffect, useState } from "react";
+import { clearPageStructuredData, setCanonicalUrl, setPageMetadata } from "./lib/seo";
 import Home from "./pages/Home";
 import EcosystemHome from "./pages/EcosystemHome";
 import PublicAdmissions from "./pages/PublicAdmissions";
@@ -58,6 +59,25 @@ function isNsosPlatformHost(hostname: string) {
     hostname.endsWith(".manus.space") ||
     hostname.endsWith(".manus.computer")
   );
+}
+
+function RouteMetadata() {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    const canonicalUrl = new URL(location, window.location.origin);
+    canonicalUrl.search = "";
+    canonicalUrl.hash = "";
+    setCanonicalUrl(canonicalUrl.toString());
+    clearPageStructuredData();
+    setPageMetadata({
+      title: "NSOS | School Management Software for Nigerian Schools",
+      description:
+        "NSOS is a school management platform for Nigerian schools, bringing school administration, academic operations and communication into one connected workspace.",
+    });
+  }, [location]);
+
+  return null;
 }
 
 function Router() {
@@ -129,8 +149,9 @@ export default function App() {
       <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
           <Toaster />
+          <RouteMetadata />
           <Router />
-          <DeveloperArsenalLaunch />
+          {import.meta.env.DEV && <DeveloperArsenalLaunch />}
           <InternalBiodataAutofillLauncher />
           <InstallNSOSPrompt />
           <NSOSUpdatePrompt />
