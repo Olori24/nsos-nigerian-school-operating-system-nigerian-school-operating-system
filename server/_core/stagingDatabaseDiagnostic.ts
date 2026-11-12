@@ -25,7 +25,7 @@ export function registerStagingDatabaseDiagnostic(app: Express) {
         port: parsed.port ? Number(parsed.port) : 3306,
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
-        database: decodeURIComponent(parsed.pathname.replace(/^\\//, "")) || undefined,
+        database: decodeURIComponent(parsed.pathname.slice(1)) || undefined,
         ssl: { rejectUnauthorized: true },
         connectTimeout: 10000,
       });
