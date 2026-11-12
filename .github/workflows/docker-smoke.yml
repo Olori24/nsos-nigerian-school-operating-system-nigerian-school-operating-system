@@ -90,6 +90,40 @@ jobs:
           bash scripts/nsos-compose.sh logs --tail=100 nsos
           exit 1
 
+      - name: Verify static HTML, JavaScript, CSS, and service-worker headers
+        run: |
+          HOST_BINDING="$(bash scripts/nsos-compose.sh port nsos 3000)"
+          node --input-type=module - "$HOST_BINDING" <<'NODE'
+          const origin = `http://${process.argv[2]}`;
+          const htmlResponse = await fetch(origin);
+          if (!htmlResponse.ok) throw new Error(`Homepage returned HTTP ${htmlResponse.status}`);
+          if (!(htmlResponse.headers.get("content-type") ?? "").includes("text/html")) {
+            throw new Error("Homepage did not return an HTML content type.");
+          }
+          const html = await htmlResponse.text();
+          if (!html.includes('<div id="root"></div>')) throw new Error("SPA root element is missing.");
+
+          const scriptPath = html.match(/<script[^>]+src=["']([^"']+\\.js(?:\\?[^"']*)?)["']/i)?.[1];
+          const stylePath = html.match(/<link[^>]+href=["']([^"']+\\.css(?:\\?[^"']*)?)["']/i)?.[1];
+          if (!scriptPath || !stylePath) throw new Error("Built JavaScript or CSS asset reference is missing.");
+
+          const [scriptResponse, styleResponse, serviceWorkerResponse] = await Promise.all([
+            fetch(new URL(scriptPath, origin)),
+            fetch(new URL(stylePath, origin)),
+            fetch(new URL("/sw.js", origin)),
+          ]);
+          if (!scriptResponse.ok || !(scriptResponse.headers.get("content-type") ?? "").includes("javascript")) {
+            throw new Error(`JavaScript asset failed: HTTP ${scriptResponse.status}`);
+          }
+          if (!styleResponse.ok || !(styleResponse.headers.get("content-type") ?? "").includes("text/css")) {
+            throw new Error(`CSS asset failed: HTTP ${styleResponse.status}`);
+          }
+          if (!serviceWorkerResponse.ok) throw new Error(`Service worker failed: HTTP ${serviceWorkerResponse.status}`);
+          const cacheControl = (serviceWorkerResponse.headers.get("cache-control") ?? "").toLowerCase();
+          if (!cacheControl.includes("no-store")) throw new Error("Service worker response is cacheable.");
+          console.log("Static smoke passed: homepage, JS, CSS, and no-store service worker.");
+          NODE
+
       - name: Verify management commands after unsetting secret
         if: always()
         run: |
