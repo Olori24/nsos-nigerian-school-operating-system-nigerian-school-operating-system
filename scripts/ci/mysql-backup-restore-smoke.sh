@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${NSOS_BACKUP_RESTORE_CI:-}" != "1" ]]; then
-  echo "This rehearsal is CI-only; refusing to run without NSOS_BACKUP_RESTORE_CI=1." >&2
+if [[ "${GITHUB_ACTIONS:-}" != "true" || "${NSOS_BACKUP_RESTORE_CI:-}" != "1" ]]; then
+  echo "This rehearsal is CI-only; refusing to run outside GitHub Actions or without NSOS_BACKUP_RESTORE_CI=1." >&2
   exit 1
 fi
 
