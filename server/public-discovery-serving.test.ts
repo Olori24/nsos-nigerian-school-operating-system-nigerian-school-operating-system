@@ -8,6 +8,9 @@ const staticServerSource = readFileSync(
   path.join(projectRoot, "server", "_core", "vite.ts"),
   "utf8"
 );
+const viteConfigSource = readFileSync(path.join(projectRoot, "vite.config.ts"), "utf8");
+const serverEntrySource = readFileSync(path.join(projectRoot, "server", "_core", "index.ts"), "utf8");
+const vercelConfigSource = readFileSync(path.join(projectRoot, "vercel.mjs"), "utf8");
 
 const discoveryFiles = [
   {
@@ -36,6 +39,14 @@ const discoveryFiles = [
 ] as const;
 
 describe("public discovery file serving", () => {
+  it("keeps analytics optional when Vite analytics variables are absent", () => {
+    const html = readFileSync(path.join(projectRoot, "client", "index.html"), "utf8");
+    expect(html).not.toContain("%VITE_ANALYTICS_ENDPOINT%");
+    expect(html).not.toContain("%VITE_ANALYTICS_WEBSITE_ID%");
+    expect(html).toContain("import.meta.env.VITE_ANALYTICS_ENDPOINT");
+    expect(html).toContain("if (analyticsEndpoint && analyticsWebsiteId)");
+  });
+
   it.each(discoveryFiles)("ships a valid $name static asset", file => {
     const assetPath = path.join(publicRoot, file.name);
     expect(existsSync(assetPath)).toBe(true);
@@ -47,6 +58,26 @@ describe("public discovery file serving", () => {
     }
 
     expect(file.contentType).toMatch(/^(text\/plain|application\/xml)$/);
+  });
+
+  it("builds assets into the Vercel CDN directory and bundles them for the Express SPA fallback", () => {
+    expect(viteConfigSource).toContain('outDir: path.resolve(import.meta.dirname, "public")');
+    expect(staticServerSource).toContain('path.resolve(process.cwd(), "public")');
+    expect(vercelConfigSource).toContain('includeFiles: "public/**"');
+  });
+
+  it("keeps database-free preview routes static and fails closed for stateful APIs", () => {
+    const previewGuard = serverEntrySource.indexOf("if (staticOnlyPreview)");
+    const storageRegistration = serverEntrySource.indexOf("registerStorageProxy(app)");
+    const affiliateRegistration = serverEntrySource.indexOf("registerAffiliateRoutes(app)");
+    const apiRegistration = serverEntrySource.indexOf('"/api/trpc",');
+
+    expect(serverEntrySource).toContain('app.use("/api", previewApiDisabled)');
+    expect(serverEntrySource).toContain('app.use(["/storage", "/manus-storage", "/r"], previewApiDisabled)');
+    expect(previewGuard).toBeGreaterThanOrEqual(0);
+    expect(storageRegistration).toBeGreaterThan(previewGuard);
+    expect(affiliateRegistration).toBeGreaterThan(previewGuard);
+    expect(apiRegistration).toBeGreaterThan(previewGuard);
   });
 
   it("serves static assets before the SPA fallback", () => {

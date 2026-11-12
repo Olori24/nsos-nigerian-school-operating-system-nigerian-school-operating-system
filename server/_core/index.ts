@@ -1,20 +1,22 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
+import { pathToFileURL } from "node:url";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth";
-import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
-import { registerSmsWebhookRoutes } from "../webhooks";
-import { registerAffiliateRoutes } from "../affiliateRoutes";
-import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
-import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
-import { ENV } from "./env";
-import { parseConfiguredPort } from "./port";
+import { registerOAuthRoutes } from "./oauth.js";
+import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth.js";
+import { registerStorageProxy } from "./storageProxy.js";
+import { appRouter } from "../routers.js";
+import { createContext } from "./context.js";
+import { serveStatic } from "./static.js";
+import { registerSmsWebhookRoutes } from "../webhooks.js";
+import { registerAffiliateRoutes } from "../affiliateRoutes.js";
+import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security.js";
+import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability.js";
+import { ENV } from "./env.js";
+import { parseConfiguredPort } from "./port.js";
+import { isStaticOnlyPreview } from "./previewMode.js";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,8 +37,17 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-async function startServer() {
-  const environmentErrors = requiredProductionEnvironmentErrors(ENV);
+const staticOnlyPreview = isStaticOnlyPreview({
+  vercel: process.env.VERCEL,
+  vercelEnv: process.env.VERCEL_ENV,
+  databaseUrl: ENV.databaseUrl,
+});
+
+export async function createApp() {
+  const environmentErrors = requiredProductionEnvironmentErrors({
+    ...ENV,
+    isProduction: ENV.isProduction && !staticOnlyPreview,
+  });
   if (environmentErrors.length) throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
   const app = express();
   const server = createServer(app);
@@ -45,8 +56,18 @@ async function startServer() {
   app.use(requestObservabilityMiddleware());
   app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
   app.get("/healthz", (_request, response) => {
-    response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
+    response.set("Cache-Control", "no-store").status(200).json({
+      status: "ok",
+      mode: staticOnlyPreview ? "static-only-preview" : "full",
+    });
   });
+  if (staticOnlyPreview) {
+    const previewApiDisabled = (_request: express.Request, response: express.Response) => {
+      response.status(503).json({ error: "Preview API is disabled until an isolated preview database is configured." });
+    };
+    app.use("/api", previewApiDisabled);
+    app.use(["/storage", "/manus-storage", "/r"], previewApiDisabled);
+  }
   app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
   app.use("/api/trpc", requireSameOriginForMutations());
@@ -61,14 +82,12 @@ async function startServer() {
   registerSmsWebhookRoutes(app);
   app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
   registerAffiliateRoutes(app);
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
   registerStorageProxy(app);
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
   registerOAuthRoutes(app);
-  // tRPC API
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -76,19 +95,19 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    const { setupVite } = await import("./vite.js");
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  const preferredPort = parseConfiguredPort(process.env.PORT);
+  return { app, server };
+}
 
-  // Managed production platforms route traffic to the exact PORT they provide.
-  // Silently choosing another port makes the process appear healthy while the
-  // platform health check and incoming traffic continue targeting the old port.
-  // Port fallback is only useful during local development.
+async function startServer() {
+  const { app, server } = await createApp();
+  const preferredPort = parseConfiguredPort(process.env.PORT);
   const port = ENV.isProduction ? preferredPort : await findAvailablePort(preferredPort);
 
   if (!ENV.isProduction && port !== preferredPort) {
@@ -108,7 +127,9 @@ async function startServer() {
   });
 }
 
-startServer().catch(error => {
-  console.error("NSOS startup failed", error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startServer().catch(error => {
+    console.error("NSOS startup failed", error);
+    process.exitCode = 1;
+  });
+}
