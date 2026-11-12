@@ -9,22 +9,26 @@ The Dockerfile packages the existing React/Vite client and Express/tRPC server a
 ## Build and run
 
 1. Install Docker Engine **28.0.0 or later** and the Docker Compose plugin on the target host. This minimum is a security prerequisite for the loopback port binding used below: older Docker Engine versions can allow hosts on the same layer-2 network to reach ports published to localhost. If an older engine must be used, do not rely on the loopback binding; first enforce and verify host/network firewall controls that block access to the published port from every non-host interface. Record the Engine version and the applicable network-control evidence before starting the service. Do not proceed if neither condition can be met.
-2. Copy `docker.env.example` to `.env`.
-3. Fill the required public application/OAuth portal values and the server-only production values using the target environment's secure secret manager.
+2. Copy `docker.env.example` to `.env.runtime` and restrict it with `chmod 600 .env.runtime`. This file contains runtime settings and must not contain `JWT_SECRET`.
+3. Fill the required public application/OAuth portal values and the server-only runtime values. Keep `JWT_SECRET` out of `.env.runtime`.
 4. Confirm `DATABASE_URL` points to a dedicated isolated staging database for staging work.
-5. Build and start:
+5. Build the image without the runtime secret:
 
 ```sh
-docker compose build
-docker compose up -d
-docker compose ps
-docker compose logs --tail=100 nsos
+bash scripts/nsos-compose.sh build
+```
+
+6. Start the service only after securely exporting the exact runtime `JWT_SECRET`; the interactive procedure is in the Secret continuity section below. Then inspect it:
+
+```sh
+bash scripts/nsos-compose.sh ps
+bash scripts/nsos-compose.sh logs --tail=100 nsos
 ```
 
 6. Verify the process health endpoint:
 
 ```sh
-HOST_BINDING="$(docker compose port nsos 3000)"
+HOST_BINDING="$(bash scripts/nsos-compose.sh port nsos 3000)"
 curl --fail --silent --show-error "http://${HOST_BINDING}/healthz"
 ```
 
@@ -36,23 +40,25 @@ The Compose port is bound to `127.0.0.1` by default. Set `NSOS_HOST_IP` only to 
 
 **Do not generate a new JWT_SECRET and point the container at the existing production database.**
 
-`JWT_SECRET` is deliberately excluded from `.env`. Docker Compose parses `.env` values and special characters, quotes, dollar signs, and trailing backslashes can be interpreted differently across versions. The Compose service receives `JWT_SECRET` only from the invoking process environment using Compose's pass-through form (`- JWT_SECRET`). It does not interpolate the secret from `.env`; if the shell variable is absent, the container receives no `JWT_SECRET`, even if an older `.env` file still contains one. This allows image builds and management commands such as `docker compose logs` and `docker compose down` to run without the runtime secret. Starting the application without the exact secret will fail its startup guard and is not a valid deployment.
+`JWT_SECRET` is deliberately excluded from `.env`. Docker Compose parses `.env` values and special characters, quotes, dollar signs, and trailing backslashes can be interpreted differently across versions. The Compose service receives `JWT_SECRET` only from the invoking process environment using Compose's pass-through form (`- JWT_SECRET`). It does not interpolate the secret from `.env`; if the shell variable is absent, the container receives no `JWT_SECRET`, even if an older `.env` file still contains one. This allows image builds and management commands such as `docker compose logs` and `bash scripts/nsos-compose.sh down` to run without the runtime secret. Starting the application without the exact secret will fail its startup guard and is not a valid deployment.
 
 For an interactive local session, enter the value silently and keep it out of shell history:
 
 ```sh
-docker compose build
+bash scripts/nsos-compose.sh build
 
 # Preserve every byte of the existing secret, including leading/trailing whitespace.
 set +x
 IFS= read -r -s -p 'Existing JWT_SECRET: ' JWT_SECRET
 printf '\n'
 export JWT_SECRET
-docker compose up -d
+bash scripts/nsos-compose.sh up -d
 unset JWT_SECRET
+bash scripts/nsos-compose.sh logs --tail=100 nsos
+bash scripts/nsos-compose.sh down
 ```
 
-For hosted deployment, inject the exact existing value from the platform's encrypted secret manager as an environment variable. Never put it in `.env`, command-line arguments, build arguments, logs, or `docker compose config` output. Confirm the secret manager's injection mechanism preserves the value byte-for-byte before connecting to a database.
+For hosted deployment, inject the exact existing value from the platform's encrypted secret manager as an environment variable. Never put it in `.env`, `.env.runtime`, command-line arguments, build arguments, logs, or Compose config output. Use `bash scripts/nsos-compose.sh` for every Compose operation. Confirm the secret manager's injection mechanism preserves the value byte-for-byte before connecting to a database.
 
 NSOS currently derives the session-signing key and encryption keys for provider credentials, Meta advertising access tokens, and school bank-account numbers from `JWT_SECRET`. Replacing that value invalidates existing sessions and makes ciphertext created with the previous key unreadable.
 
@@ -78,7 +84,7 @@ Use synthetic school, staff, learner, guardian, invoice, admissions and document
 - Run as the unprivileged `node` user.
 - The container filesystem is read-only except for a bounded temporary filesystem at `/tmp`.
 - Linux capabilities are dropped and privilege escalation is disabled.
-- Secrets are injected at runtime through the uncommitted `.env` file for local controlled use, or a deployment platform's encrypted secret manager in hosted environments.
+- Runtime settings are loaded from the uncommitted `.env.runtime` file; `JWT_SECRET` is injected separately from the shell or a deployment platform's encrypted secret manager.
 - Do not expose the application port publicly until TLS termination, ingress restrictions, backups, monitoring, and an incident rollback procedure are configured.
 
 ## Deployment and rollback
