@@ -70,6 +70,17 @@ describe("EDTEF directory proxy routes", () => {
     expect(requestEdtefJson).not.toHaveBeenCalled();
   });
 
+  it("preserves upstream not-found status for a valid but unknown school ID", async () => {
+    vi.mocked(requestEdtefJson).mockRejectedValue(
+      new EdtefApiError("The requested EDTEF directory record was not found.", 404),
+    );
+    const response = await fetch(`${baseUrl}/api/edtef/schools/sch_abcdef123456`);
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: "The requested EDTEF directory record was not found." },
+    });
+  });
+
   it("returns a safe service error when EDTEF is rate limited", async () => {
     const error = new EdtefApiError("EDTEF rate limit reached. Please retry shortly.", 429, "30");
     vi.mocked(requestEdtefJson).mockRejectedValue(error);
