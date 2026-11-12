@@ -21,8 +21,16 @@ export function registerStagingDatabaseDiagnostic(app: Express) {
       connection = await createConnection({ uri, ssl: { rejectUnauthorized: true }, connectTimeout: 10000 });
       await connection.query("SELECT 1");
       return res.status(200).json({ status: "ok", database: "reachable", check: "SELECT 1" });
-    } catch {
-      return res.status(503).json({ status: "error", database: "unreachable" });
+    } catch (error) {
+      const details = error as { code?: unknown; errno?: unknown; sqlState?: unknown; name?: unknown };
+      const code = typeof details.code === "string" ? details.code : "UNKNOWN";
+      console.error("NSOS staging database diagnostic failed", {
+        name: typeof details.name === "string" ? details.name : "Error",
+        code,
+        errno: typeof details.errno === "number" ? details.errno : undefined,
+        sqlState: typeof details.sqlState === "string" ? details.sqlState : undefined,
+      });
+      return res.status(503).json({ status: "error", database: "unreachable", code });
     } finally {
       await connection?.end().catch(() => undefined);
     }
