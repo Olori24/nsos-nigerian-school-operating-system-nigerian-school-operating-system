@@ -8,8 +8,12 @@ const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const studio = readFileSync(resolve(root, "client/src/components/WebsiteStudio.tsx"), "utf8");
 const theme = readFileSync(resolve(root, "client/src/contexts/ThemeContext.tsx"), "utf8");
 const css = readFileSync(resolve(root, "client/src/index.css"), "utf8");
+const viteConfig = readFileSync(resolve(root, "vite.config.ts"), "utf8");
 
 describe("school website publishing and theme presentation", () => {
+  it("excludes the Manus runtime plugin from Vercel builds", () => {
+    expect(viteConfig).toContain('process.env.VERCEL === "1" ? [] : [vitePluginManusRuntime()]');
+  });
   it("exposes school-owned visual direction controls in Website Studio", () => {
     expect(studio).toContain("Visual direction");
     expect(studio).toContain("modern");
