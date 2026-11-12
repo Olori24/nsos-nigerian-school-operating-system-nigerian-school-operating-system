@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 const app = readFileSync(resolve(root, "client/src/App.tsx"), "utf8");
+const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const studio = readFileSync(resolve(root, "client/src/components/WebsiteStudio.tsx"), "utf8");
 const theme = readFileSync(resolve(root, "client/src/contexts/ThemeContext.tsx"), "utf8");
 const css = readFileSync(resolve(root, "client/src/index.css"), "utf8");
@@ -26,6 +27,8 @@ describe("school website publishing and theme presentation", () => {
     expect(app).toContain('import DomainSchoolWebsite from "./pages/DomainSchoolWebsite"');
     expect(app).toContain("isNsosPlatformHost");
     expect(app).toContain('hostname.endsWith(".vercel.app")');
+    expect(home).toContain('host.endsWith(".vercel.app")');
+    expect(home).toContain("if (!isNsosPlatformHost()) return <DomainSchoolWebsite />");
     expect(app).toContain("return <DomainSchoolWebsite />");
   });
 
