@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowUpRight, Eye, GraduationCap, Loader2, MapPin, Phone, School } from "lucide-react";
 import { useEffect, useMemo } from "react";
-import { setPageMetadata, setPageStructuredData } from "@/lib/seo";
+import { setCanonicalUrl, setPageMetadata, setPageStructuredData } from "@/lib/seo";
 import { useRoute } from "wouter";
 
 type SiteQuery = { data?: PublicSchoolSite; isLoading: boolean };
@@ -24,6 +24,10 @@ export function SchoolWebsitePage({ site }: { site: SiteQuery }) {
   useEffect(() => {
     if (!site.data) return;
     const { school, website } = site.data;
+    const canonicalUrl = new URL(window.location.pathname, window.location.origin);
+    canonicalUrl.search = "";
+    canonicalUrl.hash = "";
+    setCanonicalUrl(canonicalUrl.toString());
     const description =
       website.introduction?.trim() || `Official school website for ${school.name}.`;
     setPageMetadata({
