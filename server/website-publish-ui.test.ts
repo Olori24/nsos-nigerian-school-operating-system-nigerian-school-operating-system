@@ -26,6 +26,8 @@ describe("school website publishing and theme presentation", () => {
   it("routes verified custom-domain visitors through the public domain resolver", () => {
     expect(app).toContain('import DomainSchoolWebsite from "./pages/DomainSchoolWebsite"');
     expect(app).toContain("isNsosPlatformHost");
+    expect(app).toContain('hostname === "staging.nsos.top"');
+    expect(home).toContain('host === "staging.nsos.top"');
     expect(app).toContain('hostname.endsWith(".vercel.app")');
     expect(home).toContain('host.endsWith(".vercel.app")');
     expect(home).toContain("if (!isNsosPlatformHost()) return <DomainSchoolWebsite />");
