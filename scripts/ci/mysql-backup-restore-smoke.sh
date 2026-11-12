@@ -6,19 +6,28 @@ if [[ "${GITHUB_ACTIONS:-}" != "true" || "${NSOS_BACKUP_RESTORE_CI:-}" != "1" ]]
   exit 1
 fi
 
-MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
-MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_DATABASE="${MYSQL_DATABASE:-nsos}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
-MYSQL_CLIENT_IMAGE="${MYSQL_CLIENT_IMAGE:-mysql:8.4}"
 
-if [[ "$MYSQL_HOST" != "127.0.0.1" || "$MYSQL_PORT" != "3306" || "$MYSQL_DATABASE" != "nsos" ]]; then
-  echo "Refusing to run outside the local CI nsos database on 127.0.0.1:3306." >&2
+if [[ "$MYSQL_DATABASE" != "nsos" ]]; then
+  echo "Refusing to run outside the local CI nsos database." >&2
   exit 1
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker is required for the MySQL client container." >&2
+  echo "Docker is required for the MySQL service container." >&2
+  exit 1
+fi
+
+MYSQL_CONTAINER_ID="$(docker ps --filter 'ancestor=mysql:8.4' --format '{{.ID}}' | head -n 1)"
+if [[ -z "$MYSQL_CONTAINER_ID" ]]; then
+  echo "Could not locate the ephemeral mysql:8.4 service container." >&2
+  exit 1
+fi
+
+MYSQL_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$MYSQL_CONTAINER_ID")"
+if [[ "$MYSQL_IMAGE" != "mysql:8.4" ]]; then
+  echo "Refusing unexpected MySQL service image: $MYSQL_IMAGE" >&2
   exit 1
 fi
 
@@ -26,9 +35,15 @@ BACKUP_DIR="$(mktemp -d)"
 BACKUP_FILE="$BACKUP_DIR/nsos.sql"
 
 mysql_cli() {
-  docker run --rm --network host \
-    -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
-    "$MYSQL_CLIENT_IMAGE" mysql --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u root "$@"
+  docker exec -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" "$MYSQL_CONTAINER_ID" mysql -uroot "$@"
+}
+
+mysql_dump() {
+  docker exec -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" "$MYSQL_CONTAINER_ID" mysqldump -uroot "$@"
+}
+
+mysql_import() {
+  docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" "$MYSQL_CONTAINER_ID" mysql -uroot "$@"
 }
 
 cleanup() {
@@ -47,10 +62,7 @@ mysql_cli "$MYSQL_DATABASE" -e "
   ON DUPLICATE KEY UPDATE marker = 'nsos-ci-restore-probe';
 "
 
-docker run --rm --network host \
-  -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
-  "$MYSQL_CLIENT_IMAGE" mysqldump --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u root \
-    --single-transaction --routines --triggers --events --hex-blob --databases "$MYSQL_DATABASE" --no-create-db > "$BACKUP_FILE"
+mysql_dump --single-transaction --routines --triggers --events --hex-blob --databases "$MYSQL_DATABASE" --no-create-db > "$BACKUP_FILE"
 
 # Rewrite the explicit database selection so the dump restores into the isolated target.
 sed -i 's/USE `nsos`;/USE `nsos_restore`;/g' "$BACKUP_FILE"
@@ -58,10 +70,7 @@ grep -Fq 'USE `nsos_restore`;' "$BACKUP_FILE"
 
 test -s "$BACKUP_FILE"
 mysql_cli -e "DROP DATABASE IF EXISTS nsos_restore; CREATE DATABASE nsos_restore"
-
-docker run --rm --network host -i \
-  -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" \
-  "$MYSQL_CLIENT_IMAGE" mysql --protocol=tcp -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u root < "$BACKUP_FILE"
+mysql_import < "$BACKUP_FILE"
 
 source_tables="$(mysql_cli -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$MYSQL_DATABASE'")"
 restored_tables="$(mysql_cli -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'nsos_restore'")"
