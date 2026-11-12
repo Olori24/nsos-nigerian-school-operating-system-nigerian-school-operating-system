@@ -9,7 +9,7 @@ import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth.js";
 import { registerStorageProxy } from "./storageProxy.js";
 import { appRouter } from "../routers.js";
 import { createContext } from "./context.js";
-import { serveStatic, setupVite } from "./vite.js";
+import { serveStatic } from "./static.js";
 import { registerSmsWebhookRoutes } from "../webhooks.js";
 import { registerAffiliateRoutes } from "../affiliateRoutes.js";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security.js";
@@ -82,14 +82,12 @@ export async function createApp() {
   registerSmsWebhookRoutes(app);
   app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
   registerAffiliateRoutes(app);
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
   registerStorageProxy(app);
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
   registerOAuthRoutes(app);
-  // tRPC API
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -97,8 +95,8 @@ export async function createApp() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    const { setupVite } = await import("./vite.js");
     await setupVite(app, server);
   } else {
     serveStatic(app);
@@ -110,11 +108,6 @@ export async function createApp() {
 async function startServer() {
   const { app, server } = await createApp();
   const preferredPort = parseConfiguredPort(process.env.PORT);
-
-  // Managed production platforms route traffic to the exact PORT they provide.
-  // Silently choosing another port makes the process appear healthy while the
-  // platform health check and incoming traffic continue targeting the old port.
-  // Port fallback is only useful during local development.
   const port = ENV.isProduction ? preferredPort : await findAvailablePort(preferredPort);
 
   if (!ENV.isProduction && port !== preferredPort) {
