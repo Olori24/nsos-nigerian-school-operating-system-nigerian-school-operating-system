@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { ArrowRight, ArrowUpRight, BookOpen, Building2, HeartPulse, Layers3, Radar, Sparkles, Workflow } from "lucide-react";
+import { setPageMetadata, setPageStructuredData } from "@/lib/seo";
 
 const products = [
   {
@@ -94,6 +96,30 @@ function ProductCard({ product }: { product: (typeof products)[number] }) {
 }
 
 export default function EcosystemHome() {
+  useEffect(() => {
+    const description =
+      "NSOS is a school management platform for Nigerian schools, bringing school administration, academic operations and communication into one connected workspace.";
+    setPageMetadata({
+      title: "NSOS | School Management Software for Nigerian Schools",
+      description,
+    });
+    setPageStructuredData({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "NSOS",
+      alternateName: "Nigerian School Operating System",
+      url: new URL("/", window.location.origin).toString(),
+      applicationCategory: "EducationalApplication",
+      operatingSystem: "Web",
+      description,
+      provider: {
+        "@type": "Organization",
+        name: "NSOS Technology",
+        url: "https://technology.nsos.top/",
+      },
+    });
+  }, []);
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#0b1713] text-white">
       <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
