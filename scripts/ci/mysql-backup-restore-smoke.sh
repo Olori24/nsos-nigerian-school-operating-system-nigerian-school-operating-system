@@ -12,8 +12,8 @@ MYSQL_DATABASE="${MYSQL_DATABASE:-nsos}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
 MYSQL_CLIENT_IMAGE="${MYSQL_CLIENT_IMAGE:-mysql:8.4}"
 
-if [[ "$MYSQL_HOST" != "127.0.0.1" || "$MYSQL_DATABASE" != "nsos" ]]; then
-  echo "Refusing to run outside the local CI nsos database." >&2
+if [[ "$MYSQL_HOST" != "127.0.0.1" || "$MYSQL_PORT" != "3306" || "$MYSQL_DATABASE" != "nsos" ]]; then
+  echo "Refusing to run outside the local CI nsos database on 127.0.0.1:3306." >&2
   exit 1
 fi
 
