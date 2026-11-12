@@ -16,6 +16,7 @@ import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeade
 import { requiredProductionEnvironmentErrors, requestObservabilityMiddleware, writeOperationalEvent } from "../observability";
 import { ENV } from "./env";
 import { parseConfiguredPort } from "./port";
+import { isStaticOnlyPreview } from "./previewMode";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -36,8 +37,17 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+const staticOnlyPreview = isStaticOnlyPreview({
+  vercel: process.env.VERCEL,
+  vercelEnv: process.env.VERCEL_ENV,
+  databaseUrl: ENV.databaseUrl,
+});
+
 export async function createApp() {
-  const environmentErrors = requiredProductionEnvironmentErrors(ENV);
+  const environmentErrors = requiredProductionEnvironmentErrors({
+    ...ENV,
+    isProduction: ENV.isProduction && !staticOnlyPreview,
+  });
   if (environmentErrors.length) throw new Error(`NSOS production startup configuration is invalid: ${environmentErrors.join(" ")}`);
   const app = express();
   const server = createServer(app);
@@ -46,8 +56,18 @@ export async function createApp() {
   app.use(requestObservabilityMiddleware());
   app.use(securityHeadersMiddleware(process.env.NODE_ENV === "production"));
   app.get("/healthz", (_request, response) => {
-    response.set("Cache-Control", "no-store").status(200).json({ status: "ok" });
+    response.set("Cache-Control", "no-store").status(200).json({
+      status: "ok",
+      mode: staticOnlyPreview ? "static-only-preview" : "full",
+    });
   });
+  if (staticOnlyPreview) {
+    const previewApiDisabled = (_request: express.Request, response: express.Response) => {
+      response.status(503).json({ error: "Preview API is disabled until an isolated preview database is configured." });
+    };
+    app.use("/api", previewApiDisabled);
+    app.use(["/storage", "/manus-storage", "/r"], previewApiDisabled);
+  }
   app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
   app.use("/api/trpc", requireSameOriginForMutations());
