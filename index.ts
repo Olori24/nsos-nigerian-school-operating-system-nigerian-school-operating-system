@@ -30,7 +30,8 @@ export default async function handler(request: Request, response: Response) {
   response.setHeader("X-Request-ID", requestId);
 
   try {
-    appPromise ??= import("./server/_core/index").then(({ createApp }) => createApp());
+    // Node.js ESM requires the emitted .js extension for this relative import.
+    appPromise ??= import("./server/_core/index.js").then(({ createApp }) => createApp());
     const { app } = await appPromise;
     return app(request, response);
   } catch (error) {
