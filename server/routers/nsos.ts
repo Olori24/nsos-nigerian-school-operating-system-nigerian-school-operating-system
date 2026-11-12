@@ -23,7 +23,7 @@ import {
 import {
   curatedLearningSources,
   getCuratedLearningSource,
-} from "@shared/curatedLearningSources";
+} from "../../shared/curatedLearningSources.js";
 import { destinationsForRole, getCopilotGuidance } from "../copilot";
 import { buildEnterpriseConciergePlan } from "../enterpriseConcierge";
 import { buildSetupAgentAssessment } from "../setupAgent";
