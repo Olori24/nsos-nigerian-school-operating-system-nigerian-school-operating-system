@@ -10,11 +10,11 @@ services:
     restart: unless-stopped
     init: true
     env_file:
-      - .env
+      - .env.runtime
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - JWT_SECRET
+      JWT_SECRET: ${JWT_SECRET:-}
     ports:
       - "${NSOS_HOST_IP:-127.0.0.1}:${NSOS_HOST_PORT:-3000}:3000"
     read_only: true
