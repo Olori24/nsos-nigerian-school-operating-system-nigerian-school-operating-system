@@ -24,7 +24,8 @@ docker compose logs --tail=100 nsos
 6. Verify the process health endpoint:
 
 ```sh
-curl --fail --silent "http://${NSOS_HOST_IP:-127.0.0.1}:${NSOS_HOST_PORT:-3000}/healthz"
+HOST_BINDING="$(docker compose port nsos 3000)"
+curl --fail --silent --show-error "http://${HOST_BINDING}/healthz"
 ```
 
 The endpoint proves only that the HTTP process is running. It does not prove database connectivity, authentication, tenant isolation, provider delivery, or production readiness.
@@ -35,15 +36,18 @@ The Compose port is bound to `127.0.0.1` by default. Set `NSOS_HOST_IP` only to 
 
 **Do not generate a new JWT_SECRET and point the container at the existing production database.**
 
-`JWT_SECRET` is deliberately excluded from `.env`. Docker Compose parses `.env` values and special characters, quotes, dollar signs, and trailing backslashes can be interpreted differently across versions. The Compose service receives `JWT_SECRET` only from the environment of the process invoking Docker Compose; the Compose file passes it through without storing it in the repository or `.env`.
+`JWT_SECRET` is deliberately excluded from `.env`. Docker Compose parses `.env` values and special characters, quotes, dollar signs, and trailing backslashes can be interpreted differently across versions. The Compose service receives `JWT_SECRET` only from the invoking process environment using Compose's pass-through form (`- JWT_SECRET`). It does not interpolate the secret from `.env`; if the shell variable is absent, the container receives no `JWT_SECRET`, even if an older `.env` file still contains one. This allows image builds and management commands such as `docker compose logs` and `docker compose down` to run without the runtime secret. Starting the application without the exact secret will fail its startup guard and is not a valid deployment.
 
 For an interactive local session, enter the value silently and keep it out of shell history:
 
 ```sh
-read -rsp 'Existing JWT_SECRET: ' JWT_SECRET
-export JWT_SECRET
-printf '\\n'
 docker compose build
+
+# Preserve every byte of the existing secret, including leading/trailing whitespace.
+set +x
+IFS= read -r -s -p 'Existing JWT_SECRET: ' JWT_SECRET
+printf '\n'
+export JWT_SECRET
 docker compose up -d
 unset JWT_SECRET
 ```
