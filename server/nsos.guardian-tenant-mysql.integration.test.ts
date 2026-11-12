@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getDb, linkGuardianToStudent } from "./db";
 import { guardians, schools, studentGuardians, studentProfiles } from "../drizzle/schema/core";
@@ -70,10 +70,22 @@ describe.skipIf(!integrationEnabled)("guardian tenant isolation (MySQL integrati
     expect(await db.select({ id: guardians.id }).from(guardians).where(eq(guardians.schoolId, schoolBId))).toHaveLength(0);
     expect(await db.select({ id: studentGuardians.id }).from(studentGuardians).where(eq(studentGuardians.studentId, studentBId))).toHaveLength(0);
 
-    // Force the relationship insert to fail after the guardian insert. The
-    // transaction must roll back the earlier guardian row as well.
-    const triggerName = `nsos_fail_guardian_link_${suffix}`;
-    await db.execute(sql.raw(`CREATE TRIGGER ${triggerName} BEFORE INSERT ON studentGuardians FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced relationship failure'`));
+    // Reserve the next guardian ID in a pre-existing relationship row. The
+    // guardian insert can succeed, but the relationship insert then collides
+    // with the unique (studentId, guardianId) index and must roll back.
+    const [sequenceRows] = await db.$client.promise().query(
+      "SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'guardians'",
+    );
+    const nextGuardianId = Number(
+      (sequenceRows as Array<{ AUTO_INCREMENT: number | null }>)[0]?.AUTO_INCREMENT,
+    );
+    if (!Number.isSafeInteger(nextGuardianId) || nextGuardianId <= 0) {
+      throw new Error("Could not determine the next guardian ID for rollback coverage.");
+    }
+    await db.insert(studentGuardians).values({
+      studentId: studentBId,
+      guardianId: nextGuardianId,
+    });
     try {
       await expect(linkGuardianToStudent({
         schoolId: schoolBId,
@@ -83,9 +95,9 @@ describe.skipIf(!integrationEnabled)("guardian tenant isolation (MySQL integrati
         relationship: "Parent",
       })).rejects.toThrow();
       expect(await db.select({ id: guardians.id }).from(guardians).where(eq(guardians.schoolId, schoolBId))).toHaveLength(0);
-      expect(await db.select({ id: studentGuardians.id }).from(studentGuardians).where(eq(studentGuardians.studentId, studentBId))).toHaveLength(0);
+      expect(await db.select({ id: studentGuardians.id }).from(studentGuardians).where(eq(studentGuardians.studentId, studentBId))).toHaveLength(1);
     } finally {
-      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${triggerName}`));
+      await db.delete(studentGuardians).where(eq(studentGuardians.studentId, studentBId));
     }
 
     const validLink = await linkGuardianToStudent({
