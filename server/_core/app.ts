@@ -8,7 +8,6 @@ import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
 import { registerSmsWebhookRoutes } from "../webhooks";
 import { registerAffiliateRoutes } from "../affiliateRoutes";
 import { createRateLimitMiddleware, requireSameOriginForMutations, securityHeadersMiddleware } from "../security";
@@ -50,17 +49,13 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
   registerOAuthRoutes(app);
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
+  app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
 
   if (process.env.NODE_ENV === "development") {
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
+    const { serveStatic } = await import("./static");
     serveStatic(app);
   }
 
