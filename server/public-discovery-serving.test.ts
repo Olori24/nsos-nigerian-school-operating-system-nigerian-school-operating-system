@@ -38,6 +38,14 @@ const discoveryFiles = [
 ] as const;
 
 describe("public discovery file serving", () => {
+  it("keeps analytics optional when Vite analytics variables are absent", () => {
+    const html = readFileSync(path.join(projectRoot, "client", "index.html"), "utf8");
+    expect(html).not.toContain("%VITE_ANALYTICS_ENDPOINT%");
+    expect(html).not.toContain("%VITE_ANALYTICS_WEBSITE_ID%");
+    expect(html).toContain("import.meta.env.VITE_ANALYTICS_ENDPOINT");
+    expect(html).toContain("if (analyticsEndpoint && analyticsWebsiteId)");
+  });
+
   it.each(discoveryFiles)("ships a valid $name static asset", file => {
     const assetPath = path.join(publicRoot, file.name);
     expect(existsSync(assetPath)).toBe(true);
