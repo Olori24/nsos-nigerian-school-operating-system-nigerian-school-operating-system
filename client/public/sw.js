@@ -55,7 +55,7 @@ self.addEventListener("fetch", event => {
 
   if (
     url.pathname.startsWith("/assets/") ||
-    url.pathname.startsWith("/manus-storage/")
+    (url.pathname.startsWith("/manus-storage/") || url.pathname.startsWith("/storage/"))
   ) {
     event.respondWith(
       caches.match(request).then(

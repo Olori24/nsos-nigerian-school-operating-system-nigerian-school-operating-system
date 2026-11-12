@@ -217,6 +217,7 @@ class SDKServer {
       if (
         !isNonEmptyString(openId) ||
         !isNonEmptyString(appId) ||
+        appId !== ENV.appId ||
         !isNonEmptyString(name) ||
         typeof exp !== "number"
       ) {
@@ -283,6 +284,7 @@ class SDKServer {
     }
 
     if (session.openId.startsWith(CRON_OPEN_ID_PREFIX)) {
+      if (!ENV.legacyAuthEnabled) throw ForbiddenError("Legacy scheduled-task authentication is disabled.");
       const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
       const taskUid = userInfo.taskUid ?? null;
       if (!taskUid) {
@@ -293,28 +295,12 @@ class SDKServer {
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
-
-    // If user not in DB, sync from OAuth server automatically
+    const user = await db.getUserByOpenId(sessionUserId);
     if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-        await db.upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
-        });
-        user = await db.getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
-    }
-
-    if (!user) {
-      throw ForbiddenError("User not found");
+      // User records must be migrated or explicitly re-created through the
+      // legacy sign-in bridge. Never fetch identity data from the old provider
+      // during an ordinary authenticated application request.
+      throw ForbiddenError("NSOS account not found. Sign in again to restore account access.");
     }
 
     await db.upsertUser({
@@ -331,7 +317,7 @@ class SDKServer {
 
 const CRON_OPEN_ID_PREFIX = "cron_";
 
-/** Result of `sdk.authenticateRequest`. Cron callbacks set `isCron=true` and `taskUid`; see `/home/ubuntu/skills/webdev-periodic-updates/SKILL.md`. */
+/** Result of `sdk.authenticateRequest`. Scheduled-task callbacks set `isCron=true` and `taskUid`. */
 export type AuthenticatedUser = User & {
   sessionId?: string;
   taskUid?: string;
@@ -345,7 +331,7 @@ function buildCronUser(
   return {
     id: -1,
     openId: userInfo.openId,
-    name: userInfo.name || "Manus Scheduled Task",
+    name: userInfo.name || "NSOS Scheduled Task",
     email: null,
     loginMethod: null,
     role: "user",

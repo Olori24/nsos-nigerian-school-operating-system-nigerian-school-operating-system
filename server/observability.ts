@@ -27,7 +27,8 @@ export function requestIdFor(value: string | undefined) {
 }
 
 export function safeRequestPath(request: Pick<Request, "baseUrl" | "path">) {
-  return `${request.baseUrl || ""}${request.path || ""}`.split("?", 1)[0]!.slice(0, 320) || "/";
+  const path = ((request.baseUrl || "") + (request.path || "")).split("?", 1)[0]!.slice(0, 320);
+  return path || "/";
 }
 
 export function writeOperationalEvent(level: "info" | "warn" | "error", event: string, fields: Record<string, string | number | boolean | undefined>) {
@@ -68,12 +69,83 @@ export function requestObservabilityMiddleware(options: {
   };
 }
 
-export function requiredProductionEnvironmentErrors(input: { isProduction: boolean; appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string }) {
+export function requiredProductionEnvironmentErrors(input: {
+  isProduction: boolean;
+  appId: string;
+  ownerOpenId?: string;
+  cookieSecret: string;
+  databaseUrl: string;
+  oAuthServerUrl: string;
+  legacyAuthEnabled?: boolean;
+  storageProvider?: string;
+  s3Bucket?: string;
+  s3AccessKeyId?: string;
+  s3SecretAccessKey?: string;
+  s3Region?: string;
+  forgeApiUrl?: string;
+  forgeApiKey?: string;
+  llmProvider?: string;
+  llmApiBaseUrl?: string;
+  llmApiKey?: string;
+  llmModel?: string;
+  publicAppUrl?: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
+  resendApiKey?: string;
+  authEmailFrom?: string;
+  googleMapsApiKey?: string;
+  googleMapsBrowserApiKey?: string;
+}) {
   if (!input.isProduction) return [];
-  return [
+  const errors = [
     ["VITE_APP_ID", input.appId],
+    ["OWNER_OPEN_ID", input.ownerOpenId],
     ["JWT_SECRET", input.cookieSecret && input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
-    ["OAUTH_SERVER_URL", input.oAuthServerUrl],
-  ].filter(([, value]) => !value.trim()).map(([name]) => `${name} is required in production.`);
+    ...(input.legacyAuthEnabled === false ? [] : [["OAUTH_SERVER_URL", input.oAuthServerUrl] as const]),
+    ["PUBLIC_APP_URL", input.publicAppUrl],
+    ["GOOGLE_MAPS_API_KEY", input.googleMapsApiKey],
+    ["VITE_GOOGLE_MAPS_API_KEY", input.googleMapsBrowserApiKey],
+  ].filter(([, value]) => !value?.trim()).map(([name]) => name + " is required in production.");
+
+  if (input.storageProvider && !["forge", "s3", "dual"].includes(input.storageProvider)) {
+    errors.push("STORAGE_PROVIDER must be forge, s3, or dual.");
+  }
+  if (input.storageProvider === "s3" || input.storageProvider === "dual") {
+    const missingStorage = [
+      ["S3_BUCKET", input.s3Bucket],
+      ["S3_ACCESS_KEY_ID", input.s3AccessKeyId],
+      ["S3_SECRET_ACCESS_KEY", input.s3SecretAccessKey],
+      ["S3_REGION", input.s3Region],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingStorage.length) errors.push("S3 storage is selected but these settings are missing: " + missingStorage.join(", ") + ".");
+  }
+  if (input.storageProvider === "forge" || input.storageProvider === "dual" || input.llmProvider === "forge") {
+    const missingLegacy = [
+      ["BUILT_IN_FORGE_API_URL", input.forgeApiUrl],
+      ["BUILT_IN_FORGE_API_KEY", input.forgeApiKey],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingLegacy.length) errors.push("Forge integration is selected but these settings are missing: " + missingLegacy.join(", ") + ".");
+  }
+  if (input.llmProvider && !["forge", "openai-compatible"].includes(input.llmProvider)) {
+    errors.push("LLM_PROVIDER must be forge or openai-compatible.");
+  }
+  if (input.llmProvider === "openai-compatible") {
+    const missingLlm = [
+      ["LLM_API_BASE_URL", input.llmApiBaseUrl],
+      ["LLM_API_KEY", input.llmApiKey],
+      ["LLM_MODEL", input.llmModel],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingLlm.length) errors.push("OpenAI-compatible LLM is selected but these settings are missing: " + missingLlm.join(", ") + ".");
+  }
+  if (input.legacyAuthEnabled === false) {
+    const missingStandaloneAuth = [
+      ["GOOGLE_CLIENT_ID", input.googleClientId],
+      ["GOOGLE_CLIENT_SECRET", input.googleClientSecret],
+      ["RESEND_API_KEY", input.resendApiKey],
+      ["AUTH_EMAIL_FROM", input.authEmailFrom],
+    ].filter(([, value]) => !value?.trim()).map(([name]) => name);
+    if (missingStandaloneAuth.length) errors.push("Standalone sign-in is selected but these settings are missing: " + missingStandaloneAuth.join(", ") + ".");
+  }
+  return errors;
 }

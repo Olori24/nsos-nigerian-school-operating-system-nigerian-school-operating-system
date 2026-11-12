@@ -6,6 +6,7 @@ import * as db from "../db";
 import { createRateLimitMiddleware } from "../security";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { ENV } from "./env";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -13,6 +14,12 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
+  if (!ENV.legacyAuthEnabled) {
+    app.get("/api/oauth/callback", (_req: Request, res: Response) => {
+      res.status(410).json({ error: "Legacy sign-in has been retired. Use Google or email sign-in." });
+    });
+    return;
+  }
   app.get(
     "/api/oauth/callback",
     rateLimit({ windowMs: 10 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false }),
@@ -70,7 +77,7 @@ export function registerOAuthRoutes(app: Express) {
 
       const callbackUrl = new URL(oauthState.redirectUri);
       const hostname = callbackUrl.hostname;
-      const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
+      const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".nsos.top") || hostname.endsWith(".vercel.app");
       res.redirect(302, `${callbackUrl.origin}${isPlatformHost ? "/app" : "/"}`);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);

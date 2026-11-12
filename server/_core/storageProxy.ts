@@ -1,8 +1,9 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import * as db from "../db";
+import { storageGetSignedUrl } from "../storage";
 import { can, isManagementRole, type SchoolRole } from "../roles";
-import { ENV } from "./env";
 import { sdk } from "./sdk";
+import { createRateLimitMiddleware } from "../security";
 
 export function isSafeStorageKey(key: string) {
   return key.length > 0 && key.length <= 1024 && /^[A-Za-z0-9._/-]+$/.test(key) && !key.includes("..") && /^schools\/[1-9]\d*\//.test(key);
@@ -16,68 +17,47 @@ function canReadStoredObject(record: db.StoredObjectAccessRecord, input: { userI
   return can(input.role, "finance.read") || (can(input.role, "portal.read") && record.createdBy === input.userId);
 }
 
-export function registerStorageProxy(app: Express) {
-  app.get("/manus-storage/*", async (req, res) => {
-    const key = (req.params as Record<string, string>)[0];
-    if (!key || !isSafeStorageKey(key)) {
+async function serveStoredObject(req: Request, res: Response) {
+  const key = (req.params as Record<string, string>)[0];
+  if (!key || !isSafeStorageKey(key)) {
+    res.status(404).send("File not found");
+    return;
+  }
+
+  try {
+    const record = await db.getStoredObjectAccessRecord(key);
+    if (!record) {
       res.status(404).send("File not found");
       return;
     }
 
-    if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-      res.status(500).send("Storage proxy not configured");
-      return;
-    }
-
-    try {
-      const record = await db.getStoredObjectAccessRecord(key);
-      if (!record) {
+    if (record.scope !== "public_website_media") {
+      let user;
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch {
         res.status(404).send("File not found");
         return;
       }
-
-      if (record.scope !== "public_website_media") {
-        let user;
-        try {
-          user = await sdk.authenticateRequest(req);
-        } catch {
-          res.status(404).send("File not found");
-          return;
-        }
-        const membership = await db.getSchoolMembership(user.id, record.schoolId);
-        if (!membership || membership.schoolId !== record.schoolId || membership.status !== "active" || !canReadStoredObject(record, { userId: user.id, role: membership.role as SchoolRole })) {
-          res.status(404).send("File not found");
-          return;
-        }
-      }
-
-      const forgeUrl = new URL(
-        "v1/storage/presign/get",
-        ENV.forgeApiUrl.replace(/\/+$/, "") + "/",
-      );
-      forgeUrl.searchParams.set("path", key);
-
-      const forgeResp = await fetch(forgeUrl, {
-        headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
-      });
-
-      if (!forgeResp.ok) {
-        console.error("[StorageProxy] forge signing failed", { status: forgeResp.status });
-        res.status(502).send("Storage backend error");
+      const membership = await db.getSchoolMembership(user.id, record.schoolId);
+      if (!membership || membership.schoolId !== record.schoolId || membership.status !== "active" || !canReadStoredObject(record, { userId: user.id, role: membership.role as SchoolRole })) {
+        res.status(404).send("File not found");
         return;
       }
-
-      const { url } = (await forgeResp.json()) as { url: string };
-      if (!url) {
-        res.status(502).send("Empty signed URL from backend");
-        return;
-      }
-
-      res.set("Cache-Control", "no-store");
-      res.redirect(307, url);
-    } catch (err) {
-      console.error("[StorageProxy] failed:", err);
-      res.status(502).send("Storage proxy error");
     }
-  });
+
+    const signedUrl = await storageGetSignedUrl(key);
+    res.set("Cache-Control", "no-store");
+    res.redirect(307, signedUrl);
+  } catch (error) {
+    console.error("[StorageProxy] failed:", error);
+    res.status(502).send("Storage backend error");
+  }
+}
+
+export function registerStorageProxy(app: Express, rateLimit = createRateLimitMiddleware) {
+  // New uploads use the provider-neutral path. The old path remains available
+  // so previously persisted file URLs continue to work during migration.
+  app.get("/storage/*", rateLimit({ namespace: "storage-object-read", limit: 300, windowMs: 60_000 }), serveStoredObject);
+  app.get("/manus-storage/*", rateLimit({ namespace: "storage-object-read", limit: 300, windowMs: 60_000 }), serveStoredObject);
 }

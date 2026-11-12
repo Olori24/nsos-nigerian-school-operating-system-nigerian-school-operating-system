@@ -26,8 +26,8 @@ function isNsosPlatformHost(hostname: string) {
     hostname === "127.0.0.1" ||
     hostname === "nsos.top" ||
     hostname === "www.nsos.top" ||
-    hostname.endsWith(".manus.space") ||
-    hostname.endsWith(".manus.computer")
+    hostname.endsWith(".nsos.top") ||
+    hostname.endsWith(".vercel.app")
   );
 }
 
