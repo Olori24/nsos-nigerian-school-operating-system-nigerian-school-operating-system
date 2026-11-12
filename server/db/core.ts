@@ -143,7 +143,7 @@ export function databasePoolOptions(uri: string) {
     queueLimit: DB_POOL_QUEUE_LIMIT,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    ...(ENV.isProduction ? { ssl: { rejectUnauthorized: true } } : {}),
+    ssl: { rejectUnauthorized: true },
   };
 }
 
