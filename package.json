@@ -127,5 +127,8 @@
       "zod": "4.6.6",
       "body-parser": "1.20.9"
     }
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.52.4"
   }
 }
