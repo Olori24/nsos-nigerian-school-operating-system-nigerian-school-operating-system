@@ -23,6 +23,31 @@ describe("NSOS security hardening rules", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("fails closed when the shared rate-limit store is unavailable", async () => {
+    const middleware = createRateLimitMiddleware({
+      namespace: "test",
+      limit: 2,
+      windowMs: 1_000,
+      consume: async () => {
+        throw new Error("synthetic rate-limit store outage");
+      },
+    });
+    const response = { set: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    await middleware(
+      { baseUrl: "/api", path: "/auth/email/request", originalUrl: "/api/auth/email/request", ip: "127.0.0.1" } as any,
+      response as any,
+      next,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(503);
+    expect(response.json).toHaveBeenCalledWith({
+      error: "Request protection is temporarily unavailable. Please retry shortly.",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("requires production session secrets to be at least 32 characters", () => {
     const base = { isProduction: true, appId: "app", databaseUrl: "mysql://db", oAuthServerUrl: "https://auth.example" };
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "short" })).toContain("JWT_SECRET is required in production.");
