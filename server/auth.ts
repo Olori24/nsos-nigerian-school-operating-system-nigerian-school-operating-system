@@ -24,7 +24,7 @@ function isTrustedAuthHost(hostname: string) {
     hostname === "127.0.0.1" ||
     hostname === "nsos.top" ||
     hostname.endsWith(".nsos.top") ||
-    (hostname.startsWith("nsos-vercel-migration-") && hostname.endsWith(".vercel.app"));
+    (hostname.startsWith("nsos-vercel-migration-") && hostname.endsWith("-bakande11-2779s-projects.vercel.app"));
 }
 
 function validOrigin(value: unknown) {
