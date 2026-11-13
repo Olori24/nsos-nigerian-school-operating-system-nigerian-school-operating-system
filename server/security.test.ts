@@ -24,7 +24,7 @@ describe("NSOS security hardening rules", () => {
   });
 
   it("requires production session secrets to be at least 32 characters", () => {
-    const base = { isProduction: true, cookieSecret: "a".repeat(32), databaseUrl: "mysql://db" };
+    const base = { isProduction: true, cookieSecret: "a".repeat(32), databaseUrl: "mysql://db", googleClientId: "google-client", googleClientSecret: "google-secret", geminiApiKey: "gemini-key", s3Bucket: "bucket", s3AccessKeyId: "access", s3SecretAccessKey: "secret", resendApiKey: "resend-key", authEmailFrom: "NSOS <noreply@nsos.top>", ownerNotificationEmail: "owner@nsos.top" };
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "short" })).toContain("JWT_SECRET is required in production.");
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "12345678901234567890123456789012" })).not.toContain("JWT_SECRET is required in production.");
   });
