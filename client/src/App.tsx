@@ -18,20 +18,8 @@ import EcosystemHome from "./pages/EcosystemHome";
 import PublicAdmissions from "./pages/PublicAdmissions";
 import SchoolWebsite from "./pages/SchoolWebsite";
 import DomainSchoolWebsite from "./pages/DomainSchoolWebsite";
+import { isNsosPlatformHost } from "./lib/hostRouting";
 import LeadCapture from "./pages/LeadCapture";
-
-function isNsosPlatformHost(hostname: string) {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "nsos.top" ||
-    hostname === "www.nsos.top" ||
-    hostname === "staging.nsos.top" ||
-    hostname.endsWith(".vercel.app") ||
-    hostname.endsWith(".manus.space") ||
-    hostname.endsWith(".manus.computer")
-  );
-}
 
 function Router() {
   if (
