@@ -4,13 +4,26 @@ import { ENV } from "./_core/env";
 
 let client: S3Client | undefined;
 
+function validateS3Endpoint(value: string) {
+  const url = new URL(value);
+  const host = url.hostname.toLowerCase();
+  const trustedHost =
+    /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(host) ||
+    host === "s3.amazonaws.com" ||
+    /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(host);
+  if (url.protocol !== "https:" || !trustedHost || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    throw new Error("S3_ENDPOINT must be a trusted HTTPS Cloudflare R2 or AWS S3 endpoint.");
+  }
+  return url.origin;
+}
+
 function getStorage() {
   if (!ENV.s3Bucket || !ENV.s3AccessKeyId || !ENV.s3SecretAccessKey) {
     throw new Error("S3 storage is not configured. Set S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY.");
   }
   client ??= new S3Client({
     region: ENV.s3Region,
-    ...(ENV.s3Endpoint ? { endpoint: ENV.s3Endpoint, forcePathStyle: true } : {}),
+    ...(ENV.s3Endpoint ? { endpoint: validateS3Endpoint(ENV.s3Endpoint), forcePathStyle: true } : {}),
     credentials: { accessKeyId: ENV.s3AccessKeyId, secretAccessKey: ENV.s3SecretAccessKey },
   });
   return { client, bucket: ENV.s3Bucket };
