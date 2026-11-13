@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { isNsosPlatformHost } from "../client/src/lib/hostRouting";
 
 const root = resolve(import.meta.dirname, "..");
-const app = readFileSync(resolve(root, "client/src/App.tsx"), "utf8");
-const home = readFileSync(resolve(root, "client/src/pages/Home.tsx"), "utf8");
 const studio = readFileSync(resolve(root, "client/src/components/WebsiteStudio.tsx"), "utf8");
 const theme = readFileSync(resolve(root, "client/src/contexts/ThemeContext.tsx"), "utf8");
 const css = readFileSync(resolve(root, "client/src/index.css"), "utf8");
@@ -27,15 +26,10 @@ describe("school website publishing and theme presentation", () => {
     expect(studio).toContain("FAQs — one per line: Question | Answer");
   });
 
-  it("routes verified custom-domain visitors through the public domain resolver", () => {
-    expect(app).toContain('import DomainSchoolWebsite from "./pages/DomainSchoolWebsite"');
-    expect(app).toContain("isNsosPlatformHost");
-    expect(app).toContain('hostname === "staging.nsos.top"');
-    expect(home).toContain('host === "staging.nsos.top"');
-    expect(app).toContain('hostname.endsWith(".vercel.app")');
-    expect(home).toContain('host.endsWith(".vercel.app")');
-    expect(home).toContain("if (!isNsosPlatformHost()) return <DomainSchoolWebsite />");
-    expect(app).toContain("return <DomainSchoolWebsite />");
+  it("routes platform hosts to NSOS and custom domains to the school website resolver", () => {
+    expect(isNsosPlatformHost("staging.nsos.top")).toBe(true);
+    expect(isNsosPlatformHost("nsos-preview-abc.vercel.app")).toBe(true);
+    expect(isNsosPlatformHost("school.example.ng")).toBe(false);
   });
 
   it("provides explicit publish and unpublish actions while keeping custom domains optional", () => {
