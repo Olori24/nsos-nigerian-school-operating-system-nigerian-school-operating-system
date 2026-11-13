@@ -45,7 +45,6 @@ export async function storagePut(
     Key: key,
     Body: body,
     ContentType: contentType,
-    ServerSideEncryption: "AES256",
   }));
   return { key, url: publicPath(key) };
 }
