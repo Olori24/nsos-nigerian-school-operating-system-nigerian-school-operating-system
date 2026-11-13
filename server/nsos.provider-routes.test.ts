@@ -19,7 +19,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 function caller() {
-  return appRouter.createCaller({ user: { id: 8, openId: "provider-admin", name: "Provider Admin", email: "admin@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
+  return appRouter.createCaller({ user: { id: 8, openId: "provider-admin", name: "Provider Admin", email: "admin@example.com", loginMethod: "google", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 }
 
 describe("NSOS provider configuration routes", () => {
