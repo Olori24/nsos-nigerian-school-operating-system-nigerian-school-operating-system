@@ -40,6 +40,9 @@ async function main() {
   if (!databaseName || required("NSOS_STORAGE_MIGRATION_DATABASE") !== databaseName) {
     throw new Error("Database name does not match the explicit migration allow-list.");
   }
+  if (databaseUrl.hostname !== required("NSOS_STORAGE_MIGRATION_DATABASE_HOST")) {
+    throw new Error("Database host does not match the explicit staging host allow-list.");
+  }
 
   const forgeBase = required("LEGACY_STORAGE_FORGE_API_URL").replace(/\\/+$/, "");
   const forgeBaseUrl = new URL(forgeBase);
@@ -51,6 +54,14 @@ async function main() {
   const accessKeyId = required("S3_ACCESS_KEY_ID");
   const secretAccessKey = required("S3_SECRET_ACCESS_KEY");
   const endpoint = process.env.S3_ENDPOINT?.trim();
+  if (endpoint) {
+    const endpointUrl = new URL(endpoint);
+    const endpointHost = endpointUrl.hostname.toLowerCase();
+    const trustedEndpoint = /^[a-f0-9]{32}\\.r2\\.cloudflarestorage\\.com$/.test(endpointHost) || endpointHost === "s3.amazonaws.com" || /^s3[.-][a-z0-9-]+\\.amazonaws\\.com$/.test(endpointHost);
+    if (endpointUrl.protocol !== "https:" || !trustedEndpoint || endpointUrl.username || endpointUrl.password || endpointUrl.pathname !== "/" || endpointUrl.search || endpointUrl.hash) {
+      throw new Error("S3_ENDPOINT must be a trusted HTTPS Cloudflare R2 or AWS S3 endpoint.");
+    }
+  }
   const region = process.env.S3_REGION?.trim() || "auto";
   const s3 = new S3Client({
     region,
