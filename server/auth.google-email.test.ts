@@ -87,7 +87,7 @@ describe("external authentication policy", () => {
     await withAuthRouteServer(async origin => {
       const googleResponse = await requestRoute(`${origin}/api/auth/google/start`, { headers: { host: "attacker.example" } });
       expect(googleResponse.status).toBe(302);
-      expect(googleResponse.headers.destination).toBe("https://nsos.top/api/auth/google/start");
+      expect(googleResponse.headers.location).toBe("https://nsos.top/api/auth/google/start");
       const emailResponse = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { host: "attacker.example", origin: "https://attacker.example", "Content-Type": "application/json" }, body: JSON.stringify({ email: "person@example.ng" }) });
       expect(emailResponse.status).toBe(400);
     });
