@@ -1,7 +1,6 @@
 const testEnv: Record<string, string> = {
   JWT_SECRET: "nsos-vitest-cookie-secret",
   DATABASE_URL: process.env.DATABASE_URL ?? "mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos",
-  OAUTH_SERVER_URL: "https://auth.test.local",
   GOOGLE_CLIENT_ID: "nsos-vitest-google-client-id",
   GOOGLE_CLIENT_SECRET: "nsos-vitest-google-client-secret",
   RESEND_API_KEY: "nsos-vitest-resend-api-key",
