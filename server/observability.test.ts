@@ -36,7 +36,7 @@ describe("production observability controls", () => {
   });
 
   it("fails production startup only when a core runtime secret or connection setting is absent", () => {
-    expect(requiredProductionEnvironmentErrors({ isProduction: false, cookieSecret: "", databaseUrl: "" })).toEqual([]);
-    expect(requiredProductionEnvironmentErrors({ isProduction: true, cookieSecret: "", databaseUrl: "db" })).toEqual(["JWT_SECRET is required in production."]);
+    expect(requiredProductionEnvironmentErrors({ isProduction: false, cookieSecret: "", databaseUrl: "", googleClientId: "", googleClientSecret: "", geminiApiKey: "", s3Bucket: "", s3AccessKeyId: "", s3SecretAccessKey: "", resendApiKey: "", authEmailFrom: "", ownerNotificationEmail: "" })).toEqual([]);
+    expect(requiredProductionEnvironmentErrors({ isProduction: true, cookieSecret: "", databaseUrl: "db", googleClientId: "", googleClientSecret: "", geminiApiKey: "", s3Bucket: "", s3AccessKeyId: "", s3SecretAccessKey: "", resendApiKey: "", authEmailFrom: "", ownerNotificationEmail: "" })).toEqual(["JWT_SECRET is required in production.", "GOOGLE_CLIENT_ID is required in production.", "GOOGLE_CLIENT_SECRET is required in production.", "GEMINI_API_KEY is required in production.", "S3_BUCKET is required in production.", "S3_ACCESS_KEY_ID is required in production.", "S3_SECRET_ACCESS_KEY is required in production.", "RESEND_API_KEY is required in production.", "AUTH_EMAIL_FROM is required in production.", "OWNER_NOTIFICATION_EMAIL is required in production."]);
   });
 });
