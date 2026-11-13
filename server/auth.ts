@@ -127,7 +127,7 @@ export async function sendGuardianPortalInvitationEmail(input: { email: string; 
 
 export function registerGoogleAuthRoutes(app: Express) {
   app.get("/api/auth/google/start", (req: Request, res: Response) => {
-    if (!isCanonicalRequestHost(req)) return res.status(400).json({ error: "Start Google sign-in from the official NSOS address." });
+    if (!isCanonicalRequestHost(req)) return res.redirect(302, `${AUTH_CANONICAL_ORIGIN}/api/auth/google/start`);
     if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
     const state = randomBytes(32).toString("base64url");
     res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
