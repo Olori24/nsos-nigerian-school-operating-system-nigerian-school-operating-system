@@ -1,0 +1,97 @@
+name: NSOS staging Tigris storage smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type TEST-STAGING-TIGRIS to authorize one disposable object test
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nsos-staging-tigris-smoke-test
+  cancel-in-progress: false
+
+jobs:
+  tigris-smoke-test:
+    name: Upload, download, compare, and delete one temporary object
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'TEST-STAGING-TIGRIS' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Validate staging-only configuration
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in S3_BUCKET S3_ENDPOINT S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing staging environment secret: $name"
+              exit 1
+            fi
+          done
+          if [ "$S3_ENDPOINT" != "https://t3.storage.dev" ]; then
+            echo "::error::Unexpected endpoint; refusing to run."
+            exit 1
+          fi
+          if [ "$S3_BUCKET" != "nsos-staging-assets-2026" ]; then
+            echo "::error::Unexpected bucket; refusing to run."
+            exit 1
+          fi
+          echo "Staging bucket and Tigris endpoint validated. Secret values are not printed."
+
+      - name: Install AWS CLI
+        run: |
+          python3 -m venv "$RUNNER_TEMP/awscli-venv"
+          "$RUNNER_TEMP/awscli-venv/bin/pip" install --disable-pip-version-check awscli
+          echo "$RUNNER_TEMP/awscli-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Test one disposable object and remove it
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          key="nsos-smoke-tests/github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.txt"
+          cleanup() {
+            aws --endpoint-url "$S3_ENDPOINT" s3api delete-object \
+              --bucket "$S3_BUCKET" --key "$key" >/dev/null || {
+                echo "::error::Temporary object cleanup failed. Object key: $key"
+                return 1
+              }
+          }
+          trap 'cleanup; rm -rf "$workdir"' EXIT
+
+          printf 'NSOS Tigris staging smoke test\nrun=%s\nattempt=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$workdir/source.txt"
+
+          aws --endpoint-url "$S3_ENDPOINT" s3api put-object \
+            --bucket "$S3_BUCKET" --key "$key" --body "$workdir/source.txt" \
+            --content-type text/plain >/dev/null
+
+          aws --endpoint-url "$S3_ENDPOINT" s3api get-object \
+            --bucket "$S3_BUCKET" --key "$key" "$workdir/download.txt" >/dev/null
+
+          if ! cmp --silent "$workdir/source.txt" "$workdir/download.txt"; then
+            echo "::error::Downloaded object does not match uploaded contents."
+            exit 1
+          fi
+          echo "PASS: temporary object uploaded and downloaded with identical contents."
+
+          cleanup
+          trap - EXIT
+          rm -rf "$workdir"
+          echo "PASS: temporary object deleted from the staging bucket."
