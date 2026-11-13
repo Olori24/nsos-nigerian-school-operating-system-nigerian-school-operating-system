@@ -9,7 +9,7 @@ Configure these GitHub Actions secrets in the `staging` environment:
 - `STAGING_DATABASE_URL`: staging MySQL/TiDB connection string
 - `LEGACY_STORAGE_FORGE_API_URL` and `LEGACY_STORAGE_FORGE_API_KEY`: read access to the previous Forge storage
 - `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`: destination bucket credentials
-- `S3_ENDPOINT`: optional HTTPS AWS S3 or Cloudflare R2 endpoint
+- `S3_ENDPOINT`: optional HTTPS Tigris (`https://t3.storage.dev`), AWS S3, or Cloudflare R2 endpoint
 
 Configure `NSOS_STAGING_DATABASE_NAME` and `NSOS_STAGING_DATABASE_HOST` as GitHub environment variables. They must exactly match the database name and hostname in `STAGING_DATABASE_URL`. `S3_REGION` is optional and defaults to `auto`.
 
