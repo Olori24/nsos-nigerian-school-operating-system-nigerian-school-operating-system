@@ -32,7 +32,7 @@ function getStorage() {
 }
 
 function normalizeKey(value: string) {
-  const key = value.replace(/^\\/+/, "").replace(/\\\\/g, "/");
+  const key = value.replace(/^\/+/, "").replace(/\\/g, "/");
   if (!key || key.split("/").some(part => !part || part === "." || part === "..") || key.length > 900) {
     throw new Error("Invalid storage key.");
   }
@@ -58,7 +58,7 @@ function legacyForgeBaseUrl() {
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
     throw new Error("LEGACY_STORAGE_FORGE_API_URL must be a trusted HTTPS URL.");
   }
-  return url.toString().replace(/\\/+$/, "");
+  return url.toString().replace(/\/+$/, "");
 }
 
 async function getLegacyForgeSignedUrl(key: string) {
