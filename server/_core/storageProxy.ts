@@ -2,7 +2,7 @@ import type { Express } from "express";
 import * as db from "../db";
 import { can, isManagementRole, type SchoolRole } from "../roles";
 import { sdk } from "./sdk";
-import { storageGetSignedUrl } from "../storage";
+import { storageGetObject } from "../storage";
 
 export function isSafeStorageKey(key: string) {
   return key.length > 0 && key.length <= 1024 && /^[A-Za-z0-9._/-]+$/.test(key) && !key.includes("..") && /^schools\/[1-9]\d*\//.test(key);
@@ -46,10 +46,21 @@ export function registerStorageProxy(app: Express) {
         }
       }
 
-      const url = await storageGetSignedUrl(key);
-
-      res.set("Cache-Control", "no-store");
-      res.redirect(307, url);
+      const object = await storageGetObject(key);
+      if (!object.Body) {
+        res.status(404).send("File not found");
+        return;
+      }
+      res.set("Cache-Control", "private, no-store");
+      res.set("Content-Type", object.ContentType ?? "application/octet-stream");
+      if (object.ContentLength !== undefined) res.set("Content-Length", String(object.ContentLength));
+      const body = object.Body as NodeJS.ReadableStream;
+      body.on("error", error => {
+        console.error("[StorageProxy] stream failed:", error);
+        if (!res.headersSent) res.status(502).end("Storage proxy error");
+        else res.destroy(error);
+      });
+      body.pipe(res);
     } catch (err) {
       console.error("[StorageProxy] failed:", err);
       res.status(502).send("Storage proxy error");
