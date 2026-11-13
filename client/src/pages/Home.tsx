@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isNsosPlatformHost } from "@/lib/hostRouting";
 import { AttendanceExport, DepartmentStation, FinanceReceiptStation, MessageHistory, ReportCardPrint, StudentLifecycleControls } from "@/components/OperationalAddons";
 import { FamilyCashAssurance } from "@/components/FamilyCashAssurance";
 import { ParentTrustCentre } from "@/components/ParentTrustCentre";
@@ -201,11 +202,6 @@ function currency(value: number) {
 
 function initials(name?: string | null) {
   return (name ?? "NS").split(" ").filter(Boolean).slice(0, 2).map(word => word[0]).join("").toUpperCase();
-}
-
-function isNsosPlatformHost() {
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1" || host === "nsos.top" || host === "www.nsos.top" || host === "staging.nsos.top" || host.endsWith(".vercel.app");
 }
 
 function StatusPill({ children, tone = "sage" }: { children: React.ReactNode; tone?: "sage" | "gold" | "rose" | "sky" | "neutral" }) {
@@ -416,7 +412,7 @@ function consumeGoogleSignInNotice() {
 }
 
 export default function Home() {
-  if (!isNsosPlatformHost()) return <DomainSchoolWebsite />;
+  if (!isNsosPlatformHost(window.location.hostname)) return <DomainSchoolWebsite />;
   const { user, loading, logout } = useAuth();
   const schoolsQuery = trpc.nsos.schools.list.useQuery(undefined, { enabled: !!user });
   const [schoolId, setSchoolId] = useState<number | null>(null);
