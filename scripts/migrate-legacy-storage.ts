@@ -36,7 +36,7 @@ async function main() {
 
   const databaseUrl = new URL(required("DATABASE_URL"));
   if (databaseUrl.protocol !== "mysql:") throw new Error("DATABASE_URL must use mysql://.");
-  const databaseName = decodeURIComponent(databaseUrl.pathname.replace(/^\\//, ""));
+  const databaseName = decodeURIComponent(databaseUrl.pathname.replace(/^\//, ""));
   if (!databaseName || required("NSOS_STORAGE_MIGRATION_DATABASE") !== databaseName) {
     throw new Error("Database name does not match the explicit migration allow-list.");
   }
@@ -44,7 +44,7 @@ async function main() {
     throw new Error("Database host does not match the explicit staging host allow-list.");
   }
 
-  const forgeBase = required("LEGACY_STORAGE_FORGE_API_URL").replace(/\\/+$/, "");
+  const forgeBase = required("LEGACY_STORAGE_FORGE_API_URL").replace(/\/+$/, "");
   const forgeBaseUrl = new URL(forgeBase);
   if (forgeBaseUrl.protocol !== "https:" || forgeBaseUrl.username || forgeBaseUrl.password || forgeBaseUrl.search || forgeBaseUrl.hash) {
     throw new Error("Legacy Forge API must be a trusted HTTPS URL.");
@@ -57,7 +57,7 @@ async function main() {
   if (endpoint) {
     const endpointUrl = new URL(endpoint);
     const endpointHost = endpointUrl.hostname.toLowerCase();
-    const trustedEndpoint = /^[a-f0-9]{32}\\.r2\\.cloudflarestorage\\.com$/.test(endpointHost) || endpointHost === "s3.amazonaws.com" || /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(endpointHost);
+    const trustedEndpoint = /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(endpointHost) || endpointHost === "s3.amazonaws.com" || /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(endpointHost);
     if (endpointUrl.protocol !== "https:" || !trustedEndpoint || endpointUrl.username || endpointUrl.password || endpointUrl.pathname !== "/" || endpointUrl.search || endpointUrl.hash) {
       throw new Error("S3_ENDPOINT must be a trusted HTTPS Cloudflare R2 or AWS S3 endpoint.");
     }
@@ -94,7 +94,7 @@ async function main() {
         `SELECT DISTINCT \`${column.COLUMN_NAME}\` AS storageKey FROM \`${column.TABLE_NAME}\` WHERE \`${column.COLUMN_NAME}\` IS NOT NULL AND \`${column.COLUMN_NAME}\` <> ''`,
       ) as [Array<{ storageKey: string | null }>, unknown];
       for (const row of rows) {
-        const key = row.storageKey?.replace(/^\\/+/, "");
+        const key = row.storageKey?.replace(/^\/+/, "");
         if (key?.startsWith("schools/") && !key.split("/").some(part => !part || part === "." || part === "..") && key.length <= 900) keys.add(key);
       }
     }
@@ -116,7 +116,7 @@ async function main() {
         if (!isMissing(error)) throw error;
       }
 
-      const presign = new URL("v1/storage/presign/get", forgeBaseUrl.toString().replace(/\\/+$/, "") + "/");
+      const presign = new URL("v1/storage/presign/get", forgeBaseUrl.toString().replace(/\/+$/, "") + "/");
       presign.searchParams.set("path", key);
       const presignResponse = await fetch(presign, {
         headers: { Authorization: `Bearer ${forgeKey}` },
