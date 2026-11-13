@@ -48,6 +48,27 @@ jobs:
           fi
           echo "Staging bucket and Tigris endpoint validated. Secret values are not printed."
 
+      - name: Validate Tigris credential format without exposing secrets
+        env:
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$S3_ACCESS_KEY_ID" in
+            tid_*) ;;
+            *) echo "::error::Access key does not have the documented Tigris access-key prefix."; exit 1 ;;
+          esac
+          case "$S3_SECRET_ACCESS_KEY" in
+            tsec_*) ;;
+            *) echo "::error::Secret key does not have the documented Tigris secret-key prefix."; exit 1 ;;
+          esac
+          if [[ "$S3_ACCESS_KEY_ID" =~ [[:space:]] || "$S3_SECRET_ACCESS_KEY" =~ [[:space:]] ]]; then
+            echo "::error::A credential contains whitespace; secret values remain hidden."
+            exit 1
+          fi
+          echo "PASS: credential prefixes and whitespace checks passed. Values were not printed."
+
       - name: Install AWS CLI
         run: |
           python3 -m venv "$RUNNER_TEMP/awscli-venv"
@@ -73,6 +94,7 @@ jobs:
           cat > "$HOME/.aws/config" <<'EOF'
           [default]
           region = auto
+          signature_version = s3v4
           s3 =
             addressing_style = virtual
           EOF
