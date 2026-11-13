@@ -61,3 +61,9 @@ export async function storageGetSignedUrl(relKey: string, expiresIn = 900): Prom
     expiresIn: Math.min(Math.max(expiresIn, 60), 3600),
   });
 }
+
+export async function storageGetObject(relKey: string) {
+  const { client: s3, bucket } = getStorage();
+  const key = normalizeKey(relKey);
+  return s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+}
