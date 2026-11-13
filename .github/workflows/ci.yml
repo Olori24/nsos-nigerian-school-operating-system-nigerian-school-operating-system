@@ -27,8 +27,10 @@ jobs:
       GOOGLE_CLIENT_SECRET: ci-test-google-client-secret
       RESEND_API_KEY: ci-test-resend-api-key
       AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>"
-      BUILT_IN_FORGE_API_KEY: ci-test-forge-api-key
-      OPENAI_API_KEY: ci-test-openai-api-key
+      GEMINI_API_KEY: ci-test-gemini-api-key
+      S3_BUCKET: ci-test-bucket
+      S3_ACCESS_KEY_ID: ci-test-access-key
+      S3_SECRET_ACCESS_KEY: ci-test-secret-key
     services:
       mysql:
         image: mysql:8.4
