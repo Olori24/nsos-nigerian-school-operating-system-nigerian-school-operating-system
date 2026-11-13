@@ -86,7 +86,8 @@ describe("external authentication policy", () => {
   it("rejects authentication requests made on a non-canonical host", async () => {
     await withAuthRouteServer(async origin => {
       const googleResponse = await requestRoute(`${origin}/api/auth/google/start`, { headers: { host: "attacker.example" } });
-      expect(googleResponse.status).toBe(400);
+      expect(googleResponse.status).toBe(302);
+      expect(googleResponse.headers.destination).toBe("https://nsos.top/api/auth/google/start");
       const emailResponse = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { host: "attacker.example", origin: "https://attacker.example", "Content-Type": "application/json" }, body: JSON.stringify({ email: "person@example.ng" }) });
       expect(emailResponse.status).toBe(400);
     });
@@ -96,7 +97,9 @@ describe("external authentication policy", () => {
     await withAuthRouteServer(async origin => {
       const response = await fetch(`${origin}/api/auth/google/start`, { redirect: "manual" });
       expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toContain("accounts.google.com/o/oauth2/v2/auth");
+      const authorizationUrl = new URL(response.headers.get("location") ?? "");
+      expect(authorizationUrl.hostname).toBe("accounts.google.com");
+      expect(authorizationUrl.searchParams.get("redirect_uri")).toBe("https://nsos.top/api/auth/google/callback");
       expect(response.headers.get("set-cookie")).toContain("__Host-google_oauth_state=");
     });
   });
