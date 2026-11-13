@@ -45,10 +45,9 @@ export async function generateImage(options: GenerateImageOptions): Promise<Gene
 
   const model = options.model ?? DEFAULT_IMAGE_MODEL;
   const endpoint = new URL(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`);
-  endpoint.searchParams.set("key", ENV.geminiApiKey);
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-goog-api-key": ENV.geminiApiKey },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
       generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
