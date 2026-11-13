@@ -3,7 +3,7 @@ import { ENV } from "./env";
 
 export type GenerateImageOptions = {
   prompt: string;
-  originalImages?: Array<{ url?: string; b64Json?: string; mimeType?: string }>;
+  originalImages?: Array<{ b64Json: string; mimeType?: string }>;
   model?: string;
   quality?: string;
 };
@@ -16,20 +16,13 @@ const DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image";
 const MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024;
 
 async function resolveReferenceImage(image: NonNullable<GenerateImageOptions["originalImages"]>[number]) {
-  if (image.b64Json) {
-    const bytes = Buffer.from(image.b64Json, "base64");
-    if (!bytes.length || bytes.length > MAX_REFERENCE_IMAGE_BYTES) throw new Error("Reference image must be smaller than 10 MB.");
-    return { mimeType: image.mimeType ?? "image/jpeg", data: bytes.toString("base64") };
+  if (!image.b64Json) {
+    throw new Error("Reference images must be supplied as base64 data. Remote image URLs are not fetched.");
   }
-  if (!image.url) throw new Error("Reference image requires a URL or base64 data.");
-  const url = new URL(image.url);
-  if (url.protocol !== "https:") throw new Error("Reference image URLs must use HTTPS.");
-  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) throw new Error(`Reference image download failed (${response.status}).`);
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const bytes = Buffer.from(image.b64Json, "base64");
   if (!bytes.length || bytes.length > MAX_REFERENCE_IMAGE_BYTES) throw new Error("Reference image must be smaller than 10 MB.");
-  const mimeType = response.headers.get("content-type")?.split(";")[0] ?? image.mimeType ?? "image/jpeg";
-  if (!mimeType.startsWith("image/")) throw new Error("Reference URL did not return an image.");
+  const mimeType = image.mimeType ?? "image/jpeg";
+  if (!mimeType.startsWith("image/")) throw new Error("Reference image must use an image MIME type.");
   return { mimeType, data: bytes.toString("base64") };
 }
 
