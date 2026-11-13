@@ -33,7 +33,7 @@ function validOrigin(value: unknown) {
 
 function postSignInPath(origin: string) {
   const hostname = new URL(origin).hostname;
-  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || ;
+  const isPlatformHost = ["localhost", "127.0.0.1", "nsos.top", "www.nsos.top", "staging.nsos.top"].includes(hostname);
   return isPlatformHost ? "/app" : "/";
 }
 
