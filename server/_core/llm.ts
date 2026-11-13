@@ -454,6 +454,6 @@ export async function listLLMModels(): Promise<ModelsResponse> {
     object: "list",
     data: (result.models ?? [])
       .filter(item => item.name && (item.supportedGenerationMethods ?? []).includes("generateContent"))
-      .map(item => ({ id: item.name!.replace(/^models\\//, ""), object: "model", created: 0, owned_by: item.displayName ?? "Google Gemini" })),
+      .map(item => ({ id: item.name!.replace(/^models\//, ""), object: "model", created: 0, owned_by: item.displayName ?? "Google Gemini" })),
   };
 }
