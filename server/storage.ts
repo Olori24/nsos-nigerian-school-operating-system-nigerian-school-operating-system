@@ -92,7 +92,8 @@ async function getLegacyObject(key: string) {
     throw new Error(`Legacy object download failed (${response.status}).`);
   }
   if (!response.body) return null;
-  const contentLength = Number(response.headers.get("content-length"));
+  const lengthHeader = response.headers.get("content-length");
+  const contentLength = lengthHeader === null ? Number.NaN : Number(lengthHeader);
   return {
     Body: Readable.fromWeb(response.body as any),
     ContentType: response.headers.get("content-type") ?? "application/octet-stream",
