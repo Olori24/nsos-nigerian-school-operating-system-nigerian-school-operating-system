@@ -50,8 +50,9 @@ jobs:
 
       - name: Install AWS CLI
         run: |
-          python3 -m pip install --user --disable-pip-version-check awscli
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          python3 -m venv "$RUNNER_TEMP/awscli-venv"
+          "$RUNNER_TEMP/awscli-venv/bin/pip" install --disable-pip-version-check awscli
+          echo "$RUNNER_TEMP/awscli-venv/bin" >> "$GITHUB_PATH"
 
       - name: Test one disposable object and remove it
         env:
