@@ -3,6 +3,7 @@ import { parse as parseCookieHeader } from "cookie";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import * as db from "./db";
+import { createRateLimitMiddleware } from "./security";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
@@ -127,7 +128,7 @@ export async function sendGuardianPortalInvitationEmail(input: { email: string; 
 }
 
 export function registerGoogleAuthRoutes(app: Express) {
-  app.get("/api/auth/google/start", (req: Request, res: Response) => {
+  app.get("/api/auth/google/start", createRateLimitMiddleware({ namespace: "google-oauth-start", limit: 10, windowMs: 10 * 60_000 }), (req: Request, res: Response) => {
     if (!isCanonicalRequestHost(req)) return res.redirect(302, `${AUTH_CANONICAL_ORIGIN}/api/auth/google/start`);
     if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
     const state = randomBytes(32).toString("base64url");
@@ -138,7 +139,7 @@ export function registerGoogleAuthRoutes(app: Express) {
     res.redirect(302, url.toString());
   });
 
-  app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+  app.get("/api/auth/google/callback", createRateLimitMiddleware({ namespace: "google-oauth-callback", limit: 20, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     if (!isCanonicalRequestHost(req)) return res.status(400).json({ error: "Google sign-in callback reached an unexpected domain." });
     const code = getStringQuery(req, "code");
     const state = getStringQuery(req, "state");
@@ -171,7 +172,7 @@ export function registerGoogleAuthRoutes(app: Express) {
 }
 
 export function registerEmailAuthRoutes(app: Express) {
-  app.post("/api/auth/email/request", async (req: Request, res: Response) => {
+  app.post("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     if (!isCanonicalRequestHost(req) || req.get("origin") !== AUTH_CANONICAL_ORIGIN) return res.status(400).json({ error: "Start email sign-in from the official NSOS address." });
     const origin = AUTH_CANONICAL_ORIGIN;
     try {
@@ -186,7 +187,7 @@ export function registerEmailAuthRoutes(app: Express) {
     }
   });
 
-  app.get("/api/auth/email/verify", async (req: Request, res: Response) => {
+  app.get("/api/auth/email/verify", createRateLimitMiddleware({ namespace: "passwordless-verify", limit: 10, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     if (!isCanonicalRequestHost(req)) return res.status(400).json({ error: "Sign-in link opened on an unexpected domain." });
     const token = getStringQuery(req, "token");
     if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
