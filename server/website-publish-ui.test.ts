@@ -11,8 +11,9 @@ const css = readFileSync(resolve(root, "client/src/index.css"), "utf8");
 const viteConfig = readFileSync(resolve(root, "vite.config.ts"), "utf8");
 
 describe("school website publishing and theme presentation", () => {
-  it("excludes the Manus runtime plugin from Vercel builds", () => {
-    expect(viteConfig).toContain('process.env.VERCEL === "1" ? [] : [vitePluginManusRuntime()]');
+  it("uses only the application build plugins", () => {
+    expect(viteConfig).toContain("plugins: [react(), tailwindcss(), jsxLocPlugin()]");
+    expect(viteConfig).not.toContain("vitePlugin");
   });
   it("exposes school-owned visual direction controls in Website Studio", () => {
     expect(studio).toContain("Visual direction");
