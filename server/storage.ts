@@ -10,9 +10,9 @@ function validateS3Endpoint(value: string) {
   const url = new URL(value);
   const host = url.hostname.toLowerCase();
   const trustedHost =
-    /^[a-f0-9]{32}\\.r2\\.cloudflarestorage\\.com$/.test(host) ||
+    /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(host) ||
     host === "s3.amazonaws.com" ||
-    /^s3[.-][a-z0-9-]+\\.amazonaws\\.com$/.test(host);
+    /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(host);
   if (url.protocol !== "https:" || !trustedHost || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
     throw new Error("S3_ENDPOINT must be a trusted HTTPS Cloudflare R2 or AWS S3 endpoint.");
   }
@@ -76,7 +76,7 @@ async function getLegacyForgeSignedUrl(key: string) {
   const signedUrl = new URL(payload.url);
   const trustedHost = signedUrl.hostname === "s3.amazonaws.com" ||
     signedUrl.hostname.endsWith(".amazonaws.com") ||
-    /^[a-f0-9]{32}\\.r2\\.cloudflarestorage\\.com$/.test(signedUrl.hostname);
+    /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(signedUrl.hostname);
   if (signedUrl.protocol !== "https:" || !trustedHost || signedUrl.username || signedUrl.password) {
     throw new Error("Legacy storage provider returned an untrusted download URL.");
   }
