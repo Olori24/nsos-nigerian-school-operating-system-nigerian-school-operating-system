@@ -95,12 +95,12 @@ describe("external authentication policy", () => {
 
   it("starts Google sign-in on the canonical host and issues a browser-bound state cookie", async () => {
     await withAuthRouteServer(async origin => {
-      const response = await fetch(`${origin}/api/auth/google/start`, { redirect: "manual" });
+      const response = await requestRoute(`${origin}/api/auth/google/start`);
       expect(response.status).toBe(302);
-      const authorizationUrl = new URL(response.headers.get("location") ?? "");
+      const authorizationUrl = new URL(response.headers.location ?? "");
       expect(authorizationUrl.hostname).toBe("accounts.google.com");
       expect(authorizationUrl.searchParams.get("redirect_uri")).toBe("https://nsos.top/api/auth/google/callback");
-      expect(response.headers.get("set-cookie")).toContain("__Host-google_oauth_state=");
+      expect(headerText(response.headers["set-cookie"])).toContain("__Host-google_oauth_state=");
     });
   });
 
