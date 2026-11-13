@@ -40,11 +40,6 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "live-provider-action", limit: 6, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.providers.sendTestSms") }));
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "family-receipt-scan", limit: 12, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.portal.scanPaymentEvidence") }));
   app.use("/api/auth/email/request", requireSameOriginForMutations());
-  app.use("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }));
-  app.use("/api/auth/google/start", createRateLimitMiddleware({ namespace: "google-oauth-start", limit: 10, windowMs: 10 * 60_000 }));
-  app.use("/api/auth/google/callback", createRateLimitMiddleware({ namespace: "google-oauth-callback", limit: 20, windowMs: 10 * 60_000 }));
-  app.use("/api/auth/email/verify", createRateLimitMiddleware({ namespace: "passwordless-verify", limit: 10, windowMs: 10 * 60_000 }));
-  app.use("/api/storage", createRateLimitMiddleware({ namespace: "storage-download", limit: 60, windowMs: 60_000 }));
   registerSmsWebhookRoutes(app);
   app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
   registerAffiliateRoutes(app);
