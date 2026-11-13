@@ -5,6 +5,7 @@ const testEnv: Record<string, string> = {
   GOOGLE_CLIENT_SECRET: "nsos-vitest-google-client-secret",
   RESEND_API_KEY: "nsos-vitest-resend-api-key",
   AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>",
+  OWNER_NOTIFICATION_EMAIL: "owner@example.ng",
   GEMINI_API_KEY: "nsos-vitest-gemini-api-key",
   AI_MODEL: "gemini-2.5-flash",
   S3_BUCKET: "nsos-test-bucket",
