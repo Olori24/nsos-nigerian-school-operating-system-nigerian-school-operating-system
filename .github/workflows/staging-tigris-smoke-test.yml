@@ -199,12 +199,19 @@ jobs:
           let uploaded = false;
 
           function reportError(stage, error) {
+            // Log only provider error fields and request identifiers. Never log
+            // credentials, request headers, authorization data, or signed requests.
+            const safeText = (value) => typeof value === "string"
+              ? value.replace(/[\\u0000-\\u001f\\u007f]/g, " ").slice(0, 500)
+              : null;
             console.error(JSON.stringify({
               stage,
-              errorName: error?.name ?? "UnknownError",
+              errorName: safeText(error?.name) ?? "UnknownError",
+              errorCode: safeText(error?.Code ?? error?.code),
+              errorMessage: safeText(error?.message),
               httpStatusCode: error?.$metadata?.httpStatusCode ?? null,
-              requestId: error?.$metadata?.requestId ?? null,
-              extendedRequestId: error?.$metadata?.extendedRequestId ?? null
+              requestId: safeText(error?.$metadata?.requestId),
+              extendedRequestId: safeText(error?.$metadata?.extendedRequestId)
             }));
           }
 
