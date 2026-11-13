@@ -1,17 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ send: vi.fn() }));
-
-vi.mock("@aws-sdk/client-s3", () => ({
-  S3Client: class { send = mocks.send; },
-  GetObjectCommand: class { constructor(public input: unknown) {} },
-  HeadObjectCommand: class { constructor(public input: unknown) {} },
-  PutObjectCommand: class { constructor(public input: unknown) {} },
-}));
-
-vi.mock("@aws-sdk/s3-request-presigner", () => ({ getSignedUrl: vi.fn() }));
-vi.mock("./_core/env", () => ({
-  ENV: {
+const mocks = vi.hoisted(() => ({
+  send: vi.fn(),
+  env: {
     s3Bucket: "nsos-test",
     s3AccessKeyId: "test-access",
     s3SecretAccessKey: "test-secret",
@@ -22,11 +13,22 @@ vi.mock("./_core/env", () => ({
   },
 }));
 
+vi.mock("@aws-sdk/client-s3", () => ({
+  S3Client: class { send = mocks.send; },
+  GetObjectCommand: class { constructor(public input: unknown) {} },
+  HeadObjectCommand: class { constructor(public input: unknown) {} },
+  PutObjectCommand: class { constructor(public input: unknown) {} },
+}));
+
+vi.mock("@aws-sdk/s3-request-presigner", () => ({ getSignedUrl: vi.fn() }));
+vi.mock("./_core/env", () => ({ ENV: mocks.env }));
+
 import { storageGetObject } from "./storage";
 
 describe("legacy storage read compatibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(mocks.env, { s3Bucket: "nsos-test", s3AccessKeyId: "test-access", s3SecretAccessKey: "test-secret", s3Region: "auto", s3Endpoint: "", legacyForgeApiUrl: "https://forge.example", legacyForgeApiKey: "legacy-read-key" });
   });
 
   afterEach(() => {
@@ -56,6 +58,22 @@ describe("legacy storage read compatibility", () => {
     expect(object.ContentType).toBe("image/png");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("v1/storage/presign/get");
+  });
+
+  it("can read legacy objects while destination S3 credentials are not configured", async () => {
+    mocks.env.s3Bucket = "";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        url: "https://nsos-bucket.s3.amazonaws.com/schools/34/admissions/51/passport.png?signature=test",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response("legacy-passport", { status: 200, headers: { "content-type": "image/png" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const object = await storageGetObject("schools/34/admissions/51/passport.png");
+
+    expect(object.ContentType).toBe("image/png");
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not fall back to legacy storage for destination authorization or service errors", async () => {
