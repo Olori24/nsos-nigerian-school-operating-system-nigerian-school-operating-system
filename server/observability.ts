@@ -68,12 +68,10 @@ export function requestObservabilityMiddleware(options: {
   };
 }
 
-export function requiredProductionEnvironmentErrors(input: { isProduction: boolean; appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string }) {
+export function requiredProductionEnvironmentErrors(input: { isProduction: boolean; cookieSecret: string; databaseUrl: string }) {
   if (!input.isProduction) return [];
   return [
-    ["VITE_APP_ID", input.appId],
     ["JWT_SECRET", input.cookieSecret && input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
-    ["OAUTH_SERVER_URL", input.oAuthServerUrl],
   ].filter(([, value]) => !value.trim()).map(([name]) => `${name} is required in production.`);
 }
