@@ -63,7 +63,7 @@ describe("external authentication policy", () => {
   it("allows only an exact HTTPS origin or a local HTTP development origin", () => {
     expect(authRoutePolicies.validOrigin("https://nsos.top")).toBe("https://nsos.top");
     expect(authRoutePolicies.validOrigin("https://staging.nsos.top")).toBe("https://staging.nsos.top");
-    expect(authRoutePolicies.validOrigin("https://nsos-vercel-migration-preview.vercel.app")).toBe("https://nsos-vercel-migration-preview.vercel.app");
+    expect(authRoutePolicies.validOrigin("https://nsos-vercel-migration-preview-bakande11-2779s-projects.vercel.app")).toBe("https://nsos-vercel-migration-preview.vercel.app");
     expect(authRoutePolicies.validOrigin("https://attacker.example")).toBeUndefined();
     expect(authRoutePolicies.validOrigin("http://localhost:3000")).toBe("http://localhost:3000");
     expect(authRoutePolicies.validOrigin("https://nsos.top/unsafe-path")).toBeUndefined();
