@@ -60,16 +60,18 @@ describe("external authentication policy", () => {
     expect(() => normaliseAuthEmail("not-an-email")).toThrow("Enter a valid email address.");
   });
 
-  it("allows only an exact HTTPS origin or a local HTTP development origin", () => {
-    expect(authRoutePolicies.validOrigin("https://nsos.top")).toBe("https://nsos.top");
-    expect(authRoutePolicies.validOrigin("https://staging.nsos.top")).toBe("https://staging.nsos.top");
+  it("allows only NSOS, local, or active published school origins", async () => {
+    const customDomain = vi.spyOn(database, "getPublicSchoolWebsiteByDomain").mockResolvedValue({ schoolId: 42 } as any);
+    expect(await authRoutePolicies.validOrigin("https://nsos.top")).toBe("https://nsos.top");
+    expect(await authRoutePolicies.validOrigin("https://staging.nsos.top")).toBe("https://staging.nsos.top");
     expect(authRoutePolicies.validOrigin("https://nsos-vercel-migration-preview-bakande11-2779s-projects.vercel.app")).toBe("https://nsos-vercel-migration-preview.vercel.app");
-    expect(authRoutePolicies.validOrigin("https://attacker.example")).toBeUndefined();
-    expect(authRoutePolicies.validOrigin("https://school.example.ng", "school.example.ng")).toBe("https://school.example.ng");
-    expect(authRoutePolicies.validOrigin("https://school.example.ng", "attacker.example")).toBeUndefined();
-    expect(authRoutePolicies.validOrigin("http://localhost:3000")).toBe("http://localhost:3000");
-    expect(authRoutePolicies.validOrigin("https://nsos.top/unsafe-path")).toBeUndefined();
-    expect(authRoutePolicies.validOrigin("http://school.example.ng")).toBeUndefined();
+    customDomain.mockResolvedValue(undefined as any);
+    expect(await authRoutePolicies.validOrigin("https://attacker.example")).toBeUndefined();
+    customDomain.mockResolvedValue({ schoolId: 42 } as any);
+    expect(await authRoutePolicies.validOrigin("https://school.example.ng")).toBe("https://school.example.ng");
+    expect(await authRoutePolicies.validOrigin("http://localhost:3000")).toBe("http://localhost:3000");
+    expect(await authRoutePolicies.validOrigin("https://nsos.top/unsafe-path")).toBeUndefined();
+    expect(await authRoutePolicies.validOrigin("http://school.example.ng")).toBeUndefined();
   });
 
   it("requires an exact browser-bound OAuth state match", () => {
