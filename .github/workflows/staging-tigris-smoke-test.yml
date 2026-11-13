@@ -79,6 +79,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_REGION: auto
           AWS_DEFAULT_REGION: auto
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
@@ -89,20 +90,27 @@ jobs:
           key="nsos-smoke-tests/github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.txt"
           uploaded=false
 
-          # Tigris S3-compatible requests use virtual-hosted bucket addressing.
+          # Tigris uses the global endpoint and region "auto". Use explicit
+          # path-style addressing as a diagnostic contrast to the prior
+          # virtual-hosted attempts.
           mkdir -p "$HOME/.aws"
           cat > "$HOME/.aws/config" <<'EOF'
           [default]
           region = auto
           signature_version = s3v4
           s3 =
-            addressing_style = virtual
+            addressing_style = path
           EOF
           export AWS_CONFIG_FILE="$HOME/.aws/config"
 
+          echo "AWS CLI version: $(aws --version 2>&1)"
+          echo "Runner UTC time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Effective AWS configuration (credentials are masked):"
+          aws configure list
+
           cleanup() {
             if [ "$uploaded" = true ]; then
-              aws --endpoint-url "$S3_ENDPOINT" s3api delete-object \
+              aws --region auto --endpoint-url "$S3_ENDPOINT" s3api delete-object \
                 --bucket "$S3_BUCKET" --key "$key" >/dev/null || {
                   echo "::error::Temporary object cleanup failed. Object key: $key"
                   return 1
@@ -120,12 +128,12 @@ jobs:
           printf 'NSOS Tigris staging smoke test\nrun=%s\nattempt=%s\n' \
             "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$workdir/source.txt"
 
-          aws --endpoint-url "$S3_ENDPOINT" s3api put-object \
+          aws --region auto --endpoint-url "$S3_ENDPOINT" s3api put-object \
             --bucket "$S3_BUCKET" --key "$key" --body "$workdir/source.txt" \
             --content-type text/plain >/dev/null
           uploaded=true
 
-          aws --endpoint-url "$S3_ENDPOINT" s3api get-object \
+          aws --region auto --endpoint-url "$S3_ENDPOINT" s3api get-object \
             --bucket "$S3_BUCKET" --key "$key" "$workdir/download.txt" >/dev/null
 
           if ! cmp --silent "$workdir/source.txt" "$workdir/download.txt"; then
