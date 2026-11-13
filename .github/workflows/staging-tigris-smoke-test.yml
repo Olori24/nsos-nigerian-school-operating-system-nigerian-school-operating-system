@@ -202,7 +202,7 @@ jobs:
             // Log only provider error fields and request identifiers. Never log
             // credentials, request headers, authorization data, or signed requests.
             const safeText = (value) => typeof value === "string"
-              ? value.replace(/[\\u0000-\\u001f\\u007f]/g, " ").slice(0, 500)
+              ? value.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 500)
               : null;
             console.error(JSON.stringify({
               stage,
