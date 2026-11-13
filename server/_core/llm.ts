@@ -212,14 +212,11 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const resolveApiUrl = () => "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!ENV.geminiApiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
   }
 };
 
@@ -365,6 +362,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   const payload: Record<string, unknown> = {
     messages: messages.map(normalizeMessage),
+    model: model ?? ENV.aiModel,
   };
 
   if (model) {
@@ -410,7 +408,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${ENV.geminiApiKey}`,
     },
     body: JSON.stringify(payload),
   });
@@ -455,5 +453,11 @@ export async function listLLMModels(): Promise<ModelsResponse> {
     );
   }
 
-  return (await response.json()) as ModelsResponse;
+  const result = await response.json() as { models?: Array<{ name?: string; displayName?: string; supportedGenerationMethods?: string[] }> };
+  return {
+    object: "list",
+    data: (result.models ?? [])
+      .filter(item => item.name && (item.supportedGenerationMethods ?? []).includes("generateContent"))
+      .map(item => ({ id: item.name!.replace(/^models\\//, ""), object: "model", created: 0, owned_by: item.displayName ?? "Google Gemini" })),
+  };
 }
