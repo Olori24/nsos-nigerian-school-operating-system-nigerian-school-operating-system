@@ -24,7 +24,7 @@ async function withAuthRouteServer<T>(run: (origin: string) => Promise<T>) {
 async function requestRoute(url: string, input: { method?: string; headers?: Record<string, string>; body?: string } = {}) {
   const target = new URL(url);
   return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: string }>((resolve, reject) => {
-    const request = httpRequest({ hostname: target.hostname, port: target.port, path: `${target.pathname}${target.search}`, method: input.method ?? "GET", headers: input.headers }, response => {
+    const request = httpRequest({ hostname: target.hostname, port: target.port, path: `${target.pathname}${target.search}`, method: input.method ?? "GET", headers: { host: "nsos.top", ...(input.headers ?? {}) } }, response => {
       const chunks: Buffer[] = [];
       response.on("data", chunk => chunks.push(Buffer.from(chunk)));
       response.on("end", () => resolve({ status: response.statusCode ?? 0, headers: response.headers, body: Buffer.concat(chunks).toString("utf8") }));
@@ -39,7 +39,7 @@ function getGoogleState(setCookie: string | string[] | undefined) {
   const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
   const encodedState = cookie?.match(/__Host-google_oauth_state=([^;]+)/)?.[1];
   if (!encodedState) throw new Error("Google state cookie was not set.");
-  return JSON.parse(decodeURIComponent(encodedState)) as { state: string; origin: string };
+  return JSON.parse(decodeURIComponent(encodedState)) as { state: string };
 }
 
 function headerText(value: string | string[] | undefined) {
@@ -60,18 +60,10 @@ describe("external authentication policy", () => {
     expect(() => normaliseAuthEmail("not-an-email")).toThrow("Enter a valid email address.");
   });
 
-  it("allows only NSOS, local, or active published school origins", async () => {
-    const customDomain = vi.spyOn(database, "getPublicSchoolWebsiteByDomain").mockResolvedValue({ schoolId: 42 } as any);
-    expect(await authRoutePolicies.validOrigin("https://nsos.top")).toBe("https://nsos.top");
-    expect(await authRoutePolicies.validOrigin("https://staging.nsos.top")).toBe("https://staging.nsos.top");
-    expect(authRoutePolicies.validOrigin("https://nsos-vercel-migration-preview-bakande11-2779s-projects.vercel.app")).toBe("https://nsos-vercel-migration-preview.vercel.app");
-    customDomain.mockResolvedValue(undefined as any);
-    expect(await authRoutePolicies.validOrigin("https://attacker.example")).toBeUndefined();
-    customDomain.mockResolvedValue({ schoolId: 42 } as any);
-    expect(await authRoutePolicies.validOrigin("https://school.example.ng")).toBe("https://school.example.ng");
-    expect(await authRoutePolicies.validOrigin("http://localhost:3000")).toBe("http://localhost:3000");
-    expect(await authRoutePolicies.validOrigin("https://nsos.top/unsafe-path")).toBeUndefined();
-    expect(await authRoutePolicies.validOrigin("http://school.example.ng")).toBeUndefined();
+  it("uses a fixed canonical origin and rejects requests on other hosts", () => {
+    expect(authRoutePolicies.canonicalOrigin).toBe("https://nsos.top");
+    expect(authRoutePolicies.isCanonicalRequestHost({ hostname: "nsos.top" } as any)).toBe(true);
+    expect(authRoutePolicies.isCanonicalRequestHost({ hostname: "attacker.example" } as any)).toBe(false);
   });
 
   it("requires an exact browser-bound OAuth state match", () => {
@@ -91,18 +83,18 @@ describe("external authentication policy", () => {
     expect(() => authRoutePolicies.normaliseAuthSender("NSOS <onboarding@resend.dev>\r\nBcc: attacker@example.com")).toThrow("not configured safely");
   });
 
-  it("rejects route starts that do not provide a safe application origin", async () => {
+  it("rejects authentication requests made on a non-canonical host", async () => {
     await withAuthRouteServer(async origin => {
-      const googleResponse = await fetch(`${origin}/api/auth/google/start`, { redirect: "manual" });
+      const googleResponse = await requestRoute(`${origin}/api/auth/google/start`, { headers: { host: "attacker.example" } });
       expect(googleResponse.status).toBe(400);
-      const emailResponse = await fetch(`${origin}/api/auth/email/request`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "person@example.ng" }) });
+      const emailResponse = await requestRoute(`${origin}/api/auth/email/request`, { method: "POST", headers: { host: "attacker.example", origin: "https://attacker.example", "Content-Type": "application/json" }, body: JSON.stringify({ email: "person@example.ng" }) });
       expect(emailResponse.status).toBe(400);
     });
   });
 
-  it("starts Google sign-in only with a safe origin and issues a browser-bound state cookie", async () => {
+  it("starts Google sign-in on the canonical host and issues a browser-bound state cookie", async () => {
     await withAuthRouteServer(async origin => {
-      const response = await fetch(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`, { redirect: "manual" });
+      const response = await fetch(`${origin}/api/auth/google/start`, { redirect: "manual" });
       expect(response.status).toBe(302);
       expect(response.headers.get("location")).toContain("accounts.google.com/o/oauth2/v2/auth");
       expect(response.headers.get("set-cookie")).toContain("__Host-google_oauth_state=");
