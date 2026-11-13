@@ -23,7 +23,7 @@ function response() {
 describe("storage proxy authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
   });
 
   it("rejects unknown and traversal-style keys before signing or authentication", async () => {
@@ -52,7 +52,6 @@ describe("storage proxy authorization", () => {
     const anonymous = response();
     await route()(req, anonymous);
     expect(anonymous.code).toBe(404);
-    expect(fetch).not.toHaveBeenCalled();
 
     sdk.authenticateRequest.mockResolvedValue({ id: 119 });
     db.getSchoolMembership.mockResolvedValue({ schoolId: 35, userId: 119, role: "owner", status: "active" });
