@@ -20,7 +20,7 @@ function trustedObjectUrl(value: string) {
   const url = new URL(value);
   const host = url.hostname.toLowerCase();
   const trusted = host === "s3.amazonaws.com" || host.endsWith(".amazonaws.com") ||
-    /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(host);
+    /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(host) || host === "t3.storage.dev";
   if (url.protocol !== "https:" || !trusted || url.username || url.password) {
     throw new Error("Legacy provider returned an untrusted object URL.");
   }
@@ -57,9 +57,9 @@ async function main() {
   if (endpoint) {
     const endpointUrl = new URL(endpoint);
     const endpointHost = endpointUrl.hostname.toLowerCase();
-    const trustedEndpoint = /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(endpointHost) || endpointHost === "s3.amazonaws.com" || /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(endpointHost);
+    const trustedEndpoint = /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(endpointHost) || endpointHost === "s3.amazonaws.com" || /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(endpointHost) || endpointHost === "t3.storage.dev";
     if (endpointUrl.protocol !== "https:" || !trustedEndpoint || endpointUrl.username || endpointUrl.password || endpointUrl.pathname !== "/" || endpointUrl.search || endpointUrl.hash) {
-      throw new Error("S3_ENDPOINT must be a trusted HTTPS Cloudflare R2 or AWS S3 endpoint.");
+      throw new Error("S3_ENDPOINT must be a trusted HTTPS Tigris, Cloudflare R2, or AWS S3 endpoint.");
     }
   }
   const region = process.env.S3_REGION?.trim() || "auto";
