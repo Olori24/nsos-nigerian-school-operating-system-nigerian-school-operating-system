@@ -19,12 +19,21 @@ function getStringQuery(req: Request, key: string) {
   return typeof value === "string" ? value : undefined;
 }
 
+function isTrustedAuthHost(hostname: string) {
+  return hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "nsos.top" ||
+    hostname.endsWith(".nsos.top") ||
+    (hostname.startsWith("nsos-vercel-migration-") && hostname.endsWith(".vercel.app"));
+}
+
 function validOrigin(value: unknown) {
   if (typeof value !== "string" || value.length > 512) return undefined;
   try {
     const url = new URL(value);
     if (url.origin !== value || !["https:", "http:"].includes(url.protocol)) return undefined;
     if (url.protocol === "http:" && !["localhost", "127.0.0.1"].includes(url.hostname)) return undefined;
+    if (!isTrustedAuthHost(url.hostname)) return undefined;
     return url.origin;
   } catch {
     return undefined;
@@ -33,8 +42,7 @@ function validOrigin(value: unknown) {
 
 function postSignInPath(origin: string) {
   const hostname = new URL(origin).hostname;
-  const isPlatformHost = ["localhost", "127.0.0.1", "nsos.top", "www.nsos.top", "staging.nsos.top"].includes(hostname);
-  return isPlatformHost ? "/app" : "/";
+  return isTrustedAuthHost(hostname) ? "/app" : "/";
 }
 
 function validMagicLinkToken(value: string) {
