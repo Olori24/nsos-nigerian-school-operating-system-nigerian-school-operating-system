@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ send: vi.fn() }));
 
@@ -29,6 +29,10 @@ describe("legacy storage read compatibility", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("reads a pre-migration object from Forge when the destination bucket has no copy", async () => {
     mocks.send.mockRejectedValueOnce(Object.assign(new Error("missing"), {
       name: "NoSuchKey",
@@ -40,7 +44,7 @@ describe("legacy storage read compatibility", () => {
       }), { status: 200, headers: { "content-type": "application/json" } }))
       .mockResolvedValueOnce(new Response("legacy-file-content", {
         status: 200,
-        headers: { "content-type": "image/png", "content-length": "20" },
+        headers: { "content-type": "image/png", "content-length": "19" },
       }));
     vi.stubGlobal("fetch", fetchMock);
 
