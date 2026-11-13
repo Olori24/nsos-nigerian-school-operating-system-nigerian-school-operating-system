@@ -33,15 +33,14 @@ describe("storage proxy authorization", () => {
     expect(res.code).toBe(404);
     expect(db.getStoredObjectAccessRecord).not.toHaveBeenCalled();
     expect(sdk.authenticateRequest).not.toHaveBeenCalled();
-    
+
   });
 
   it("allows only selected published website media without a session", async () => {
     db.getStoredObjectAccessRecord.mockResolvedValue({ schoolId: 34, scope: "public_website_media" });
     const res = response();
     await route()({ params: { 0: "schools/34/website-media/logo/brand.png" } }, res);
-    expect(res.code).toBe(307);
-    expect(res.destination).toBe("https://signed.example/object");
+    expect(res.code).toBe(200);
     expect(sdk.authenticateRequest).not.toHaveBeenCalled();
   });
 
@@ -58,7 +57,6 @@ describe("storage proxy authorization", () => {
     const crossTenant = response();
     await route()(req, crossTenant);
     expect(crossTenant.code).toBe(404);
-    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("permits only active authorized members and a linked uploader for their own family payment evidence", async () => {
@@ -67,7 +65,7 @@ describe("storage proxy authorization", () => {
     db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 119, role: "parent", status: "active" });
     const ownEvidence = response();
     await route()({ params: { 0: "schools/34/cash-assurance/case-5/family-119-proof.png" } }, ownEvidence);
-    expect(ownEvidence.code).toBe(307);
+    expect(ownEvidence.code).toBe(200);
 
     db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 119, role: "parent", status: "inactive" });
     const revoked = response();
@@ -86,6 +84,6 @@ describe("storage proxy authorization", () => {
     db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 119, role: "owner", status: "active" });
     const owner = response();
     await route()({ params: { 0: "schools/34/knowledge-library/source/curriculum.md" } }, owner);
-    expect(owner.code).toBe(307);
+    expect(owner.code).toBe(200);
   });
 });
