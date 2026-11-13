@@ -3,6 +3,7 @@ import * as db from "../db";
 import { can, isManagementRole, type SchoolRole } from "../roles";
 import { sdk } from "./sdk";
 import { storageGetObject } from "../storage";
+import { createRateLimitMiddleware } from "../security";
 
 export function isSafeStorageKey(key: string) {
   return key.length > 0 && key.length <= 1024 && /^[A-Za-z0-9._/-]+$/.test(key) && !key.includes("..") && /^schools\/[1-9]\d*\//.test(key);
