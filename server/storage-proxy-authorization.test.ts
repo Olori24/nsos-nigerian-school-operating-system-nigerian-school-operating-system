@@ -4,7 +4,7 @@ const db = vi.hoisted(() => ({ getStoredObjectAccessRecord: vi.fn(), getSchoolMe
 const sdk = vi.hoisted(() => ({ authenticateRequest: vi.fn() }));
 vi.mock("../server/db", () => db);
 vi.mock("../server/_core/sdk", () => ({ sdk }));
-vi.mock("../server/storage", () => ({ storageGetSignedUrl: vi.fn().mockResolvedValue("https://signed.example/object") }));
+vi.mock("../server/storage", () => ({ storageGetObject: vi.fn().mockResolvedValue({ Body: { pipe: vi.fn(), on: vi.fn() }, ContentType: "application/octet-stream", ContentLength: 1 }) }));
 
 import { isSafeStorageKey, registerStorageProxy } from "./_core/storageProxy";
 
