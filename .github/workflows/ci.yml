@@ -23,6 +23,7 @@ jobs:
       DATABASE_URL: mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos
       JWT_SECRET: ci-test-jwt-secret-with-at-least-32-characters
       APP_SECRET: ci-test-application-secret
+      AUTH_CANONICAL_ORIGIN: https://nsos.top
       GOOGLE_CLIENT_ID: ci-test-google-client-id
       GOOGLE_CLIENT_SECRET: ci-test-google-client-secret
       RESEND_API_KEY: ci-test-resend-api-key
