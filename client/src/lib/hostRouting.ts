@@ -7,6 +7,6 @@ const PLATFORM_HOSTS = new Set([
 ]);
 
 export function isNsosPlatformHost(hostname: string): boolean {
-  const host = hostname.trim().toLowerCase().replace(/\\.$/, "");
+  const host = hostname.trim().toLowerCase().replace(/\.$/, "");
   return PLATFORM_HOSTS.has(host) || host.endsWith(".vercel.app");
 }
