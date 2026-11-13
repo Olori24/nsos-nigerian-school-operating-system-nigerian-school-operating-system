@@ -27,13 +27,14 @@ function isTrustedAuthHost(hostname: string) {
     (hostname.startsWith("nsos-vercel-migration-") && hostname.endsWith("-bakande11-2779s-projects.vercel.app"));
 }
 
-function validOrigin(value: unknown) {
+function validOrigin(value: unknown, requestHost?: string) {
   if (typeof value !== "string" || value.length > 512) return undefined;
   try {
     const url = new URL(value);
     if (url.origin !== value || !["https:", "http:"].includes(url.protocol)) return undefined;
     if (url.protocol === "http:" && !["localhost", "127.0.0.1"].includes(url.hostname)) return undefined;
-    if (!isTrustedAuthHost(url.hostname)) return undefined;
+    const sameRequestHost = Boolean(requestHost && url.host.toLowerCase() === requestHost.toLowerCase());
+    if (!isTrustedAuthHost(url.hostname) && !sameRequestHost) return undefined;
     return url.origin;
   } catch {
     return undefined;
@@ -68,7 +69,7 @@ function readGoogleLoginState(req: Request) {
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown };
-    const origin = validOrigin(parsed.origin);
+    const origin = validOrigin(parsed.origin, req.get("host"));
     return typeof parsed.state === "string" && origin ? { state: parsed.state, origin } : undefined;
   } catch {
     return undefined;
@@ -121,8 +122,8 @@ export async function sendAdmissionLetterEmail(input: { email: string; subject: 
   return typeof payload.id === "string" ? payload.id.slice(0, 255) : undefined;
 }
 
-export async function sendStaffSetupInvitationEmail(input: { email: string; schoolName: string; role: "admin" | "staff" | "teacher" | "finance"; jobTitle: string; origin: string }) {
-  const origin = validOrigin(input.origin);
+export async function sendStaffSetupInvitationEmail(input: { email: string; schoolName: string; role: "admin" | "staff" | "teacher" | "finance"; jobTitle: string; origin: string; requestHost?: string }) {
+  const origin = validOrigin(input.origin, input.requestHost);
   if (!origin) throw new Error("Use a valid NSOS application address before sending the invitation.");
   const email = db.normaliseAuthEmail(input.email);
   const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
@@ -133,8 +134,8 @@ export async function sendStaffSetupInvitationEmail(input: { email: string; scho
   await sendMagicLinkEmail({ email, link, subject: `You are invited to ${schoolName} on NSOS`, text: `${schoolName} invited you to join NSOS as ${roleLabel} (${jobTitle}). Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>${schoolName} invited you to join NSOS as <strong>${roleLabel}</strong> (${jobTitle}).</p><p><a href="${link}">Accept invitation and sign in</a></p><p>This link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
 }
 
-export async function sendGuardianPortalInvitationEmail(input: { email: string; schoolName: string; guardianName: string; origin: string }) {
-  const origin = validOrigin(input.origin);
+export async function sendGuardianPortalInvitationEmail(input: { email: string; schoolName: string; guardianName: string; origin: string; requestHost?: string }) {
+  const origin = validOrigin(input.origin, input.requestHost);
   if (!origin) throw new Error("Use a valid NSOS application address before sending the guardian portal invitation.");
   const email = db.normaliseAuthEmail(input.email);
   const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
@@ -146,7 +147,7 @@ export async function sendGuardianPortalInvitationEmail(input: { email: string; 
 
 export function registerGoogleAuthRoutes(app: Express) {
   app.get("/api/auth/google/start", (req: Request, res: Response) => {
-    const origin = validOrigin(getStringQuery(req, "origin"));
+    const origin = validOrigin(getStringQuery(req, "origin"), req.get("host"));
     if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
     if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
     const state = randomBytes(32).toString("base64url");
@@ -190,8 +191,8 @@ export function registerGoogleAuthRoutes(app: Express) {
 
 export function registerEmailAuthRoutes(app: Express) {
   app.post("/api/auth/email/request", async (req: Request, res: Response) => {
-    const origin = validOrigin(req.body?.origin);
-    const headerOrigin = validOrigin(req.get("origin"));
+    const origin = validOrigin(req.body?.origin, req.get("host"));
+    const headerOrigin = validOrigin(req.get("origin"), req.get("host"));
     if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
     try {
       const email = db.normaliseAuthEmail(req.body?.email ?? "");
@@ -210,7 +211,7 @@ export function registerEmailAuthRoutes(app: Express) {
     if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
     try {
       const link = await db.consumeAuthMagicLink(token);
-      const origin = validOrigin(link.redirectOrigin);
+      const origin = validOrigin(link.redirectOrigin, req.get("host"));
       if (!origin) throw new Error("The sign-in link does not have a valid destination.");
       const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
       await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
