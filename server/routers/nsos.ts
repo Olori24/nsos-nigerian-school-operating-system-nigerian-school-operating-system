@@ -1751,6 +1751,7 @@ export const nsosRouter = router({
             role: invitation.role,
             jobTitle: invitation.jobTitle,
             origin: input.origin,
+            requestHost: ctx.req.get("host"),
           });
           return await db.markCopilotSetupAgentStaffInvitationSent({
             schoolId: input.schoolId,
