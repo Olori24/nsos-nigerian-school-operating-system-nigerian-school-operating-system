@@ -66,14 +66,34 @@ jobs:
           set -euo pipefail
           workdir="$(mktemp -d)"
           key="nsos-smoke-tests/github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.txt"
+          uploaded=false
+
+          # Tigris S3-compatible requests use virtual-hosted bucket addressing.
+          mkdir -p "$HOME/.aws"
+          cat > "$HOME/.aws/config" <<'EOF'
+          [default]
+          region = auto
+          s3 =
+            addressing_style = virtual
+          EOF
+          export AWS_CONFIG_FILE="$HOME/.aws/config"
+
           cleanup() {
-            aws --endpoint-url "$S3_ENDPOINT" s3api delete-object \
-              --bucket "$S3_BUCKET" --key "$key" >/dev/null || {
-                echo "::error::Temporary object cleanup failed. Object key: $key"
-                return 1
-              }
+            if [ "$uploaded" = true ]; then
+              aws --endpoint-url "$S3_ENDPOINT" s3api delete-object \
+                --bucket "$S3_BUCKET" --key "$key" >/dev/null || {
+                  echo "::error::Temporary object cleanup failed. Object key: $key"
+                  return 1
+                }
+              uploaded=false
+              echo "PASS: temporary object deleted from the staging bucket."
+            fi
           }
-          trap 'cleanup; rm -rf "$workdir"' EXIT
+          on_exit() {
+            cleanup || true
+            rm -rf "$workdir"
+          }
+          trap on_exit EXIT
 
           printf 'NSOS Tigris staging smoke test\nrun=%s\nattempt=%s\n' \
             "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$workdir/source.txt"
@@ -81,6 +101,7 @@ jobs:
           aws --endpoint-url "$S3_ENDPOINT" s3api put-object \
             --bucket "$S3_BUCKET" --key "$key" --body "$workdir/source.txt" \
             --content-type text/plain >/dev/null
+          uploaded=true
 
           aws --endpoint-url "$S3_ENDPOINT" s3api get-object \
             --bucket "$S3_BUCKET" --key "$key" "$workdir/download.txt" >/dev/null
@@ -94,4 +115,3 @@ jobs:
           cleanup
           trap - EXIT
           rm -rf "$workdir"
-          echo "PASS: temporary object deleted from the staging bucket."
