@@ -1,6 +1,6 @@
 import { ENV } from "./env";
 
-export type TranscribeOptions = { audioUrl: string; language?: string; prompt?: string };
+export type TranscribeOptions = { audioBase64: string; mimeType?: string; language?: string; prompt?: string };
 export type WhisperSegment = {
   id: number; seek: number; start: number; end: number; text: string; tokens: number[];
   temperature: number; avg_logprob: number; compression_ratio: number; no_speech_prob: number;
@@ -20,15 +20,12 @@ const MAX_AUDIO_BYTES = 16 * 1024 * 1024;
 export async function transcribeAudio(options: TranscribeOptions): Promise<TranscriptionResponse | TranscriptionError> {
   try {
     if (!ENV.geminiApiKey) return { error: "Voice transcription is not configured", code: "SERVICE_ERROR", details: "GEMINI_API_KEY is not set." };
-    const audioUrl = new URL(options.audioUrl);
-    if (audioUrl.protocol !== "https:" || audioUrl.username || audioUrl.password) {
-      return { error: "Invalid audio URL", code: "INVALID_FORMAT", details: "Audio must be served from an HTTPS URL." };
+    if (!options.audioBase64 || options.audioBase64.length > Math.ceil(MAX_AUDIO_BYTES * 4 / 3) + 8) {
+      return { error: "Audio data is missing or exceeds 16 MB", code: "FILE_TOO_LARGE" };
     }
-    const audioResponse = await fetch(audioUrl, { signal: AbortSignal.timeout(20_000) });
-    if (!audioResponse.ok) return { error: "Failed to download audio file", code: "INVALID_FORMAT", details: `HTTP ${audioResponse.status}` };
-    const mimeType = (audioResponse.headers.get("content-type") ?? "audio/webm").split(";")[0];
+    const mimeType = options.mimeType ?? "audio/webm";
     if (!mimeType.startsWith("audio/")) return { error: "Unsupported audio format", code: "INVALID_FORMAT", details: `Received ${mimeType}` };
-    const audio = Buffer.from(await audioResponse.arrayBuffer());
+    const audio = Buffer.from(options.audioBase64, "base64");
     if (!audio.length) return { error: "Audio file is empty", code: "INVALID_FORMAT" };
     if (audio.length > MAX_AUDIO_BYTES) return { error: "Audio file exceeds 16 MB", code: "FILE_TOO_LARGE" };
 
