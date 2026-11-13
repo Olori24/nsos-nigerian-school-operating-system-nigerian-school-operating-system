@@ -1,6 +1,9 @@
 name: Repair NSOS Staging Domain Branch
 
 on:
+  push:
+    branches:
+      - fix/staging-domain-branch-repair
   workflow_dispatch:
     inputs:
       confirm:
@@ -17,7 +20,9 @@ concurrency:
 
 jobs:
   reassign:
-    if: github.ref == 'refs/heads/main' && inputs.confirm == 'REASSIGN_STAGING_DOMAIN'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/fix/staging-domain-branch-repair') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm == 'REASSIGN_STAGING_DOMAIN')
     runs-on: ubuntu-latest
     environment: staging
     steps:
