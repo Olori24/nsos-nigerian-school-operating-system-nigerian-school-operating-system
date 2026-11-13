@@ -72,6 +72,7 @@ export function requiredProductionEnvironmentErrors(input: {
   isProduction: boolean;
   cookieSecret: string;
   databaseUrl: string;
+  authCanonicalOrigin: string;
   googleClientId: string;
   googleClientSecret: string;
   geminiApiKey: string;
@@ -86,6 +87,7 @@ export function requiredProductionEnvironmentErrors(input: {
   const required: Array<[string, string]> = [
     ["JWT_SECRET", input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
+    ["AUTH_CANONICAL_ORIGIN", input.authCanonicalOrigin],
     ["GOOGLE_CLIENT_ID", input.googleClientId],
     ["GOOGLE_CLIENT_SECRET", input.googleClientSecret],
     ["GEMINI_API_KEY", input.geminiApiKey],
