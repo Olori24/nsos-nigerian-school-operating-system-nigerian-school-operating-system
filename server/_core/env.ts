@@ -14,6 +14,9 @@ export const ENV = {
   s3Endpoint: process.env.S3_ENDPOINT ?? "",
   s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
   s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
+  // Read-only compatibility for objects uploaded before the S3/R2 migration.
+  legacyForgeApiUrl: process.env.LEGACY_STORAGE_FORGE_API_URL ?? "",
+  legacyForgeApiKey: process.env.LEGACY_STORAGE_FORGE_API_KEY ?? "",
   mapsUserAgent: process.env.MAPS_USER_AGENT ?? "NSOS/1.0 (https://nsos.top)",
   cronSecret: process.env.CRON_SECRET ?? "",
   ownerNotificationEmail: process.env.OWNER_NOTIFICATION_EMAIL ?? "",
