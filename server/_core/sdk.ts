@@ -9,8 +9,6 @@ import { ENV } from "./env";
 
 export type AuthenticatedUser = User & {
   sessionId?: string;
-  taskUid?: string;
-  isCron?: boolean;
 };
 
 type SessionClaims = {
