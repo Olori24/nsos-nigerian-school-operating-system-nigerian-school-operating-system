@@ -36,7 +36,7 @@ describe("production observability controls", () => {
   });
 
   it("fails production startup only when a core runtime secret or connection setting is absent", () => {
-    expect(requiredProductionEnvironmentErrors({ isProduction: false, appId: "", cookieSecret: "", databaseUrl: "", oAuthServerUrl: "" })).toEqual([]);
-    expect(requiredProductionEnvironmentErrors({ isProduction: true, appId: "app", cookieSecret: "", databaseUrl: "db", oAuthServerUrl: "" })).toEqual(["JWT_SECRET is required in production.", "OAUTH_SERVER_URL is required in production."]);
+    expect(requiredProductionEnvironmentErrors({ isProduction: false, cookieSecret: "", databaseUrl: "" })).toEqual([]);
+    expect(requiredProductionEnvironmentErrors({ isProduction: true, cookieSecret: "", databaseUrl: "db" })).toEqual(["JWT_SECRET is required in production."]);
   });
 });
