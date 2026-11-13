@@ -1,6 +1,12 @@
 name: NSOS staging Tigris storage smoke test
 
 on:
+  # Run the staging-only diagnostic automatically when this workflow changes
+  # on main, avoiding a separate manual workflow_dispatch after merge.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/staging-tigris-smoke-test.yml'
   workflow_dispatch:
     inputs:
       confirmation:
@@ -18,7 +24,7 @@ concurrency:
 jobs:
   tigris-smoke-test:
     name: Upload, download, compare, and delete one temporary object
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'TEST-STAGING-TIGRIS' }}
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'TEST-STAGING-TIGRIS') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: staging
@@ -149,7 +155,7 @@ jobs:
 
   tigris-sdk-diagnostic:
     name: Independent AWS SDK v3 signing diagnostic
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'TEST-STAGING-TIGRIS' }}
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'TEST-STAGING-TIGRIS') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: staging
