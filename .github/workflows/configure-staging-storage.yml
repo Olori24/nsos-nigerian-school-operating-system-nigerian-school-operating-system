@@ -17,7 +17,8 @@ concurrency:
 
 jobs:
   configure:
-    if: inputs.confirm == 'CONFIGURE_STAGING_STORAGE'
+    # Never allow a dispatch from a feature/PR ref to access staging secrets.
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'CONFIGURE_STAGING_STORAGE'
     runs-on: ubuntu-latest
     environment: staging
     steps:
