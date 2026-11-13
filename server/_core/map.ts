@@ -8,6 +8,7 @@ const splitLocations = (value: unknown) => String(value ?? "").split("|").map(it
 const toLatLon = (value: string) => {
   const parts = value.split(",").map(Number);
   if (parts.length !== 2 || parts.some(part => !Number.isFinite(part))) return undefined;
+  if (parts[0] < -90 || parts[0] > 90 || parts[1] < -180 || parts[1] > 180) return undefined;
   return { lat: parts[0], lon: parts[1] };
 };
 
