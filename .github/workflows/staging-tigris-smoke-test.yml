@@ -187,9 +187,13 @@ jobs:
           tigris="$cli_dir/node_modules/.bin/tigris"
           test -x "$tigris"
           "$tigris" configure --access-key "$TIGRIS_ACCESS_KEY" --access-secret "$TIGRIS_SECRET_KEY" --endpoint "$TIGRIS_ENDPOINT"
-          echo "Step 1: testing whether these credentials authenticate with Tigris, without checking bucket permissions."
-          "$tigris" credentials test
-          echo "Step 2: authentication passed; now checking access to the exact staging bucket."
+          echo "Step 1: checking whether this key can list all buckets (optional; bucket-scoped keys may not have this permission)."
+          if "$tigris" credentials test; then
+            echo "PASS: key can list buckets."
+          else
+            echo "INFO: key cannot list all buckets; this is not a failure for a bucket-scoped key. Continuing with the scoped bucket check."
+          fi
+          echo "Step 2: checking object-list access to the exact staging bucket."
           "$tigris" credentials test --bucket "$S3_BUCKET"
 
   tigris-sdk-diagnostic:
