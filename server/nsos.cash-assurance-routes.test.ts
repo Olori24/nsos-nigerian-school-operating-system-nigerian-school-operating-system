@@ -25,7 +25,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 const callerFor = (id: number) => appRouter.createCaller({
-  user: { id, openId: `cash-user-${id}`, name: "Finance User", email: "finance@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
+  user: { id, openId: `cash-user-${id}`, name: "Finance User", email: "finance@example.com", loginMethod: "google", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
   req: {} as TrpcContext["req"],
   res: {} as TrpcContext["res"],
 });
