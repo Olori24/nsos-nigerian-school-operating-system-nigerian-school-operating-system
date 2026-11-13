@@ -145,3 +145,98 @@ jobs:
           cleanup
           trap - EXIT
           rm -rf "$workdir"
+
+
+  tigris-sdk-diagnostic:
+    name: Independent AWS SDK v3 signing diagnostic
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'TEST-STAGING-TIGRIS' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Validate staging target
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$S3_BUCKET" = "nsos-staging-assets-2026" ] || { echo "::error::Unexpected bucket; refusing to run."; exit 1; }
+          [ "$S3_ENDPOINT" = "https://t3.storage.dev" ] || { echo "::error::Unexpected endpoint; refusing to run."; exit 1; }
+          echo "Validated exact staging bucket and endpoint."
+
+      - name: Test Tigris using independent AWS SDK v3 signer
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_REGION: auto
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkdir="$RUNNER_TEMP/tigris-sdk"
+          mkdir -p "$sdkdir"
+          npm install --prefix "$sdkdir" --no-audit --no-fund @aws-sdk/client-s3
+          cat > "$sdkdir/test.mjs" <<'EOF'
+          import {
+            S3Client, HeadBucketCommand, PutObjectCommand,
+            GetObjectCommand, DeleteObjectCommand
+          } from "@aws-sdk/client-s3";
+          import { randomUUID } from "node:crypto";
+
+          const client = new S3Client({
+            region: "auto",
+            endpoint: process.env.S3_ENDPOINT,
+            forcePathStyle: false,
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            }
+          });
+          const bucket = process.env.S3_BUCKET;
+          const key = `nsos-smoke-tests/sdk-${process.env.GITHUB_RUN_ID}-${randomUUID()}.txt`;
+          let uploaded = false;
+
+          function reportError(stage, error) {
+            console.error(JSON.stringify({
+              stage,
+              errorName: error?.name ?? "UnknownError",
+              httpStatusCode: error?.$metadata?.httpStatusCode ?? null,
+              requestId: error?.$metadata?.requestId ?? null,
+              extendedRequestId: error?.$metadata?.extendedRequestId ?? null
+            }));
+          }
+
+          try {
+            await client.send(new HeadBucketCommand({ Bucket: bucket }));
+            console.log("PASS: SDK HeadBucket authenticated successfully.");
+
+            const body = `NSOS Tigris SDK diagnostic ${process.env.GITHUB_RUN_ID}\n`;
+            await client.send(new PutObjectCommand({
+              Bucket: bucket, Key: key, Body: body, ContentType: "text/plain"
+            }));
+            uploaded = true;
+            const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+            const downloaded = await result.Body.transformToString();
+            if (downloaded !== body) throw new Error("Downloaded object content mismatch");
+            console.log("PASS: SDK disposable object round-trip matched exactly.");
+          } catch (error) {
+            reportError("SDK S3 operation", error);
+            process.exitCode = 1;
+          } finally {
+            if (uploaded) {
+              try {
+                await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+                console.log("PASS: SDK disposable object deleted.");
+              } catch (error) {
+                reportError("SDK cleanup", error);
+                process.exitCode = 1;
+              }
+            } else {
+              console.log("No disposable object was confirmed uploaded; no delete attempted.");
+            }
+            client.destroy();
+          }
+          EOF
+          node "$sdkdir/test.mjs"
