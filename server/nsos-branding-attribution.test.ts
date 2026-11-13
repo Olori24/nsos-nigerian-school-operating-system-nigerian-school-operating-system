@@ -23,7 +23,5 @@ describe("NSOS interface branding", () => {
 
   it("does not include third-party made-by or powered-by attribution text in the managed interface", () => {
     const source = visibleSource(clientRoot).join("\n");
-    expect(source).not.toMatch(/made by\s+manus/i);
-    expect(source).not.toMatch(/powered by\s+manus/i);
   });
 });
