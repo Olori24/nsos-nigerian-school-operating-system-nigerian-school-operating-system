@@ -153,6 +153,42 @@ jobs:
           rm -rf "$workdir"
 
 
+  tigris-native-credential-check:
+    name: Verify credentials with the official Tigris CLI
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'TEST-STAGING-TIGRIS') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Validate exact staging target
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$S3_BUCKET" = "nsos-staging-assets-2026" ] || { echo "::error::Unexpected bucket; refusing to run."; exit 1; }
+          [ "$S3_ENDPOINT" = "https://t3.storage.dev" ] || { echo "::error::Unexpected endpoint; refusing to run."; exit 1; }
+          echo "Validated exact staging bucket and Tigris endpoint."
+
+      - name: Install official Tigris CLI and test key against staging bucket
+        env:
+          TIGRIS_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY_ID }}
+          TIGRIS_SECRET_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          TIGRIS_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          cli_dir="$RUNNER_TEMP/tigris-cli"
+          mkdir -p "$cli_dir"
+          npm install --prefix "$cli_dir" --no-audit --no-fund @tigrisdata/cli
+          tigris="$cli_dir/node_modules/.bin/tigris"
+          test -x "$tigris"
+          "$tigris" configure --access-key "$TIGRIS_ACCESS_KEY" --access-secret "$TIGRIS_SECRET_KEY" --endpoint "$TIGRIS_ENDPOINT"
+          "$tigris" credentials test --bucket "$S3_BUCKET"
+
   tigris-sdk-diagnostic:
     name: Independent AWS SDK v3 signing diagnostic
     if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.confirmation == 'TEST-STAGING-TIGRIS') }}
