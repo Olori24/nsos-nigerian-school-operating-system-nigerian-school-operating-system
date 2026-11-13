@@ -66,7 +66,7 @@ describe("NSOS provider configuration routes", () => {
   });
 
   it("returns tenant-scoped callback URLs only to school administrators", async () => {
-    vi.mocked(db.getSmsDeliveryWebhookUrls).mockReturnValue({ termii: "https://nsos-system-uhkdscaf.manus.space/api/webhooks/sms/termii?schoolId=1", twilio: "https://nsos-system-uhkdscaf.manus.space/api/webhooks/sms/twilio?schoolId=1" });
+    vi.mocked(db.getSmsDeliveryWebhookUrls).mockReturnValue({ termii: "https://nsos.top/api/webhooks/sms/termii?schoolId=1", twilio: "https://nsos.top/api/webhooks/sms/twilio?schoolId=1" });
     await expect(caller().nsos.providers.webhookUrls({ schoolId: 1 })).resolves.toMatchObject({ termii: expect.stringContaining("schoolId=1") });
     expect(db.getSmsDeliveryWebhookUrls).toHaveBeenCalledWith(1);
   });
