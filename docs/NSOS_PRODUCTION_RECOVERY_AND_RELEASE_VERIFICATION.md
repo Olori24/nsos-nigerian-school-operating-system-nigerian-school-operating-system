@@ -65,7 +65,7 @@ Before republishing the existing checkpoint:
 - Confirm the protected secret is restored in the production runtime. If replacement is unavoidable, first confirm the encrypted-data inventory and approved recovery/re-entry plan are complete and explicitly authorised.
 - Confirm the value meets the application's 32-character minimum without revealing or copying it into logs.
 - Before any replacement, confirm affected provider credentials and bank-account records have an approved preservation, migration, or secure re-entry path; do not proceed on the basis of session recovery alone.
-- Confirm the other required production settings are present: `VITE_APP_ID`, `DATABASE_URL`, and `OAUTH_SERVER_URL`.
+- Confirm the other required production setting is present: `DATABASE_URL`.
 - Confirm the intended checkpoint/commit is the current reviewed release and no unrelated changes are included.
 - Do not run schema migrations, alter DNS, attach domains, change traffic routing, or modify provider credentials as part of this secret-only recovery.
 
