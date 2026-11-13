@@ -439,8 +439,7 @@ export async function listLLMModels(): Promise<ModelsResponse> {
   assertApiKey();
 
   const url = new URL("https://generativelanguage.googleapis.com/v1beta/models");
-  url.searchParams.set("key", ENV.geminiApiKey);
-  const response = await fetchWithBackoff(url.toString(), {});
+  const response = await fetchWithBackoff(url.toString(), { headers: { "x-goog-api-key": ENV.geminiApiKey } });
 
   if (!response.ok) {
     const errorText = await response.text();
