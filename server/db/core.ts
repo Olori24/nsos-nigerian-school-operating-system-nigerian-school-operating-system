@@ -202,7 +202,7 @@ export type SmsDeliveryState = "pending" | "delivered" | "failed";
 export type AdvertisingCampaignStatus = "draft" | "pending_approval" | "approved" | "launching" | "active" | "paused" | "completed" | "failed" | "archived";
 type AdvertisingAudience = { locations: string[]; ageMin?: number; ageMax?: number; note?: string };
 
-const NSOS_WEBHOOK_ORIGIN = "https://nsos-system-uhkdscaf.manus.space";
+const NSOS_WEBHOOK_ORIGIN = process.env.AUTH_CANONICAL_ORIGIN ?? "https://nsos.top";
 
 function encryptionKey() {
   if (!ENV.cookieSecret) throw new Error("Provider credentials cannot be stored until the application secret is configured.");
@@ -734,9 +734,8 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   }
 
   // A matching email alone must not attach a newly verified external provider
-  // to a pre-existing Manus user, because that user may already own tenant data.
-  // External providers may share their own local account; linking a legacy
-  // Manus account requires a separate explicit reauthentication flow.
+  // to an existing account, because that account may already own tenant data.
+  // Account linking requires proof of control of the existing account.
   let user = (await db.select().from(users).where(and(eq(users.email, email), like(users.openId, "external:%"))).limit(1))[0];
   if (!user) {
     const created = await db.insert(users).values({ openId: externalOpenId(input.provider), name: input.name?.trim().slice(0, 255) || null, email, avatarUrl, loginMethod: input.provider, lastSignedIn: new Date() });
