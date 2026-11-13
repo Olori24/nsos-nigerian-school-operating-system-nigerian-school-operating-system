@@ -5,8 +5,11 @@ const testEnv: Record<string, string> = {
   GOOGLE_CLIENT_SECRET: "nsos-vitest-google-client-secret",
   RESEND_API_KEY: "nsos-vitest-resend-api-key",
   AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>",
-  BUILT_IN_FORGE_API_URL: "https://forge.test.local",
-  BUILT_IN_FORGE_API_KEY: "nsos-vitest-forge-api-key",
+  GEMINI_API_KEY: "nsos-vitest-gemini-api-key",
+  AI_MODEL: "gemini-2.5-flash",
+  S3_BUCKET: "nsos-test-bucket",
+  S3_ACCESS_KEY_ID: "nsos-test-access-key",
+  S3_SECRET_ACCESS_KEY: "nsos-test-secret-key",
 };
 
 for (const [key, value] of Object.entries(testEnv)) {
