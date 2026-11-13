@@ -11,7 +11,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;
-      const { sessionId: _sessionId, taskUid: _taskUid, isCron: _isCron, ...user } = opts.ctx.user;
+      const { sessionId: _sessionId, ...user } = opts.ctx.user;
       return user;
     }),
     logout: publicProcedure.mutation(async ({ ctx }) => {
