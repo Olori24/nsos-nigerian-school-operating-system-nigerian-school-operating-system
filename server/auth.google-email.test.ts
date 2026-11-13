@@ -103,7 +103,7 @@ describe("external authentication policy", () => {
 
   it("rejects a Google callback whose state does not match the browser-bound cookie", async () => {
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start`);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=fake-code&state=wrong-state`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(403);
       expect(callback.body).toContain("could not be verified");
@@ -114,7 +114,7 @@ describe("external authentication policy", () => {
     const providerFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }));
     vi.stubGlobal("fetch", providerFetch);
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start`);
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=fake-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(502);
@@ -130,7 +130,7 @@ describe("external authentication policy", () => {
     const resolveIdentity = vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 12, openId: "external:google:12", name: "School User", email: "school.user@example.ng", avatarUrl: "https://lh3.googleusercontent.com/a/verified-profile", loginMethod: "google" } as any);
     vi.spyOn(database, "createUserSession").mockResolvedValue("google-test-session");
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start`);
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=verified-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(302);
@@ -179,7 +179,7 @@ describe("external authentication policy", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("provider deadline exceeded", "TimeoutError")));
     const createSession = vi.spyOn(database, "createUserSession");
     await withAuthRouteServer(async origin => {
-      const start = await requestRoute(`${origin}/api/auth/google/start?origin=${encodeURIComponent("https://nsos.top")}`);
+      const start = await requestRoute(`${origin}/api/auth/google/start`);
       const state = getGoogleState(start.headers["set-cookie"]);
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=slow-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(502);
