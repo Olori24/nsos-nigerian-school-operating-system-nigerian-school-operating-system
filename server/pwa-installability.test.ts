@@ -46,8 +46,8 @@ describe("NSOS installable web app", () => {
     expect(bootstrap).toContain('register("/sw.js")');
   });
 
-  it("uses an offline shell without caching NSOS API responses", () => {
-    expect(worker).toContain('const CACHE_NAME = "nsos-shell-v6"');
+  it("uses a versioned offline shell without caching NSOS API responses", () => {
+    expect(worker).toContain('const CACHE_NAME = "nsos-shell-v7"');
     expect(worker).toContain('"/offline.html"');
     expect(worker).toContain('url.pathname.startsWith("/api/")');
     expect(worker).toContain('request.mode === "navigate"');
