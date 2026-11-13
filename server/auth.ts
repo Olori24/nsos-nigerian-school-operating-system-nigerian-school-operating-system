@@ -19,8 +19,9 @@ function getStringQuery(req: Request, key: string) {
   return typeof value === "string" ? value : undefined;
 }
 
-const AUTH_CANONICAL_URL = new URL(ENV.authCanonicalOrigin);
-if (AUTH_CANONICAL_URL.origin !== ENV.authCanonicalOrigin || AUTH_CANONICAL_URL.protocol !== "https:") {
+const canonicalOriginValue = ENV.authCanonicalOrigin ?? "https://nsos.top";
+const AUTH_CANONICAL_URL = new URL(canonicalOriginValue);
+if (AUTH_CANONICAL_URL.origin !== canonicalOriginValue || AUTH_CANONICAL_URL.protocol !== "https:") {
   throw new Error("AUTH_CANONICAL_ORIGIN must be a canonical HTTPS origin without a path.");
 }
 const AUTH_CANONICAL_ORIGIN = AUTH_CANONICAL_URL.origin;
