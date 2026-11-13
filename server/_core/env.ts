@@ -7,8 +7,16 @@ export const ENV = {
   isProduction: process.env.VERCEL === "1"
     ? process.env.VERCEL_ENV === "production"
     : process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  aiModel: process.env.AI_MODEL ?? "gemini-2.5-flash",
+  s3Region: process.env.S3_REGION ?? "auto",
+  s3Bucket: process.env.S3_BUCKET ?? "",
+  s3Endpoint: process.env.S3_ENDPOINT ?? "",
+  s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
+  s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
+  mapsUserAgent: process.env.MAPS_USER_AGENT ?? "NSOS/1.0 (https://nsos.top)",
+  cronSecret: process.env.CRON_SECRET ?? "",
+  ownerNotificationEmail: process.env.OWNER_NOTIFICATION_EMAIL ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
