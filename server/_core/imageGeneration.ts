@@ -1,4 +1,4 @@
-import { storagePut } from "server/storage";
+import { storageGetSignedUrl, storagePut } from "server/storage";
 import { ENV } from "./env";
 
 export type GenerateImageOptions = {
@@ -8,7 +8,7 @@ export type GenerateImageOptions = {
   quality?: string;
 };
 
-export type GenerateImageResponse = { url?: string };
+export type GenerateImageResponse = { url?: string; key?: string };
 export type ImageModelInfo = { model?: string; id?: string };
 export type ListImageModelsResponse = { models: ImageModelInfo[] };
 
@@ -60,8 +60,9 @@ export async function generateImage(options: GenerateImageOptions): Promise<Gene
   const mimeType = imagePart?.inlineData?.mimeType ?? imagePart?.inline_data?.mime_type ?? "image/png";
   if (!encoded) throw new Error("Gemini returned no image data.");
   const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
-  const { url } = await storagePut(`generated/${Date.now()}.${extension}`, Buffer.from(encoded, "base64"), mimeType);
-  return { url };
+  const stored = await storagePut(`generated/${Date.now()}.${extension}`, Buffer.from(encoded, "base64"), mimeType);
+  const url = await storageGetSignedUrl(stored.key);
+  return { url, key: stored.key };
 }
 
 export async function listImageModels(): Promise<ListImageModelsResponse> {
