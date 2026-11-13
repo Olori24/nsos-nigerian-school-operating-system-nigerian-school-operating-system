@@ -40,10 +40,9 @@ export async function transcribeAudio(options: TranscribeOptions): Promise<Trans
     ].filter(Boolean).join(" ");
 
     const endpoint = new URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
-    endpoint.searchParams.set("key", ENV.geminiApiKey);
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-goog-api-key": ENV.geminiApiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [
           { text: instruction },
