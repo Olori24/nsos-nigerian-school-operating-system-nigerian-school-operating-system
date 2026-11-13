@@ -94,7 +94,7 @@ export async function makeRequest<T = unknown>(
     const query = params.query ?? params.input ?? params.name ?? params.keyword;
     if (query) url.searchParams.set("q", String(query));
     if (params.location) {
-      const location = toLatLon(String(params.location));
+      const location = await resolveLocation(String(params.location));
       url.searchParams.set("lat", String(location.lat)); url.searchParams.set("lon", String(location.lon));
     }
     url.searchParams.set("limit", String(Math.min(20, Math.max(1, Number(params.limit ?? 10)))));
