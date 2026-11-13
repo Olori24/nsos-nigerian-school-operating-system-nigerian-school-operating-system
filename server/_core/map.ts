@@ -7,8 +7,18 @@ interface RequestOptions { method?: "GET" | "POST"; body?: Record<string, unknow
 const splitLocations = (value: unknown) => String(value ?? "").split("|").map(item => item.trim()).filter(Boolean);
 const toLatLon = (value: string) => {
   const parts = value.split(",").map(Number);
-  if (parts.length !== 2 || parts.some(part => !Number.isFinite(part))) throw new Error("Location must be expressed as latitude,longitude.");
+  if (parts.length !== 2 || parts.some(part => !Number.isFinite(part))) return undefined;
   return { lat: parts[0], lon: parts[1] };
+};
+
+async function resolveLocation(value: string) {
+  const coordinates = toLatLon(value);
+  if (coordinates) return coordinates;
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "jsonv2"); url.searchParams.set("limit", "1"); url.searchParams.set("q", value);
+  const results = await requestJson<Array<{ lat: string; lon: string }>>(url);
+  if (!results[0]) throw new Error("The requested location could not be found.");
+  return { lat: Number(results[0].lat), lon: Number(results[0].lon) };
 };
 const profileFor = (mode: unknown) => mode === "walking" ? "walking" : mode === "bicycling" ? "cycling" : "driving";
 
@@ -45,7 +55,7 @@ export async function makeRequest<T = unknown>(
     url.searchParams.set("format", "jsonv2");
     url.searchParams.set("addressdetails", "1");
     url.searchParams.set("limit", String(params.limit ?? 5));
-    if (params.lat && params.lng) { url.searchParams.set("lat", String(params.lat)); url.searchParams.set("lon", String(params.lng)); }
+    if (params.lat !== undefined && params.lng !== undefined) { url.searchParams.set("lat", String(params.lat)); url.searchParams.set("lon", String(params.lng)); }
     else url.searchParams.set("q", String(params.address ?? params.q ?? ""));
     const result = await requestJson<any>(url);
     const records = Array.isArray(result) ? result : [result];
@@ -57,8 +67,8 @@ export async function makeRequest<T = unknown>(
   }
 
   if (path.includes("/directions/json")) {
-    const origin = toLatLon(String(params.origin ?? ""));
-    const destination = toLatLon(String(params.destination ?? ""));
+    const origin = await resolveLocation(String(params.origin ?? ""));
+    const destination = await resolveLocation(String(params.destination ?? ""));
     const url = new URL(`${OSRM_BASE}/route/v1/${profileFor(params.mode)}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}`);
     url.searchParams.set("overview", "full"); url.searchParams.set("geometries", "geojson"); url.searchParams.set("steps", "true");
     const result = await requestJson<any>(url);
@@ -69,8 +79,8 @@ export async function makeRequest<T = unknown>(
   }
 
   if (path.includes("/distancematrix/json")) {
-    const origins = splitLocations(params.origins).map(toLatLon);
-    const destinations = splitLocations(params.destinations).map(toLatLon);
+    const origins = await Promise.all(splitLocations(params.origins).map(resolveLocation));
+    const destinations = await Promise.all(splitLocations(params.destinations).map(resolveLocation));
     const coordinates = [...origins, ...destinations].map(point => `${point.lon},${point.lat}`).join(";");
     const url = new URL(`${OSRM_BASE}/table/v1/${profileFor(params.mode)}/${coordinates}`);
     url.searchParams.set("sources", origins.map((_, i) => i).join(";"));
