@@ -4880,7 +4880,6 @@ export const nsosRouter = router({
             schoolName: invitation.schoolName,
             guardianName: invitation.guardianName,
             origin: input.origin,
-            requestHost: ctx.req.get("host"),
           });
           const result = await db.markGuardianPortalInvitationDelivery({
             schoolId: input.schoolId,
