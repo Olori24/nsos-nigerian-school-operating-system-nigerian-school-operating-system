@@ -16,7 +16,7 @@ describe("NSOS interface branding", () => {
   it("uses the supplied NSOS Digital School Operations artwork in the app brand", () => {
     const homeSource = readFileSync(resolve(clientRoot, "pages/Home.tsx"), "utf8");
     expect(homeSource).toContain(
-      'src="/manus-storage/1000033458_785cbbbc.png"',
+      'src="/api/storage/1000033458_785cbbbc.png"',
     );
     expect(homeSource).toContain("Digital School Operations");
   });
