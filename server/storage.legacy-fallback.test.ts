@@ -88,6 +88,16 @@ describe("legacy storage read compatibility", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+
+  it("accepts the official Tigris S3-compatible endpoint", async () => {
+    mocks.env.s3Endpoint = "https://t3.storage.dev";
+    mocks.send.mockResolvedValueOnce({ Body: null, ContentType: "application/octet-stream" });
+
+    await expect(storageGetObject("schools/34/website-media/logo.png"))
+      .resolves.toMatchObject({ ContentType: "application/octet-stream" });
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a legacy provider response that points to an untrusted host", async () => {
     mocks.send.mockRejectedValueOnce(Object.assign(new Error("missing"), {
       name: "NoSuchKey",
