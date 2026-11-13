@@ -124,8 +124,16 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
 }
 
 export async function storageGetSignedUrl(relKey: string, expiresIn = 900): Promise<string> {
-  const { client: s3, bucket } = getStorage();
   const key = normalizeKey(relKey);
+  let storage: ReturnType<typeof getStorage>;
+  try {
+    storage = getStorage();
+  } catch (error) {
+    const legacyUrl = await getLegacyForgeSignedUrl(key);
+    if (legacyUrl) return legacyUrl;
+    throw error;
+  }
+  const { client: s3, bucket } = storage;
   try {
     await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
     return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), {
@@ -140,8 +148,16 @@ export async function storageGetSignedUrl(relKey: string, expiresIn = 900): Prom
 }
 
 export async function storageGetObject(relKey: string) {
-  const { client: s3, bucket } = getStorage();
   const key = normalizeKey(relKey);
+  let storage: ReturnType<typeof getStorage>;
+  try {
+    storage = getStorage();
+  } catch (error) {
+    const legacyObject = await getLegacyObject(key);
+    if (legacyObject) return legacyObject;
+    throw error;
+  }
+  const { client: s3, bucket } = storage;
   try {
     return await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   } catch (error) {
