@@ -30,6 +30,7 @@ jobs:
       AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>"
       BUILT_IN_FORGE_API_KEY: ci-test-forge-api-key
       OPENAI_API_KEY: ci-test-openai-api-key
+      NSOS_MYSQL_INTEGRATION: "1"
     services:
       mysql:
         image: mysql:8.4
