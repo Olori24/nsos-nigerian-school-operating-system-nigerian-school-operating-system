@@ -1,0 +1,132 @@
+name: NSOS Docker Smoke
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - "docker.env.example"
+      - "scripts/nsos-compose.sh"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "patches/**"
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "vite.config.ts"
+      - ".github/workflows/docker-smoke.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - "docker.env.example"
+      - "scripts/nsos-compose.sh"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "patches/**"
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "vite.config.ts"
+      - ".github/workflows/docker-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Prepare synthetic Compose environment
+        run: |
+          cat > .env <<'EOF'
+          JWT_SECRET=dotenv-sentinel-must-never-reach-container
+          EOF
+          cat > .env.runtime <<'EOF'
+          VITE_APP_ID=nsos-synthetic-ci
+          VITE_OAUTH_PORTAL_URL=https://auth.example.invalid
+          DATABASE_URL=mysql://synthetic:synthetic@127.0.0.1:3306/nsos_test
+          OAUTH_SERVER_URL=https://auth.example.invalid
+          NSOS_HOST_PORT=3000
+          EOF
+          chmod 600 .env.runtime
+
+      - name: Build without runtime secret
+        run: |
+          env -u JWT_SECRET bash scripts/nsos-compose.sh build
+
+      - name: Verify default .env cannot supply JWT_SECRET
+        run: |
+          env -u JWT_SECRET bash scripts/nsos-compose.sh run --rm --no-deps --entrypoint node nsos \
+            -e "if (process.env.JWT_SECRET) { console.error('JWT_SECRET leaked from default .env'); process.exit(1); }"
+          if NSOS_COMPOSE_ENV_FILE=.env bash scripts/nsos-compose.sh config; then
+            echo "The Compose wrapper accepted an env file containing JWT_SECRET" >&2
+            exit 1
+          fi
+
+      - name: Start with synthetic runtime secret
+        run: |
+          export JWT_SECRET=ci-only-not-a-real-secret-32-characters-minimum
+          bash scripts/nsos-compose.sh up -d
+          unset JWT_SECRET
+
+      - name: Verify process health through configured host binding
+        run: |
+          HOST_BINDING="$(bash scripts/nsos-compose.sh port nsos 3000)"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://${HOST_BINDING}/healthz"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          bash scripts/nsos-compose.sh logs --tail=100 nsos
+          exit 1
+
+      - name: Verify static HTML, JavaScript, CSS, and service-worker headers
+        run: |
+          HOST_BINDING="$(bash scripts/nsos-compose.sh port nsos 3000)"
+          node --input-type=module - "$HOST_BINDING" <<'NODE'
+          const origin = `http://${process.argv[2]}`;
+          const htmlResponse = await fetch(origin);
+          if (!htmlResponse.ok) throw new Error(`Homepage returned HTTP ${htmlResponse.status}`);
+          if (!(htmlResponse.headers.get("content-type") ?? "").includes("text/html")) {
+            throw new Error("Homepage did not return an HTML content type.");
+          }
+          const html = await htmlResponse.text();
+          if (!html.includes('<div id="root"></div>')) throw new Error("SPA root element is missing.");
+
+          const scriptPath = html.match(/<script[^>]+src=["']([^"']+\.js(?:\?[^"']*)?)["']/i)?.[1];
+          const stylePath = html.match(/<link[^>]+href=["']([^"']+\.css(?:\?[^"']*)?)["']/i)?.[1];
+          if (!scriptPath || !stylePath) throw new Error("Built JavaScript or CSS asset reference is missing.");
+
+          const [scriptResponse, styleResponse, serviceWorkerResponse] = await Promise.all([
+            fetch(new URL(scriptPath, origin)),
+            fetch(new URL(stylePath, origin)),
+            fetch(new URL("/sw.js", origin)),
+          ]);
+          if (!scriptResponse.ok || !(scriptResponse.headers.get("content-type") ?? "").includes("javascript")) {
+            throw new Error(`JavaScript asset failed: HTTP ${scriptResponse.status}`);
+          }
+          if (!styleResponse.ok || !(styleResponse.headers.get("content-type") ?? "").includes("text/css")) {
+            throw new Error(`CSS asset failed: HTTP ${styleResponse.status}`);
+          }
+          if (!serviceWorkerResponse.ok) throw new Error(`Service worker failed: HTTP ${serviceWorkerResponse.status}`);
+          const cacheControl = (serviceWorkerResponse.headers.get("cache-control") ?? "").toLowerCase();
+          if (!cacheControl.includes("no-store")) throw new Error("Service worker response is cacheable.");
+          console.log("Static smoke passed: homepage, JS, CSS, and no-store service worker.");
+          NODE
+
+      - name: Verify management commands after unsetting secret
+        if: always()
+        run: |
+          bash scripts/nsos-compose.sh ps
+          bash scripts/nsos-compose.sh logs --tail=100 nsos || true
+          bash scripts/nsos-compose.sh down --remove-orphans || true

@@ -1,0 +1,36 @@
+services:
+  nsos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_APP_ID: ${VITE_APP_ID:?Set VITE_APP_ID in .env.runtime}
+        VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:?Set VITE_OAUTH_PORTAL_URL in .env.runtime}
+    image: nsos:local
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.runtime
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      JWT_SECRET: ${JWT_SECRET:-}
+    ports:
+      - "${NSOS_HOST_IP:-127.0.0.1}:${NSOS_HOST_PORT:-3000}:3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
