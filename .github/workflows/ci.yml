@@ -81,6 +81,12 @@ jobs:
       - name: Validate database migrations
         run: pnpm drizzle-kit migrate
 
+      - name: Rehearse synthetic MySQL backup and restore
+        env:
+          NSOS_BACKUP_RESTORE_CI: "1"
+          MYSQL_ROOT_PASSWORD: root_test_password
+        run: bash scripts/ci/mysql-backup-restore-smoke.sh
+
       - name: Verify Drizzle schema snapshots
         run: |
           pnpm drizzle-kit generate --name=ci_schema_drift
