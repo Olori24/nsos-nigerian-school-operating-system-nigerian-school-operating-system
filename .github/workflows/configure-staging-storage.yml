@@ -57,7 +57,7 @@ jobs:
 
           upsert_env() {
             local key="$1" value="$2" type="$3"
-            local payload status error_code error_message
+            local payload status error_code
             payload=$(jq -n --arg key "$key" --arg value "$value" --arg type "$type" --arg branch "$PREVIEW_BRANCH" \
               '{key:$key,value:$value,type:$type,target:["preview"],gitBranch:$branch}')
 
@@ -69,8 +69,7 @@ jobs:
 
             if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
               error_code=$(jq -r '.error.code // .errorCode // "not_provided"' "$response_file" 2>/dev/null || echo "unavailable")
-              error_message=$(jq -r '.error.message // .message // "No safe error message returned"' "$response_file" 2>/dev/null || echo "unavailable")
-              echo "::error::Vercel rejected $key (HTTP $status; code: $error_code; message: $error_message)"
+              echo "::error::Vercel rejected $key (HTTP $status; code: $error_code). Response body withheld to protect credentials."
               exit 1
             fi
 
