@@ -187,13 +187,36 @@ export function registerEmailAuthRoutes(app: Express) {
     }
   });
 
-  app.get("/api/auth/email/verify", createRateLimitMiddleware({ namespace: "passwordless-verify", limit: 10, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
-    if (!isCanonicalRequestHost(req)) return res.status(400).json({ error: "Sign-in link opened on an unexpected domain." });
+  app.get("/api/auth/email/verify", createRateLimitMiddleware({ namespace: "passwordless-verify-page", limit: 20, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
+    if (!isCanonicalRequestHost(req)) return res.status(400).send("Sign-in link opened on an unexpected domain.");
     const token = getStringQuery(req, "token");
-    if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
+    if (!token || !validMagicLinkToken(token)) return res.status(400).send("This sign-in link is invalid or has expired.");
+    // Email security scanners commonly issue GET requests. Never consume a login token on GET.
+    res.set("Cache-Control", "no-store");
+    res.set("Content-Security-Policy", "default-src 'none'; form-action 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+    res.set("X-Content-Type-Options", "nosniff");
+    res.status(200).type("html").send(`<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm NSOS sign-in</title></head>
+<body>
+<main>
+<h1>Confirm your NSOS sign-in</h1>
+<p>Continue only if you requested this sign-in link. This confirmation completes your sign-in.</p>
+<form method="post" action="/api/auth/email/verify">
+<input type="hidden" name="token" value="${token}">
+<button type="submit">Continue to NSOS</button>
+</form>
+</main>
+</body>
+</html>`);
+  });
+
+  app.post("/api/auth/email/verify", createRateLimitMiddleware({ namespace: "passwordless-verify", limit: 10, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
+    if (!isCanonicalRequestHost(req) || req.get("origin") !== AUTH_CANONICAL_ORIGIN) return res.status(400).json({ error: "Confirm sign-in from the official NSOS address." });
+    const token = typeof req.body?.token === "string" ? req.body.token : "";
+    if (!validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
     try {
       const link = await db.consumeAuthMagicLink(token);
-      const origin = AUTH_CANONICAL_ORIGIN;
       const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
       await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
