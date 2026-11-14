@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({ getStoredObjectAccessRecord: vi.fn(), getSchoolMembership: vi.fn() }));
 const sdk = vi.hoisted(() => ({ authenticateRequest: vi.fn() }));
+const storage = vi.hoisted(() => ({ storageGetObject: vi.fn() }));
 vi.mock("../server/db", () => db);
 vi.mock("../server/_core/sdk", () => ({ sdk }));
-vi.mock("../server/storage", () => ({ storageGetObject: vi.fn().mockResolvedValue({ Body: { pipe: vi.fn(), on: vi.fn() }, ContentType: "application/octet-stream", ContentLength: 1 }) }));
+vi.mock("../server/storage", () => storage);
 
 import { isSafeStorageKey, registerStorageProxy } from "./_core/storageProxy";
 
@@ -17,13 +18,13 @@ function route() {
 }
 
 function response() {
-  return { code: 200, body: "", destination: "", status(code: number) { this.code = code; return this; }, send(body: string) { this.body = body; return this; }, set: vi.fn(), redirect(code: number, destination: string) { this.code = code; this.destination = destination; return this; } };
+  return { code: 200, body: "", destination: "", headers: {} as Record<string, string>, status(code: number) { this.code = code; return this; }, send(body: string) { this.body = body; return this; }, set(name: string, value: string) { this.headers[name] = value; return this; }, redirect(code: number, destination: string) { this.code = code; this.destination = destination; return this; } };
 }
 
 describe("storage proxy authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
+    storage.storageGetObject.mockResolvedValue({ Body: { pipe: vi.fn(), on: vi.fn() }, ContentType: "application/octet-stream", ContentLength: 1 });
   });
 
   it("rejects unknown and traversal-style keys before signing or authentication", async () => {
@@ -71,6 +72,27 @@ describe("storage proxy authorization", () => {
     const revoked = response();
     await route()({ params: { 0: "schools/34/cash-assurance/case-5/family-119-proof.png" } }, revoked);
     expect(revoked.code).toBe(404);
+  });
+
+  it("forces active content to download and applies browser isolation headers", async () => {
+    db.getStoredObjectAccessRecord.mockResolvedValue({ schoolId: 34, scope: "public_website_media" });
+    storage.storageGetObject.mockResolvedValue({ Body: { pipe: vi.fn(), on: vi.fn() }, ContentType: "text/html; charset=utf-8", ContentLength: 20 });
+    const res = response();
+    await route()({ params: { 0: "schools/34/website-media/page.html" } }, res);
+    expect(res.headers["Content-Type"]).toBe("application/octet-stream");
+    expect(res.headers["Content-Disposition"]).toBe("attachment");
+    expect(res.headers["X-Content-Type-Options"]).toBe("nosniff");
+    expect(res.headers["Content-Security-Policy"]).toContain("sandbox");
+  });
+
+  it("allows only safe raster images to render inline", async () => {
+    db.getStoredObjectAccessRecord.mockResolvedValue({ schoolId: 34, scope: "public_website_media" });
+    storage.storageGetObject.mockResolvedValue({ Body: { pipe: vi.fn(), on: vi.fn() }, ContentType: "image/png", ContentLength: 20 });
+    const res = response();
+    await route()({ params: { 0: "schools/34/website-media/logo.png" } }, res);
+    expect(res.headers["Content-Type"]).toBe("image/png");
+    expect(res.headers["Content-Disposition"]).toBeUndefined();
+    expect(res.headers["X-Content-Type-Options"]).toBe("nosniff");
   });
 
   it("keeps File-to-School source artifacts restricted to active owners and administrators", async () => {
