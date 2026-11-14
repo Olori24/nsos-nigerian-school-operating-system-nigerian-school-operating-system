@@ -986,16 +986,37 @@ export async function recordPlatformBillingPayment(input: { billingRecordId: num
   return { schoolId: record.schoolId, billingRecordId: record.id };
 }
 
+export function inspectProviderCredentialState(payload: string | null) {
+  if (!payload) {
+    return { hasCredentials: false, hasWebhookSecret: false, credentialsReadable: true };
+  }
+  try {
+    const credentials = openProviderCredentials(payload);
+    return {
+      hasCredentials: true,
+      hasWebhookSecret: Boolean(credentials.webhookSecret),
+      credentialsReadable: true,
+    };
+  } catch {
+    // An unreadable encrypted bundle must not take down unrelated school
+    // operations. Report it as unavailable so readiness checks fail closed;
+    // never expose or attempt to repair the stored ciphertext here.
+    return { hasCredentials: false, hasWebhookSecret: false, credentialsReadable: false };
+  }
+}
+
 export async function listProviderConfigurations(schoolId: number) {
   const db = await database();
   const rows = await db.select().from(providerConfigurations).where(eq(providerConfigurations.schoolId, schoolId));
   return (["payment", "sms", "whatsapp", "email", "in_app"] as const).map(channel => {
     const row = rows.find(item => item.channel === channel);
-    const hasCredentials = Boolean(row?.encryptedCredentials);
-    const hasWebhookSecret = Boolean(row?.encryptedCredentials && openProviderCredentials(row.encryptedCredentials).webhookSecret);
+    const credentialState = inspectProviderCredentialState(row?.encryptedCredentials ?? null);
+    const readiness = !credentialState.credentialsReadable
+      ? "Credentials unreadable; re-enter required"
+      : providerReadiness(channel, row?.provider ?? providerChannelDefaults[channel], credentialState.hasCredentials, row?.status ?? "draft");
     return row
-      ? { id: row.id, channel, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, hasCredentials, hasWebhookSecret, readiness: providerReadiness(channel, row.provider, hasCredentials, row.status), lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
-      : { id: null, channel, provider: providerChannelDefaults[channel], status: "draft" as const, configuration: {}, hasCredentials: false, hasWebhookSecret: false, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
+      ? { id: row.id, channel, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, ...credentialState, readiness, lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
+      : { id: null, channel, provider: providerChannelDefaults[channel], status: "draft" as const, configuration: {}, ...credentialState, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
   });
 }
 
