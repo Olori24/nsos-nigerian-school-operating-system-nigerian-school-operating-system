@@ -14,7 +14,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 const teacherContext = (): TrpcContext => ({
-  user: { id: 7, openId: "teacher-7", name: "Mrs. Ade", email: "teacher@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
+  user: { id: 7, openId: "teacher-7", name: "Mrs. Ade", email: "teacher@example.com", loginMethod: "google", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
   req: {} as TrpcContext["req"],
   res: {} as TrpcContext["res"],
 });

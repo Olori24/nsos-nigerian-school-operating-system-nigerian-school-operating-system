@@ -1,13 +1,17 @@
 const testEnv: Record<string, string> = {
-  JWT_SECRET: "nsos-vitest-cookie-secret",
+  JWT_SECRET: "nsos-vitest-cookie-secret-with-at-least-32-characters",
   DATABASE_URL: process.env.DATABASE_URL ?? "mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos",
-  OAUTH_SERVER_URL: "https://auth.test.local",
+  AUTH_CANONICAL_ORIGIN: "https://nsos.top",
   GOOGLE_CLIENT_ID: "nsos-vitest-google-client-id",
   GOOGLE_CLIENT_SECRET: "nsos-vitest-google-client-secret",
   RESEND_API_KEY: "nsos-vitest-resend-api-key",
   AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>",
-  BUILT_IN_FORGE_API_URL: "https://forge.test.local",
-  BUILT_IN_FORGE_API_KEY: "nsos-vitest-forge-api-key",
+  OWNER_NOTIFICATION_EMAIL: "owner@example.ng",
+  GEMINI_API_KEY: "nsos-vitest-gemini-api-key",
+  AI_MODEL: "gemini-2.5-flash",
+  S3_BUCKET: "nsos-test-bucket",
+  S3_ACCESS_KEY_ID: "nsos-test-access-key",
+  S3_SECRET_ACCESS_KEY: "nsos-test-secret-key",
 };
 
 for (const [key, value] of Object.entries(testEnv)) {

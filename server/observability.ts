@@ -68,12 +68,35 @@ export function requestObservabilityMiddleware(options: {
   };
 }
 
-export function requiredProductionEnvironmentErrors(input: { isProduction: boolean; appId: string; cookieSecret: string; databaseUrl: string; oAuthServerUrl: string }) {
+export function requiredProductionEnvironmentErrors(input: {
+  isProduction: boolean;
+  cookieSecret: string;
+  databaseUrl: string;
+  authCanonicalOrigin: string;
+  googleClientId: string;
+  googleClientSecret: string;
+  geminiApiKey: string;
+  s3Bucket: string;
+  s3AccessKeyId: string;
+  s3SecretAccessKey: string;
+  resendApiKey: string;
+  authEmailFrom: string;
+  ownerNotificationEmail: string;
+}) {
   if (!input.isProduction) return [];
-  return [
-    ["VITE_APP_ID", input.appId],
-    ["JWT_SECRET", input.cookieSecret && input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
+  const required: Array<[string, string]> = [
+    ["JWT_SECRET", input.cookieSecret.length >= 32 ? input.cookieSecret : ""],
     ["DATABASE_URL", input.databaseUrl],
-    ["OAUTH_SERVER_URL", input.oAuthServerUrl],
-  ].filter(([, value]) => !value.trim()).map(([name]) => `${name} is required in production.`);
+    ["AUTH_CANONICAL_ORIGIN", input.authCanonicalOrigin],
+    ["GOOGLE_CLIENT_ID", input.googleClientId],
+    ["GOOGLE_CLIENT_SECRET", input.googleClientSecret],
+    ["GEMINI_API_KEY", input.geminiApiKey],
+    ["S3_BUCKET", input.s3Bucket],
+    ["S3_ACCESS_KEY_ID", input.s3AccessKeyId],
+    ["S3_SECRET_ACCESS_KEY", input.s3SecretAccessKey],
+    ["RESEND_API_KEY", input.resendApiKey],
+    ["AUTH_EMAIL_FROM", input.authEmailFrom],
+    ["OWNER_NOTIFICATION_EMAIL", input.ownerNotificationEmail],
+  ];
+  return required.filter(([, value]) => !value.trim()).map(([name]) => `${name} is required in production.`);
 }

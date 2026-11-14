@@ -3,7 +3,6 @@ import express from "express";
 import { createServer } from "http";
 import type { Server } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
 import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -41,7 +40,6 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "live-provider-action", limit: 6, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.providers.sendTestSms") }));
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "family-receipt-scan", limit: 12, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.portal.scanPaymentEvidence") }));
   app.use("/api/auth/email/request", requireSameOriginForMutations());
-  app.use("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }));
   registerSmsWebhookRoutes(app);
   app.use(createRateLimitMiddleware({ namespace: "affiliate-redirects", limit: 30, windowMs: 10 * 60_000, matcher: path => path.startsWith("/r/") }));
   registerAffiliateRoutes(app);
@@ -50,7 +48,6 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   registerStorageProxy(app);
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
-  registerOAuthRoutes(app);
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
 
   if (process.env.NODE_ENV === "development") {

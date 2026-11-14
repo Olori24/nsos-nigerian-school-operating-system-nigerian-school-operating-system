@@ -3,6 +3,7 @@ import { parse as parseCookieHeader } from "cookie";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import * as db from "./db";
+import { createRateLimitMiddleware } from "./security";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
@@ -19,22 +20,15 @@ function getStringQuery(req: Request, key: string) {
   return typeof value === "string" ? value : undefined;
 }
 
-function validOrigin(value: unknown) {
-  if (typeof value !== "string" || value.length > 512) return undefined;
-  try {
-    const url = new URL(value);
-    if (url.origin !== value || !["https:", "http:"].includes(url.protocol)) return undefined;
-    if (url.protocol === "http:" && !["localhost", "127.0.0.1"].includes(url.hostname)) return undefined;
-    return url.origin;
-  } catch {
-    return undefined;
-  }
+const canonicalOriginValue = ENV.authCanonicalOrigin ?? "https://nsos.top";
+const AUTH_CANONICAL_URL = new URL(canonicalOriginValue);
+if (AUTH_CANONICAL_URL.origin !== canonicalOriginValue || AUTH_CANONICAL_URL.protocol !== "https:") {
+  throw new Error("AUTH_CANONICAL_ORIGIN must be a canonical HTTPS origin without a path.");
 }
+const AUTH_CANONICAL_ORIGIN = AUTH_CANONICAL_URL.origin;
 
-function postSignInPath(origin: string) {
-  const hostname = new URL(origin).hostname;
-  const isPlatformHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "nsos.top" || hostname === "www.nsos.top" || hostname.endsWith(".manus.space") || hostname.endsWith(".manus.computer");
-  return isPlatformHost ? "/app" : "/";
+function isCanonicalRequestHost(req: Request) {
+  return req.hostname.toLowerCase() === AUTH_CANONICAL_URL.hostname.toLowerCase();
 }
 
 function validMagicLinkToken(value: string) {
@@ -59,9 +53,8 @@ function readGoogleLoginState(req: Request) {
   const raw = parseCookieHeader(req.headers.cookie ?? "")[GOOGLE_STATE_COOKIE];
   if (!raw) return undefined;
   try {
-    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown };
-    const origin = validOrigin(parsed.origin);
-    return typeof parsed.state === "string" && origin ? { state: parsed.state, origin } : undefined;
+    const parsed = JSON.parse(raw) as { state?: unknown };
+    return typeof parsed.state === "string" ? { state: parsed.state } : undefined;
   } catch {
     return undefined;
   }
@@ -114,8 +107,7 @@ export async function sendAdmissionLetterEmail(input: { email: string; subject: 
 }
 
 export async function sendStaffSetupInvitationEmail(input: { email: string; schoolName: string; role: "admin" | "staff" | "teacher" | "finance"; jobTitle: string; origin: string }) {
-  const origin = validOrigin(input.origin);
-  if (!origin) throw new Error("Use a valid NSOS application address before sending the invitation.");
+  const origin = AUTH_CANONICAL_ORIGIN;
   const email = db.normaliseAuthEmail(input.email);
   const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
   const link = `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`;
@@ -126,8 +118,7 @@ export async function sendStaffSetupInvitationEmail(input: { email: string; scho
 }
 
 export async function sendGuardianPortalInvitationEmail(input: { email: string; schoolName: string; guardianName: string; origin: string }) {
-  const origin = validOrigin(input.origin);
-  if (!origin) throw new Error("Use a valid NSOS application address before sending the guardian portal invitation.");
+  const origin = AUTH_CANONICAL_ORIGIN;
   const email = db.normaliseAuthEmail(input.email);
   const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
   const link = `${origin}/api/auth/email/verify?token=${encodeURIComponent(token)}`;
@@ -137,19 +128,19 @@ export async function sendGuardianPortalInvitationEmail(input: { email: string; 
 }
 
 export function registerGoogleAuthRoutes(app: Express) {
-  app.get("/api/auth/google/start", (req: Request, res: Response) => {
-    const origin = validOrigin(getStringQuery(req, "origin"));
-    if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
+  app.get("/api/auth/google/start", createRateLimitMiddleware({ namespace: "google-oauth-start", limit: 10, windowMs: 10 * 60_000 }), (req: Request, res: Response) => {
+    if (!isCanonicalRequestHost(req)) return res.redirect(302, `${AUTH_CANONICAL_ORIGIN}/api/auth/google/start`);
     if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
     const state = randomBytes(32).toString("base64url");
-    res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state, origin }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
-    const redirectUri = `${origin}/api/auth/google/callback`;
+    res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+    const redirectUri = `${AUTH_CANONICAL_ORIGIN}/api/auth/google/callback`;
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.search = new URLSearchParams({ client_id: ENV.googleClientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, prompt: "select_account" }).toString();
     res.redirect(302, url.toString());
   });
 
-  app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+  app.get("/api/auth/google/callback", createRateLimitMiddleware({ namespace: "google-oauth-callback", limit: 20, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
+    if (!isCanonicalRequestHost(req)) return res.status(400).json({ error: "Google sign-in callback reached an unexpected domain." });
     const code = getStringQuery(req, "code");
     const state = getStringQuery(req, "state");
     const loginState = readGoogleLoginState(req);
@@ -157,7 +148,7 @@ export function registerGoogleAuthRoutes(app: Express) {
     if (!code || !loginState || !matchesState(loginState.state, state)) return res.status(403).json({ error: "Google sign-in could not be verified. Please start again." });
 
     try {
-      const redirectUri = `${loginState.origin}/api/auth/google/callback`;
+      const redirectUri = `${AUTH_CANONICAL_ORIGIN}/api/auth/google/callback`;
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -172,7 +163,7 @@ export function registerGoogleAuthRoutes(app: Express) {
       const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.picture === "string" ? profile.picture : null });
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
-      res.redirect(302, `${loginState.origin}${postSignInPath(loginState.origin)}`);
+      res.redirect(302, `${AUTH_CANONICAL_ORIGIN}/app`);
     } catch {
       writeOperationalEvent("warn", "auth_google_callback_failed", { category: "provider_or_identity_failure" });
       res.status(502).json({ error: "Google sign-in could not be completed. Please try again." });
@@ -181,10 +172,9 @@ export function registerGoogleAuthRoutes(app: Express) {
 }
 
 export function registerEmailAuthRoutes(app: Express) {
-  app.post("/api/auth/email/request", async (req: Request, res: Response) => {
-    const origin = validOrigin(req.body?.origin);
-    const headerOrigin = validOrigin(req.get("origin"));
-    if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
+  app.post("/api/auth/email/request", createRateLimitMiddleware({ namespace: "passwordless-email", limit: 5, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
+    if (!isCanonicalRequestHost(req) || req.get("origin") !== AUTH_CANONICAL_ORIGIN) return res.status(400).json({ error: "Start email sign-in from the official NSOS address." });
+    const origin = AUTH_CANONICAL_ORIGIN;
     try {
       const email = db.normaliseAuthEmail(req.body?.email ?? "");
       const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
@@ -197,18 +187,41 @@ export function registerEmailAuthRoutes(app: Express) {
     }
   });
 
-  app.get("/api/auth/email/verify", async (req: Request, res: Response) => {
+  app.get("/api/auth/email/verify", createRateLimitMiddleware({ namespace: "passwordless-verify-page", limit: 20, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
+    if (!isCanonicalRequestHost(req)) return res.status(400).send("Sign-in link opened on an unexpected domain.");
     const token = getStringQuery(req, "token");
-    if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
+    if (!token || !validMagicLinkToken(token)) return res.status(400).send("This sign-in link is invalid or has expired.");
+    // Email security scanners commonly issue GET requests. Never consume a login token on GET.
+    res.set("Cache-Control", "no-store");
+    res.set("Content-Security-Policy", "default-src 'none'; form-action 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+    res.set("X-Content-Type-Options", "nosniff");
+    res.status(200).type("html").send(`<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm NSOS sign-in</title></head>
+<body>
+<main>
+<h1>Confirm your NSOS sign-in</h1>
+<p>Continue only if you requested this sign-in link. This confirmation completes your sign-in.</p>
+<form method="post" action="/api/auth/email/verify">
+<input type="hidden" name="token" value="${token}">
+<button type="submit">Continue to NSOS</button>
+</form>
+</main>
+</body>
+</html>`);
+  });
+
+  app.post("/api/auth/email/verify", createRateLimitMiddleware({ namespace: "passwordless-verify", limit: 10, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
+    if (!isCanonicalRequestHost(req) || req.get("origin") !== AUTH_CANONICAL_ORIGIN) return res.status(400).json({ error: "Confirm sign-in from the official NSOS address." });
+    const token = typeof req.body?.token === "string" ? req.body.token : "";
+    if (!validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
     try {
       const link = await db.consumeAuthMagicLink(token);
-      const origin = validOrigin(link.redirectOrigin);
-      if (!origin) throw new Error("The sign-in link does not have a valid destination.");
       const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
       await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);
-      res.redirect(302, `${origin}${postSignInPath(origin)}`);
+      res.redirect(302, `${AUTH_CANONICAL_ORIGIN}/app`);
     } catch {
       writeOperationalEvent("warn", "auth_passwordless_verification_failed", { category: "invalid_or_expired_link" });
       res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });
@@ -216,4 +229,4 @@ export function registerEmailAuthRoutes(app: Express) {
   });
 }
 
-export const authRoutePolicies = { validOrigin, validMagicLinkToken, matchesState, normaliseAuthSender };
+export const authRoutePolicies = { canonicalOrigin: AUTH_CANONICAL_ORIGIN, isCanonicalRequestHost, validMagicLinkToken, matchesState, normaliseAuthSender };

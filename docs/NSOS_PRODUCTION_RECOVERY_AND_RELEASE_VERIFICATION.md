@@ -6,7 +6,7 @@ This runbook is separate from application feature work. A successful GitHub buil
 
 ## Current incident record
 
-As of 7 November 2026, PR #59 is merged into `main`. A Manus checkpoint is available, but publishing it failed during production startup because the protected built-in `JWT_SECRET` variable was unavailable. The project Secrets API and UI reportedly reject edits to this protected variable. The owner has contacted Manus support and is waiting in its queue.
+As of 7 November 2026, PR #59 is merged into `main`. A previous deployment checkpoint is available, but publishing it failed during production startup because the protected built-in `JWT_SECRET` variable was unavailable. The project Secrets API and UI reportedly reject edits to this protected variable. The owner has contacted hosting support and is waiting in its queue.
 
 No application workaround, DNS change, traffic shift, or production code change is authorised by this incident record. Treat this as a platform configuration incident until fresh evidence shows otherwise.
 
@@ -21,7 +21,7 @@ Do not weaken startup validation, introduce a development fallback, hardcode a s
 
 ## Platform support handoff
 
-Ask Manus support to:
+Ask hosting support to:
 
 1. Confirm that the existing project's protected `JWT_SECRET` binding is present and readable by the production runtime.
 2. Restore the original protected value if it is recoverable.
@@ -49,7 +49,7 @@ If `JWT_SECRET` is replaced, ciphertext encrypted under the previous derived key
 3. Define and approve an operable recovery path for every affected provider channel and every affected school record. If the original key cannot be restored, plan secure credential re-entry, token revocation/rotation where appropriate, bank-detail re-entry and verification, and provider reconnection tests. For each provider channel, submit the complete required credential bundle in one save; do not assume separate partial saves accumulate. The current save operation replaces the encrypted credential bundle when credentials are supplied. Keep the channel disabled or otherwise unavailable until the complete bundle has been re-entered and the required checks pass. Verify that each channel can be recovered independently; a successful save for one channel must not be taken as proof that all channels are recoverable.
 4. Account for partial-success behavior during recovery: `saveProviderConfiguration` writes the selected channel before returning `listProviderConfigurations`, which decrypts all configured channels. A save can therefore persist successfully and still return an error if another channel contains ciphertext that cannot be decrypted. Do not treat list/status metadata or credential-presence flags as proof that a replacement was fully persisted. For an enabled external provider, `providers.testConnection` checks the selected channel without listing other channels and can verify the provider authentication path; however, success does not verify every credential field or the full write. For fields not exercised by that connection test, including SMS webhook-signing secrets, do not test by temporarily enabling a production channel. Verify the signing secret only in an isolated synthetic staging environment: use a dedicated synthetic school, synthetic provider credentials, and a provider stub or enforced outbound-network block; set the staging SMS channel to `ready` only for the signed synthetic webhook request, verify the expected response and test-message-only effect, then return the channel to `disabled` and confirm the outbound block remains in place. A `draft` or `disabled` channel intentionally rejects the webhook, so that rejection is not evidence that the signing secret is wrong. The synthetic staging check verifies only the synthetic school's synthetic signing secret; it does not verify the production school's saved `webhookSecret`. Record production webhook verification as NOT RUN until a separately approved check verifies the actual production configuration without exposing the secret. Keep the production SMS channel unavailable until that production-specific verification passes under an owner-approved controlled procedure. If isolated staging or the required outbound block is unavailable, record the synthetic staging check as NOT RUN as well. If any check is inconclusive, stop and follow the approved recovery plan rather than retrying blindly. Do not expose decrypted values during these checks.
 5. For any proposed cryptographic migration, require a separately reviewed and tested migration design with explicit backup, access-control, rollback, and verification steps. Do not improvise a multi-key fallback or attempt ad hoc decryption/re-encryption during this incident.
-6. Obtain explicit owner approval for the complete recovery plan before Manus provisions a replacement secret or anyone initiates a rotation.
+6. Obtain explicit owner approval for the complete recovery plan before a replacement provider provisions a replacement secret or anyone initiates a rotation.
 
 Never place plaintext credentials, full bank account numbers, secret values, or decrypted exports in GitHub, logs, tickets, or this runbook.
 
@@ -65,7 +65,7 @@ Before republishing the existing checkpoint:
 - Confirm the protected secret is restored in the production runtime. If replacement is unavoidable, first confirm the encrypted-data inventory and approved recovery/re-entry plan are complete and explicitly authorised.
 - Confirm the value meets the application's 32-character minimum without revealing or copying it into logs.
 - Before any replacement, confirm affected provider credentials and bank-account records have an approved preservation, migration, or secure re-entry path; do not proceed on the basis of session recovery alone.
-- Confirm the other required production settings are present: `VITE_APP_ID`, `DATABASE_URL`, and `OAUTH_SERVER_URL`.
+- Confirm the other required production setting is present: `DATABASE_URL`.
 - Confirm the intended checkpoint/commit is the current reviewed release and no unrelated changes are included.
 - Do not run schema migrations, alter DNS, attach domains, change traffic routing, or modify provider credentials as part of this secret-only recovery.
 

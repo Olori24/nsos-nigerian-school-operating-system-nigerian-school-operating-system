@@ -18,7 +18,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 const callerFor = (role: "admin" | "user", openId = "platform-owner") => appRouter.createCaller({
-  user: { id: 1, openId, name: "NSOS Operator", email: "operator@example.com", loginMethod: "manus", role, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
+  user: { id: 1, openId, name: "NSOS Operator", email: "operator@example.com", loginMethod: "google", role, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
   req: {} as TrpcContext["req"],
   res: {} as TrpcContext["res"],
 });
@@ -50,11 +50,11 @@ describe("NSOS platform revenue routes", () => {
     vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 4, schoolId: 20, userId: 9, role: "owner", status: "active", createdAt: new Date(), updatedAt: new Date() });
     vi.mocked(db.getSchoolSubscription).mockResolvedValue({ subscription: { status: "trial" }, plan: null, billingRecords: [] } as any);
 
-    const ownerCaller = appRouter.createCaller({ user: { id: 9, openId: "school-owner", name: "School Owner", email: "owner@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
+    const ownerCaller = appRouter.createCaller({ user: { id: 9, openId: "school-owner", name: "School Owner", email: "owner@example.com", loginMethod: "google", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
     await expect(ownerCaller.nsos.platformRevenue.schoolSubscription({ schoolId: 20 })).resolves.toMatchObject({ subscription: { status: "trial" } });
 
     vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 5, schoolId: 20, userId: 10, role: "staff", status: "active", createdAt: new Date(), updatedAt: new Date() });
-    const staffCaller = appRouter.createCaller({ user: { id: 10, openId: "staff-user", name: "Staff", email: "staff@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
+    const staffCaller = appRouter.createCaller({ user: { id: 10, openId: "staff-user", name: "Staff", email: "staff@example.com", loginMethod: "google", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
     await expect(staffCaller.nsos.platformRevenue.schoolSubscription({ schoolId: 20 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

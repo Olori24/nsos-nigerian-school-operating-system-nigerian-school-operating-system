@@ -7,14 +7,22 @@ import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server) {
+  const resolvedViteConfig =
+    typeof viteConfig === "function"
+      ? await viteConfig({
+          command: "serve",
+          mode: process.env.NODE_ENV === "production" ? "production" : "development",
+        })
+      : viteConfig;
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
-    allowedHosts: viteConfig.server?.allowedHosts ?? [],
+    allowedHosts: resolvedViteConfig.server?.allowedHosts ?? [],
   };
 
   const vite = await createViteServer({
-    ...viteConfig,
+    ...resolvedViteConfig,
     configFile: false,
     server: serverOptions,
     appType: "custom",

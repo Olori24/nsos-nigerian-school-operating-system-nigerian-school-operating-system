@@ -24,15 +24,15 @@ describe("NSOS security hardening rules", () => {
   });
 
   it("requires production session secrets to be at least 32 characters", () => {
-    const base = { isProduction: true, appId: "app", databaseUrl: "mysql://db", oAuthServerUrl: "https://auth.example" };
+    const base = { isProduction: true, cookieSecret: "a".repeat(32), databaseUrl: "mysql://db", authCanonicalOrigin: "https://nsos.top", googleClientId: "google-client", googleClientSecret: "google-secret", geminiApiKey: "gemini-key", s3Bucket: "bucket", s3AccessKeyId: "access", s3SecretAccessKey: "secret", resendApiKey: "resend-key", authEmailFrom: "NSOS <noreply@nsos.top>", ownerNotificationEmail: "owner@nsos.top" };
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "short" })).toContain("JWT_SECRET is required in production.");
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "12345678901234567890123456789012" })).not.toContain("JWT_SECRET is required in production.");
   });
 
   it("allows same-origin state changes and redacts sensitive audit metadata", () => {
-    expect(isTrustedMutationOrigin("https://nsos-system-uhkdscaf.manus.space", "https", "nsos-system-uhkdscaf.manus.space")).toBe(true);
-    expect(isTrustedMutationOrigin("https://attacker.example", "https", "nsos-system-uhkdscaf.manus.space")).toBe(false);
-    expect(isTrustedMutationOrigin(undefined, "https", "nsos-system-uhkdscaf.manus.space")).toBe(false);
+    expect(isTrustedMutationOrigin("https://nsos.top", "https", "nsos.top")).toBe(true);
+    expect(isTrustedMutationOrigin("https://attacker.example", "https", "nsos.top")).toBe(false);
+    expect(isTrustedMutationOrigin(undefined, "https", "nsos.top")).toBe(false);
     expect(sanitizeSecurityAuditMetadata({ provider: "termii", apiKey: "secret", recipientPhone: "2348031234567", deliveryTracking: "pending" })).toEqual({ provider: "termii", apiKey: "[REDACTED]", recipientPhone: "[REDACTED]", deliveryTracking: "pending" });
     expect(sanitizeSecurityAuditMetadata({ approvalNote: "Reviewed against the approved termly fee schedule." })).toEqual({ approvalNote: "Reviewed against the approved termly fee schedule." });
   });

@@ -1,31 +1,106 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uploads via Forge Server presigned URL to S3 (PUT direct).
-// Downloads return /manus-storage/{key} paths served via 307 redirect.
-
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Readable } from "node:stream";
 import { ENV } from "./_core/env";
 
-function getForgeConfig() {
-  const forgeUrl = ENV.forgeApiUrl;
-  const forgeKey = ENV.forgeApiKey;
+let client: S3Client | undefined;
+const STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
-  if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
-    );
+function validateS3Endpoint(value: string) {
+  const url = new URL(value);
+  const host = url.hostname.toLowerCase();
+  const trustedHost =
+    /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(host) ||
+    host === "s3.amazonaws.com" ||
+    /^s3[.-][a-z0-9-]+\.amazonaws\.com$/.test(host) ||
+    host === "t3.storage.dev";
+  if (url.protocol !== "https:" || !trustedHost || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    throw new Error("S3_ENDPOINT must be a trusted HTTPS Tigris, Cloudflare R2, or AWS S3 endpoint.");
   }
-
-  return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
+  return url.origin;
 }
 
-function normalizeKey(relKey: string): string {
-  return relKey.replace(/^\/+/, "");
+function getStorage() {
+  if (!ENV.s3Bucket || !ENV.s3AccessKeyId || !ENV.s3SecretAccessKey) {
+    throw new Error("S3 storage is not configured. Set S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY.");
+  }
+  client ??= new S3Client({
+    region: ENV.s3Region,
+    ...(ENV.s3Endpoint ? { endpoint: validateS3Endpoint(ENV.s3Endpoint), forcePathStyle: true } : {}),
+    credentials: { accessKeyId: ENV.s3AccessKeyId, secretAccessKey: ENV.s3SecretAccessKey },
+  });
+  return { client, bucket: ENV.s3Bucket };
 }
 
-function appendHashSuffix(relKey: string): string {
-  const hash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  const lastDot = relKey.lastIndexOf(".");
-  if (lastDot === -1) return `${relKey}_${hash}`;
-  return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
+function normalizeKey(value: string) {
+  const key = value.replace(/^\/+/, "").replace(/\\/g, "/");
+  if (!key || key.split("/").some(part => !part || part === "." || part === "..") || key.length > 900) {
+    throw new Error("Invalid storage key.");
+  }
+  return key;
+}
+
+function appendHashSuffix(key: string) {
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  const dot = key.lastIndexOf(".");
+  return dot > key.lastIndexOf("/") ? `${key.slice(0, dot)}_${suffix}${key.slice(dot)}` : `${key}_${suffix}`;
+}
+
+const publicPath = (key: string) => `/api/storage/${key.split("/").map(encodeURIComponent).join("/")}`;
+
+function isMissingObjectError(error: unknown) {
+  const value = error as { name?: string; Code?: string; code?: string; $metadata?: { httpStatusCode?: number } };
+  return value?.$metadata?.httpStatusCode === 404 || ["NoSuchKey", "NotFound", "404"].includes(value?.name ?? value?.Code ?? value?.code ?? "");
+}
+
+function legacyForgeBaseUrl() {
+  if (!ENV.legacyForgeApiUrl || !ENV.legacyForgeApiKey) return null;
+  const url = new URL(ENV.legacyForgeApiUrl);
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+    throw new Error("LEGACY_STORAGE_FORGE_API_URL must be a trusted HTTPS URL.");
+  }
+  return url.toString().replace(/\/+$/, "");
+}
+
+async function getLegacyForgeSignedUrl(key: string) {
+  const forgeUrl = legacyForgeBaseUrl();
+  if (!forgeUrl) return null;
+  const presignUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
+  presignUrl.searchParams.set("path", key);
+  const response = await fetch(presignUrl, {
+    headers: { Authorization: `Bearer ${ENV.legacyForgeApiKey}` },
+    signal: AbortSignal.timeout(STORAGE_REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Legacy storage read authorization failed (${response.status}).`);
+  const payload = await response.json().catch(() => ({})) as { url?: unknown };
+  if (typeof payload.url !== "string") throw new Error("Legacy storage provider returned an invalid download URL.");
+  const signedUrl = new URL(payload.url);
+  const trustedHost = signedUrl.hostname === "s3.amazonaws.com" ||
+    signedUrl.hostname.endsWith(".amazonaws.com") ||
+    /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(signedUrl.hostname) ||
+    signedUrl.hostname === "t3.storage.dev";
+  if (signedUrl.protocol !== "https:" || !trustedHost || signedUrl.username || signedUrl.password) {
+    throw new Error("Legacy storage provider returned an untrusted download URL.");
+  }
+  return signedUrl.toString();
+}
+
+async function getLegacyObject(key: string) {
+  const signedUrl = await getLegacyForgeSignedUrl(key);
+  if (!signedUrl) return null;
+  const response = await fetch(signedUrl, { signal: AbortSignal.timeout(STORAGE_REQUEST_TIMEOUT_MS), redirect: "error" });
+  if (!response.ok) {
+    if (response.status === 404) return null;
+    throw new Error(`Legacy object download failed (${response.status}).`);
+  }
+  if (!response.body) return null;
+  const lengthHeader = response.headers.get("content-length");
+  const contentLength = lengthHeader === null ? Number.NaN : Number(lengthHeader);
+  return {
+    Body: Readable.fromWeb(response.body as any),
+    ContentType: response.headers.get("content-type") ?? "application/octet-stream",
+    ...(Number.isFinite(contentLength) && contentLength >= 0 ? { ContentLength: contentLength } : {}),
+  };
 }
 
 export async function storagePut(
@@ -33,65 +108,64 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
+  const { client: s3, bucket } = getStorage();
   const key = appendHashSuffix(normalizeKey(relKey));
-
-  // 1. Get presigned PUT URL from Forge
-  const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
-  presignUrl.searchParams.set("path", key);
-
-  const presignResp = await fetch(presignUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-  });
-
-  if (!presignResp.ok) {
-    const msg = await presignResp.text().catch(() => presignResp.statusText);
-    throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
-  }
-
-  const { url: s3Url } = (await presignResp.json()) as { url: string };
-  if (!s3Url) throw new Error("Forge returned empty presign URL");
-
-  // 2. PUT file directly to S3
-  const blob =
-    typeof data === "string"
-      ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
-
-  const uploadResp = await fetch(s3Url, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: blob,
-  });
-
-  if (!uploadResp.ok) {
-    throw new Error(`Storage upload to S3 failed (${uploadResp.status})`);
-  }
-
-  return { key, url: `/manus-storage/${key}` };
+  const body = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+  await s3.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+  }));
+  return { key, url: publicPath(key) };
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
-  return { key, url: `/manus-storage/${key}` };
+  return { key, url: publicPath(key) };
 }
 
-export async function storageGetSignedUrl(relKey: string): Promise<string> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
+export async function storageGetSignedUrl(relKey: string, expiresIn = 900): Promise<string> {
   const key = normalizeKey(relKey);
-
-  const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
-  getUrl.searchParams.set("path", key);
-
-  const resp = await fetch(getUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-  });
-
-  if (!resp.ok) {
-    const msg = await resp.text().catch(() => resp.statusText);
-    throw new Error(`Storage signed URL failed (${resp.status}): ${msg}`);
+  let storage: ReturnType<typeof getStorage>;
+  try {
+    storage = getStorage();
+  } catch (error) {
+    const legacyUrl = await getLegacyForgeSignedUrl(key);
+    if (legacyUrl) return legacyUrl;
+    throw error;
   }
+  const { client: s3, bucket } = storage;
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+      expiresIn: Math.min(Math.max(expiresIn, 60), 3600),
+    });
+  } catch (error) {
+    if (!isMissingObjectError(error)) throw error;
+    const legacyUrl = await getLegacyForgeSignedUrl(key);
+    if (legacyUrl) return legacyUrl;
+    throw error;
+  }
+}
 
-  const { url } = (await resp.json()) as { url: string };
-  return url;
+export async function storageGetObject(relKey: string) {
+  const key = normalizeKey(relKey);
+  let storage: ReturnType<typeof getStorage>;
+  try {
+    storage = getStorage();
+  } catch (error) {
+    const legacyObject = await getLegacyObject(key);
+    if (legacyObject) return legacyObject;
+    throw error;
+  }
+  const { client: s3, bucket } = storage;
+  try {
+    return await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  } catch (error) {
+    if (!isMissingObjectError(error)) throw error;
+    const legacyObject = await getLegacyObject(key);
+    if (legacyObject) return legacyObject;
+    throw error;
+  }
 }

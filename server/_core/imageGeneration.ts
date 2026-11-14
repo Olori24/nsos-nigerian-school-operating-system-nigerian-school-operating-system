@@ -1,160 +1,71 @@
-/**
- * Image generation helper using internal ImageService
- *
- * Example usage:
- *   const { url: imageUrl } = await generateImage({
- *     prompt: "A serene landscape with mountains"
- *   });
- *
- * For editing:
- *   const { url: imageUrl } = await generateImage({
- *     prompt: "Add a rainbow to this landscape",
- *     originalImages: [{
- *       url: "https://example.com/original.jpg",
- *       mimeType: "image/jpeg"
- *     }]
- *   });
- */
-import { storagePut } from "server/storage";
+import { storageGetSignedUrl, storagePut } from "server/storage";
 import { ENV } from "./env";
-
-// Default model for generated sites. "MODEL_GPT_IMAGE_2" is the forge images.v1
-// enum for GPT Image 2 (id: gpt-image-2). If omitted, forge falls back to Gemini 2.5 Flash.
-const DEFAULT_IMAGE_MODEL = "MODEL_GPT_IMAGE_2";
-const DEFAULT_IMAGE_QUALITY = "medium";
 
 export type GenerateImageOptions = {
   prompt: string;
-  originalImages?: Array<{
-    url?: string;
-    b64Json?: string;
-    mimeType?: string;
-  }>;
-  /** Forge image model enum, e.g. "MODEL_GPT_IMAGE_2". Defaults to GPT Image 2. */
+  originalImages?: Array<{ b64Json: string; mimeType?: string }>;
   model?: string;
-  /** Generation quality, e.g. "medium" | "high". Defaults to "medium" for GPT Image 2. */
   quality?: string;
 };
 
-export type GenerateImageResponse = {
-  url?: string;
-};
+export type GenerateImageResponse = { url?: string; key?: string };
+export type ImageModelInfo = { model?: string; id?: string };
+export type ListImageModelsResponse = { models: ImageModelInfo[] };
 
-export async function generateImage(
-  options: GenerateImageOptions
-): Promise<GenerateImageResponse> {
-  if (!ENV.forgeApiUrl) {
-    throw new Error("BUILT_IN_FORGE_API_URL is not configured");
+const DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image";
+const MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024;
+
+async function resolveReferenceImage(image: NonNullable<GenerateImageOptions["originalImages"]>[number]) {
+  if (!image.b64Json) {
+    throw new Error("Reference images must be supplied as base64 data. Remote image URLs are not fetched.");
   }
-  if (!ENV.forgeApiKey) {
-    throw new Error("BUILT_IN_FORGE_API_KEY is not configured");
-  }
-
-  // Build the full URL by appending the service path to the base URL
-  const baseUrl = ENV.forgeApiUrl.endsWith("/")
-    ? ENV.forgeApiUrl
-    : `${ENV.forgeApiUrl}/`;
-  const fullUrl = new URL(
-    "images.v1.ImageService/GenerateImage",
-    baseUrl
-  ).toString();
-
-  const model = options.model ?? DEFAULT_IMAGE_MODEL;
-  const quality =
-    options.quality ?? (model === DEFAULT_IMAGE_MODEL ? DEFAULT_IMAGE_QUALITY : undefined);
-
-  const response = await fetch(fullUrl, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "connect-protocol-version": "1",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify({
-      prompt: options.prompt,
-      original_images: options.originalImages || [],
-      model,
-      ...(quality ? { quality } : {}),
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `Image generation request failed (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
-    );
-  }
-
-  const result = (await response.json()) as {
-    image: {
-      b64Json: string;
-      mimeType: string;
-    };
-  };
-  const base64Data = result.image.b64Json;
-  const buffer = Buffer.from(base64Data, "base64");
-
-  // Save to S3
-  const { url } = await storagePut(
-    `generated/${Date.now()}.png`,
-    buffer,
-    result.image.mimeType
-  );
-  return {
-    url,
-  };
+  const bytes = Buffer.from(image.b64Json, "base64");
+  if (!bytes.length || bytes.length > MAX_REFERENCE_IMAGE_BYTES) throw new Error("Reference image must be smaller than 10 MB.");
+  const mimeType = image.mimeType ?? "image/jpeg";
+  if (!mimeType.startsWith("image/")) throw new Error("Reference image must use an image MIME type.");
+  return { mimeType, data: bytes.toString("base64") };
 }
 
-export type ImageModelInfo = {
-  /** Forge model enum, e.g. "MODEL_GPT_IMAGE_2". Pass into generateImage({ model }). */
-  model?: string;
-  /** Stable model id, e.g. "gpt-image-2". */
-  id?: string;
-};
+export async function generateImage(options: GenerateImageOptions): Promise<GenerateImageResponse> {
+  if (!ENV.geminiApiKey) throw new Error("GEMINI_API_KEY is not configured.");
+  if (!options.prompt?.trim() || options.prompt.length > 8000) throw new Error("Image prompt must contain 1 to 8,000 characters.");
 
-export type ListImageModelsResponse = {
-  models: ImageModelInfo[];
-};
-
-/**
- * List the image models the internal ImageService currently supports.
- * Feed a returned `model` value into generateImage({ model }).
- */
-export async function listImageModels(): Promise<ListImageModelsResponse> {
-  if (!ENV.forgeApiUrl) {
-    throw new Error("BUILT_IN_FORGE_API_URL is not configured");
-  }
-  if (!ENV.forgeApiKey) {
-    throw new Error("BUILT_IN_FORGE_API_KEY is not configured");
+  const parts: Array<Record<string, unknown>> = [{ text: options.prompt.trim() }];
+  for (const image of options.originalImages ?? []) {
+    const resolved = await resolveReferenceImage(image);
+    parts.push({ inline_data: { mime_type: resolved.mimeType, data: resolved.data } });
   }
 
-  const baseUrl = ENV.forgeApiUrl.endsWith("/")
-    ? ENV.forgeApiUrl
-    : `${ENV.forgeApiUrl}/`;
-  const fullUrl = new URL(
-    "images.v1.ImageService/ListModels",
-    baseUrl
-  ).toString();
-
-  const response = await fetch(fullUrl, {
+  const model = options.model ?? DEFAULT_IMAGE_MODEL;
+  const endpoint = new URL(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`);
+  const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "connect-protocol-version": "1",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: "{}",
+    headers: { "content-type": "application/json", "x-goog-api-key": ENV.geminiApiKey },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+    }),
+    signal: AbortSignal.timeout(90_000),
   });
-
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(
-      `List image models failed (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
-    );
+    throw new Error(`Gemini image generation failed (${response.status}): ${detail.slice(0, 1200)}`);
   }
 
-  const result = (await response.json()) as { models?: ImageModelInfo[] };
-  return { models: result.models ?? [] };
+  const result = await response.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string; inlineData?: { mimeType?: string; data?: string }; inline_data?: { mime_type?: string; data?: string } }> } }>;
+  };
+  const imagePart = result.candidates?.flatMap(candidate => candidate.content?.parts ?? []).find(part => part.inlineData?.data || part.inline_data?.data);
+  const encoded = imagePart?.inlineData?.data ?? imagePart?.inline_data?.data;
+  const mimeType = imagePart?.inlineData?.mimeType ?? imagePart?.inline_data?.mime_type ?? "image/png";
+  if (!encoded) throw new Error("Gemini returned no image data.");
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
+  const stored = await storagePut(`generated/${Date.now()}.${extension}`, Buffer.from(encoded, "base64"), mimeType);
+  const url = await storageGetSignedUrl(stored.key);
+  return { url, key: stored.key };
+}
+
+export async function listImageModels(): Promise<ListImageModelsResponse> {
+  if (!ENV.geminiApiKey) throw new Error("GEMINI_API_KEY is not configured.");
+  return { models: [{ model: DEFAULT_IMAGE_MODEL, id: DEFAULT_IMAGE_MODEL }] };
 }
