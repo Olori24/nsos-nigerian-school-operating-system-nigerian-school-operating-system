@@ -1,0 +1,79 @@
+name: Configure NSOS Staging Storage
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type CONFIGURE_STAGING_STORAGE to update Preview variables"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nsos-staging-storage-config
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    # Never allow a dispatch from a feature/PR ref to access staging secrets.
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'CONFIGURE_STAGING_STORAGE'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Validate required secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          for name in VERCEL_TOKEN S3_BUCKET S3_ENDPOINT S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required GitHub environment secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Configure Vercel Preview environment only
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          VERCEL_PROJECT_ID: prj_xjIPyNyC6VIs6tE0Hb0ODcfBbqTs
+          VERCEL_TEAM_ID: team_NKFPuLmPv9szBq7kwqFVfafV
+          PREVIEW_BRANCH: fix/remove-manus-native-google-auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID"
+          upsert_env() {
+            local key="$1" value="$2" type="$3"
+            local existing
+            existing=$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" "$api" |
+              jq -r --arg key "$key" '.envs[]? | select(.key == $key and (.target | index("preview")) and .gitBranch == "fix/remove-manus-native-google-auth") | .id' |
+              head -n1)
+            local payload
+            payload=$(jq -n --arg key "$key" --arg value "$value" --arg type "$type" --arg branch "$PREVIEW_BRANCH" \
+              '{key:$key,value:$value,type:$type,target:["preview"],gitBranch:$branch}')
+            if [ -n "$existing" ]; then
+              curl --fail --silent --show-error -X PATCH \
+                -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+                --data "$payload" "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env/$existing?teamId=$VERCEL_TEAM_ID" >/dev/null
+            else
+              curl --fail --silent --show-error -X POST -H "Authorization: Bearer $VERCEL_TOKEN" \
+                -H "Content-Type: application/json" --data "$payload" "$api" >/dev/null
+            fi
+            echo "Configured $key for Preview branch only."
+          }
+          upsert_env S3_BUCKET "$S3_BUCKET" encrypted
+          upsert_env S3_ENDPOINT "$S3_ENDPOINT" encrypted
+          upsert_env S3_ACCESS_KEY_ID "$S3_ACCESS_KEY_ID" sensitive
+          upsert_env S3_SECRET_ACCESS_KEY "$S3_SECRET_ACCESS_KEY" sensitive
+          upsert_env S3_REGION "auto" plain
