@@ -52,7 +52,7 @@ export async function makeRequest<T = unknown>(
 ): Promise<T> {
   const path = endpoint.toLowerCase();
   if (path.includes("/geocode/json")) {
-    const url = new URL("https://nominatim.openstreetmap.org/" + (params.lat && params.lng ? "reverse" : "search"));
+    const url = new URL("https://nominatim.openstreetmap.org/" + (params.lat !== undefined && params.lng !== undefined ? "reverse" : "search"));
     url.searchParams.set("format", "jsonv2");
     url.searchParams.set("addressdetails", "1");
     url.searchParams.set("limit", String(params.limit ?? 5));
@@ -71,11 +71,37 @@ export async function makeRequest<T = unknown>(
     const origin = await resolveLocation(String(params.origin ?? ""));
     const destination = await resolveLocation(String(params.destination ?? ""));
     const url = new URL(`${OSRM_BASE}/route/v1/${profileFor(params.mode)}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}`);
-    url.searchParams.set("overview", "full"); url.searchParams.set("geometries", "geojson"); url.searchParams.set("steps", "true");
+    url.searchParams.set("overview", "full"); url.searchParams.set("geometries", "polyline"); url.searchParams.set("steps", "true");
     const result = await requestJson<any>(url);
     return { status: result.code === "Ok" ? "OK" : result.code, routes: (result.routes ?? []).map((route: any) => ({
-      summary: route.legs?.[0]?.summary ?? "", overview_polyline: { points: route.geometry },
-      legs: (route.legs ?? []).map((leg: any) => ({ distance: { value: leg.distance, text: `${(leg.distance / 1000).toFixed(1)} km` }, duration: { value: leg.duration, text: `${Math.round(leg.duration / 60)} mins` }, start_address: String(params.origin), end_address: String(params.destination), steps: leg.steps ?? [] })),
+      summary: route.legs?.[0]?.summary ?? "",
+      overview_polyline: { points: typeof route.geometry === "string" ? route.geometry : "" },
+      legs: (route.legs ?? []).map((leg: any, legIndex: number) => {
+        const start = route.waypoints?.[legIndex]?.location ?? [origin.lon, origin.lat];
+        const end = route.waypoints?.[legIndex + 1]?.location ?? [destination.lon, destination.lat];
+        const steps = (leg.steps ?? []).map((step: any, stepIndex: number, allSteps: any[]) => {
+          const startLocation = step.maneuver?.location ?? start;
+          const endLocation = allSteps[stepIndex + 1]?.maneuver?.location ?? end;
+          const maneuver = [step.maneuver?.type, step.maneuver?.modifier].filter(Boolean).join(" ");
+          return {
+            distance: { value: step.distance ?? 0, text: `${((step.distance ?? 0) / 1000).toFixed(1)} km` },
+            duration: { value: step.duration ?? 0, text: `${Math.round((step.duration ?? 0) / 60)} mins` },
+            html_instructions: [maneuver, step.name].filter(Boolean).join(" "),
+            travel_mode: String(step.mode ?? "driving").toUpperCase(),
+            start_location: { lat: Number(startLocation[1]), lng: Number(startLocation[0]) },
+            end_location: { lat: Number(endLocation[1]), lng: Number(endLocation[0]) },
+          };
+        });
+        return {
+          distance: { value: leg.distance ?? 0, text: `${((leg.distance ?? 0) / 1000).toFixed(1)} km` },
+          duration: { value: leg.duration ?? 0, text: `${Math.round((leg.duration ?? 0) / 60)} mins` },
+          start_address: String(params.origin),
+          end_address: String(params.destination),
+          start_location: { lat: Number(start[1]), lng: Number(start[0]) },
+          end_location: { lat: Number(end[1]), lng: Number(end[0]) },
+          steps,
+        };
+      }),
     })) } as T;
   }
 
@@ -87,7 +113,17 @@ export async function makeRequest<T = unknown>(
     url.searchParams.set("sources", origins.map((_, i) => i).join(";"));
     url.searchParams.set("destinations", destinations.map((_, i) => i + origins.length).join(";"));
     const result = await requestJson<any>(url);
-    return { status: result.code === "Ok" ? "OK" : result.code, rows: (result.durations ?? []).map((row: number[]) => ({ elements: row.map((duration, i) => ({ status: Number.isFinite(duration) ? "OK" : "ZERO_RESULTS", duration: { value: duration, text: `${Math.round(duration / 60)} mins` }, distance: { value: result.distances?.[0]?.[i] ?? 0, text: `${((result.distances?.[0]?.[i] ?? 0) / 1000).toFixed(1)} km` } })) })) } as T;
+    return { status: result.code === "Ok" ? "OK" : result.code, rows: (result.durations ?? []).map((row: Array<number | null>, rowIndex: number) => ({ elements: row.map((duration, i) => {
+      const distance = result.distances?.[rowIndex]?.[i];
+      const reachable = Number.isFinite(duration) && Number.isFinite(distance);
+      const durationValue = reachable ? Number(duration) : 0;
+      const distanceValue = reachable ? Number(distance) : 0;
+      return {
+        status: reachable ? "OK" : "ZERO_RESULTS",
+        duration: { value: durationValue, text: reachable ? `${Math.round(durationValue / 60)} mins` : "" },
+        distance: { value: distanceValue, text: reachable ? `${(distanceValue / 1000).toFixed(1)} km` : "" },
+      };
+    }) })) } as T;
   }
 
   if (path.includes("/place/") || path.includes("/place/textsearch") || path.includes("/place/nearbysearch") || path.includes("/place/autocomplete")) {
