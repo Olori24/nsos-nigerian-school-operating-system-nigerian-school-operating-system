@@ -52,13 +52,18 @@ export function getRequestClientKey(req: Pick<Request, "headers" | "ip">) {
 }
 
 function getRateLimitFailureMetadata(error: unknown) {
-  const candidate = typeof error === "object" && error !== null ? error as { code?: unknown; sqlState?: unknown; sqlstate?: unknown } : {};
-  const code = typeof candidate.code === "string" && /^(?:ER_[A-Z0-9_]{1,40}|E[A-Z0-9_]{1,40})$/.test(candidate.code) ? candidate.code : undefined;
-  const sqlStateValue = candidate.sqlState ?? candidate.sqlstate;
-  const sqlState = typeof sqlStateValue === "string" && /^[0-9A-Z]{5}$/.test(sqlStateValue) ? sqlStateValue : undefined;
+  const root = typeof error === "object" && error !== null ? error as { code?: unknown; sqlState?: unknown; sqlstate?: unknown; rateLimitStage?: unknown; cause?: unknown } : {};
+  const cause = typeof root.cause === "object" && root.cause !== null ? root.cause as { code?: unknown; sqlState?: unknown; sqlstate?: unknown } : {};
+  const rawCode = root.code ?? cause.code;
+  const code = typeof rawCode === "string" && /^(?:ER_[A-Z0-9_]{1,40}|E[A-Z0-9_]{1,40})$/.test(rawCode) ? rawCode : undefined;
+  const rawSqlState = root.sqlState ?? root.sqlstate ?? cause.sqlState ?? cause.sqlstate;
+  const sqlState = typeof rawSqlState === "string" && /^[0-9A-Z]{5}$/.test(rawSqlState) ? rawSqlState : undefined;
+  const allowedStages = ["key_derivation", "database_connection", "bucket_write", "bucket_read"];
+  const stage = typeof root.rateLimitStage === "string" && allowedStages.includes(root.rateLimitStage) ? root.rateLimitStage : undefined;
   return {
     event: "shared_rate_limit_unavailable",
     errorKind: error instanceof Error ? "error" : "non_error",
+    ...(stage ? { stage } : {}),
     ...(code ? { errorCode: code } : {}),
     ...(sqlState ? { sqlState } : {}),
   };
