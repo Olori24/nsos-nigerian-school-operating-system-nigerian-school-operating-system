@@ -8,6 +8,7 @@ import { normaliseAuthEmail } from "./db";
 async function withAuthRouteServer<T>(run: (origin: string) => Promise<T>) {
   const app = express();
   app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
   const server = createServer(app);
@@ -190,21 +191,37 @@ describe("external authentication policy", () => {
     });
   });
 
-  it("creates a session only once for a successfully consumed passwordless-email link", async () => {
+  it("does not consume a passwordless-email token on GET and requires explicit same-origin POST confirmation", async () => {
+    const token = "a".repeat(43);
     const consumeLink = vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "parent@example.ng", redirectOrigin: "https://nsos.top" } as any);
     vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 123, openId: "external:email:123", name: "Parent", email: "parent@example.ng" } as any);
     const acceptStaffInvitations = vi.spyOn(database, "acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
     const acceptGuardianInvitations = vi.spyOn(database, "acceptGuardianPortalInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
     const createSession = vi.spyOn(database, "createUserSession").mockResolvedValue("test-session-id");
     await withAuthRouteServer(async origin => {
-      const first = await requestRoute(`${origin}/api/auth/email/verify?token=${"a".repeat(43)}`);
-      expect(first.status).toBe(302);
-      expect(first.headers.location).toBe("https://nsos.top/app");
-      expect(headerText(first.headers["set-cookie"])).toContain("app_session_id=");
+      const openedByScanner = await requestRoute(`${origin}/api/auth/email/verify?token=${token}`);
+      expect(openedByScanner.status).toBe(200);
+      expect(openedByScanner.body).toContain('method="post"');
+      expect(openedByScanner.body).toContain("Confirm your NSOS sign-in");
+      expect(consumeLink).not.toHaveBeenCalled();
+      expect(createSession).not.toHaveBeenCalled();
+
+      const confirmed = await requestRoute(`${origin}/api/auth/email/verify`, {
+        method: "POST",
+        headers: { origin: "https://nsos.top", "content-type": "application/x-www-form-urlencoded" },
+        body: `token=${token}`,
+      });
+      expect(confirmed.status).toBe(302);
+      expect(confirmed.headers.location).toBe("https://nsos.top/app");
+      expect(headerText(confirmed.headers["set-cookie"])).toContain("app_session_id=");
       expect(acceptStaffInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });
       expect(acceptGuardianInvitations).toHaveBeenCalledWith({ email: "parent@example.ng", userId: 123 });
       consumeLink.mockRejectedValueOnce(new Error("used"));
-      const repeated = await requestRoute(`${origin}/api/auth/email/verify?token=${"a".repeat(43)}`);
+      const repeated = await requestRoute(`${origin}/api/auth/email/verify`, {
+        method: "POST",
+        headers: { origin: "https://nsos.top", "content-type": "application/x-www-form-urlencoded" },
+        body: `token=${token}`,
+      });
       expect(repeated.status).toBe(400);
       expect(repeated.body).toContain("invalid, expired, or already used");
       expect(createSession).toHaveBeenCalledTimes(1);
