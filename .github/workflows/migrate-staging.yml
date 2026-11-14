@@ -7,6 +7,10 @@ on:
         description: Type MIGRATE-NSOS-STAGING to confirm
         required: true
         type: string
+      backup_confirmation:
+        description: Type STAGING-BACKUP-VERIFIED only after confirming a restorable staging backup exists
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -20,12 +24,21 @@ jobs:
     name: Apply reviewed Drizzle migrations to staging only
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ inputs.confirmation == 'MIGRATE-NSOS-STAGING' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'MIGRATE-NSOS-STAGING' && inputs.backup_confirmation == 'STAGING-BACKUP-VERIFIED' }}
     env:
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
     steps:
       - name: Check out migration source
         uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Record migration safeguards
+        run: |
+          echo "Workflow ref: $GITHUB_REF"
+          echo "Migration source: main"
+          echo "Staging backup readiness was explicitly attested by the operator."
+          echo "This workflow does not create or independently validate backups."
 
       - name: Validate staging target before any database write
         run: |
