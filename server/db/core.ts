@@ -3562,17 +3562,54 @@ export async function createInvoice(input: { schoolId: number; studentId: number
   await db.insert(invoiceLineItems).values(input.lineItems.map(item => ({ invoiceId, feeStructureId: item.feeStructureId, description: item.description, quantity: item.quantity, unitAmount: String(item.unitAmount), lineTotal: String(item.quantity * item.unitAmount) })));
   return { invoiceId };
 }
+/**
+ * Records a school-scoped invoice payment atomically, using kobo precision.
+ */
 export async function recordPayment(input: { schoolId: number; invoiceId: number; amount: number; paidOn: string; method: "cash" | "bank_transfer" | "card" | "pos" | "cheque" | "other"; reference?: string; note?: string; recordedBy: number }) {
+  const amountText = String(input.amount);
+  const decimalPlaces = amountText.includes(".") ? amountText.length - amountText.indexOf(".") - 1 : 0;
+  if (!Number.isFinite(input.amount) || input.amount <= 0 || /[eE]/.test(amountText) || decimalPlaces > 2 || input.amount > 9_999_999_999.99) {
+    throw new Error("Payment amount must be a positive value with no more than two decimal places.");
+  }
+  const paymentDate = asDate(input.paidOn);
+  if (!paymentDate || Number.isNaN(paymentDate.getTime()) || paymentDate.toISOString().slice(0, 10) !== input.paidOn) {
+    throw new Error("Enter a valid payment date.");
+  }
+
   const db = await database();
-  const invoice = (await db.select().from(invoices).where(and(eq(invoices.id, input.invoiceId), eq(invoices.schoolId, input.schoolId))).limit(1))[0];
-  if (!invoice) throw new Error("Invoice not found.");
-  const currentPaid = Number(invoice.amountPaid);
-  const newPaid = currentPaid + input.amount;
-  const total = Number(invoice.total);
-  if (newPaid > total + 0.009) throw new Error("Payment exceeds the outstanding balance.");
-  await db.insert(payments).values({ schoolId: input.schoolId, invoiceId: input.invoiceId, receiptNo: makeNumber("RCT"), amount: String(input.amount), paidOn: asDate(input.paidOn)!, method: input.method, reference: input.reference, note: input.note, recordedBy: input.recordedBy });
-  await db.update(invoices).set({ amountPaid: String(newPaid), status: newPaid >= total ? "paid" : "partial" }).where(eq(invoices.id, input.invoiceId));
-  return { success: true, outstanding: Math.max(0, total - newPaid) };
+  return db.transaction(async tx => {
+    // Serialize payment postings for this invoice so concurrent requests cannot
+    // both validate against the same stale balance and overpay the invoice.
+    const invoice = (await tx.select().from(invoices).where(and(
+      eq(invoices.id, input.invoiceId),
+      eq(invoices.schoolId, input.schoolId),
+    )).limit(1).for("update"))[0];
+    if (!invoice) throw new Error("Invoice not found.");
+
+    const currentPaidCents = Math.round(Number(invoice.amountPaid) * 100);
+    const totalCents = Math.round(Number(invoice.total) * 100);
+    const paymentCents = Math.round(input.amount * 100);
+    const newPaidCents = currentPaidCents + paymentCents;
+    if (newPaidCents > totalCents) throw new Error("Payment exceeds the outstanding balance.");
+
+    await tx.insert(payments).values({
+      schoolId: input.schoolId,
+      invoiceId: input.invoiceId,
+      receiptNo: makeNumber("RCT"),
+      amount: (paymentCents / 100).toFixed(2),
+      paidOn: paymentDate,
+      method: input.method,
+      reference: input.reference,
+      note: input.note,
+      recordedBy: input.recordedBy,
+    });
+    await tx.update(invoices).set({
+      amountPaid: (newPaidCents / 100).toFixed(2),
+      status: newPaidCents >= totalCents ? "paid" : "partial",
+    }).where(and(eq(invoices.id, input.invoiceId), eq(invoices.schoolId, input.schoolId)));
+
+    return { success: true, outstanding: Math.max(0, totalCents - newPaidCents) / 100 };
+  });
 }
 
 type CashAssuranceCaseStatus = "open" | "contact_due" | "awaiting_promise" | "payment_under_review" | "disputed" | "escalated" | "settled" | "closed";
