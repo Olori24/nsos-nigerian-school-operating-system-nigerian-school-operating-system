@@ -52,8 +52,14 @@ export function registerStorageProxy(app: Express) {
         res.status(404).send("File not found");
         return;
       }
+      const contentType = (object.ContentType ?? "application/octet-stream").split(";", 1)[0]!.trim().toLowerCase();
+      const safeInlineImageTypes = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+      const canRenderInline = safeInlineImageTypes.has(contentType);
       res.set("Cache-Control", "private, no-store");
-      res.set("Content-Type", object.ContentType ?? "application/octet-stream");
+      res.set("X-Content-Type-Options", "nosniff");
+      res.set("Content-Security-Policy", "default-src 'none'; sandbox");
+      res.set("Content-Type", canRenderInline ? contentType : "application/octet-stream");
+      if (!canRenderInline) res.set("Content-Disposition", "attachment");
       if (object.ContentLength !== undefined) res.set("Content-Length", String(object.ContentLength));
       const body = object.Body as NodeJS.ReadableStream;
       body.on("error", error => {
