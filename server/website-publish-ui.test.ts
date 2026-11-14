@@ -11,7 +11,10 @@ const viteConfig = readFileSync(resolve(root, "vite.config.ts"), "utf8");
 
 describe("school website publishing and theme presentation", () => {
   it("uses only the application build plugins", () => {
-    expect(viteConfig).toContain("plugins: [react(), tailwindcss(), jsxLocPlugin()]");
+    expect(viteConfig).toContain("react(),");
+    expect(viteConfig).toContain("tailwindcss(),");
+    expect(viteConfig).toContain("jsxLocPlugin(),");
+    expect(viteConfig).toContain("analyticsPlugin(env.VITE_ANALYTICS_ENDPOINT, env.VITE_ANALYTICS_WEBSITE_ID)");
     expect(viteConfig).not.toContain("vitePlugin");
   });
   it("exposes school-owned visual direction controls in Website Studio", () => {
