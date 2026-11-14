@@ -25,7 +25,7 @@ describe("NSOS security hardening rules", () => {
 
   it("fails closed and logs only allowlisted rate-limit dependency codes", async () => {
     const secretMessage = "DATABASE_URL=mysql://secret JWT_SECRET=private";
-    const failure = Object.assign(new Error(secretMessage), { code: "ER_ACCESS_DENIED_ERROR", sqlState: "28000" });
+    const failure = Object.assign(new Error(secretMessage), { code: "ER_ACCESS_DENIED_ERROR", sqlState: "28000", rateLimitStage: "bucket_write" });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const middleware = createRateLimitMiddleware({ namespace: "test", limit: 2, windowMs: 1_000, consume: async () => { throw failure; } });
     const response = { set: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() };
@@ -38,6 +38,7 @@ describe("NSOS security hardening rules", () => {
       expect(errorSpy).toHaveBeenCalledWith("[security] shared rate-limit dependency failed", {
         event: "shared_rate_limit_unavailable",
         errorKind: "error",
+        stage: "bucket_write",
         errorCode: "ER_ACCESS_DENIED_ERROR",
         sqlState: "28000",
       });
