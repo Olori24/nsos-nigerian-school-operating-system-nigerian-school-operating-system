@@ -320,19 +320,28 @@ export async function listSecurityAuditEvents(schoolId: number, limit = 50) {
 }
 
 export async function consumeSharedRateLimit(input: { namespace: string; route: string; clientKey: string; limit: number; windowMs: number; now?: number }) {
-  const now = input.now ?? Date.now();
-  const windowStartedAt = Math.floor(now / input.windowMs) * input.windowMs;
-  const expiresAt = new Date(windowStartedAt + input.windowMs);
-  const bucketMaterial = `${input.namespace}:${input.route}:${input.clientKey}:${windowStartedAt}`;
-  const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
-  const db = await database();
-  await db.insert(rateLimitBuckets).values({ bucketKey, count: 1, expiresAt }).onDuplicateKeyUpdate({ set: { count: sql`${rateLimitBuckets.count} + 1`, expiresAt } });
-  const bucket = (await db.select({ count: rateLimitBuckets.count, expiresAt: rateLimitBuckets.expiresAt }).from(rateLimitBuckets).where(eq(rateLimitBuckets.bucketKey, bucketKey)).limit(1))[0];
-  if (Math.random() < 0.01) void db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.expiresAt} < ${new Date(now)}`);
-  const count = Number(bucket?.count ?? input.limit + 1);
-  return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+  let stage: "key_derivation" | "database_connection" | "bucket_write" | "bucket_read" = "key_derivation";
+  try {
+    const now = input.now ?? Date.now();
+    const windowStartedAt = Math.floor(now / input.windowMs) * input.windowMs;
+    const expiresAt = new Date(windowStartedAt + input.windowMs);
+    const bucketMaterial = `${input.namespace}:${input.route}:${input.clientKey}:${windowStartedAt}`;
+    const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
+    stage = "database_connection";
+    const db = await database();
+    stage = "bucket_write";
+    await db.insert(rateLimitBuckets).values({ bucketKey, count: 1, expiresAt }).onDuplicateKeyUpdate({ set: { count: sql`${rateLimitBuckets.count} + 1`, expiresAt } });
+    stage = "bucket_read";
+    const bucket = (await db.select({ count: rateLimitBuckets.count, expiresAt: rateLimitBuckets.expiresAt }).from(rateLimitBuckets).where(eq(rateLimitBuckets.bucketKey, bucketKey)).limit(1))[0];
+    if (Math.random() < 0.01) void db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.expiresAt} < ${new Date(now)}`);
+    const count = Number(bucket?.count ?? input.limit + 1);
+    return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+  } catch (cause) {
+    const error = new Error("Shared rate-limit operation failed");
+    Object.assign(error, { rateLimitStage: stage, cause });
+    throw error;
+  }
 }
-
 export async function saveCopilotRecentSearch(input: { userId: number; schoolId: number; query: string; destinationId?: string | null }) {
   const query = input.query.trim().slice(0, 600);
   if (!query) return;
