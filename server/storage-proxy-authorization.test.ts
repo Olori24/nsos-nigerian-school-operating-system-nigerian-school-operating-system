@@ -11,10 +11,10 @@ import { isSafeStorageKey, registerStorageProxy } from "./_core/storageProxy";
 
 type Handler = (req: any, res: any) => Promise<void>;
 
-function route() {
-  let handler: Handler | undefined;
-  registerStorageProxy({ get: (_path: string, registered: Handler) => { handler = registered; } } as any);
-  return handler!;
+function route(path = "/api/storage/*") {
+  const handlers = new Map<string, Handler>();
+  registerStorageProxy({ get: (registeredPath: string, registered: Handler) => { handlers.set(registeredPath, registered); } } as any);
+  return handlers.get(path)!;
 }
 
 function response() {
@@ -22,6 +22,14 @@ function response() {
 }
 
 describe("storage proxy authorization", () => {
+  it("registers new and legacy URL paths through one shared authorization handler", () => {
+    const handlers = new Map<string, Handler>();
+    registerStorageProxy({ get: (path: string, handler: Handler) => { handlers.set(path, handler); } } as any);
+    expect([...handlers.keys()]).toEqual(["/api/storage/*", "/storage/*", "/manus-storage/*"]);
+    expect(handlers.get("/storage/*")).toBe(handlers.get("/api/storage/*"));
+    expect(handlers.get("/manus-storage/*")).toBe(handlers.get("/api/storage/*"));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     storage.storageGetObject.mockResolvedValue({ Body: { pipe: vi.fn(), on: vi.fn() }, ContentType: "application/octet-stream", ContentLength: 1 });
@@ -35,6 +43,17 @@ describe("storage proxy authorization", () => {
     expect(db.getStoredObjectAccessRecord).not.toHaveBeenCalled();
     expect(sdk.authenticateRequest).not.toHaveBeenCalled();
 
+  });
+
+  it("serves an existing legacy URL through the same protected handler", async () => {
+    db.getStoredObjectAccessRecord.mockResolvedValue({ schoolId: 34, scope: "admission_document" });
+    sdk.authenticateRequest.mockResolvedValue({ id: 119 });
+    db.getSchoolMembership.mockResolvedValue({ schoolId: 34, userId: 119, role: "owner", status: "active" });
+    const res = response();
+    await route("/manus-storage/*")({ params: { 0: "schools/34/admissions/51/passport.png" } }, res);
+    expect(res.code).toBe(200);
+    expect(db.getStoredObjectAccessRecord).toHaveBeenCalledWith("schools/34/admissions/51/passport.png");
+    expect(sdk.authenticateRequest).toHaveBeenCalledTimes(1);
   });
 
   it("allows only selected published website media without a session", async () => {
