@@ -19,7 +19,8 @@ describe("supervised AI tutor response boundaries", () => {
     const result = await generateSupervisedTutorResponse({ tutorName: "Mathematics study guide", subjectName: "Mathematics", curriculumScope: "Algebraic expressions only", allowedLevels: ["JSS 2"], question: "Can you check whether this is the correct method for my take-home practice?" });
     expect(result).toMatchObject({ needsTeacherSupport: true, escalationReason: "needs_teacher_review" });
     expect(result.studySteps).toHaveLength(2);
-    expect(invokeLLM).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-5-mini", outputSchema: expect.anything() }));
+    expect(invokeLLM).toHaveBeenCalledWith(expect.objectContaining({ outputSchema: expect.anything() }));
+    expect(invokeLLM.mock.calls[0]?.[0]).not.toHaveProperty("model");
   });
 
   it("uses a bounded teaching-format instruction without widening tutor input data", async () => {

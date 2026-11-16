@@ -36,10 +36,6 @@ The account holder then supplied a DomainKing domain-management dashboard screen
 
 ## NSOS custom-domain binding requirement
 
-The official Manus connection guidance confirms that an externally registered domain must first be entered as an existing custom domain in the project settings; the platform then supplies the required **CNAME or A record** to add at the registrar. The registrar’s IP-address prompt must not be used as a substitute for that platform-provided value. If a `www` record is later needed, it must also use the record supplied after the domain connection is created.[1]
-
-## References
-
-[1]: https://help.manus.im/en/articles/11711203-how-can-i-connect-the-website-created-by-manus-to-my-custom-domain "Manus Help Center: How can I connect the website created by Manus to my custom domain?"
+This is a historical note about the previous hosting provider. Do not use its DNS instructions for the current Vercel migration. Any DNS change must use the exact record shown by the active Vercel project and requires separate approval.
 
 No additional domain order, payment, renewal, DNS record, NSOS custom-domain binding, or sender-domain change should be attempted from this record. Any later operational step requires the account holder’s separate explicit instruction and the platform-provided DNS record where applicable.

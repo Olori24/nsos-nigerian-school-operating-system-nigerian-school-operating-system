@@ -20,7 +20,6 @@
 - **Founder:** priorities, approvals, business/product decisions, production-impacting authorization.
 - **Primary ChatGPT session:** product + technical coordination, architecture, execution, evidence discipline, and cross-agent synchronization.
 - **Other ChatGPT sessions:** parallel research, architecture, implementation, and review work within explicitly documented scope.
-- **Manus:** agentic implementation/testing/deployment work within an assigned scope.
 - **GitHub:** shared memory and handoff surface for all agents.
 
 No agent owns the whole project. No agent should assume another agent's private context.
@@ -126,4 +125,4 @@ Use this structure in issue/PR updates:
 > - Next action:
 > - Do not infer:
 
-This protocol is the coordination contract for every ChatGPT session, Manus run, and human contributor working on NSOS.
+This protocol is the coordination contract for every ChatGPT session, automated engineering run, and human contributor working on NSOS.

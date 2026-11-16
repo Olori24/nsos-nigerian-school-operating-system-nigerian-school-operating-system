@@ -24,7 +24,7 @@
 | Autonomous admissions, finance, grading, or messages | **FAIL by design** | These operations are intentionally excluded from AI automation. | Keep accountable human review; do not attempt to remove the boundary. |
 | Tenant isolation and private-file access | **PASS** | Private object downloads are record-aware and tenant/role authorized; admission review requires tenant scope; direct regressions cover cross-tenant access. | Continue regression coverage for every new object-bearing workflow. |
 | Recovery, staging, and load evidence | **BLOCKED** | The probe is staging-only and fail-closed; no isolated synthetic target, restore rehearsal, or progressive-load measurement has been approved. | Provide isolated staging and execute the controlled runbook before any capacity statement. |
-| Preview/mobile observation | **WARNING** | Production build passed. The temporary preview wake-up redirected to Manus sign-in and human verification; no protected workspace was accessed. | Re-run mobile and authenticated visual checks in an authorized session before a presentation or public launch. |
+| Preview/mobile observation | **WARNING** | Production build passed. The temporary preview wake-up redirected to legacy deployment authentication and human verification; no protected workspace was accessed. | Re-run mobile and authenticated visual checks in an authorized session before a presentation or public launch. |
 
 ## Current software validation
 

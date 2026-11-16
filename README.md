@@ -196,7 +196,7 @@ The product is in **active engineering and controlled rollout preparation**. The
 
 | Evidence category | Current repository record |
 |---|---|
-| Managed preview | [NSOS managed preview](https://nsos-system-uhkdscaf.manus.space) is available; normal authentication and workspace setup apply. |
+| Public platform | [NSOS](https://nsos.top) is the public platform entry point. |
 | Latest product additions | Tenant-private Knowledge-to-Business Engine with approved text sources, structured expertise/curriculum/project/offer/website-readiness analysis, source inspection/deletion, and confirmed Builder/protected-workspace handoffs; approval-first AI School Operator workflow preferences and visible owner-authority policy; learner-owned Student Learning Copilot next-step guidance; Institution Builder non-JSON response recovery and private brand/offer/growth planning; expanded review-only Course Studio material types; Automation Desk; Quick Start; Single-Prompt Online School Launcher; and the 19-Prompt Taster Library. |
 | Focused validation | The Knowledge-to-Business release passed 41 focused tests across its source-analysis, protected-route, UI, Institution Builder, Course Studio, School Operator, and learner-support regressions, alongside fresh TypeScript validation and a production build. Migration `0062_unknown_radioactive_man` was reviewed and applied to add tenant-scoped private knowledge-source and analysis records. |
 | Broader regression record | The latest full-suite record is **399/400 passing tests across 109/110 files**. The sole failure is the unchanged external sender-domain authorisation integration check for the currently unverified `resend.dev` sender. |

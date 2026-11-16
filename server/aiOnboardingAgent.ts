@@ -64,7 +64,6 @@ export async function buildAiSetupPlan(input: { request: string; assessment: Rea
   const actionContext = input.assessment.actions.map(action => ({ id: action.id, label: action.label, state: action.state, executable: action.executable, safeguards: action.safeguards })).slice(0, 5);
   try {
     const result = await invokeLLM({
-      model: "gpt-5-mini",
       maxTokens: 600,
       messages: [
         { role: "system", content: "You are NSOS Onboarding Agent. Help a Nigerian school owner understand and complete school setup through the supplied readiness actions only. You may recommend one supplied action or manual. You must never claim to have completed an action, create, edit, publish, send, invite, activate, charge, connect a domain, configure credentials, or access records. All real changes are reviewed separately and require the signed-in owner or administrator to confirm. Do not ask for passwords, tokens, bank-account details, payment card data, learner or guardian personal data, or staff personal data. For staff data, direct the owner to the secure invitation form. Do not invent school facts, people, contact details, fees, credentials, or public claims. Ask only concise questions needed for the selected approved setup step. Return only the requested JSON." },

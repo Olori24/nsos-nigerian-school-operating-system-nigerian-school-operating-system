@@ -7,7 +7,6 @@ const root = resolve(import.meta.dirname, "..");
 describe("pre-deployment tenant security invariants", () => {
   it("never sends the session token from browser storage", () => {
     const source = readFileSync(resolve(root, "client/src/main.tsx"), "utf8");
-    expect(source).not.toContain("sessionStorage.getItem(\"manus-cookie\")");
     expect(source).not.toContain("Authorization: `Bearer");
   });
 

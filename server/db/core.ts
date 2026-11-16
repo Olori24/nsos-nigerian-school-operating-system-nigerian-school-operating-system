@@ -126,6 +126,7 @@ import { storagePut } from "../storage";
 import { deriveTenantOnboardingStatus } from "../tenantOnboarding";
 import { getNigerianCurriculumTemplate, type NigerianCurriculumTemplateId, listNigerianCurriculumTemplates } from "../nigerianCurriculum";
 import { MAX_SCHEME_FILE_BYTES, normaliseReviewedSchemeRows, safeSchemeFileName, type ReviewedSchemeRow } from "../schemeOfWork";
+import { requireUnambiguousVerifiedEmailAccount } from "../authIdentity";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -202,7 +203,7 @@ export type SmsDeliveryState = "pending" | "delivered" | "failed";
 export type AdvertisingCampaignStatus = "draft" | "pending_approval" | "approved" | "launching" | "active" | "paused" | "completed" | "failed" | "archived";
 type AdvertisingAudience = { locations: string[]; ageMin?: number; ageMax?: number; note?: string };
 
-const NSOS_WEBHOOK_ORIGIN = "https://nsos-system-uhkdscaf.manus.space";
+const NSOS_WEBHOOK_ORIGIN = process.env.AUTH_CANONICAL_ORIGIN ?? "https://nsos.top";
 
 function encryptionKey() {
   if (!ENV.cookieSecret) throw new Error("Provider credentials cannot be stored until the application secret is configured.");
@@ -733,11 +734,12 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
     return existingUser;
   }
 
-  // A matching email alone must not attach a newly verified external provider
-  // to a pre-existing Manus user, because that user may already own tenant data.
-  // External providers may share their own local account; linking a legacy
-  // Manus account requires a separate explicit reauthentication flow.
-  let user = (await db.select().from(users).where(and(eq(users.email, email), like(users.openId, "external:%"))).limit(1))[0];
+  // Google supplies an email_verified claim, and the passwordless-email flow
+  // reaches this function only after consuming a one-time link sent to that
+  // address. That proof can recover a legacy account with the same email.
+  // Never guess when duplicate accounts share an address: fail closed.
+  const matchingUsers = await db.select().from(users).where(eq(users.email, email)).limit(2);
+  let user = requireUnambiguousVerifiedEmailAccount(matchingUsers);
   if (!user) {
     const created = await db.insert(users).values({ openId: externalOpenId(input.provider), name: input.name?.trim().slice(0, 255) || null, email, avatarUrl, loginMethod: input.provider, lastSignedIn: new Date() });
     user = (await db.select().from(users).where(eq(users.id, Number(created[0].insertId))).limit(1))[0];
@@ -747,13 +749,14 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
     await db.update(users).set({ avatarUrl }).where(eq(users.id, user.id));
     user.avatarUrl = avatarUrl;
   }
+  // Keep the existing user ID, openId, role, school memberships and all
+  // tenant-owned records intact while adding the verified provider identity.
   await db.insert(authIdentities).values({ userId: user.id, provider: input.provider, providerSubject, email, lastUsedAt: new Date() }).onDuplicateKeyUpdate({ set: { lastUsedAt: new Date(), email } });
   const identity = (await db.select().from(authIdentities).where(and(eq(authIdentities.provider, input.provider), eq(authIdentities.providerSubject, providerSubject))).limit(1))[0];
-  if (!identity) throw new Error("Unable to link the external identity.");
-  const linkedUser = (await db.select().from(users).where(eq(users.id, identity.userId)).limit(1))[0];
-  if (!linkedUser) throw new Error("External identity is not linked to an NSOS account.");
-  await upsertUser({ openId: linkedUser.openId, lastSignedIn: new Date() });
-  return linkedUser;
+  if (!identity || identity.userId !== user.id) throw new Error("Unable to link the external identity safely.");
+  await db.update(users).set({ loginMethod: input.provider, lastSignedIn: new Date() }).where(eq(users.id, user.id));
+  user.loginMethod = input.provider;
+  return user;
 }
 
 export async function createAuthMagicLink(input: { email: string; redirectOrigin: string }) {

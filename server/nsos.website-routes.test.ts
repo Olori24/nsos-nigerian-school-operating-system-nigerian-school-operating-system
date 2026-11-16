@@ -19,7 +19,7 @@ import { generateAiWebsiteDraft } from "./aiWebsiteAgent";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-const adminCaller = () => appRouter.createCaller({ user: { id: 5, openId: "admin-5", name: "School Admin", email: "admin@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
+const adminCaller = () => appRouter.createCaller({ user: { id: 5, openId: "admin-5", name: "School Admin", email: "admin@example.com", loginMethod: "google", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 
 describe("NSOS tenant website routes", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(db.getSchoolMembership).mockResolvedValue({ id: 1, schoolId: 1, userId: 5, role: "admin", status: "active", createdAt: new Date(), updatedAt: new Date() }); vi.mocked(db.consumeSharedRateLimit).mockResolvedValue({ allowed: true, retryAfterSeconds: 0 } as any); });
@@ -32,7 +32,7 @@ describe("NSOS tenant website routes", () => {
   });
 
   it("allows an administrator to list and upload only approved school-owned website media", async () => {
-    vi.mocked(db.listSchoolWebsiteMedia).mockResolvedValue([{ id: 9, purpose: "logo", label: "School mark", url: "/manus-storage/school-mark.png" }] as any);
+    vi.mocked(db.listSchoolWebsiteMedia).mockResolvedValue([{ id: 9, purpose: "logo", label: "School mark", url: "/api/storage/school-mark.png" }] as any);
     vi.mocked(db.uploadSchoolWebsiteMedia).mockResolvedValue({ id: 9, purpose: "logo", label: "School mark", mimeType: "image/png", byteSize: 1024 } as any);
     await expect(adminCaller().nsos.website.media({ schoolId: 1 })).resolves.toHaveLength(1);
     await expect(adminCaller().nsos.website.uploadMedia({ schoolId: 1, purpose: "logo", label: "School mark", fileName: "school-mark.png", mimeType: "image/png", base64: "a".repeat(100) })).resolves.toMatchObject({ id: 9, purpose: "logo" });

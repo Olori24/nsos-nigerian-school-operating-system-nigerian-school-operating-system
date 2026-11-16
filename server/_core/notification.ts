@@ -1,114 +1,46 @@
 import { TRPCError } from "@trpc/server";
 import { ENV } from "./env";
 
-export type NotificationPayload = {
-  title: string;
-  content: string;
-};
-
+export type NotificationPayload = { title: string; content: string };
 const TITLE_MAX_LENGTH = 1200;
 const CONTENT_MAX_LENGTH = 20000;
 
-const trimValue = (value: string): string => value.trim();
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
-
-const buildEndpointUrl = (baseUrl: string): string => {
-  const normalizedBase = baseUrl.endsWith("/")
-    ? baseUrl
-    : `${baseUrl}/`;
-  return new URL(
-    "webdevtoken.v1.WebDevService/SendNotification",
-    normalizedBase
-  ).toString();
-};
-
-const validatePayload = (input: NotificationPayload): NotificationPayload => {
-  if (!isNonEmptyString(input.title)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification title is required.",
-    });
+function validatePayload(input: NotificationPayload): NotificationPayload {
+  const title = input.title?.trim();
+  const content = input.content?.trim();
+  if (!title || !content) throw new TRPCError({ code: "BAD_REQUEST", message: "Notification title and content are required." });
+  if (title.length > TITLE_MAX_LENGTH || content.length > CONTENT_MAX_LENGTH) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Notification exceeds the allowed length." });
   }
-  if (!isNonEmptyString(input.content)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification content is required.",
-    });
-  }
-
-  const title = trimValue(input.title);
-  const content = trimValue(input.content);
-
-  if (title.length > TITLE_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification title must be at most ${TITLE_MAX_LENGTH} characters.`,
-    });
-  }
-
-  if (content.length > CONTENT_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification content must be at most ${CONTENT_MAX_LENGTH} characters.`,
-    });
-  }
-
   return { title, content };
-};
+}
 
-/**
- * Dispatches a project-owner notification through the Manus Notification Service.
- * Returns `true` if the request was accepted, `false` when the upstream service
- * cannot be reached (callers can fall back to email/slack). Validation errors
- * bubble up as TRPC errors so callers can fix the payload.
- */
-export async function notifyOwner(
-  payload: NotificationPayload
-): Promise<boolean> {
-  const { title, content } = validatePayload(payload);
-
-  if (!ENV.forgeApiUrl) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Notification service URL is not configured.",
-    });
+/** Sends owner alerts through the existing Resend transactional-email account. */
+export async function notifyOwner(payload: NotificationPayload): Promise<boolean> {
+  const message = validatePayload(payload);
+  if (!ENV.resendApiKey || !ENV.authEmailFrom || !ENV.ownerNotificationEmail) {
+    console.warn("[Notification] Owner email is not configured; notification was not sent.");
+    return false;
   }
-
-  if (!ENV.forgeApiKey) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Notification service API key is not configured.",
-    });
-  }
-
-  const endpoint = buildEndpointUrl(ENV.forgeApiUrl);
-
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${ENV.forgeApiKey}`,
-        "content-type": "application/json",
-        "connect-protocol-version": "1",
-      },
-      body: JSON.stringify({ title, content }),
+      headers: { authorization: `Bearer ${ENV.resendApiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        from: ENV.authEmailFrom,
+        to: [ENV.ownerNotificationEmail],
+        subject: `[NSOS] ${message.title.slice(0, 180)}`,
+        text: message.content,
+      }),
+      signal: AbortSignal.timeout(15_000),
     });
-
     if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.warn(
-        `[Notification] Failed to notify owner (${response.status} ${response.statusText})${
-          detail ? `: ${detail}` : ""
-        }`
-      );
+      console.warn("[Notification] Resend rejected owner notification.", { status: response.status });
       return false;
     }
-
     return true;
   } catch (error) {
-    console.warn("[Notification] Error calling notification service:", error);
+    console.warn("[Notification] Owner email delivery failed.", error instanceof Error ? error.message : "Unknown error");
     return false;
   }
 }

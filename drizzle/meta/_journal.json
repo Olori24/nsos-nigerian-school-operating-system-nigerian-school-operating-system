@@ -477,6 +477,13 @@
       "when": 1793810000000,
       "tag": "0067_cash_assurance_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1794548000000,
+      "tag": "0068_remove_legacy_auth_source",
+      "breakpoints": true
     }
   ]
 }
