@@ -1,4 +1,5 @@
 import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { createHash } from "node:crypto";
 import { createConnection } from "mysql2/promise";
 
 const MAX_OBJECT_BYTES = 50 * 1024 * 1024;
@@ -108,14 +109,8 @@ async function main() {
     let copied = 0;
     let alreadyPresent = 0;
     for (const key of keys) {
-      try {
-        await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-        alreadyPresent += 1;
-        continue;
-      } catch (error) {
-        if (!isMissing(error)) throw error;
-      }
-
+      // Always fetch the legacy source, including for keys already present in S3.
+      // Destination existence alone is not evidence of byte integrity.
       const presign = new URL("v1/storage/presign/get", forgeBaseUrl.toString().replace(/\/+$/, "") + "/");
       presign.searchParams.set("path", key);
       const presignResponse = await fetch(presign, {
@@ -134,15 +129,34 @@ async function main() {
       }
       const body = Buffer.from(await objectResponse.arrayBuffer());
       if (body.byteLength > MAX_OBJECT_BYTES) throw new Error("Downloaded object exceeds the 50 MB migration safety limit.");
-      await s3.send(new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: body,
-        ContentType: objectResponse.headers.get("content-type") || "application/octet-stream",
-      }));
-      await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-      copied += 1;
-      if ((copied + alreadyPresent) % 25 === 0) console.log(`Progress: ${copied} copied, ${alreadyPresent} already present.`);
+      const sourceDigest = createHash("sha256").update(body).digest("hex");
+      let destinationExists = true;
+      try {
+        await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+      } catch (error) {
+        if (!isMissing(error)) throw error;
+        destinationExists = false;
+      }
+
+      if (!destinationExists) {
+        await s3.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: objectResponse.headers.get("content-type") || "application/octet-stream",
+        }));
+        copied += 1;
+      }
+
+      // Read the object back and compare its actual bytes with the legacy source.
+      const stored = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      if (!stored.Body) throw new Error(`Destination object ${key} returned an empty response body.`);
+      const destinationBody = Buffer.from(await stored.Body.transformToByteArray());
+      const destinationDigest = createHash("sha256").update(destinationBody).digest("hex");
+      if (destinationBody.byteLength !== body.byteLength || destinationDigest !== sourceDigest) {
+        throw new Error(`Storage integrity verification failed for ${key} (source ${body.byteLength} bytes, destination ${destinationBody.byteLength} bytes).`);
+      }
+      if (destinationExists) alreadyPresent += 1;
     }
     console.log(`Migration complete: ${copied} copied, ${alreadyPresent} already present, ${keys.size} total.`);
   } finally {
