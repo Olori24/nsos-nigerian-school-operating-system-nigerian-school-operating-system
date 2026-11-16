@@ -51,6 +51,24 @@ export function getRequestClientKey(req: Pick<Request, "headers" | "ip">) {
   return req.ip || "unknown";
 }
 
+function getRateLimitFailureMetadata(error: unknown) {
+  const root = typeof error === "object" && error !== null ? error as { code?: unknown; sqlState?: unknown; sqlstate?: unknown; rateLimitStage?: unknown; cause?: unknown } : {};
+  const cause = typeof root.cause === "object" && root.cause !== null ? root.cause as { code?: unknown; sqlState?: unknown; sqlstate?: unknown } : {};
+  const rawCode = root.code ?? cause.code;
+  const code = typeof rawCode === "string" && /^(?:ER_[A-Z0-9_]{1,40}|E[A-Z0-9_]{1,40})$/.test(rawCode) ? rawCode : undefined;
+  const rawSqlState = root.sqlState ?? root.sqlstate ?? cause.sqlState ?? cause.sqlstate;
+  const sqlState = typeof rawSqlState === "string" && /^[0-9A-Z]{5}$/.test(rawSqlState) ? rawSqlState : undefined;
+  const allowedStages = ["key_derivation", "database_connection", "bucket_write", "bucket_read"];
+  const stage = typeof root.rateLimitStage === "string" && allowedStages.includes(root.rateLimitStage) ? root.rateLimitStage : undefined;
+  return {
+    event: "shared_rate_limit_unavailable",
+    errorKind: error instanceof Error ? "error" : "non_error",
+    ...(stage ? { stage } : {}),
+    ...(code ? { errorCode: code } : {}),
+    ...(sqlState ? { sqlState } : {}),
+  };
+}
+
 export function createRateLimitMiddleware(input: { namespace: string; limit: number; windowMs: number; matcher?: (requestPath: string) => boolean; consume?: typeof consumeSharedRateLimit }): RequestHandler {
   const consume = input.consume ?? consumeSharedRateLimit;
   return async (req, res, next) => {
@@ -61,7 +79,8 @@ export function createRateLimitMiddleware(input: { namespace: string; limit: num
       if (decision.allowed) return next();
       res.set({ "Cache-Control": "no-store", "Retry-After": String(decision.retryAfterSeconds) });
       return res.status(429).json({ error: "Too many requests. Please wait and try again." });
-    } catch {
+    } catch (error) {
+      console.error("[security] shared rate-limit dependency failed", getRateLimitFailureMetadata(error));
       return res.status(503).json({ error: "Request protection is temporarily unavailable. Please retry shortly." });
     }
   };

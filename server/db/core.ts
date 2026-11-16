@@ -320,19 +320,28 @@ export async function listSecurityAuditEvents(schoolId: number, limit = 50) {
 }
 
 export async function consumeSharedRateLimit(input: { namespace: string; route: string; clientKey: string; limit: number; windowMs: number; now?: number }) {
-  const now = input.now ?? Date.now();
-  const windowStartedAt = Math.floor(now / input.windowMs) * input.windowMs;
-  const expiresAt = new Date(windowStartedAt + input.windowMs);
-  const bucketMaterial = `${input.namespace}:${input.route}:${input.clientKey}:${windowStartedAt}`;
-  const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
-  const db = await database();
-  await db.insert(rateLimitBuckets).values({ bucketKey, count: 1, expiresAt }).onDuplicateKeyUpdate({ set: { count: sql`${rateLimitBuckets.count} + 1`, expiresAt } });
-  const bucket = (await db.select({ count: rateLimitBuckets.count, expiresAt: rateLimitBuckets.expiresAt }).from(rateLimitBuckets).where(eq(rateLimitBuckets.bucketKey, bucketKey)).limit(1))[0];
-  if (Math.random() < 0.01) void db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.expiresAt} < ${new Date(now)}`);
-  const count = Number(bucket?.count ?? input.limit + 1);
-  return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+  let stage: "key_derivation" | "database_connection" | "bucket_write" | "bucket_read" = "key_derivation";
+  try {
+    const now = input.now ?? Date.now();
+    const windowStartedAt = Math.floor(now / input.windowMs) * input.windowMs;
+    const expiresAt = new Date(windowStartedAt + input.windowMs);
+    const bucketMaterial = `${input.namespace}:${input.route}:${input.clientKey}:${windowStartedAt}`;
+    const bucketKey = createHmac("sha256", encryptionKey()).update(bucketMaterial).digest("hex");
+    stage = "database_connection";
+    const db = await database();
+    stage = "bucket_write";
+    await db.insert(rateLimitBuckets).values({ bucketKey, count: 1, expiresAt }).onDuplicateKeyUpdate({ set: { count: sql`${rateLimitBuckets.count} + 1`, expiresAt } });
+    stage = "bucket_read";
+    const bucket = (await db.select({ count: rateLimitBuckets.count, expiresAt: rateLimitBuckets.expiresAt }).from(rateLimitBuckets).where(eq(rateLimitBuckets.bucketKey, bucketKey)).limit(1))[0];
+    if (Math.random() < 0.01) void db.delete(rateLimitBuckets).where(sql`${rateLimitBuckets.expiresAt} < ${new Date(now)}`);
+    const count = Number(bucket?.count ?? input.limit + 1);
+    return { allowed: count <= input.limit, retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)) };
+  } catch (cause) {
+    const error = new Error("Shared rate-limit operation failed");
+    Object.assign(error, { rateLimitStage: stage, cause });
+    throw error;
+  }
 }
-
 export async function saveCopilotRecentSearch(input: { userId: number; schoolId: number; query: string; destinationId?: string | null }) {
   const query = input.query.trim().slice(0, 600);
   if (!query) return;
@@ -986,16 +995,37 @@ export async function recordPlatformBillingPayment(input: { billingRecordId: num
   return { schoolId: record.schoolId, billingRecordId: record.id };
 }
 
+export function inspectProviderCredentialState(payload: string | null) {
+  if (!payload) {
+    return { hasCredentials: false, hasWebhookSecret: false, credentialsReadable: true };
+  }
+  try {
+    const credentials = openProviderCredentials(payload);
+    return {
+      hasCredentials: true,
+      hasWebhookSecret: Boolean(credentials.webhookSecret),
+      credentialsReadable: true,
+    };
+  } catch {
+    // An unreadable encrypted bundle must not take down unrelated school
+    // operations. Report it as unavailable so readiness checks fail closed;
+    // never expose or attempt to repair the stored ciphertext here.
+    return { hasCredentials: false, hasWebhookSecret: false, credentialsReadable: false };
+  }
+}
+
 export async function listProviderConfigurations(schoolId: number) {
   const db = await database();
   const rows = await db.select().from(providerConfigurations).where(eq(providerConfigurations.schoolId, schoolId));
   return (["payment", "sms", "whatsapp", "email", "in_app"] as const).map(channel => {
     const row = rows.find(item => item.channel === channel);
-    const hasCredentials = Boolean(row?.encryptedCredentials);
-    const hasWebhookSecret = Boolean(row?.encryptedCredentials && openProviderCredentials(row.encryptedCredentials).webhookSecret);
+    const credentialState = inspectProviderCredentialState(row?.encryptedCredentials ?? null);
+    const readiness = !credentialState.credentialsReadable
+      ? "Credentials unreadable; re-enter required"
+      : providerReadiness(channel, row?.provider ?? providerChannelDefaults[channel], credentialState.hasCredentials, row?.status ?? "draft");
     return row
-      ? { id: row.id, channel, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, hasCredentials, hasWebhookSecret, readiness: providerReadiness(channel, row.provider, hasCredentials, row.status), lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
-      : { id: null, channel, provider: providerChannelDefaults[channel], status: "draft" as const, configuration: {}, hasCredentials: false, hasWebhookSecret: false, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
+      ? { id: row.id, channel, provider: row.provider, status: row.status, configuration: row.configuration as Record<string, unknown>, ...credentialState, readiness, lastValidatedAt: row.lastValidatedAt, updatedAt: row.updatedAt }
+      : { id: null, channel, provider: providerChannelDefaults[channel], status: "draft" as const, configuration: {}, ...credentialState, readiness: "Not configured", lastValidatedAt: null, updatedAt: null };
   });
 }
 

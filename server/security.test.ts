@@ -23,6 +23,31 @@ describe("NSOS security hardening rules", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("fails closed and logs only allowlisted rate-limit dependency codes", async () => {
+    const secretMessage = "DATABASE_URL=mysql://secret JWT_SECRET=private";
+    const failure = Object.assign(new Error(secretMessage), { code: "ER_ACCESS_DENIED_ERROR", sqlState: "28000", rateLimitStage: "bucket_write" });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const middleware = createRateLimitMiddleware({ namespace: "test", limit: 2, windowMs: 1_000, consume: async () => { throw failure; } });
+    const response = { set: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+    try {
+      await middleware({ baseUrl: "/api", path: "/auth/me", originalUrl: "/api/auth/me", ip: "127.0.0.1" } as any, response as any, next);
+      expect(response.status).toHaveBeenCalledWith(503);
+      expect(response.json).toHaveBeenCalledWith({ error: "Request protection is temporarily unavailable. Please retry shortly." });
+      expect(next).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith("[security] shared rate-limit dependency failed", {
+        event: "shared_rate_limit_unavailable",
+        errorKind: "error",
+        stage: "bucket_write",
+        errorCode: "ER_ACCESS_DENIED_ERROR",
+        sqlState: "28000",
+      });
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(secretMessage);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it("requires production session secrets to be at least 32 characters", () => {
     const base = { isProduction: true, cookieSecret: "a".repeat(32), databaseUrl: "mysql://db", authCanonicalOrigin: "https://nsos.top", googleClientId: "google-client", googleClientSecret: "google-secret", geminiApiKey: "gemini-key", s3Bucket: "bucket", s3AccessKeyId: "access", s3SecretAccessKey: "secret", resendApiKey: "resend-key", authEmailFrom: "NSOS <noreply@nsos.top>", ownerNotificationEmail: "owner@nsos.top" };
     expect(requiredProductionEnvironmentErrors({ ...base, cookieSecret: "short" })).toContain("JWT_SECRET is required in production.");
