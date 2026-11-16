@@ -1,9 +1,8 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { can, isManagementRole, type SchoolRole } from "../roles";
 import { sdk } from "./sdk";
 import { storageGetObject } from "../storage";
-import { createRateLimitMiddleware } from "../security";
 
 export function isSafeStorageKey(key: string) {
   return key.length > 0 && key.length <= 1024 && /^[A-Za-z0-9._/-]+$/.test(key) && !key.includes("..") && /^schools\/[1-9]\d*\//.test(key);
@@ -18,7 +17,9 @@ function canReadStoredObject(record: db.StoredObjectAccessRecord, input: { userI
 }
 
 export function registerStorageProxy(app: Express) {
-  app.get("/api/storage/*", async (req, res) => {
+  // Keep persisted URLs working across the provider migration. All aliases use
+  // the exact same school-scoped authorization and safe streaming handler.
+  const handler = async (req: Request, res: Response) => {
     const key = (req.params as Record<string, string>)[0];
     if (!key || !isSafeStorageKey(key)) {
       res.status(404).send("File not found");
@@ -72,5 +73,8 @@ export function registerStorageProxy(app: Express) {
       console.error("[StorageProxy] failed:", err);
       res.status(502).send("Storage proxy error");
     }
-  });
+  };
+  for (const path of ["/api/storage/*", "/storage/*", "/manus-storage/*"]) {
+    app.get(path, handler);
+  }
 }
