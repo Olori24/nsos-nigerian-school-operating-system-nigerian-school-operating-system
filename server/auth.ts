@@ -89,6 +89,7 @@ async function sendMagicLinkEmail(input: { email: string; link: string; subject?
     signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
     body: JSON.stringify({
       from: normaliseAuthSender(ENV.authEmailFrom),
+      reply_to: ENV.supportEmail,
       to: input.email,
       subject: input.subject ?? "Your NSOS sign-in link",
       text: input.text ?? `Use this secure NSOS sign-in link within ${MAGIC_LINK_TTL_LABEL}: ${input.link}`,
@@ -106,7 +107,7 @@ export async function sendAdmissionLetterEmail(input: { email: string; subject: 
     method: "POST",
     headers: { Authorization: `Bearer ${ENV.resendApiKey}`, "Content-Type": "application/json" },
     signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS),
-    body: JSON.stringify({ from: normaliseAuthSender(ENV.authEmailFrom), to: email, subject: input.subject.slice(0, 255), text: input.text, html: input.html }),
+    body: JSON.stringify({ from: normaliseAuthSender(ENV.authEmailFrom), reply_to: ENV.supportEmail, to: email, subject: input.subject.slice(0, 255), text: input.text, html: input.html }),
   });
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) throw new Error(`Resend rejected admission-letter delivery with status ${response.status}`);

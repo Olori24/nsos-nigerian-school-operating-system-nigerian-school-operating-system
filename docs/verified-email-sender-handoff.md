@@ -1,6 +1,6 @@
 # NSOS Verified Email Sender Handoff
 
-**Current status:** Blocked externally. The unchanged integration test reports that the configured `AUTH_EMAIL_FROM` sender uses `resend.dev`, which is not present as a verified domain in the connected Resend account.
+**Current status (18 November 2026):** Resend reports `nsos.top` as verified with sending enabled. The live deployment value of `AUTH_EMAIL_FROM` has not been inspected, so its alignment with `nsos.top` remains unverified. Lockally remains responsible for inbound mail at `hello@nsos.top`; Resend receiving remains disabled.
 
 > **No DNS record, sender domain, email address, invitation, passwordless email, or Resend setting is changed by this document.** The account holder must explicitly approve every provider-side step.
 
@@ -17,7 +17,7 @@
 
 ## Required information before the next action
 
-The owner must provide or approve the exact sender domain and either approve the Resend connector or perform the domain work directly in the Resend dashboard. If the owner completes it directly, send back a screenshot or the verified domain name; NSOS will then request the exact sender address via the project-secret control and rerun the unchanged test.
+The owner must inspect the protected deployment setting without revealing its value in chat or GitHub. Confirm only whether the sender domain is `nsos.top`. Do not rotate or replace the Resend API key. A controlled test email requires separate approval.
 
 ## Explicit exclusions
 

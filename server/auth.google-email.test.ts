@@ -152,6 +152,7 @@ describe("external authentication policy", () => {
       expect(response.status).toBe(202);
       expect(response.body).toContain("sign-in links");
       expect(providerFetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(String((providerFetch.mock.calls[0]?.[1] as RequestInit).body))).toMatchObject({ reply_to: "hello@nsos.top" });
       expect((providerFetch.mock.calls[0]?.[1] as RequestInit).signal).toBeTruthy();
     });
   });
