@@ -1,6 +1,6 @@
 # NSOS Communication Reliability and Email-Service Plan
 
-**Status:** Approved implementation direction. Live email delivery remains blocked until the NSOS sender domain is verified, but the channel model, setup experience, delivery state model, and admissions-upload work can proceed independently.
+**Status:** Updated 18 November 2026. Resend verifies `nsos.top` and has sending enabled. Lockally remains the inbound mailbox for `hello@nsos.top`; Resend receiving stays disabled. Application runtime sender configuration and delivery webhooks still require separate verification.
 
 ## 1. Problem Statement
 
@@ -41,7 +41,7 @@ NSOS will launch email in two layers.
 
 | Layer | Sender pattern | Scope | Constraint |
 |---|---|---|---|
-| Managed NSOS transactional mail | `NSOS Notifications <notifications@nsos.ng>` | Sign-in links, guardian/staff invitations, admission letters, security notices | Requires active `nsos.ng`, Resend domain verification, and platform `AUTH_EMAIL_FROM` update |
+| Managed NSOS transactional mail | Existing owner-configured `AUTH_EMAIL_FROM` on verified `nsos.top` | Sign-in links, guardian/staff invitations, admission letters, security notices | Confirm runtime sender is within verified `nsos.top`; do not change it as part of reply routing |
 | School-branded mail | Display name such as `Greener Future Academy via NSOS`; optional verified school sending domain later | School admissions and announcements | A school must verify any custom sending domain before it is used as the technical `From` address |
 
 Until a school verifies its own sender domain, the technical sender will remain the verified NSOS sender with the school’s approved display name and a school-controlled reply-to address only when that address is valid. NSOS will never impersonate an unverified school domain. Resend requires a domain owned and verified in the account before it can send from addresses at that domain.[1]
