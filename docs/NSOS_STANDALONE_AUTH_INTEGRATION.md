@@ -1,6 +1,6 @@
 # NSOS Standalone Authentication Integration
 
-Status: draft integration work; not approved for production.
+Status: Google account-linking implementation added; CI and focused verification pending. Not approved for production.
 
 ## Baseline
 
@@ -8,7 +8,7 @@ Status: draft integration work; not approved for production.
 - Current production deployment also points to `44292d393c565c933ac52281d5d1482afca68250`.
 - The connected Vercel project has no Production environment variables configured.
 - Current main contains Google OAuth and passwordless email routes, but its SDK still constructs the Manus OAuth service and reads `OAUTH_SERVER_URL` / `VITE_APP_ID`.
-- Current main rejects attaching a new provider to a legacy account based on matching email alone. Explicit account linking is not yet implemented.
+- Current main rejects attaching a new provider to a legacy account based on matching email alone. This branch now adds explicit, session-bound Google account linking.
 
 ## Integration decisions
 
@@ -31,14 +31,14 @@ These sources are references, not merge candidates. No stale branch is merged wh
 
 ## Required implementation and verification gates
 
-- [ ] Port explicit Google identity linking into current auth and database modules with minimal diffs.
-- [ ] Add/port tests for successful linking, expired session, changed session, mismatched email, duplicate provider identity, and no duplicate account creation.
+- [x] Port explicit Google identity linking into current auth and database modules with minimal diffs.
+- [x] Add focused tests for successful linking, changed session, and refusal to auto-link a legacy account by email alone.\n- [ ] Add direct database tests for mismatched email and duplicate provider identity; route-level tests for expired/revoked sessions.
 - [ ] Remove Manus OAuth runtime dependency without breaking existing session validation or legacy-account recovery.
 - [ ] Verify startup validation is scoped correctly: production-only checks must not break protected Preview.
 - [ ] Review environment variable names and required/optional provider configuration; do not invent values.
 - [ ] Validate schema compatibility and migrations against an isolated staging database restore.
 - [ ] Verify storage migration with byte-level checks and preserve encryption-key continuity.
-- [ ] Run lint, formatting, typecheck, unit/integration tests, production build, migration validation, Gitleaks, CodeQL, and dependency review where available.
+- [ ] Run lint, formatting, typecheck, unit/integration tests, production build, migration validation, Gitleaks, CodeQL, and dependency review where available. Current PR checks: Gitleaks passed; CI and CodeQL still running; dependency review skipped because GitHub Dependency Graph is unavailable.
 - [ ] Complete authenticated staging journeys for Google sign-in, email sign-in, existing-account linking, tenant isolation, and session revocation.
 - [ ] Obtain separate explicit approval before any production environment change, migration, merge, or deployment.
 
