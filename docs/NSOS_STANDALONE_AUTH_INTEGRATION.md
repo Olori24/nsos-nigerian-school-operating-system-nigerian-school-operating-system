@@ -1,6 +1,6 @@
 # NSOS Standalone Authentication Integration
 
-Status: Google account-linking implementation added; CI and focused verification pending. Not approved for production.
+Status: Google and passwordless-email account-linking implementation added; local-only normal-session resolution implemented. CI verification pending. Not approved for production.
 
 ## Baseline
 
@@ -32,6 +32,8 @@ These sources are references, not merge candidates. No stale branch is merged wh
 ## Required implementation and verification gates
 
 - [x] Port explicit Google identity linking into current auth and database modules with minimal diffs.
+- [x] Add browser- and session-bound passwordless-email identity linking without changing the existing magic-link table or invalidating current sessions.
+- [x] Resolve normal authenticated requests from NSOS database records only; missing local accounts now fail closed instead of being imported from the Manus OAuth service.
 - [x] Add focused tests for successful linking, changed session, and refusal to auto-link a legacy account by email alone.\n- [ ] Add direct database tests for mismatched email and duplicate provider identity; route-level tests for expired/revoked sessions.
 - [ ] Remove Manus OAuth runtime dependency without breaking existing session validation or legacy-account recovery.
 - [ ] Verify startup validation is scoped correctly: production-only checks must not break protected Preview.
