@@ -7,7 +7,7 @@ Status: Google/email standalone sign-in and account linking implemented; normal 
 - Integration branch is based on current `main` at `44292d393c565c933ac52281d5d1482afca68250`.
 - Current production deployment also points to `44292d393c565c933ac52281d5d1482afca68250`.
 - The connected Vercel project has no Production environment variables configured.
-- The integration branch now handles ordinary Google/email sessions locally. The legacy OAuth callback is no longer registered. A small scheduled-task identity adapter remains optional and fails closed without its provider configuration.
+- The integration branch now handles ordinary Google/email sessions locally. The legacy OAuth callback remains available only as an optional account-recovery bridge when its provider configuration is present; the normal login entry points use Google/email. The legacy scheduled-task identity adapter is also optional and fails closed without configuration.
 - Current main rejects attaching a new provider to a legacy account based on matching email alone. This branch adds explicit, session-bound Google and email identity linking.
 
 ## Integration decisions
