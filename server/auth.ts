@@ -302,10 +302,20 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
   app.get("/api/auth/email/verify", rateLimit({ namespace: "email-signin-verify", limit: 20, windowMs: 15 * 60_000 }), async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
     if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
+    const linkStateCookie = parseCookieHeader(req.headers.cookie ?? "")[EMAIL_LINK_STATE_COOKIE];
+    const linkState = linkStateCookie ? readEmailIdentityLinkState(req, token) : undefined;
+    clearEmailIdentityLinkState(res);
+    if (linkStateCookie && !linkState) return res.status(403).json({ error: "This account-link confirmation must be completed in the browser that requested it. Sign in and request a new link." });
     try {
       const link = await db.consumeAuthMagicLink(token);
       const origin = validOrigin(link.redirectOrigin);
       if (!origin) throw new Error("The sign-in link does not have a valid destination.");
+      if (linkState) {
+        const currentUser = await sdk.authenticateRequest(req);
+        if (currentUser.isCron || currentUser.id !== linkState.userId || currentUser.sessionId !== linkState.sessionId || Date.now() > linkState.expiresAt) return res.status(403).json({ error: "Your NSOS account session changed or expired. Sign in and request a new confirmation link." });
+        await db.linkExternalAuthIdentity({ userId: currentUser.id, provider: "email", providerSubject: link.email, email: link.email });
+        return res.redirect(302, origin + "/app?identityLinked=email");
+      }
       const user = await db.resolveExternalAuthIdentity({ provider: "email", providerSubject: link.email, email: link.email });
       await db.acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
