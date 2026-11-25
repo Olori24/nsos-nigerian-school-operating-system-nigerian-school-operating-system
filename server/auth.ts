@@ -7,6 +7,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { sdk } from "./_core/sdk";
 import { writeOperationalEvent } from "./observability";
+import { createRateLimitMiddleware } from "./security";
 
 const GOOGLE_STATE_COOKIE = "__Host-google_oauth_state";
 const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
@@ -55,13 +56,20 @@ function matchesState(expected: string | undefined, actual: string | undefined) 
   return timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
 }
 
-function readGoogleLoginState(req: Request) {
+type GoogleLoginState = { state: string; origin: string; intent: "signin" | "link"; userId?: number; sessionId?: string };
+
+function readGoogleLoginState(req: Request): GoogleLoginState | undefined {
   const raw = parseCookieHeader(req.headers.cookie ?? "")[GOOGLE_STATE_COOKIE];
   if (!raw) return undefined;
   try {
-    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown };
+    const parsed = JSON.parse(raw) as { state?: unknown; origin?: unknown; intent?: unknown; userId?: unknown; sessionId?: unknown };
     const origin = validOrigin(parsed.origin);
-    return typeof parsed.state === "string" && origin ? { state: parsed.state, origin } : undefined;
+    if (typeof parsed.state !== "string" || !origin) return undefined;
+    if (parsed.intent === "link") {
+      if (!Number.isSafeInteger(parsed.userId) || typeof parsed.sessionId !== "string" || !parsed.sessionId) return undefined;
+      return { state: parsed.state, origin, intent: "link", userId: parsed.userId as number, sessionId: parsed.sessionId };
+    }
+    return { state: parsed.state, origin, intent: "signin" };
   } catch {
     return undefined;
   }
@@ -136,20 +144,41 @@ export async function sendGuardianPortalInvitationEmail(input: { email: string; 
   await sendMagicLinkEmail({ email, link, subject: `Your ${schoolName} family portal invitation`, text: `Hello ${guardianName}, ${schoolName} has invited you to access the NSOS family portal. Use this secure link within ${MAGIC_LINK_TTL_LABEL}: ${link}`, html: `<p>Hello ${guardianName},</p><p>${schoolName} has invited you to access the NSOS family portal.</p><p><a href="${link}">Access family portal</a></p><p>This secure sign-in link expires in ${MAGIC_LINK_TTL_LABEL}. If you were not expecting this invitation, you can safely ignore this email.</p>` });
 }
 
-export function registerGoogleAuthRoutes(app: Express) {
-  app.get("/api/auth/google/start", (req: Request, res: Response) => {
-    const origin = validOrigin(getStringQuery(req, "origin"));
-    if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
-    if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
-    const state = randomBytes(32).toString("base64url");
-    res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state, origin }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
-    const redirectUri = `${origin}/api/auth/google/callback`;
-    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    url.search = new URLSearchParams({ client_id: ENV.googleClientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, prompt: "select_account" }).toString();
-    res.redirect(302, url.toString());
+async function startGoogleAuthorization(req: Request, res: Response, intent: "signin" | "link") {
+  const origin = validOrigin(getStringQuery(req, "origin"));
+  if (!origin) return res.status(400).json({ error: "A valid application origin is required." });
+  if (!ENV.googleClientId || !ENV.googleClientSecret) return res.status(503).json({ error: "Google sign-in is not configured." });
+
+  let userId: number | undefined;
+  let sessionId: string | undefined;
+  if (intent === "link") {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user.email || !user.sessionId || user.isCron) return res.status(409).json({ error: "Sign in to the existing NSOS account before linking Google." });
+      userId = user.id;
+      sessionId = user.sessionId;
+    } catch {
+      return res.status(401).json({ error: "Sign in to the existing NSOS account before linking Google." });
+    }
+  }
+
+  const state = randomBytes(32).toString("base64url");
+  res.cookie(GOOGLE_STATE_COOKIE, JSON.stringify({ state, origin, intent, userId, sessionId }), { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: STATE_TTL_MS });
+  const redirectUri = `${origin}/api/auth/google/callback`;
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.search = new URLSearchParams({ client_id: ENV.googleClientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, prompt: "select_account" }).toString();
+  return res.redirect(302, url.toString());
+}
+
+export function registerGoogleAuthRoutes(app: Express, rateLimit = createRateLimitMiddleware) {
+  app.get("/api/auth/google/start", rateLimit({ namespace: "google-signin-start", limit: 10, windowMs: 10 * 60_000 }), (req: Request, res: Response) => {
+    void startGoogleAuthorization(req, res, "signin");
+  });
+  app.get("/api/auth/google/link/start", rateLimit({ namespace: "google-account-link", limit: 5, windowMs: 10 * 60_000 }), (req: Request, res: Response) => {
+    void startGoogleAuthorization(req, res, "link");
   });
 
-  app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+  app.get("/api/auth/google/callback", rateLimit({ namespace: "google-signin-callback", limit: 20, windowMs: 10 * 60_000 }), async (req: Request, res: Response) => {
     const code = getStringQuery(req, "code");
     const state = getStringQuery(req, "state");
     const loginState = readGoogleLoginState(req);
@@ -169,13 +198,31 @@ export function registerGoogleAuthRoutes(app: Express) {
       const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${tokenPayload.access_token}` }, signal: AbortSignal.timeout(EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS) });
       const profile = await profileResponse.json().catch(() => ({})) as { sub?: unknown; email?: unknown; email_verified?: unknown; name?: unknown; picture?: unknown };
       if (!profileResponse.ok || typeof profile.sub !== "string" || typeof profile.email !== "string" || profile.email_verified !== true) throw new Error("Google account does not provide a verified email address.");
+
+      if (loginState.intent === "link") {
+        let currentUser;
+        try {
+          currentUser = await sdk.authenticateRequest(req);
+        } catch {
+          return res.status(401).json({ error: "Your NSOS session expired. Sign in again and restart account linking." });
+        }
+        if (currentUser.isCron || currentUser.id !== loginState.userId || currentUser.sessionId !== loginState.sessionId) {
+          return res.status(403).json({ error: "The account session changed during linking. Sign in again and restart." });
+        }
+        await db.linkExternalAuthIdentity({ userId: currentUser.id, provider: "google", providerSubject: profile.sub, email: profile.email });
+        return res.redirect(302, `${loginState.origin}/app?identityLinked=google`);
+      }
+
       const user = await db.resolveExternalAuthIdentity({ provider: "google", providerSubject: profile.sub, email: profile.email, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.picture === "string" ? profile.picture : null });
       await createSession(req, res, user, profile.email);
       setGoogleSignInNotice(res);
       res.redirect(302, `${loginState.origin}${postSignInPath(loginState.origin)}`);
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("explicit identity linking")) {
+        return res.status(409).json({ error: "An existing NSOS account uses this verified email. Sign in to that account with its current sign-in method, then link Google from Account security." });
+      }
       writeOperationalEvent("warn", "auth_google_callback_failed", { category: "provider_or_identity_failure" });
-      res.status(502).json({ error: "Google sign-in could not be completed. Please try again." });
+      res.status(502).json({ error: "Google sign-in or account linking could not be completed. Please try again." });
     }
   });
 }
