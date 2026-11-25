@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { authRoutePolicies, registerEmailAuthRoutes, registerGoogleAuthRoutes } from "./auth";
 import * as database from "./db";
 import { normaliseAuthEmail } from "./db";
+import { sdk } from "./_core/sdk";
 
 async function withAuthRouteServer<T>(run: (origin: string) => Promise<T>) {
   const app = express();
@@ -186,6 +187,58 @@ describe("external authentication policy", () => {
       const callback = await requestRoute(`${origin}/api/auth/google/callback?code=slow-code&state=${encodeURIComponent(state.state)}`, { headers: { cookie: String(start.headers["set-cookie"]) } });
       expect(callback.status).toBe(502);
       expect(createSession).not.toHaveBeenCalled();
+    });
+  });
+
+
+  it("links a verified email to the same authenticated account without creating a replacement session", async () => {
+    const user = { id: 81, openId: "legacy-user-81", name: "School Owner", email: "owner@example.ng", loginMethod: "legacy", role: "user", sessionId: "active-session-81" };
+    vi.spyOn(sdk, "authenticateRequest").mockResolvedValue(user as any);
+    vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("m".repeat(43));
+    vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "owner@example.ng", redirectOrigin: "https://nsos.top" } as any);
+    const linkIdentity = vi.spyOn(database, "linkExternalAuthIdentity").mockResolvedValue(user as any);
+    const createSession = vi.spyOn(database, "createUserSession");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "email_link_81" }), { status: 200 })));
+
+    await withAuthRouteServer(async origin => {
+      const sessionCookie = "app_session_id=existing-session-token";
+      const start = await requestRoute(origin + "/api/auth/email/link", {
+        method: "POST",
+        headers: { origin: "https://nsos.top", "content-type": "application/json", cookie: sessionCookie },
+        body: JSON.stringify({ email: "owner@example.ng", origin: "https://nsos.top" }),
+      });
+      expect(start.status).toBe(202);
+      const setCookie = headerText(start.headers["set-cookie"]);
+      const stateCookie = setCookie.split("\n").find(value => value.startsWith("__Host-email_identity_link="))?.split(";", 1)[0];
+      expect(stateCookie).toBeTruthy();
+      const callback = await requestRoute(origin + "/api/auth/email/verify?token=" + "m".repeat(43), { headers: { cookie: sessionCookie + "; " + stateCookie } });
+      expect(callback.status).toBe(302);
+      expect(callback.headers.location).toBe("https://nsos.top/app?identityLinked=email");
+      expect(linkIdentity).toHaveBeenCalledWith({ userId: 81, provider: "email", providerSubject: "owner@example.ng", email: "owner@example.ng" });
+      expect(createSession).not.toHaveBeenCalled();
+    });
+  });
+
+  it("rejects email identity linking if the account session changes before confirmation", async () => {
+    const user = { id: 81, openId: "legacy-user-81", name: "School Owner", email: "owner@example.ng", loginMethod: "legacy", role: "user", sessionId: "active-session-81" };
+    vi.spyOn(sdk, "authenticateRequest").mockResolvedValueOnce(user as any).mockResolvedValueOnce({ ...user, sessionId: "replacement-session" } as any);
+    vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("m".repeat(43));
+    vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "owner@example.ng", redirectOrigin: "https://nsos.top" } as any);
+    const linkIdentity = vi.spyOn(database, "linkExternalAuthIdentity");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "email_link_81" }), { status: 200 })));
+
+    await withAuthRouteServer(async origin => {
+      const sessionCookie = "app_session_id=existing-session-token";
+      const start = await requestRoute(origin + "/api/auth/email/link", {
+        method: "POST",
+        headers: { origin: "https://nsos.top", "content-type": "application/json", cookie: sessionCookie },
+        body: JSON.stringify({ email: "owner@example.ng", origin: "https://nsos.top" }),
+      });
+      const setCookie = headerText(start.headers["set-cookie"]);
+      const stateCookie = setCookie.split("\n").find(value => value.startsWith("__Host-email_identity_link="))?.split(";", 1)[0];
+      const callback = await requestRoute(origin + "/api/auth/email/verify?token=" + "m".repeat(43), { headers: { cookie: sessionCookie + "; " + stateCookie } });
+      expect(callback.status).toBe(403);
+      expect(linkIdentity).not.toHaveBeenCalled();
     });
   });
 
