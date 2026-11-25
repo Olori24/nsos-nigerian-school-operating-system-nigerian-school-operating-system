@@ -38,13 +38,14 @@ describe("standalone NSOS session authentication", () => {
 
   it("fails closed when a signed session has no corresponding local NSOS account", async () => {
     vi.spyOn(database, "getUserByOpenId").mockResolvedValue(undefined);
+    const ensureSession = vi.spyOn(database, "ensureActiveUserSession");
     const externalLookup = vi.spyOn(sdk, "getUserInfoWithJwt").mockRejectedValue(new Error("No external service"));
     const token = await sdk.createSessionToken("missing-local-user", { name: "Missing", sessionId: "session-missing" });
     const req = { headers: { cookie: COOKIE_NAME + "=" + token }, get: () => "NSOS auth test" } as any;
 
     await expect(sdk.authenticateRequest(req)).rejects.toThrow("NSOS account not found");
     expect(externalLookup).not.toHaveBeenCalled();
-    expect(database.ensureActiveUserSession).not.toHaveBeenCalled();
+    expect(ensureSession).not.toHaveBeenCalled();
   });
 
   it("continues to reject a revoked local session", async () => {
