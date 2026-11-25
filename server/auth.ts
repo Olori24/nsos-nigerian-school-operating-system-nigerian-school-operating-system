@@ -1,6 +1,6 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -14,6 +14,37 @@ const GOOGLE_SIGNIN_NOTICE_COOKIE = "__Host-google_signin_notice";
 const STATE_TTL_MS = 10 * 60_000;
 const MAGIC_LINK_TTL_LABEL = "15 minutes";
 const EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS = 10_000;
+
+const EMAIL_LINK_STATE_COOKIE = "__Host-email_identity_link";
+
+type EmailIdentityLinkState = { tokenHash: string; userId: number; sessionId: string; expiresAt: number };
+
+function signEmailIdentityLinkState(payload: EmailIdentityLinkState) {
+  if (!ENV.cookieSecret || ENV.cookieSecret.length < 32) throw new Error("Session signing is not configured.");
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", ENV.cookieSecret).update(encoded).digest("base64url");
+  return encoded + "." + signature;
+}
+
+function readEmailIdentityLinkState(req: Request, token: string): EmailIdentityLinkState | undefined {
+  const raw = parseCookieHeader(req.headers.cookie ?? "")[EMAIL_LINK_STATE_COOKIE];
+  if (!raw || !ENV.cookieSecret || ENV.cookieSecret.length < 32) return undefined;
+  const parts = raw.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return undefined;
+  const expected = createHmac("sha256", ENV.cookieSecret).update(parts[0]).digest();
+  const actual = Buffer.from(parts[1], "base64url");
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8")) as Partial<EmailIdentityLinkState>;
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    if (payload.tokenHash !== tokenHash || !Number.isSafeInteger(payload.userId) || typeof payload.sessionId !== "string" || !payload.sessionId || typeof payload.expiresAt !== "number" || payload.expiresAt <= Date.now()) return undefined;
+    return payload as EmailIdentityLinkState;
+  } catch { return undefined; }
+}
+
+function clearEmailIdentityLinkState(res: Response) {
+  res.clearCookie(EMAIL_LINK_STATE_COOKIE, { path: "/", secure: true, sameSite: "lax", httpOnly: true });
+}
 
 function getStringQuery(req: Request, key: string) {
   const value = req.query[key];
