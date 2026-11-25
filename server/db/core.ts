@@ -756,6 +756,47 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   return linkedUser;
 }
 
+export async function linkExternalAuthIdentity(input: { userId: number; provider: ExternalAuthProvider; providerSubject: string; email: string }) {
+  const db = await database();
+  const email = normaliseAuthEmail(input.email);
+  const providerSubject = input.provider === "email" ? normaliseAuthEmail(input.providerSubject) : input.providerSubject.trim();
+  if (!providerSubject || providerSubject.length > 320) throw new Error("External identity is invalid.");
+
+  const user = (await db.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
+  if (!user) throw new Error("The signed-in NSOS account could not be found.");
+  if (!user.email || normaliseAuthEmail(user.email) !== email) {
+    throw new Error("The verified provider email must match the signed-in NSOS account email.");
+  }
+  if (input.provider === "email" && providerSubject !== email) {
+    throw new Error("The email identity does not match the verified account email.");
+  }
+
+  const existingIdentity = (await db.select().from(authIdentities).where(and(
+    eq(authIdentities.provider, input.provider),
+    eq(authIdentities.providerSubject, providerSubject),
+  )).limit(1))[0];
+  if (existingIdentity) {
+    if (existingIdentity.userId !== user.id) throw new Error("This external identity is already linked to another NSOS account.");
+    await db.update(authIdentities).set({ lastUsedAt: new Date(), email }).where(eq(authIdentities.id, existingIdentity.id));
+    return user;
+  }
+
+  try {
+    await db.insert(authIdentities).values({ userId: user.id, provider: input.provider, providerSubject, email, lastUsedAt: new Date() });
+  } catch {
+    const racedIdentity = (await db.select().from(authIdentities).where(and(
+      eq(authIdentities.provider, input.provider),
+      eq(authIdentities.providerSubject, providerSubject),
+    )).limit(1))[0];
+    if (!racedIdentity || racedIdentity.userId !== user.id) {
+      throw new Error("This external identity is already linked to another NSOS account.");
+    }
+    await db.update(authIdentities).set({ lastUsedAt: new Date(), email }).where(eq(authIdentities.id, racedIdentity.id));
+  }
+
+  return user;
+}
+
 export async function createAuthMagicLink(input: { email: string; redirectOrigin: string }) {
   const db = await database();
   const email = normaliseAuthEmail(input.email);
