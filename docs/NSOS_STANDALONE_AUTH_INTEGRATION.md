@@ -7,7 +7,7 @@ Status: Google/email standalone sign-in and account linking implemented; normal 
 - Integration branch is based on current `main` at `44292d393c565c933ac52281d5d1482afca68250`.
 - Current production deployment also points to `44292d393c565c933ac52281d5d1482afca68250`.
 - The connected Vercel project has no Production environment variables configured.
-- The integration branch now handles ordinary Google/email sessions locally. The legacy OAuth adapter remains isolated for old OAuth callbacks and scheduled-task identity; it is optional at startup and fails closed if invoked without its provider configuration.
+- The integration branch now handles ordinary Google/email sessions locally. The legacy OAuth callback is no longer registered. A small scheduled-task identity adapter remains optional and fails closed without its provider configuration.
 - Current main rejects attaching a new provider to a legacy account based on matching email alone. This branch adds explicit, session-bound Google and email identity linking.
 
 ## Integration decisions
@@ -34,10 +34,13 @@ These sources are references, not merge candidates. No stale branch is merged wh
 - [x] Port explicit Google identity linking into current auth and database modules with minimal diffs.
 - [x] Add browser- and session-bound passwordless-email identity linking without changing the existing magic-link table or invalidating current sessions.
 - [x] Resolve normal authenticated requests from NSOS database records only; missing local accounts now fail closed instead of being imported from the Manus OAuth service.
-- [x] Add focused tests for successful linking, changed session, and refusal to auto-link a legacy account by email alone.\n- [ ] Add direct database tests for mismatched email and duplicate provider identity; route-level tests for expired/revoked sessions.
-- [x] Remove the legacy OAuth service from ordinary request authentication and make its production startup requirement optional.\n- [ ] Decide whether to retire the legacy OAuth callback and scheduled-task adapter after confirming no active client or automation depends on it.
-- [ ] Verify startup validation is scoped correctly: production-only checks must not break protected Preview.
-- [x] Make `JWT_SECRET` and `DATABASE_URL` the core production requirements; legacy `OAUTH_SERVER_URL` and `VITE_APP_ID` are no longer required for Google/email authentication.\n- [ ] Verify Google and Resend configuration in an isolated staging environment; do not invent values.
+- [x] Add focused tests for successful linking, changed session, and refusal to auto-link a legacy account by email alone.
+- [ ] Add direct database tests for mismatched email and duplicate provider identity; route-level tests for expired/revoked sessions.
+- [x] Remove the legacy OAuth service from ordinary request authentication and make its production startup requirement optional.
+- [ ] Retain or retire the legacy scheduled-task identity adapter after reviewing active automation dependencies.
+- [x] Verify startup validation is scoped correctly: core production checks require the database and signing secret; legacy OAuth configuration is optional.
+- [x] Make `JWT_SECRET` and `DATABASE_URL` the core production requirements; legacy `OAUTH_SERVER_URL` and `VITE_APP_ID` are no longer required for Google/email authentication.
+- [ ] Verify Google and Resend configuration in an isolated staging environment; do not invent values.
 - [ ] Validate schema compatibility and migrations against an isolated staging database restore.
 - [ ] Verify storage migration with byte-level checks and preserve encryption-key continuity.
 - [x] Run lint, formatting, typecheck, unit/integration tests, production build, migration validation, Gitleaks, and CodeQL. Latest head passed all available checks; Dependency Review was skipped because GitHub Dependency Graph is unavailable.
