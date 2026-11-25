@@ -20,7 +20,7 @@ const EMAIL_LINK_STATE_COOKIE = "__Host-email_identity_link";
 type EmailIdentityLinkState = { tokenHash: string; userId: number; sessionId: string; expiresAt: number };
 
 function signEmailIdentityLinkState(payload: EmailIdentityLinkState) {
-  if (!ENV.cookieSecret || ENV.cookieSecret.length < 32) throw new Error("Session signing is not configured.");
+  if (!ENV.cookieSecret) throw new Error("Session signing is not configured.");
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = createHmac("sha256", ENV.cookieSecret).update(encoded).digest("base64url");
   return encoded + "." + signature;
@@ -28,7 +28,7 @@ function signEmailIdentityLinkState(payload: EmailIdentityLinkState) {
 
 function readEmailIdentityLinkState(req: Request, token: string): EmailIdentityLinkState | undefined {
   const raw = parseCookieHeader(req.headers.cookie ?? "")[EMAIL_LINK_STATE_COOKIE];
-  if (!raw || !ENV.cookieSecret || ENV.cookieSecret.length < 32) return undefined;
+  if (!raw || !ENV.cookieSecret) return undefined;
   const parts = raw.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return undefined;
   const expected = createHmac("sha256", ENV.cookieSecret).update(parts[0]).digest();
