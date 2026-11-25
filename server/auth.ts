@@ -258,8 +258,8 @@ export function registerGoogleAuthRoutes(app: Express, rateLimit = createRateLim
   });
 }
 
-export function registerEmailAuthRoutes(app: Express) {
-  app.post("/api/auth/email/request", async (req: Request, res: Response) => {
+export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimitMiddleware) {
+  app.post("/api/auth/email/request", rateLimit({ namespace: "email-signin-request", limit: 5, windowMs: 15 * 60_000 }), async (req: Request, res: Response) => {
     const origin = validOrigin(req.body?.origin);
     const headerOrigin = validOrigin(req.get("origin"));
     if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
@@ -275,7 +275,31 @@ export function registerEmailAuthRoutes(app: Express) {
     }
   });
 
-  app.get("/api/auth/email/verify", async (req: Request, res: Response) => {
+  app.post("/api/auth/email/link", rateLimit({ namespace: "email-identity-link", limit: 3, windowMs: 15 * 60_000 }), async (req: Request, res: Response) => {
+    const origin = validOrigin(req.body?.origin);
+    const headerOrigin = validOrigin(req.get("origin"));
+    if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (user.isCron || !user.email || !user.sessionId) return res.status(409).json({ error: "Sign in to the existing NSOS account before linking email." });
+      const email = db.normaliseAuthEmail(req.body?.email ?? user.email);
+      if (email !== db.normaliseAuthEmail(user.email)) return res.status(409).json({ error: "The email address must match the signed-in NSOS account." });
+      const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
+      const expiresAt = Date.now() + 15 * 60_000;
+      const state = signEmailIdentityLinkState({ tokenHash: createHash("sha256").update(token).digest("hex"), userId: user.id, sessionId: user.sessionId, expiresAt });
+      res.cookie(EMAIL_LINK_STATE_COOKIE, state, { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: 15 * 60_000 });
+      const link = origin + "/api/auth/email/verify?token=" + encodeURIComponent(token);
+      await sendMagicLinkEmail({ email, link, subject: "Confirm your NSOS account email", text: "Confirm this email address for your existing NSOS account within 15 minutes: " + link, html: "<p>Confirm this email address for your existing NSOS account.</p><p><a href=\"" + link + "\">Confirm email and link account</a></p><p>This link expires in 15 minutes. If you did not request this, ignore this email.</p>" });
+      return res.status(202).json({ success: true, message: "If this address can receive confirmation links, one is on its way." });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Invalid session cookie") return res.status(401).json({ error: "Sign in to the existing NSOS account before linking email." });
+      if (error instanceof Error && error.message === "Enter a valid email address.") return res.status(400).json({ error: error.message });
+      writeOperationalEvent("warn", "auth_email_identity_link_request_failed", { category: "provider_or_session_failure" });
+      return res.status(503).json({ error: "We could not send an account confirmation link right now. Please try again shortly." });
+    }
+  });
+
+  app.get("/api/auth/email/verify", rateLimit({ namespace: "email-signin-verify", limit: 20, windowMs: 15 * 60_000 }), async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
     if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
     try {
