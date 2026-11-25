@@ -33,6 +33,7 @@ These sources are references, not merge candidates. No stale branch is merged wh
 
 - [x] Port explicit Google identity linking into current auth and database modules with minimal diffs.
 - [x] Add browser- and session-bound passwordless-email identity linking without changing the existing magic-link table or invalidating current sessions.
+- [x] Expose Google and email identity-link actions in Account & security; keep the linking actions tied to the current signed-in account.
 - [x] Resolve normal authenticated requests from NSOS database records only; missing local accounts now fail closed instead of being imported from the Manus OAuth service.
 - [x] Add focused tests for successful linking, changed session, and refusal to auto-link a legacy account by email alone.
 - [ ] Add direct database tests for mismatched email and duplicate provider identity; route-level tests for expired/revoked sessions.
