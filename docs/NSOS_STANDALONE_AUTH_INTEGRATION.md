@@ -1,6 +1,6 @@
 # NSOS Standalone Authentication Integration
 
-Status: Google and passwordless-email account-linking implementation added; local-only normal-session resolution implemented. CI verification pending. Not approved for production.
+Status: Google/email standalone sign-in and account linking implemented; normal sessions resolve locally. Latest CI, CodeQL and secret scan passed. Staging and production cutover remain unverified.
 
 ## Baseline
 
@@ -40,7 +40,7 @@ These sources are references, not merge candidates. No stale branch is merged wh
 - [x] Make `JWT_SECRET` and `DATABASE_URL` the core production requirements; legacy `OAUTH_SERVER_URL` and `VITE_APP_ID` are no longer required for Google/email authentication.\n- [ ] Verify Google and Resend configuration in an isolated staging environment; do not invent values.
 - [ ] Validate schema compatibility and migrations against an isolated staging database restore.
 - [ ] Verify storage migration with byte-level checks and preserve encryption-key continuity.
-- [ ] Run lint, formatting, typecheck, unit/integration tests, production build, migration validation, Gitleaks, CodeQL, and dependency review where available. Current PR checks are tracked on the latest head commit; Dependency Review may be skipped when GitHub Dependency Graph is unavailable.
+- [x] Run lint, formatting, typecheck, unit/integration tests, production build, migration validation, Gitleaks, and CodeQL. Latest head passed all available checks; Dependency Review was skipped because GitHub Dependency Graph is unavailable.
 - [ ] Complete authenticated staging journeys for Google sign-in, email sign-in, existing-account linking, tenant isolation, and session revocation.
 - [ ] Obtain separate explicit approval before any production environment change, migration, merge, or deployment.
 
