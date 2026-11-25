@@ -2,6 +2,8 @@ import { OAUTH_STATE_COOKIE, encodeOAuthState } from "@shared/const";
 
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
+export const hasLegacyOAuthConfig = Boolean(import.meta.env.VITE_OAUTH_PORTAL_URL && import.meta.env.VITE_APP_ID);
+
 // Start the standalone NSOS Google sign-in flow. The server creates and
 // validates the OAuth state cookie; the browser never handles provider secrets.
 export const startLogin = () => {
@@ -13,10 +15,7 @@ export const startLogin = () => {
 export const startLegacyLogin = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
-  if (!oauthPortalUrl || !appId) {
-    window.location.assign("/api/auth/google/start?origin=" + encodeURIComponent(window.location.origin));
-    return;
-  }
+  if (!oauthPortalUrl || !appId) return;
   const redirectUri = window.location.origin + "/api/oauth/callback";
   const nonce = crypto.randomUUID();
   document.cookie = OAUTH_STATE_COOKIE + "=" + nonce + "; Path=/; Max-Age=600; SameSite=None; Secure";
