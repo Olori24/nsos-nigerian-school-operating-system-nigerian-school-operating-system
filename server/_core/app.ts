@@ -3,7 +3,6 @@ import express from "express";
 import { createServer } from "http";
 import type { Server } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
 import { registerEmailAuthRoutes, registerGoogleAuthRoutes } from "../auth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -50,7 +49,6 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   registerStorageProxy(app);
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
-  registerOAuthRoutes(app);
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
 
   if (process.env.NODE_ENV === "development") {
