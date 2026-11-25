@@ -307,12 +307,24 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
     clearEmailIdentityLinkState(res);
     if (linkStateCookie && !linkState) return res.status(403).json({ error: "This account-link confirmation must be completed in the browser that requested it. Sign in and request a new link." });
     try {
+      // Validate the initiating session before consuming the one-time token.
+      // A stale or switched session must not burn a valid email confirmation.
+      if (linkState) {
+        let currentUser;
+        try {
+          currentUser = await sdk.authenticateRequest(req);
+        } catch {
+          return res.status(401).json({ error: "Your NSOS session expired. Sign in again and request a new confirmation link." });
+        }
+        if (currentUser.isCron || currentUser.id !== linkState.userId || currentUser.sessionId !== linkState.sessionId || Date.now() > linkState.expiresAt) {
+          return res.status(403).json({ error: "Your NSOS account session changed or expired. Sign in and request a new confirmation link." });
+        }
+      }
       const link = await db.consumeAuthMagicLink(token);
       const origin = validOrigin(link.redirectOrigin);
       if (!origin) throw new Error("The sign-in link does not have a valid destination.");
       if (linkState) {
         const currentUser = await sdk.authenticateRequest(req);
-        if (currentUser.isCron || currentUser.id !== linkState.userId || currentUser.sessionId !== linkState.sessionId || Date.now() > linkState.expiresAt) return res.status(403).json({ error: "Your NSOS account session changed or expired. Sign in and request a new confirmation link." });
         await db.linkExternalAuthIdentity({ userId: currentUser.id, provider: "email", providerSubject: link.email, email: link.email });
         return res.redirect(302, origin + "/app?identityLinked=email");
       }
