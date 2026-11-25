@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { registerOAuthRoutes } from "./oauth";
 import { createServer } from "http";
 import type { Server } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -49,6 +50,7 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   registerStorageProxy(app);
   registerGoogleAuthRoutes(app);
   registerEmailAuthRoutes(app);
+  registerOAuthRoutes(app);
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
 
   if (process.env.NODE_ENV === "development") {
