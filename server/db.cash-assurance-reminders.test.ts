@@ -36,7 +36,7 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
   afterAll(async () => {
     if (!db) return;
     if (auditConstraintName) {
-      try { await (db as any).$client.promise().query("ALTER TABLE securityAuditEvents DROP CHECK " + auditConstraintName); } catch { /* Best-effort cleanup after a failed DDL setup. */ }
+      try { await (db as any).$client.promise().query("ALTER TABLE securityAuditEvents DROP CONSTRAINT " + auditConstraintName); } catch { /* Best-effort cleanup after a failed DDL setup. */ }
     }
     await db.delete(reminderRuns).where(eq(reminderRuns.schoolId, schoolId));
     await db.delete(reminderPolicies).where(eq(reminderPolicies.schoolId, schoolId));
@@ -247,7 +247,7 @@ describe.skipIf(!databaseEnabled)("Cash Assurance reminder database invariants",
         schoolId, runId: approvalRollbackProposal.runId, actorUserId,
       })).rejects.toThrow();
     } finally {
-      await pool.promise().query("ALTER TABLE securityAuditEvents DROP CHECK " + auditConstraintName);
+      await pool.promise().query("ALTER TABLE securityAuditEvents DROP CONSTRAINT " + auditConstraintName);
       auditConstraintName = null;
     }
     const approvalRollbackRun = (await db!.select().from(reminderRuns).where(eq(reminderRuns.id, approvalRollbackProposal.runId)).limit(1))[0];
