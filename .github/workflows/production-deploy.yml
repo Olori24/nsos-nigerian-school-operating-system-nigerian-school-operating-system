@@ -1,34 +1,36 @@
 name: NSOS Production Deploy
 
 on:
-  workflow_run:
-    workflows:
-      - NSOS CI
-    types:
-      - completed
+  # Production deployment is deliberately manual. Successful CI must never
+  # publish to Production as a side effect of merging an unrelated PR.
   workflow_dispatch:
+    inputs:
+      confirm_production_deploy:
+        description: "Explicitly approve deployment of the selected main commit"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
 
 permissions:
   contents: read
 
 concurrency:
-  group: nsos-production-${{ github.event.workflow_run.head_branch || github.ref_name }}
-  cancel-in-progress: true
+  group: nsos-production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy to production
-    if: >-
-      (github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref_name == 'main')
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.confirm_production_deploy == 'yes'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
     env:
       PRODUCTION_DEPLOY_HOOK_URL: ${{ secrets.PRODUCTION_DEPLOY_HOOK_URL }}
-      DEPLOY_COMMIT: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      DEPLOY_COMMIT: ${{ github.sha }}
     steps:
       - name: Require production deploy hook
         run: |
@@ -40,10 +42,10 @@ jobs:
 
       - name: Trigger production deployment
         run: |
-          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 5 \
-            --request POST "$PRODUCTION_DEPLOY_HOOK_URL" \
-            --header "Content-Type: application/json" \
-            --data "{\"repository\":\"${GITHUB_REPOSITORY}\",\"commit\":\"${DEPLOY_COMMIT}\",\"ref\":\"main\",\"source\":\"github-actions\"}"
+          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 5 \\
+            --request POST "$PRODUCTION_DEPLOY_HOOK_URL" \\
+            --header "Content-Type: application/json" \\
+            --data "{\\"repository\\":\\"\${GITHUB_REPOSITORY}\\",\\"commit\\":\\"\${DEPLOY_COMMIT}\\",\\"ref\\":\\"main\\",\\"source\\":\\"github-actions-manual\\"}"
 
       - name: Record deployment trigger
         run: |
