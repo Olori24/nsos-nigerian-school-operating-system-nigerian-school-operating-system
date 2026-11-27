@@ -65,14 +65,6 @@ jobs:
             "$image" --store=unistore --path=""
           echo "Started $container using $image"
 
-      - name: Start disposable TiDB v8.5.3 standalone instance
-        if: matrix.tidb_version == 'v8.5.3'
-        run: |
-          docker run --detach --name nsos-tidb-v853 \
-            --publish 4000:4000 \
-            pingcap/tidb:v8.5.3-20260920-65bb871 \
-            --store=unistore --path=""
-
       - name: Wait for TiDB and prepare isolated test database
         run: |
           node --input-type=module <<'NODE'
@@ -158,5 +150,7 @@ jobs:
       - name: Show TiDB diagnostics on failure
         if: failure()
         run: |
-          echo "TiDB playground log:"
-          tail -n 200 /tmp/nsos-tidb-playground.log || true
+          echo "TiDB container diagnostics:"
+          docker ps -a --filter "name=nsos-tidb" || true
+          docker logs nsos-tidb-v853 2>&1 | tail -n 120 || true
+          docker logs nsos-tidb-v858 2>&1 | tail -n 120 || true
