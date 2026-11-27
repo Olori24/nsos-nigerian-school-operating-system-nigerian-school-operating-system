@@ -1,4 +1,39 @@
+import { useEffect } from "react";
 import { ArrowRight, ArrowUpRight, BookOpen, Building2, HeartPulse, Layers3, Radar, Sparkles, Workflow } from "lucide-react";
+
+declare global {
+  interface Window {
+    hbspt?: {
+      forms: {
+        create: (options: { region: string; portalId: string; formId: string; target: string }) => void;
+      };
+    };
+  }
+}
+
+function HubSpotBusinessEnquiryForm() {
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://js-eu1.hsforms.net/forms/embed/v2.js";
+    script.async = true;
+    script.onload = () => {
+      window.hbspt?.forms.create({
+        region: "eu1",
+        portalId: "149811122",
+        formId: "ce2094f8-8dc2-477e-91fe-9acfe092446c",
+        target: "#nsos-tech-business-enquiry-form",
+      });
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      script.onload = null;
+      script.remove();
+    };
+  }, []);
+
+  return <div id="nsos-tech-business-enquiry-form" className="min-h-32 text-left" />;
+}
 
 const products = [
   {
@@ -147,8 +182,19 @@ export default function EcosystemHome() {
         <div className="space-y-5 text-sm leading-8 text-[#b6c8bd] sm:text-base"><p>We build software around real operational needs. Schools need better ways to manage learning and administration. Clinics need dependable operational systems. Businesses need clearer processes. People need useful AI tools.</p><p>NSOS is the shared front door to this work: one place to understand what we are building and find the right product.</p></div>
       </section>
 
-      <section id="contact" className="mx-5 mb-16 rounded-3xl border border-[#6ca98a]/20 bg-gradient-to-br from-[#173c2c] to-[#10251c] px-6 py-12 text-center sm:mx-8 sm:px-10 lg:mx-auto lg:max-w-7xl lg:py-16">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a8d7b9]">Start here</p><h2 className="mx-auto mt-4 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Find the product built for what you need to do.</h2><p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#bdd0c3]">Explore the ecosystem or contact the NSOS team directly.</p><a href="mailto:hello@nsos.top" className="mt-7 inline-flex items-center gap-2 rounded-full border border-[#b7e2c8]/40 px-6 py-3.5 text-sm font-bold text-[#b7e2c8] transition hover:bg-white/10">Contact hello@nsos.top</a><a href="/app" className="mt-7 inline-flex items-center gap-2 rounded-full bg-[#b7e2c8] px-6 py-3.5 text-sm font-bold text-[#103d2d] transition hover:bg-white">Enter NSOS <ArrowUpRight size={16} /></a>
+      <section id="contact" className="mx-5 mb-16 rounded-3xl border border-[#6ca98a]/20 bg-gradient-to-br from-[#173c2c] to-[#10251c] px-6 py-12 sm:mx-8 sm:px-10 lg:mx-auto lg:max-w-7xl lg:py-16">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a8d7b9]">NSOS Technology · Business enquiries</p>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Tell us what your business needs.</h2>
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#bdd0c3]">Looking for software, AI solutions, workflow automation or technology support? Share what you are working on and our team will follow up.</p>
+        </div>
+        <div className="mx-auto mt-9 max-w-2xl rounded-2xl bg-white p-5 text-[#142c22] shadow-xl sm:p-8">
+          <HubSpotBusinessEnquiryForm />
+        </div>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-sm">
+          <a href="mailto:hello@nsos.top" className="font-semibold text-[#b7e2c8] underline underline-offset-4">Or email hello@nsos.top</a>
+          <a href="/app" className="inline-flex items-center gap-2 rounded-full bg-[#b7e2c8] px-5 py-3 font-bold text-[#103d2d] transition hover:bg-white">School Management System <ArrowUpRight size={16} /></a>
+        </div>
       </section>
 
       <footer className="border-t border-white/10 px-5 py-8 text-center text-xs text-[#81988a] sm:px-8"><p>© {new Date().getFullYear()} NSOS. A connected ecosystem of digital products.</p><p className="mt-2">Each product is independently developed and operated. Availability varies by product.</p></footer>
