@@ -29,8 +29,8 @@ jobs:
     environment: production
     timeout-minutes: 10
     env:
-      PRODUCTION_DEPLOY_HOOK_URL: ${{ secrets.PRODUCTION_DEPLOY_HOOK_URL }}
-      DEPLOY_COMMIT: ${{ github.sha }}
+      PRODUCTION_DEPLOY_HOOK_URL: \${{ secrets.PRODUCTION_DEPLOY_HOOK_URL }}
+      DEPLOY_COMMIT: \${{ github.sha }}
     steps:
       - name: Require production deploy hook
         run: |
@@ -42,11 +42,11 @@ jobs:
 
       - name: Trigger production deployment
         run: |
-          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 5 \\
-            --request POST "$PRODUCTION_DEPLOY_HOOK_URL" \\
-            --header "Content-Type: application/json" \\
-            --data "{\\"repository\\":\\"\${GITHUB_REPOSITORY}\\",\\"commit\\":\\"\${DEPLOY_COMMIT}\\",\\"ref\\":\\"main\\",\\"source\\":\\"github-actions-manual\\"}"
+          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 5 \
+            --request POST "$PRODUCTION_DEPLOY_HOOK_URL" \
+            --header "Content-Type: application/json" \
+            --data "{\"repository\":\"\${GITHUB_REPOSITORY}\",\"commit\":\"\${DEPLOY_COMMIT}\",\"ref\":\"main\",\"source\":\"github-actions-manual\"}"
 
       - name: Record deployment trigger
         run: |
-          echo "Production deployment triggered for ${GITHUB_REPOSITORY}@${DEPLOY_COMMIT}."
+          echo "Production deployment triggered for \${GITHUB_REPOSITORY}@\${DEPLOY_COMMIT}."
