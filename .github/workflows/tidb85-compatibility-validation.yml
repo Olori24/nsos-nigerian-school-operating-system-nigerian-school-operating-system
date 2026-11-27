@@ -1,4 +1,4 @@
-name: NSOS TiDB 8.5 compatibility validation
+name: NSOS TiDB 8.5.x compatibility validation
 
 on:
   workflow_call:
