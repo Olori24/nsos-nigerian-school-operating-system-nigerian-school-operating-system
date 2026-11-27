@@ -100,5 +100,5 @@ jobs:
         run: node scripts/assert-vercel-build-html.mjs
 
   tidb-compatibility:
-    name: TiDB 8.5.8 compatibility validation
+    name: TiDB 8.5.x compatibility validation
     uses: ./.github/workflows/tidb85-compatibility-validation.yml
