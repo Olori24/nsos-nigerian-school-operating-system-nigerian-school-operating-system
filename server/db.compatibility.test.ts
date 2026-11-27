@@ -36,9 +36,10 @@ describe.skipIf(!databaseEnabled)("MySQL/TiDB runtime compatibility invariants",
     const connection = await pool.getConnection();
     try {
       await connection.query("CREATE TEMPORARY TABLE nsos_collation_probe (value VARCHAR(64) NOT NULL, UNIQUE KEY uq_value (value))");
-      const [collationRows] = await connection.query("SELECT collation_name AS collation FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'nsos_collation_probe' AND column_name = 'value'");
+      const [collationRows] = await connection.query("SHOW FULL COLUMNS FROM nsos_collation_probe");
       const [databaseCollationRows] = await connection.query("SELECT @@collation_database AS collation");
-      const columnCollation = String((collationRows as Array<{ collation: string }>)[0].collation);
+      const columnDefinition = (collationRows as Array<{ Field: string; Collation: string | null }>).find((row) => row.Field === "value");
+      const columnCollation = String(columnDefinition?.Collation ?? "");
       const databaseCollation = String((databaseCollationRows as Array<{ collation: string }>)[0].collation);
       await connection.query("INSERT INTO nsos_collation_probe (value) VALUES ('NSOS-Case-Probe')");
       const [comparisonRows] = await connection.query("SELECT value = 'nsos-case-probe' AS is_equal FROM nsos_collation_probe LIMIT 1");
