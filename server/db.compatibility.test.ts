@@ -35,11 +35,12 @@ describe.skipIf(!databaseEnabled)("MySQL/TiDB runtime compatibility invariants",
     const pool = createPool(databasePoolOptions(databaseUrl!)).promise();
     const connection = await pool.getConnection();
     try {
-      const [collationRows] = await connection.query("SELECT @@collation_database AS collation");
-      const collation = String((collationRows as Array<{ collation: string }>)[0].collation);
       await connection.query("CREATE TEMPORARY TABLE nsos_collation_probe (value VARCHAR(64) NOT NULL, UNIQUE KEY uq_value (value))");
+      const [collationRows] = await connection.query("SELECT COLLATION(value) AS collation FROM nsos_collation_probe LIMIT 1");
+      const [databaseCollationRows] = await connection.query("SELECT @@collation_database AS collation");
+      const collation = String((databaseCollationRows as Array<{ collation: string }>)[0].collation);
       await connection.query("INSERT INTO nsos_collation_probe (value) VALUES ('NSOS-Case-Probe')");
-      const [comparisonRows] = await connection.query("SELECT 'NSOS-Case-Probe' = 'nsos-case-probe' AS is_equal");
+      const [comparisonRows] = await connection.query("SELECT value = 'nsos-case-probe' AS is_equal FROM nsos_collation_probe LIMIT 1");
       const caseInsensitive = Number((comparisonRows as Array<{ is_equal: number }>)[0].is_equal) === 1;
       let duplicateRejected = false;
       try {
@@ -49,6 +50,7 @@ describe.skipIf(!databaseEnabled)("MySQL/TiDB runtime compatibility invariants",
       }
       expect(duplicateRejected).toBe(caseInsensitive);
       expect(collation.length).toBeGreaterThan(0);
+      expect(String((collationRows as Array<{ collation: string }>)[0].collation).length).toBeGreaterThan(0);
       console.info(`Database collation: ${collation}; case-insensitive equality: ${caseInsensitive}`);
     } finally {
       connection.release();
