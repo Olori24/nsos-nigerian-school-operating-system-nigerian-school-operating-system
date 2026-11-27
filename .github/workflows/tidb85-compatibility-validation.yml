@@ -51,20 +51,19 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install TiUP
-        if: matrix.tidb_version == 'v8.5.8'
+      - name: Start disposable TiDB instance
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          echo "$HOME/.tiup/bin" >> "$GITHUB_PATH"
-          "$HOME/.tiup/bin/tiup" --version
-
-      - name: Start disposable TiDB v8.5.8 cluster
-        if: matrix.tidb_version == 'v8.5.8'
-        run: |
-          nohup "$HOME/.tiup/bin/tiup" playground "v8.5.8" \
-            --db 1 --pd 1 --kv 1 --tiflash 0 --without-monitor \
-            > /tmp/nsos-tidb-playground.log 2>&1 &
-          echo $! > /tmp/nsos-tidb-playground.pid
+          if [ "${{ matrix.tidb_version }}" = "v8.5.8" ]; then
+            image="pingcap/tidb:v8.5.8-20261117-b2df425"
+            container="nsos-tidb-v858"
+          else
+            image="pingcap/tidb:v8.5.3-20260920-65bb871"
+            container="nsos-tidb-v853"
+          fi
+          docker run --detach --name "$container" \
+            --publish 4000:4000 \
+            "$image" --store=unistore --path=""
+          echo "Started $container using $image"
 
       - name: Start disposable TiDB v8.5.3 standalone instance
         if: matrix.tidb_version == 'v8.5.3'
