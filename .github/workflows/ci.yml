@@ -98,3 +98,7 @@ jobs:
 
       - name: Verify production HTML has no Manus runtime injection
         run: node scripts/assert-vercel-build-html.mjs
+
+  tidb-compatibility:
+    name: TiDB 8.5.x compatibility validation
+    uses: ./.github/workflows/tidb85-compatibility-validation.yml
