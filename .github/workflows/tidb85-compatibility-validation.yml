@@ -13,7 +13,11 @@ concurrency:
 
 jobs:
   validate:
-    name: TiDB 8.5.8 migrations and database integration
+    name: TiDB ${{ matrix.tidb-version }} migrations and database integration
+    strategy:
+      fail-fast: false
+      matrix:
+        tidb-version: [v8.5.3, v8.5.8]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -55,7 +59,7 @@ jobs:
 
       - name: Start disposable TiDB 8.5.8 cluster
         run: |
-          nohup "$HOME/.tiup/bin/tiup" playground v8.5.8 \
+          nohup "$HOME/.tiup/bin/tiup" playground "${{ matrix.tidb-version }}" \
             --db 1 --pd 1 --kv 1 --tiflash 0 --without-monitor \
             > /tmp/nsos-tidb-playground.log 2>&1 &
           echo $! > /tmp/nsos-tidb-playground.pid
@@ -139,8 +143,8 @@ jobs:
           }
           NODE
 
-      - name: Run real database lifecycle, rollback, and concurrency integration tests
-        run: pnpm exec vitest run server/db.cash-assurance-reminders.test.ts
+      - name: Run database lifecycle, collation, ID, recovery, rollback, and concurrency integration tests
+        run: pnpm exec vitest run server/db.cash-assurance-reminders.test.ts server/db.compatibility.test.ts
 
       - name: Show TiDB diagnostics on failure
         if: failure()
