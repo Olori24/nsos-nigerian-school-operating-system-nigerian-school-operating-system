@@ -1,0 +1,61 @@
+name: Repair NSOS Staging Domain Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type REASSIGN_STAGING_DOMAIN to move staging.nsos.top to the database-connected Preview branch"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nsos-staging-domain-repair
+  cancel-in-progress: false
+
+jobs:
+  reassign:
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'REASSIGN_STAGING_DOMAIN'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Validate Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo "::error::Missing VERCEL_TOKEN in staging environment"; exit 1; }
+
+      - name: Verify current assignment and update staging domain only
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: prj_xjIPyNyC6VIs6tE0Hb0ODcfBbqTs
+          VERCEL_TEAM_ID: team_NKFPuLmPv9szBq7kwqFVfafV
+          DOMAIN: staging.nsos.top
+          EXPECTED_OLD_BRANCH: fix/vercel-host-platform-routing
+          TARGET_BRANCH: fix/remove-manus-native-google-auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/domains/$DOMAIN?teamId=$VERCEL_TEAM_ID"
+          current="$(curl --fail --silent --show-error -H "Authorization: Bearer $VERCEL_TOKEN" "$base")"
+          branch="$(jq -r '.gitBranch // ""' <<< "$current")"
+          if [ "$branch" = "$TARGET_BRANCH" ]; then
+            echo "Staging domain is already assigned to the target branch."
+            exit 0
+          fi
+          if [ "$branch" != "$EXPECTED_OLD_BRANCH" ]; then
+            echo "::error::Unexpected current branch assignment; refusing to overwrite it."
+            exit 1
+          fi
+          payload="$(jq -n --arg gitBranch "$TARGET_BRANCH" '{gitBranch:$gitBranch}')"
+          curl --fail --silent --show-error -X PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$payload" "$base" >/dev/null
+          updated="$(curl --fail --silent --show-error -H "Authorization: Bearer $VERCEL_TOKEN" "$base")"
+          actual="$(jq -r '.gitBranch // ""' <<< "$updated")"
+          test "$actual" = "$TARGET_BRANCH" || { echo "::error::Vercel did not confirm the expected branch assignment"; exit 1; }
+          echo "Verified: $DOMAIN now tracks $TARGET_BRANCH."
