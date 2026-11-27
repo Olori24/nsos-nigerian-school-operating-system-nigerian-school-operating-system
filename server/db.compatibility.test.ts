@@ -45,7 +45,9 @@ describe.skipIf(!databaseEnabled)("MySQL/TiDB runtime compatibility invariants",
       let duplicateRejected = false;
       try {
         await connection.query("INSERT INTO nsos_collation_probe (value) VALUES ('nsos-case-probe')");
-      } catch {
+      } catch (error) {
+        const databaseError = error as { code?: string; errno?: number };
+        if (databaseError.code !== "ER_DUP_ENTRY" && databaseError.errno !== 1062) throw error;
         duplicateRejected = true;
       }
       expect(duplicateRejected).toBe(caseInsensitive);
