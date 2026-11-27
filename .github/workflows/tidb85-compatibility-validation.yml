@@ -71,7 +71,7 @@ jobs:
         run: |
           docker run --detach --name nsos-tidb-v853 \
             --publish 4000:4000 \
-            pingcap/tidb:v8.5.3 \
+            pingcap/tidb:v8.5.3-20260920-65bb871 \
             --store=unistore --path=""
 
       - name: Wait for TiDB and prepare isolated test database
