@@ -1,5 +1,5 @@
 const STAGING_HOST_MARKER = /(^|[.-])(staging|stage|test|sandbox)([.-]|$)/i;
-const LIVE_NSOS_HOST = "nsos-system-uhkdscaf.manus.space";
+const LIVE_NSOS_HOST = "nsos.top";
 
 export function boundedInteger(value, fallback, maximum) {
   const parsed = Number(value ?? fallback);

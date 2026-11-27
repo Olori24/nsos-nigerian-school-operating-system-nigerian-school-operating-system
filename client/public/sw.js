@@ -1,4 +1,4 @@
-const CACHE_NAME = "nsos-shell-v6";
+const CACHE_NAME = "nsos-shell-v7";
 const APP_SHELL = [
   "/",
   "/offline.html",
@@ -55,7 +55,7 @@ self.addEventListener("fetch", event => {
 
   if (
     url.pathname.startsWith("/assets/") ||
-    url.pathname.startsWith("/manus-storage/")
+    url.pathname.startsWith("/api/storage/")
   ) {
     event.respondWith(
       caches.match(request).then(

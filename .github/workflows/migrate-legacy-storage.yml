@@ -1,0 +1,84 @@
+name: NSOS Legacy Storage Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Inventory only, or copy legacy objects into the new S3/R2 bucket"
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - apply
+        default: dry-run
+      confirmation:
+        description: "For apply only, enter MIGRATE_STAGING_OBJECTS"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nsos-legacy-storage-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Inventory or migrate staging storage objects
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: staging
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      NSOS_STORAGE_MIGRATION_ENV: staging
+      NSOS_STORAGE_MIGRATION_DATABASE: ${{ vars.NSOS_STAGING_DATABASE_NAME }}
+      NSOS_STORAGE_MIGRATION_DATABASE_HOST: ${{ vars.NSOS_STAGING_DATABASE_HOST }}
+      NSOS_STORAGE_MIGRATION_CONFIRM: ${{ inputs.confirmation }}
+      LEGACY_STORAGE_FORGE_API_URL: ${{ secrets.LEGACY_STORAGE_FORGE_API_URL }}
+      LEGACY_STORAGE_FORGE_API_KEY: ${{ secrets.LEGACY_STORAGE_FORGE_API_KEY }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_REGION: ${{ vars.S3_REGION }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: |
+          npm install --global corepack@0.31.0
+          corepack enable
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate required migration configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DATABASE_URL NSOS_STORAGE_MIGRATION_DATABASE NSOS_STORAGE_MIGRATION_DATABASE_HOST LEGACY_STORAGE_FORGE_API_URL LEGACY_STORAGE_FORGE_API_KEY S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required staging migration setting: $name"
+              exit 1
+            fi
+          done
+          if [ "${{ inputs.mode }}" = "apply" ] && [ "$NSOS_STORAGE_MIGRATION_CONFIRM" != "MIGRATE_STAGING_OBJECTS" ]; then
+            echo "::error::Apply mode requires the exact staging confirmation phrase."
+            exit 1
+          fi
+
+      - name: Inventory legacy objects (no writes)
+        if: inputs.mode == 'dry-run'
+        run: pnpm exec tsx scripts/migrate-legacy-storage.ts
+
+      - name: Copy legacy objects to S3/R2
+        if: inputs.mode == 'apply'
+        run: pnpm exec tsx scripts/migrate-legacy-storage.ts --apply

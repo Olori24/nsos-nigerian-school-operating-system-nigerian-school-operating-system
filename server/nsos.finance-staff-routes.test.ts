@@ -12,7 +12,7 @@ import * as db from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-const callerFor = (id: number) => appRouter.createCaller({ user: { id, openId: `user-${id}`, name: "NSOS User", email: "user@example.com", loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
+const callerFor = (id: number) => appRouter.createCaller({ user: { id, openId: `user-${id}`, name: "NSOS User", email: "user@example.com", loginMethod: "google", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] });
 
 describe("NSOS finance and staff routes", () => {
   beforeEach(() => vi.clearAllMocks());

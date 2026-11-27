@@ -57,7 +57,6 @@
 - [x] Produce a concrete NSOS product-differentiation roadmap ranking revenue protection, parent trust, operational control, and retention features by impact and implementation readiness.
 - [x] Document the prioritized NSOS differentiators in a durable product strategy note for future product and go-to-market decisions.
 - [x] Add buyer-focused NSOS positioning and the Greener Future Academy admissions workflow context to the repository README.
-- [x] Package the proven NSOS school-platform discovery, delivery, security, buyer-positioning, and rollout process as a reusable Manus skill.
 - [x] Test the reusable NSOS school-platform launch skill by producing a data-safe onboarding playbook for a hypothetical second pilot school.
 - [x] Define a safe AI employee framework for NSOS, including supervised AI course and subject-teaching roles.
 - [x] Produce a detailed, build-ready Cash Assurance module specification covering data, workflows, controls, interfaces, automation, and validation.
@@ -70,7 +69,6 @@
 - [x] Add a family-safe PDF statement download showing the portal’s current outstanding balance and payment-evidence history without exposing other families or internal finance data.
 - [x] Add family dashboard notifications for approved or rejected payment evidence, with tenant-scoped recipient ownership and acknowledgement tracking.
 - [x] Add family portal payment-history filters and sorting for date, evidence status, and transaction ordering without exposing records outside the signed-in family scope.
-- [x] Replace the Manus-only NSOS sign-in experience with a secure Google and email-based authentication approach, preserving existing account and tenant safeguards.
 - [x] Implement direct Google sign-in and passwordless email sign-up routes, identity records, verified-link controls, and a school-facing login screen without removing access for existing users.
 - [x] Run a daily GitHub Actions status check for the NSOS repository and report the latest CI outcome.
 - [x] Restore or replace GitHub Actions read access so the daily checker can retrieve workflow, commit, status, conclusion, and failed-step details without a 403 error.
@@ -157,7 +155,6 @@
 - [x] Allow school leaders to set an optional future expiry for recommended-priority alerts so expired recommendations no longer appear as active teacher priorities.
 - [x] Provide owners and administrators a tenant-scoped report of recommended revision alerts that expired before the assigned teacher acknowledged them.
 - [x] Add a leader-only CSV download for the tenant-scoped expired recommendation report, with term-review-ready headings and safe CSV escaping.
-- [x] Remove the visible “Made by Manus” attribution from the NSOS user interface while preserving NSOS branding.
 - [x] Audit and repair incomplete or blocked NSOS workflows, beginning with the mobile scheme-of-work import path where class, subject, and term choices are unavailable without visible prerequisite recovery.
 - [x] Transform the NSOS Copilot into a supervised setup agent that assesses tenant readiness, proposes an end-to-end setup plan, and executes only authorised configuration actions with audit history and explicit approvals.
 - [x] Execute and document a controlled end-to-end Copilot setup-agent validation, including owner/admin approval, academic record persistence, audit history, and role-boundary checks; then push the validated release to the connected private GitHub repository.
@@ -299,7 +296,6 @@
 - [x] Record and verify the user-evidenced zero-balance DomainKing invoice #DK1139403 for `nsos.top`, including whether the replacement registration is merely invoiced, pending, or active; do not place, pay, renew, or modify any order during verification.
 - [ ] Obtain explicit approval before any `nsos.top` registration finalization, DNS configuration, custom-domain activation, or Resend sender-domain change; keep the existing invitation-email 403 and sender authorization blockers separately visible until resolved.
 - [ ] Bind the active `nsos.top` domain to the published NSOS application and apply only the required DNS records after the account holder’s explicit approval; verify routing without changing the email sender, payments, renewals, or unrelated DomainKing settings.
-- [ ] Create and verify one user-authorized public TinyURL redirect to `https://nsos-system-uhkdscaf.manus.space` without changing `nsos.top`, DNS, hosting, or application settings.
 - [x] Define a tenant-scoped cross-provider learning-evidence model that lets a linked learner submit concise milestone evidence for review without automatic completion, grading, credentialing, public visibility, messages, payments, or cross-tenant access.
 - [x] Add protected learner submission and owner/admin/instructor review workflows for programme milestones, with explicit status, reason, audit, and evidence-access boundaries suitable for vocational practice and workplace-capability paths as well as existing learning operators.
 - [x] Build responsive learner and reviewer evidence interfaces, add role/tenant/lifecycle/UI regressions, validate, document, checkpoint, publish, and push the cross-provider evidence workflow safely.

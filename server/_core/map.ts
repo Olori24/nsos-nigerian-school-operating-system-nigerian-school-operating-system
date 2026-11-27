@@ -1,92 +1,145 @@
-/**
- * Google Maps API Integration for Manus WebDev Templates
- * 
- * Main function: makeRequest<T>(endpoint, params) - Makes authenticated requests to Google Maps APIs
- * All credentials are automatically injected. Array parameters use | as separator.
- * 
- * See API examples below the type definitions for usage patterns.
- */
+const USER_AGENT = process.env.MAPS_USER_AGENT ?? "NSOS/1.0 (https://nsos.top)";
+const OSRM_BASE = "https://router.project-osrm.org";
+const PHOTON_BASE = "https://photon.komoot.io/api/";
 
-import { ENV } from "./env";
+interface RequestOptions { method?: "GET" | "POST"; body?: Record<string, unknown> }
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-type MapsConfig = {
-  baseUrl: string;
-  apiKey: string;
+const splitLocations = (value: unknown) => String(value ?? "").split("|").map(item => item.trim()).filter(Boolean);
+const toLatLon = (value: string) => {
+  const parts = value.split(",").map(Number);
+  if (parts.length !== 2 || parts.some(part => !Number.isFinite(part))) return undefined;
+  if (parts[0] < -90 || parts[0] > 90 || parts[1] < -180 || parts[1] > 180) return undefined;
+  return { lat: parts[0], lon: parts[1] };
 };
 
-function getMapsConfig(): MapsConfig {
-  const baseUrl = ENV.forgeApiUrl;
-  const apiKey = ENV.forgeApiKey;
+async function resolveLocation(value: string) {
+  const coordinates = toLatLon(value);
+  if (coordinates) return coordinates;
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "jsonv2"); url.searchParams.set("limit", "1"); url.searchParams.set("q", value);
+  const results = await requestJson<Array<{ lat: string; lon: string }>>(url);
+  if (!results[0]) throw new Error("The requested location could not be found.");
+  return { lat: Number(results[0].lat), lon: Number(results[0].lon) };
+};
+const profileFor = (mode: unknown) => mode === "walking" ? "walking" : mode === "bicycling" ? "cycling" : "driving";
 
-  if (!baseUrl || !apiKey) {
-    throw new Error(
-      "Google Maps proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
-    );
-  }
+async function requestJson<T>(url: URL, timeout = 15_000): Promise<T> {
+  const response = await fetch(url, { headers: { "user-agent": USER_AGENT, accept: "application/json" }, signal: AbortSignal.timeout(timeout) });
+  if (!response.ok) throw new Error(`OpenStreetMap provider request failed (${response.status}).`);
+  return await response.json() as T;
+}
 
+function normalizePhotonFeature(feature: any) {
+  const coordinates = feature?.geometry?.coordinates ?? [];
+  const properties = feature?.properties ?? {};
   return {
-    baseUrl: baseUrl.replace(/\/+$/, ""),
-    apiKey,
+    place_id: `${properties.osm_type ?? "N"}${properties.osm_id ?? ""}`,
+    name: properties.name ?? properties.street ?? properties.city ?? properties.country ?? "",
+    formatted_address: [properties.name, properties.street, properties.city, properties.state, properties.country].filter(Boolean).join(", "),
+    geometry: { location: { lat: Number(coordinates[1]), lng: Number(coordinates[0]) } },
+    address_components: properties,
   };
 }
 
-// ============================================================================
-// Core Request Handler
-// ============================================================================
-
-interface RequestOptions {
-  method?: "GET" | "POST";
-  body?: Record<string, unknown>;
-}
-
 /**
- * Make authenticated requests to Google Maps APIs
- * 
- * @param endpoint - The API endpoint (e.g., "/maps/api/geocode/json")
- * @param params - Query parameters for the request
- * @param options - Additional request options
- * @returns The API response
+ * OpenStreetMap-backed replacement for the former hosted Google Maps proxy.
+ * Supports geocoding, directions, distance matrices and place search.
  */
 export async function makeRequest<T = unknown>(
   endpoint: string,
   params: Record<string, unknown> = {},
-  options: RequestOptions = {}
+  _options: RequestOptions = {},
 ): Promise<T> {
-  const { baseUrl, apiKey } = getMapsConfig();
-
-  // Construct full URL: baseUrl + /v1/maps/proxy + endpoint
-  const url = new URL(`${baseUrl}/v1/maps/proxy${endpoint}`);
-
-  // Add API key as query parameter (standard Google Maps API authentication)
-  url.searchParams.append("key", apiKey);
-
-  // Add other query parameters
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      url.searchParams.append(key, String(value));
-    }
-  });
-
-  const response = await fetch(url.toString(), {
-    method: options.method || "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Google Maps API request failed (${response.status} ${response.statusText}): ${errorText}`
-    );
+  const path = endpoint.toLowerCase();
+  if (path.includes("/geocode/json")) {
+    const url = new URL("https://nominatim.openstreetmap.org/" + (params.lat !== undefined && params.lng !== undefined ? "reverse" : "search"));
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("limit", String(params.limit ?? 5));
+    if (params.lat !== undefined && params.lng !== undefined) { url.searchParams.set("lat", String(params.lat)); url.searchParams.set("lon", String(params.lng)); }
+    else url.searchParams.set("q", String(params.address ?? params.q ?? ""));
+    const result = await requestJson<any>(url);
+    const records = Array.isArray(result) ? result : [result];
+    return { status: records.length ? "OK" : "ZERO_RESULTS", results: records.map((item: any) => ({
+      place_id: String(item.place_id), formatted_address: item.display_name,
+      geometry: { location: { lat: Number(item.lat), lng: Number(item.lon) } },
+      address_components: item.address ?? {},
+    })) } as T;
   }
 
-  return (await response.json()) as T;
+  if (path.includes("/directions/json")) {
+    const origin = await resolveLocation(String(params.origin ?? ""));
+    const destination = await resolveLocation(String(params.destination ?? ""));
+    const url = new URL(`${OSRM_BASE}/route/v1/${profileFor(params.mode)}/${origin.lon},${origin.lat};${destination.lon},${destination.lat}`);
+    url.searchParams.set("overview", "full"); url.searchParams.set("geometries", "polyline"); url.searchParams.set("steps", "true");
+    const result = await requestJson<any>(url);
+    return { status: result.code === "Ok" ? "OK" : result.code, routes: (result.routes ?? []).map((route: any) => ({
+      summary: route.legs?.[0]?.summary ?? "",
+      overview_polyline: { points: typeof route.geometry === "string" ? route.geometry : "" },
+      legs: (route.legs ?? []).map((leg: any, legIndex: number) => {
+        const start = route.waypoints?.[legIndex]?.location ?? [origin.lon, origin.lat];
+        const end = route.waypoints?.[legIndex + 1]?.location ?? [destination.lon, destination.lat];
+        const steps = (leg.steps ?? []).map((step: any, stepIndex: number, allSteps: any[]) => {
+          const startLocation = step.maneuver?.location ?? start;
+          const endLocation = allSteps[stepIndex + 1]?.maneuver?.location ?? end;
+          const maneuver = [step.maneuver?.type, step.maneuver?.modifier].filter(Boolean).join(" ");
+          return {
+            distance: { value: step.distance ?? 0, text: `${((step.distance ?? 0) / 1000).toFixed(1)} km` },
+            duration: { value: step.duration ?? 0, text: `${Math.round((step.duration ?? 0) / 60)} mins` },
+            html_instructions: [maneuver, step.name].filter(Boolean).join(" "),
+            travel_mode: String(step.mode ?? "driving").toUpperCase(),
+            start_location: { lat: Number(startLocation[1]), lng: Number(startLocation[0]) },
+            end_location: { lat: Number(endLocation[1]), lng: Number(endLocation[0]) },
+          };
+        });
+        return {
+          distance: { value: leg.distance ?? 0, text: `${((leg.distance ?? 0) / 1000).toFixed(1)} km` },
+          duration: { value: leg.duration ?? 0, text: `${Math.round((leg.duration ?? 0) / 60)} mins` },
+          start_address: String(params.origin),
+          end_address: String(params.destination),
+          start_location: { lat: Number(start[1]), lng: Number(start[0]) },
+          end_location: { lat: Number(end[1]), lng: Number(end[0]) },
+          steps,
+        };
+      }),
+    })) } as T;
+  }
+
+  if (path.includes("/distancematrix/json")) {
+    const origins = await Promise.all(splitLocations(params.origins).map(resolveLocation));
+    const destinations = await Promise.all(splitLocations(params.destinations).map(resolveLocation));
+    const coordinates = [...origins, ...destinations].map(point => `${point.lon},${point.lat}`).join(";");
+    const url = new URL(`${OSRM_BASE}/table/v1/${profileFor(params.mode)}/${coordinates}`);
+    url.searchParams.set("sources", origins.map((_, i) => i).join(";"));
+    url.searchParams.set("destinations", destinations.map((_, i) => i + origins.length).join(";"));
+    const result = await requestJson<any>(url);
+    return { status: result.code === "Ok" ? "OK" : result.code, rows: (result.durations ?? []).map((row: Array<number | null>, rowIndex: number) => ({ elements: row.map((duration, i) => {
+      const distance = result.distances?.[rowIndex]?.[i];
+      const reachable = Number.isFinite(duration) && Number.isFinite(distance);
+      const durationValue = reachable ? Number(duration) : 0;
+      const distanceValue = reachable ? Number(distance) : 0;
+      return {
+        status: reachable ? "OK" : "ZERO_RESULTS",
+        duration: { value: durationValue, text: reachable ? `${Math.round(durationValue / 60)} mins` : "" },
+        distance: { value: distanceValue, text: reachable ? `${(distanceValue / 1000).toFixed(1)} km` : "" },
+      };
+    }) })) } as T;
+  }
+
+  if (path.includes("/place/") || path.includes("/place/textsearch") || path.includes("/place/nearbysearch") || path.includes("/place/autocomplete")) {
+    const url = new URL(PHOTON_BASE);
+    const query = params.query ?? params.input ?? params.name ?? params.keyword;
+    if (query) url.searchParams.set("q", String(query));
+    if (params.location) {
+      const location = await resolveLocation(String(params.location));
+      url.searchParams.set("lat", String(location.lat)); url.searchParams.set("lon", String(location.lon));
+    }
+    url.searchParams.set("limit", String(Math.min(20, Math.max(1, Number(params.limit ?? 10)))));
+    const result = await requestJson<any>(url);
+    return { status: result.features?.length ? "OK" : "ZERO_RESULTS", results: (result.features ?? []).map(normalizePhotonFeature) } as T;
+  }
+
+  throw new Error(`Unsupported map operation: ${endpoint}. Supported operations are geocoding, directions, distance matrix and place search.`);
 }
 
 // ============================================================================

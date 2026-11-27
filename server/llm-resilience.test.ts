@@ -11,7 +11,7 @@ describe("LLM request resilience", () => {
   it("attaches a fresh bounded abort signal to an AI-provider request", async () => {
     const providerFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }));
     vi.stubGlobal("fetch", providerFetch);
-    ENV.forgeApiKey = "nsos-vitest-forge-api-key";
+    ENV.geminiApiKey = "nsos-vitest-gemini-api-key";
 
     await invokeLLM({ messages: [{ role: "user", content: "health check" }] });
 

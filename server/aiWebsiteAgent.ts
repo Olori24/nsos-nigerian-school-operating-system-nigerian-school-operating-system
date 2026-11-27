@@ -28,7 +28,6 @@ export async function generateAiWebsiteDraft(input: { schoolName: string; state?
   const fallback = fallbackDraft(input);
   try {
     const result = await invokeLLM({
-      model: "gpt-5-mini",
       maxTokens: 800,
       messages: [
         { role: "system", content: "You are the NSOS Website Builder. Create a concise, editable, unpublished public-school website draft using only the supplied school name, state, existing draft, and owner brief. Never invent people, staff, contact details, facilities, fees, results, rankings, awards, accreditation, approvals, availability, testimonials, reviews, safety claims, statistics, or community claims. Do not make promises or guarantees. If a fact is missing, write neutral wording that asks the owner to review or add approved details. This is not a publishing, domain, or payment action. Return only the requested JSON." },
