@@ -1,16 +1,7 @@
 name: NSOS TiDB 8.5 compatibility validation
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/tidb85-compatibility-validation.yml"
-      - "drizzle/**"
-      - "drizzle.config.ts"
-      - "server/db.ts"
-      - "server/db/**"
-      - "server/db.cash-assurance-reminders.test.ts"
-      - "package.json"
-      - "pnpm-lock.yaml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
