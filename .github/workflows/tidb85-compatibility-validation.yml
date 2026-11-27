@@ -13,15 +13,16 @@ concurrency:
 
 jobs:
   validate:
-    name: TiDB ${{ matrix.tidb-version }} migrations and database integration
+    name: TiDB ${{ matrix.tidb_version }} migrations and database integration
     strategy:
       fail-fast: false
       matrix:
-        tidb-version: [v8.5.3, v8.5.8]
+        tidb_version: [v8.5.3, v8.5.8]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DATABASE_URL: mysql://root:@127.0.0.1:4000/nsos_validation
+      TIDB_EXPECTED_VERSION: ${{ matrix.tidb_version }}
       JWT_SECRET: ci-tidb85-validation-jwt-secret
       APP_SECRET: ci-tidb85-validation-application-secret
       OAUTH_SERVER_URL: https://auth.test.local
@@ -57,9 +58,9 @@ jobs:
           echo "$HOME/.tiup/bin" >> "$GITHUB_PATH"
           "$HOME/.tiup/bin/tiup" --version
 
-      - name: Start disposable TiDB 8.5.8 cluster
+      - name: Start disposable TiDB ${{ matrix.tidb_version }} cluster
         run: |
-          nohup "$HOME/.tiup/bin/tiup" playground "${{ matrix.tidb-version }}" \
+          nohup "$HOME/.tiup/bin/tiup" playground "${{ matrix.tidb_version }}" \
             --db 1 --pd 1 --kv 1 --tiflash 0 --without-monitor \
             > /tmp/nsos-tidb-playground.log 2>&1 &
           echo $! > /tmp/nsos-tidb-playground.pid
@@ -92,12 +93,12 @@ jobs:
           try {
             const [versionRows] = await connection.query("SELECT VERSION() AS version");
             const version = String(versionRows[0].version);
-            if (!version.toLowerCase().includes("tidb")) {
+            if (!version.toLowerCase().includes("tidb") || !version.toLowerCase().includes(process.env.TIDB_EXPECTED_VERSION)) {
               throw new Error(`Expected TiDB, received: ${version}`);
             }
             await connection.query("CREATE DATABASE nsos_validation");
             await connection.query("SET GLOBAL tidb_enable_check_constraint = ON");
-            console.log(`Connected to ${version}`);
+            console.log(`Connected to ${version}; expected ${process.env.TIDB_EXPECTED_VERSION}`);
             console.log("Created disposable nsos_validation database");
             console.log("Enabled CHECK enforcement for rollback integration coverage");
           } finally {
