@@ -36,7 +36,7 @@ describe.skipIf(!databaseEnabled)("MySQL/TiDB runtime compatibility invariants",
     const connection = await pool.getConnection();
     try {
       await connection.query("CREATE TEMPORARY TABLE nsos_collation_probe (value VARCHAR(64) NOT NULL, UNIQUE KEY uq_value (value))");
-      const [collationRows] = await connection.query("SELECT COLLATION(value) AS collation FROM nsos_collation_probe LIMIT 1");
+      const [collationRows] = await connection.query("SELECT collation_name AS collation FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'nsos_collation_probe' AND column_name = 'value'");
       const [databaseCollationRows] = await connection.query("SELECT @@collation_database AS collation");
       const collation = String((databaseCollationRows as Array<{ collation: string }>)[0].collation);
       await connection.query("INSERT INTO nsos_collation_probe (value) VALUES ('NSOS-Case-Probe')");
