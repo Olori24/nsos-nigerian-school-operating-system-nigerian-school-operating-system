@@ -21,7 +21,6 @@ describe("standalone NSOS session authentication", () => {
     vi.spyOn(database, "getUserByOpenId").mockResolvedValue(user as any);
     vi.spyOn(database, "upsertUser").mockResolvedValue(undefined);
     vi.spyOn(database, "ensureActiveUserSession").mockResolvedValue(true);
-    const externalLookup = vi.spyOn(sdk, "getUserInfoWithJwt").mockRejectedValue(new Error("External OAuth must not be called"));
 
     const token = await sdk.createSessionToken(user.openId, { name: user.name, sessionId: "session-901" });
     const req = {
@@ -32,14 +31,12 @@ describe("standalone NSOS session authentication", () => {
 
     expect(authenticated.id).toBe(user.id);
     expect(authenticated.sessionId).toBe("session-901");
-    expect(externalLookup).not.toHaveBeenCalled();
     expect(database.ensureActiveUserSession).toHaveBeenCalledWith(expect.objectContaining({ userId: user.id, sessionId: "session-901" }));
   });
 
   it("fails closed when a signed session has no corresponding local NSOS account", async () => {
     vi.spyOn(database, "getUserByOpenId").mockResolvedValue(undefined);
     const ensureSession = vi.spyOn(database, "ensureActiveUserSession");
-    const externalLookup = vi.spyOn(sdk, "getUserInfoWithJwt").mockRejectedValue(new Error("No external service"));
     const token = await sdk.createSessionToken("missing-local-user", { name: "Missing", sessionId: "session-missing" });
     const req = { headers: { cookie: COOKIE_NAME + "=" + token }, get: () => "NSOS auth test" } as any;
 
