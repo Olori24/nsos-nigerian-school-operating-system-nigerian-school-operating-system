@@ -585,7 +585,7 @@ function AccountSecurity({ activeInstitutionId, onSwitchInstitution }: { activeI
       const response = await fetch("/api/auth/email/link", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ origin: window.location.origin }) });
       const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
       if (!response.ok) throw new Error(payload.error || "We could not send an account confirmation link.");
-      setEmailLinkState({ tone: "success", message: payload.message || "Check your inbox and open the link in this browser to finish linking." });
+      setEmailLinkState({ tone: "success", message: [payload.message, "Open the confirmation link in this same browser while signed in to the same NSOS account."].filter(Boolean).join(" ") });
     } catch (error) {
       setEmailLinkState({ tone: "error", message: error instanceof Error ? error.message : "We could not send an account confirmation link." });
     } finally {
