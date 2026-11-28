@@ -339,7 +339,7 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
       res.redirect(302, `${origin}${postSignInPath(origin)}`);
     } catch (error) {
       if (error instanceof Error && error.message.includes("Existing NSOS accounts require explicit identity linking")) {
-        return res.status(409).json({ error: "An NSOS account already exists for this email. Sign in to that account using its existing sign-in method, then link Google from account security settings." });
+        return res.status(409).json({ error: "An NSOS account already exists for this email. Sign in to that account using its existing sign-in method, then open Account Security and select “Confirm account email” to enable email sign-in." });
       }
       writeOperationalEvent("warn", "auth_passwordless_verification_failed", { category: "invalid_or_expired_link" });
       res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });
