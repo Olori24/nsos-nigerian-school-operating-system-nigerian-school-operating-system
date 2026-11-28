@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
-import { ensureActiveUserSession, getDb, linkExternalAuthIdentity, listActiveUserSessions, listUserSecurityActivity, revokeUserSession } from "./db";
+import { ensureActiveUserSession, getDb, linkExternalAuthIdentity, listActiveUserSessions, listUserSecurityActivity, resolveExternalAuthIdentity, revokeUserSession } from "./db";
 import { authIdentities, userSecurityActivity, userSessions, users } from "../drizzle/schema";
 
 const suffix = `auth-db-${process.pid}-${Date.now()}`;
@@ -40,6 +40,15 @@ afterAll(async () => {
 });
 
 describe("external identity linking against MySQL 8.4", () => {
+  it("does not create a second account when a verified provider email belongs to a legacy NSOS user", async () => {
+    const legacy = await createUser("legacy-email-owner", `${suffix}-legacy@example.ng`);
+    await expect(resolveExternalAuthIdentity({ provider: "google", providerSubject: `${suffix}-legacy-google`, email: legacy.email, name: "Duplicate Owner" })).rejects.toThrow("Existing NSOS accounts require explicit identity linking.");
+    const db = await getDb();
+    const matches = await db!.select().from(users).where(eq(users.email, legacy.email));
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.id).toBe(legacy.id);
+  });
+
   it("rejects a verified provider email that differs from the NSOS account email", async () => {
     const owner = await createUser("mismatch-owner", `${suffix}-owner@example.ng`);
     const otherEmail = `${suffix}-other@example.ng`;
