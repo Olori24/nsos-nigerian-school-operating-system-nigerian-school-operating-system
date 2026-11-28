@@ -695,7 +695,19 @@ export type ExternalAuthProvider = "google" | "email";
 
 export function normaliseAuthEmail(value: string) {
   const email = value.trim().toLowerCase();
-  if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 320) throw new Error("Enter a valid email address.");
+  const atIndex = email.indexOf("@");
+  const domain = atIndex >= 0 ? email.slice(atIndex + 1) : "";
+  const domainParts = domain.split(".");
+  if (
+    email.length > 320 ||
+    atIndex <= 0 ||
+    atIndex !== email.lastIndexOf("@") ||
+    /\s/.test(email) ||
+    domainParts.length < 2 ||
+    domainParts.some(part => part.length === 0)
+  ) {
+    throw new Error("Enter a valid email address.");
+  }
   return email;
 }
 
