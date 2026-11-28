@@ -58,6 +58,14 @@ describe("external authentication policy", () => {
     expect(normaliseAuthEmail("  ADMIN@Greener-Future.edu.ng ")).toBe("admin@greener-future.edu.ng");
   });
 
+  it("rejects malformed and oversized email input without ambiguous regex matching", () => {
+    expect(() => normaliseAuthEmail("user@@example.com")).toThrow("Enter a valid email address.");
+    expect(() => normaliseAuthEmail("user@example..com")).toThrow("Enter a valid email address.");
+    expect(() => normaliseAuthEmail(`${"a".repeat(321)}@example.com`)).toThrow("Enter a valid email address.");
+    const adversarial = `${"!@".repeat(10_000)}!.${"!.".repeat(10_000)}`;
+    expect(() => normaliseAuthEmail(adversarial)).toThrow("Enter a valid email address.");
+  });
+
   it("rejects malformed passwordless-email addresses", () => {
     expect(() => normaliseAuthEmail("not-an-email")).toThrow("Enter a valid email address.");
   });
