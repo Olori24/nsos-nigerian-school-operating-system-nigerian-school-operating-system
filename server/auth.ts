@@ -185,7 +185,7 @@ async function startGoogleAuthorization(req: Request, res: Response, intent: "si
   if (intent === "link") {
     try {
       const user = await sdk.authenticateRequest(req);
-      if (!user.email || !user.sessionId || user.isCron) return res.status(409).json({ error: "Sign in to the existing NSOS account before linking Google." });
+      if (!user.email || !user.sessionId) return res.status(409).json({ error: "Sign in to the existing NSOS account before linking Google." });
       userId = user.id;
       sessionId = user.sessionId;
     } catch {
@@ -237,7 +237,7 @@ export function registerGoogleAuthRoutes(app: Express, rateLimit = createRateLim
         } catch {
           return res.status(401).json({ error: "Your NSOS session expired. Sign in again and restart account linking." });
         }
-        if (currentUser.isCron || currentUser.id !== loginState.userId || currentUser.sessionId !== loginState.sessionId) {
+        if (currentUser.id !== loginState.userId || currentUser.sessionId !== loginState.sessionId) {
           return res.status(403).json({ error: "The account session changed during linking. Sign in again and restart." });
         }
         await db.linkExternalAuthIdentity({ userId: currentUser.id, provider: "google", providerSubject: profile.sub, email: profile.email });
@@ -281,7 +281,7 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
     if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
     try {
       const user = await sdk.authenticateRequest(req);
-      if (user.isCron || !user.email || !user.sessionId) return res.status(409).json({ error: "Sign in to the existing NSOS account before linking email." });
+      if (!user.email || !user.sessionId) return res.status(409).json({ error: "Sign in to the existing NSOS account before linking email." });
       const email = db.normaliseAuthEmail(req.body?.email ?? user.email);
       if (email !== db.normaliseAuthEmail(user.email)) return res.status(409).json({ error: "The email address must match the signed-in NSOS account." });
       const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
@@ -316,7 +316,7 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
         } catch {
           return res.status(401).json({ error: "Your NSOS session expired. Sign in again and request a new confirmation link." });
         }
-        if (linkingUser.isCron || linkingUser.id !== linkState.userId || linkingUser.sessionId !== linkState.sessionId || Date.now() > linkState.expiresAt) {
+        if (linkingUser.id !== linkState.userId || linkingUser.sessionId !== linkState.sessionId || Date.now() > linkState.expiresAt) {
           return res.status(403).json({ error: "Your NSOS account session changed or expired. Sign in and request a new confirmation link." });
         }
       }
