@@ -195,7 +195,8 @@ describe("external authentication policy", () => {
     const user = { id: 81, openId: "legacy-user-81", name: "School Owner", email: "owner@example.ng", loginMethod: "legacy", role: "user", sessionId: "active-session-81" };
     vi.spyOn(sdk, "authenticateRequest").mockResolvedValue(user as any);
     vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("m".repeat(43));
-    vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "owner@example.ng", redirectOrigin: "https://nsos.top" } as any);
+    vi.spyOn(database, "getAuthMagicLink").mockResolvedValue({ purpose: "identity_link", initiatingUserId: 81, initiatingSessionId: "active-session-81" } as any);
+    vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "owner@example.ng", redirectOrigin: "https://nsos.top", purpose: "identity_link" } as any);
     const linkIdentity = vi.spyOn(database, "linkExternalAuthIdentity").mockResolvedValue(user as any);
     const createSession = vi.spyOn(database, "createUserSession");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "email_link_81" }), { status: 200 })));
@@ -242,8 +243,22 @@ describe("external authentication policy", () => {
     });
   });
 
+
+  it("does not consume an account-link token when an email scanner opens it without the initiating browser cookie", async () => {
+    const getLink = vi.spyOn(database, "getAuthMagicLink").mockResolvedValue({ purpose: "identity_link", initiatingUserId: 81, initiatingSessionId: "active-session-81" } as any);
+    const consumeLink = vi.spyOn(database, "consumeAuthMagicLink");
+    await withAuthRouteServer(async origin => {
+      const response = await requestRoute(origin + "/api/auth/email/verify?token=" + "s".repeat(43));
+      expect(response.status).toBe(403);
+      expect(response.body).toContain("same browser and account session");
+      expect(getLink).toHaveBeenCalledOnce();
+      expect(consumeLink).not.toHaveBeenCalled();
+    });
+  });
+
   it("creates a session only once for a successfully consumed passwordless-email link", async () => {
-    const consumeLink = vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "parent@example.ng", redirectOrigin: "https://nsos-system-uhkdscaf.manus.space" } as any);
+    vi.spyOn(database, "getAuthMagicLink").mockResolvedValue({ purpose: "signin", initiatingUserId: null, initiatingSessionId: null } as any);
+    const consumeLink = vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "parent@example.ng", redirectOrigin: "https://nsos-system-uhkdscaf.manus.space", purpose: "signin" } as any);
     vi.spyOn(database, "resolveExternalAuthIdentity").mockResolvedValue({ id: 123, openId: "external:email:123", name: "Parent", email: "parent@example.ng" } as any);
     const acceptStaffInvitations = vi.spyOn(database, "acceptCopilotSetupAgentStaffInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
     const acceptGuardianInvitations = vi.spyOn(database, "acceptGuardianPortalInvitationsForVerifiedEmail").mockResolvedValue({ acceptedCount: 0 });
