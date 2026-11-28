@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { rateLimit as expressRateLimit } from "express-rate-limit";
 import { registerOAuthRoutes } from "./oauth";
 import { createServer } from "http";
 import type { Server } from "http";
@@ -33,6 +34,8 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   registerStagingDatabaseDiagnostic(app);
   app.use("/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   app.use("/api", createRateLimitMiddleware({ namespace: "api", limit: 240, windowMs: 60_000 }));
+  // CodeQL-recognized secondary process-local cap; the shared database limiter above remains authoritative.
+  app.use("/api", expressRateLimit({ windowMs: 15 * 60_000, limit: 5_000, standardHeaders: true, legacyHeaders: false }));
   app.use("/api/trpc", requireSameOriginForMutations());
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "public-admissions", limit: 30, windowMs: 10 * 60_000, matcher: path => path.includes("nsos.admissions.publicSubmit") }));
   app.use("/api/trpc", createRateLimitMiddleware({ namespace: "lead-capture", limit: 8, windowMs: 15 * 60_000, matcher: path => path.includes("nsos.leads.capture") }));
