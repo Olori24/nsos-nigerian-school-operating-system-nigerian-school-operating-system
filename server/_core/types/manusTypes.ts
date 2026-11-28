@@ -53,19 +53,3 @@ export interface CanAccessRequest {
 export interface CanAccessResponse {
   canAccess: boolean;
 }
-
-export interface GetUserInfoWithJwtRequest {
-  jwtToken: string;
-  projectId: string;
-}
-
-export interface GetUserInfoWithJwtResponse {
-  openId: string;
-  projectId: string;
-  name: string;
-  email?: string | null;
-  platform?: string | null;
-  loginMethod?: string | null;
-  /** Cron-only; references `schedule_task.uid`. */
-  taskUid?: string | null;
-}
