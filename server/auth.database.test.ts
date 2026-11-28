@@ -1,11 +1,12 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
-import { getDb, linkExternalAuthIdentity } from "./db";
-import { authIdentities, users } from "../drizzle/schema";
+import { ensureActiveUserSession, getDb, linkExternalAuthIdentity, listActiveUserSessions, listUserSecurityActivity, revokeUserSession } from "./db";
+import { authIdentities, userSecurityActivity, userSessions, users } from "../drizzle/schema";
 
 const suffix = `auth-db-${process.pid}-${Date.now()}`;
 const createdUserIds: number[] = [];
 const createdIdentitySubjects: string[] = [];
+const createdSessionIds: string[] = [];
 
 async function createUser(label: string, email: string) {
   const db = await getDb();
@@ -29,7 +30,11 @@ afterAll(async () => {
   if (createdIdentitySubjects.length) {
     await db.delete(authIdentities).where(inArray(authIdentities.providerSubject, createdIdentitySubjects));
   }
+  if (createdSessionIds.length) {
+    await db.delete(userSessions).where(inArray(userSessions.id, createdSessionIds));
+  }
   if (createdUserIds.length) {
+    await db.delete(userSecurityActivity).where(inArray(userSecurityActivity.userId, createdUserIds));
     await db.delete(users).where(inArray(users.id, createdUserIds));
   }
 });
@@ -129,5 +134,37 @@ describe("external identity linking against MySQL 8.4", () => {
     ));
     expect(rows).toHaveLength(1);
     expect([first.id, second.id]).toContain(rows[0]!.userId);
+  });
+});
+
+describe("NSOS session ownership and revocation against MySQL 8.4", () => {
+  it("allows only the owning user to revoke a session and rejects it on subsequent authentication", async () => {
+    const owner = await createUser("session-owner", `${suffix}-session-owner@example.ng`);
+    const attacker = await createUser("session-other", `${suffix}-session-other@example.ng`);
+    const sessionId = `${suffix}-active-session`;
+    createdSessionIds.push(sessionId);
+
+    expect(await ensureActiveUserSession({
+      userId: owner.id,
+      sessionId,
+      source: "test",
+      userAgent: "NSOS authentication integration test",
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    })).toBe(true);
+
+    expect(await revokeUserSession({ userId: attacker.id, sessionId, reason: "unauthorised attempt" })).toBe(false);
+    expect((await listActiveUserSessions(owner.id)).map(session => session.id)).toContain(sessionId);
+
+    expect(await revokeUserSession({ userId: owner.id, sessionId, reason: "owner initiated test revocation" })).toBe(true);
+    expect((await listActiveUserSessions(owner.id)).map(session => session.id)).not.toContain(sessionId);
+    expect(await ensureActiveUserSession({
+      userId: owner.id,
+      sessionId,
+      source: "test",
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    })).toBe(false);
+
+    const activity = await listUserSecurityActivity(owner.id);
+    expect(activity.some(event => event.eventType === "session_revoked")).toBe(true);
   });
 });
