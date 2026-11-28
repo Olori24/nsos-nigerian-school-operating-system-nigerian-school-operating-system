@@ -284,7 +284,7 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
       if (!user.email || !user.sessionId) return res.status(409).json({ error: "Sign in to the existing NSOS account before linking email." });
       const email = db.normaliseAuthEmail(req.body?.email ?? user.email);
       if (email !== db.normaliseAuthEmail(user.email)) return res.status(409).json({ error: "The email address must match the signed-in NSOS account." });
-      const token = await db.createAuthMagicLink({ email, redirectOrigin: origin });
+      const token = await db.createAuthMagicLink({ email, redirectOrigin: origin, purpose: "identity_link", initiatingUserId: user.id, initiatingSessionId: user.sessionId });
       const expiresAt = Date.now() + 15 * 60_000;
       const state = signEmailIdentityLinkState({ tokenHash: createHash("sha256").update(token).digest("hex"), userId: user.id, sessionId: user.sessionId, expiresAt });
       res.cookie(EMAIL_LINK_STATE_COOKIE, state, { path: "/", httpOnly: true, secure: true, sameSite: "lax", maxAge: 15 * 60_000 });
@@ -305,12 +305,17 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
     const linkStateCookie = parseCookieHeader(req.headers.cookie ?? "")[EMAIL_LINK_STATE_COOKIE];
     const linkState = linkStateCookie ? readEmailIdentityLinkState(req, token) : undefined;
     clearEmailIdentityLinkState(res);
-    if (linkStateCookie && !linkState) return res.status(403).json({ error: "This account-link confirmation must be completed in the browser that requested it. Sign in and request a new link." });
     try {
-      // Validate the initiating session before consuming the one-time token.
-      // A stale or switched session must not burn a valid email confirmation.
+      // Check purpose and stored account/session binding before consuming the token.
+      // Email scanners without the initiating browser cookie cannot burn identity-link tokens.
+      const pendingLink = await db.getAuthMagicLink(token);
+      if (!pendingLink) throw new Error("This sign-in link is invalid or has expired.");
+      const isIdentityLink = pendingLink.purpose === "identity_link";
+      if (isIdentityLink && (!linkState || pendingLink.initiatingUserId !== linkState.userId || pendingLink.initiatingSessionId !== linkState.sessionId)) {
+        return res.status(403).json({ error: "This account-link confirmation must be completed in the same browser and account session that requested it. Sign in and request a new link." });
+      }
       let linkingUser: Awaited<ReturnType<typeof sdk.authenticateRequest>> | undefined;
-      if (linkState) {
+      if (isIdentityLink && linkState) {
         try {
           linkingUser = await sdk.authenticateRequest(req);
         } catch {
@@ -323,7 +328,7 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
       const link = await db.consumeAuthMagicLink(token);
       const origin = validOrigin(link.redirectOrigin);
       if (!origin) throw new Error("The sign-in link does not have a valid destination.");
-      if (linkState && linkingUser) {
+      if (isIdentityLink && linkState && linkingUser) {
         await db.linkExternalAuthIdentity({ userId: linkingUser.id, provider: "email", providerSubject: link.email, email: link.email });
         return res.redirect(302, origin + "/app?identityLinked=email");
       }
