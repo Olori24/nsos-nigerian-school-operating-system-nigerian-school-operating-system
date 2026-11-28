@@ -224,7 +224,8 @@ describe("external authentication policy", () => {
     const user = { id: 81, openId: "legacy-user-81", name: "School Owner", email: "owner@example.ng", loginMethod: "legacy", role: "user", sessionId: "active-session-81" };
     vi.spyOn(sdk, "authenticateRequest").mockResolvedValueOnce(user as any).mockResolvedValueOnce({ ...user, sessionId: "replacement-session" } as any);
     vi.spyOn(database, "createAuthMagicLink").mockResolvedValue("m".repeat(43));
-    vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "owner@example.ng", redirectOrigin: "https://nsos.top" } as any);
+    vi.spyOn(database, "getAuthMagicLink").mockResolvedValue({ purpose: "identity_link", initiatingUserId: 81, initiatingSessionId: "active-session-81" } as any);
+    vi.spyOn(database, "consumeAuthMagicLink").mockResolvedValue({ email: "owner@example.ng", redirectOrigin: "https://nsos.top", purpose: "identity_link" } as any);
     const linkIdentity = vi.spyOn(database, "linkExternalAuthIdentity");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "email_link_81" }), { status: 200 })));
 
