@@ -739,6 +739,8 @@ export async function resolveExternalAuthIdentity(input: { provider: ExternalAut
   // Manus account requires a separate explicit reauthentication flow.
   let user = (await db.select().from(users).where(and(eq(users.email, email), like(users.openId, "external:%"))).limit(1))[0];
   if (!user) {
+    const legacyUser = (await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1))[0];
+    if (legacyUser) throw new Error("Existing NSOS accounts require explicit identity linking.");
     const created = await db.insert(users).values({ openId: externalOpenId(input.provider), name: input.name?.trim().slice(0, 255) || null, email, avatarUrl, loginMethod: input.provider, lastSignedIn: new Date() });
     user = (await db.select().from(users).where(eq(users.id, Number(created[0].insertId))).limit(1))[0];
   }
@@ -797,15 +799,24 @@ export async function linkExternalAuthIdentity(input: { userId: number; provider
   return user;
 }
 
-export async function createAuthMagicLink(input: { email: string; redirectOrigin: string }) {
+export async function createAuthMagicLink(input: { email: string; redirectOrigin: string; purpose?: "signin" | "identity_link"; initiatingUserId?: number; initiatingSessionId?: string }) {
   const db = await database();
   const email = normaliseAuthEmail(input.email);
+  const purpose = input.purpose ?? "signin";
+  if (purpose === "identity_link" && (!Number.isSafeInteger(input.initiatingUserId) || !input.initiatingSessionId)) throw new Error("Account-link tokens require an initiating account and session.");
+  if (purpose === "signin" && (input.initiatingUserId !== undefined || input.initiatingSessionId !== undefined)) throw new Error("Sign-in tokens cannot carry account-link session state.");
   const token = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const now = new Date();
-  await db.insert(authMagicLinks).values({ email, tokenHash, redirectOrigin: input.redirectOrigin, expiresAt: new Date(now.getTime() + 15 * 60_000) });
-  if (Math.random() < 0.05) void db.delete(authMagicLinks).where(sql`${authMagicLinks.expiresAt} < ${now}`);
+  await db.insert(authMagicLinks).values({ email, tokenHash, redirectOrigin: input.redirectOrigin, purpose, initiatingUserId: input.initiatingUserId ?? null, initiatingSessionId: input.initiatingSessionId ?? null, expiresAt: new Date(now.getTime() + 15 * 60_000) });
+  if (Math.random() < 0.05) void db.delete(authMagicLinks).where(sql`authMagicLinks.expiresAt < ${now}`);
   return token;
+}
+
+export async function getAuthMagicLink(token: string) {
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const db = await database();
+  return (await db.select().from(authMagicLinks).where(and(eq(authMagicLinks.tokenHash, tokenHash), isNull(authMagicLinks.usedAt), gt(authMagicLinks.expiresAt, new Date()))).limit(1))[0] ?? null;
 }
 
 export async function consumeAuthMagicLink(token: string) {
