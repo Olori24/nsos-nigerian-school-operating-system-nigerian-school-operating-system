@@ -16,11 +16,6 @@ const STATE_TTL_MS = 10 * 60_000;
 const MAGIC_LINK_TTL_LABEL = "15 minutes";
 const EXTERNAL_AUTH_PROVIDER_TIMEOUT_MS = 10_000;
 
-// Keep an explicit, per-process Express limiter visible to static analysis; the
-// database-backed limiter on each route remains the authoritative shared limit.
-function expressDefenseInDepthRateLimit() {
-  return expressRateLimit({ windowMs: 15 * 60_000, limit: 1_000, standardHeaders: true, legacyHeaders: false });
-}
 
 const EMAIL_LINK_STATE_COOKIE = "__Host-email_identity_link";
 
@@ -209,14 +204,14 @@ async function startGoogleAuthorization(req: Request, res: Response, intent: "si
 }
 
 export function registerGoogleAuthRoutes(app: Express, rateLimit = createRateLimitMiddleware) {
-  app.get("/api/auth/google/start", rateLimit({ namespace: "google-signin-start", limit: 10, windowMs: 10 * 60_000 }), expressDefenseInDepthRateLimit(), (req: Request, res: Response) => {
+  app.get("/api/auth/google/start", rateLimit({ namespace: "google-signin-start", limit: 10, windowMs: 10 * 60_000 }), expressRateLimit({ windowMs: 15 * 60_000, limit: 1_000, standardHeaders: true, legacyHeaders: false }), (req: Request, res: Response) => {
     void startGoogleAuthorization(req, res, "signin");
   });
-  app.get("/api/auth/google/link/start", rateLimit({ namespace: "google-account-link", limit: 5, windowMs: 10 * 60_000 }), expressDefenseInDepthRateLimit(), (req: Request, res: Response) => {
+  app.get("/api/auth/google/link/start", rateLimit({ namespace: "google-account-link", limit: 5, windowMs: 10 * 60_000 }), expressRateLimit({ windowMs: 15 * 60_000, limit: 1_000, standardHeaders: true, legacyHeaders: false }), (req: Request, res: Response) => {
     void startGoogleAuthorization(req, res, "link");
   });
 
-  app.get("/api/auth/google/callback", rateLimit({ namespace: "google-signin-callback", limit: 20, windowMs: 10 * 60_000 }), expressDefenseInDepthRateLimit(), async (req: Request, res: Response) => {
+  app.get("/api/auth/google/callback", rateLimit({ namespace: "google-signin-callback", limit: 20, windowMs: 10 * 60_000 }), expressRateLimit({ windowMs: 15 * 60_000, limit: 1_000, standardHeaders: true, legacyHeaders: false }), async (req: Request, res: Response) => {
     const code = getStringQuery(req, "code");
     const state = getStringQuery(req, "state");
     const loginState = readGoogleLoginState(req);
@@ -266,7 +261,7 @@ export function registerGoogleAuthRoutes(app: Express, rateLimit = createRateLim
 }
 
 export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimitMiddleware) {
-  app.post("/api/auth/email/request", rateLimit({ namespace: "email-signin-request", limit: 5, windowMs: 15 * 60_000 }), expressDefenseInDepthRateLimit(), async (req: Request, res: Response) => {
+  app.post("/api/auth/email/request", rateLimit({ namespace: "email-signin-request", limit: 5, windowMs: 15 * 60_000 }), expressRateLimit({ windowMs: 15 * 60_000, limit: 1_000, standardHeaders: true, legacyHeaders: false }), async (req: Request, res: Response) => {
     const origin = validOrigin(req.body?.origin);
     const headerOrigin = validOrigin(req.get("origin"));
     if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
@@ -282,7 +277,7 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
     }
   });
 
-  app.post("/api/auth/email/link", rateLimit({ namespace: "email-identity-link", limit: 3, windowMs: 15 * 60_000 }), expressDefenseInDepthRateLimit(), async (req: Request, res: Response) => {
+  app.post("/api/auth/email/link", rateLimit({ namespace: "email-identity-link", limit: 3, windowMs: 15 * 60_000 }), expressRateLimit({ windowMs: 15 * 60_000, limit: 1_000, standardHeaders: true, legacyHeaders: false }), async (req: Request, res: Response) => {
     const origin = validOrigin(req.body?.origin);
     const headerOrigin = validOrigin(req.get("origin"));
     if (!origin || !headerOrigin || origin !== headerOrigin) return res.status(400).json({ error: "A valid application origin is required." });
@@ -306,7 +301,7 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
     }
   });
 
-  app.get("/api/auth/email/verify", rateLimit({ namespace: "email-signin-verify", limit: 20, windowMs: 15 * 60_000 }), expressDefenseInDepthRateLimit(), async (req: Request, res: Response) => {
+  app.get("/api/auth/email/verify", rateLimit({ namespace: "email-signin-verify", limit: 20, windowMs: 15 * 60_000 }), expressRateLimit({ windowMs: 15 * 60_000, limit: 1_000, standardHeaders: true, legacyHeaders: false }), async (req: Request, res: Response) => {
     const token = getStringQuery(req, "token");
     if (!token || !validMagicLinkToken(token)) return res.status(400).json({ error: "This sign-in link is invalid or has expired." });
     const linkStateCookie = parseCookieHeader(req.headers.cookie ?? "")[EMAIL_LINK_STATE_COOKIE];
