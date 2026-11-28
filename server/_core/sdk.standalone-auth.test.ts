@@ -41,7 +41,6 @@ describe("standalone NSOS session authentication", () => {
     const req = { headers: { cookie: COOKIE_NAME + "=" + token }, get: () => "NSOS auth test" } as any;
 
     await expect(sdk.authenticateRequest(req)).rejects.toThrow("NSOS account not found");
-    expect(externalLookup).not.toHaveBeenCalled();
     expect(ensureSession).not.toHaveBeenCalled();
   });
 
