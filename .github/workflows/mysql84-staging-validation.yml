@@ -1,0 +1,116 @@
+name: NSOS MySQL 8.4 staging validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mysql84-staging-validation.yml"
+      - "drizzle/**"
+      - "server/db.ts"
+      - "server/db.cash-assurance-reminders.test.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nsos-mysql84-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Clean MySQL 8.4 migration and database integration validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: mysql://nsos:nsos_test_password@127.0.0.1:3306/nsos_validation
+      JWT_SECRET: ci-mysql84-validation-jwt-secret
+      APP_SECRET: ci-mysql84-validation-application-secret
+      OAUTH_SERVER_URL: https://auth.test.local
+      GOOGLE_CLIENT_ID: ci-test-google-client-id
+      GOOGLE_CLIENT_SECRET: ci-test-google-client-secret
+      RESEND_API_KEY: ci-test-resend-api-key
+      AUTH_EMAIL_FROM: "NSOS <onboarding@resend.dev>"
+      BUILT_IN_FORGE_API_KEY: ci-test-forge-api-key
+      OPENAI_API_KEY: ci-test-openai-api-key
+      # Deliberately provide no live provider credentials. Tests must use
+      # fixtures/stubs and must not contact external provider services.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: nsos_validation
+          MYSQL_USER: nsos
+          MYSQL_PASSWORD: nsos_test_password
+          MYSQL_ROOT_PASSWORD: root_test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_test_password --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: |
+          npm install --global corepack@0.31.0
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply the complete committed migration chain to an empty database
+        run: pnpm exec drizzle-kit migrate
+
+      - name: Verify migration ledger and critical tables
+        run: |
+          node --input-type=module <<'NODE'
+          import mysql from "mysql2/promise";
+          const url = new URL(process.env.DATABASE_URL);
+          const connection = await mysql.createConnection({
+            host: url.hostname,
+            port: Number(url.port),
+            user: decodeURIComponent(url.username),
+            password: decodeURIComponent(url.password),
+            database: decodeURIComponent(url.pathname.slice(1)),
+            connectTimeout: 15000,
+          });
+          try {
+            const [migrationRows] = await connection.query(
+              "SELECT COUNT(*) AS count FROM __drizzle_migrations"
+            );
+            const applied = Number(migrationRows[0].count);
+            if (applied < 68) {
+              throw new Error(`Expected at least 68 committed migrations; found ${applied}`);
+            }
+            const [tableRows] = await connection.query(
+              "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()"
+            );
+            const tables = new Set(tableRows.map((row) => row.TABLE_NAME));
+            const required = ["reminderPolicies", "reminderRuns"];
+            const missing = required.filter((name) => !tables.has(name));
+            if (missing.length) {
+              throw new Error(`Missing required tables after migration: ${missing.join(", ")}`);
+            }
+            console.log(`Applied migration records: ${applied}`);
+            console.log(`Database tables created: ${tables.size}`);
+            console.log(`Critical tables verified: ${required.join(", ")}`);
+          } finally {
+            await connection.end();
+          }
+          NODE
+
+      - name: Run Cash Assurance reminder database integration test
+        run: pnpm exec vitest run server/db.cash-assurance-reminders.test.ts
