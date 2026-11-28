@@ -74,7 +74,7 @@ Similarly, revenue recommendations may describe missing readiness information or
 
 ## Continuous monitoring and system health
 
-The School Operator is refreshed on-demand in the first release from current tenant-scoped data. It must not use `setInterval`, `node-cron`, or an in-process timer. A saved private review cue is not a schedule. Any future recurring refresh must use a deployed, idempotent Heartbeat endpoint, a task UID persisted on the owning record, and explicit schedule management. It will generate private records or owner-visible health information only; it will not send messages or retry external actions automatically.
+The School Operator is refreshed on-demand in the first release from current tenant-scoped data. It must not use `setInterval`, `node-cron`, or an in-process timer. A saved private review cue is not a schedule. Any future recurring refresh requires an explicitly approved, database-backed scheduler and a reliable deployed worker with idempotency, concurrency control, audit records, and explicit schedule management. A Vercel serverless request handler is not a persistent worker, so an in-process timer is not an acceptable substitute. No scheduler or unattended recurring refresh is currently implemented. It will generate private records or owner-visible health information only; it will not send messages or retry external actions automatically.
 
 System health uses available workflow failures and configuration status. It reports **healthy**, **attention required**, or **needs review** rather than promising complete infrastructure monitoring that the platform does not yet collect.
 

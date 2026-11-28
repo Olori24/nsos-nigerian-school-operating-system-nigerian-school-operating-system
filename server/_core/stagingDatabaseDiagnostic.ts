@@ -1,10 +1,11 @@
 import { createConnection } from "mysql2/promise";
+import { rateLimit as expressRateLimit } from "express-rate-limit";
 import type { Express, Request, Response } from "express";
 
 let lastDiagnosticAt = 0;
 
 export function registerStagingDatabaseDiagnostic(app: Express) {
-  app.get("/healthz/db", async (_req: Request, res: Response) => {
+  app.get("/healthz/db", expressRateLimit({ windowMs: 10 * 60_000, limit: 6, standardHeaders: true, legacyHeaders: false }), async (_req: Request, res: Response) => {
     res.set("Cache-Control", "no-store");
     if (process.env.VERCEL_ENV !== "preview") {
       return res.status(404).json({ status: "unavailable" });

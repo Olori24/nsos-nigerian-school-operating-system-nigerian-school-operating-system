@@ -1,4 +1,5 @@
 import type { Express, Request } from "express";
+import { rateLimit as expressRateLimit } from "express-rate-limit";
 import { randomUUID } from "node:crypto";
 import * as db from "./db";
 
@@ -9,7 +10,7 @@ function clientIp(req: Request) {
 }
 
 export function registerAffiliateRoutes(app: Express) {
-  app.get("/r/:code", async (req, res) => {
+  app.get("/r/:code", expressRateLimit({ windowMs: 10 * 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }), async (req, res) => {
     try {
       const partner = await db.getAffiliatePartnerByCode(req.params.code);
       if (!partner) {
