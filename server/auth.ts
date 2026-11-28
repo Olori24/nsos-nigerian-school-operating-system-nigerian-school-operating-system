@@ -337,7 +337,10 @@ export function registerEmailAuthRoutes(app: Express, rateLimit = createRateLimi
       await db.acceptGuardianPortalInvitationsForVerifiedEmail({ email: link.email, userId: user.id });
       await createSession(req, res, user, link.email);
       res.redirect(302, `${origin}${postSignInPath(origin)}`);
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Existing NSOS accounts require explicit identity linking")) {
+        return res.status(409).json({ error: "An NSOS account already exists for this email. Sign in using its existing method, then link Google from account security settings." });
+      }
       writeOperationalEvent("warn", "auth_passwordless_verification_failed", { category: "invalid_or_expired_link" });
       res.status(400).json({ error: "This sign-in link is invalid, expired, or already used." });
     }
