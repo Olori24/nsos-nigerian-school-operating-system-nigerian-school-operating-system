@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, linkExternalAuthIdentity } from "./db";
 import { authIdentities, users } from "../drizzle/schema";
@@ -22,11 +22,6 @@ async function createUser(label: string, email: string) {
   return { id, email };
 }
 
-beforeAll(async () => {
-  const db = await getDb();
-  if (!db) throw new Error("MySQL test database is unavailable.");
-  await db.execute({ sql: "SELECT 1", params: [] } as any);
-});
 
 afterAll(async () => {
   const db = await getDb();
